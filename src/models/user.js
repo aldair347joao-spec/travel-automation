@@ -1,8 +1,15 @@
-const mongoose = require("mongoose");
+const mongoose =
+  require("mongoose");
 
 const userSchema =
   new mongoose.Schema(
     {
+      accountId: {
+        type: String,
+        required: true,
+        index: true
+      },
+
       name: {
         type: String,
         required: true,
@@ -13,7 +20,6 @@ const userSchema =
       email: {
         type: String,
         required: true,
-        unique: true,
         lowercase: true,
         trim: true,
         index: true
@@ -21,6 +27,7 @@ const userSchema =
 
       passwordHash: {
         type: String,
+        required: true,
         select: false
       },
 
@@ -50,6 +57,11 @@ const userSchema =
         default: null
       },
 
+      sessionVersion: {
+        type: Number,
+        default: 0
+      },
+
       lastLoginAt: {
         type: Date,
         default: null
@@ -59,6 +71,16 @@ const userSchema =
       timestamps: true
     }
   );
+
+userSchema.index(
+  {
+    accountId: 1,
+    email: 1
+  },
+  {
+    unique: true
+  }
+);
 
 module.exports =
   mongoose.model(
