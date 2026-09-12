@@ -4,11 +4,17 @@ const jwt =
 const config =
   require("../config/environment");
 
+const User =
+  require("../models/user");
+
 function createToken(user) {
   return jwt.sign(
     {
       sub: user._id.toString(),
-      role: user.role
+      accountId: user.accountId,
+      role: user.role,
+      sessionVersion:
+        user.sessionVersion
     },
     config.jwtSecret,
     {
@@ -18,7 +24,7 @@ function createToken(user) {
   );
 }
 
-function requireAuth(
+async function requireAuth(
   req,
   res,
   next
@@ -40,7 +46,32 @@ function requireAuth(
         config.jwtSecret
       );
 
-    req.user = payload;
+    const user =
+      await User.findById(
+        payload.sub
+      );
+
+    if (
+      !user ||
+      !user.active
+    ) {
+      return res.status(401).json({
+        success: false,
+        error: "Invalid session"
+      });
+    }
+
+    if (
+      user.sessionVersion !==
+      payload.sessionVersion
+    ) {
+      return res.status(401).json({
+        success: false,
+        error: "Session expired"
+      });
+    }
+
+    req.user = user;
 
     next();
   } catch {
@@ -51,9 +82,7 @@ function requireAuth(
   }
 }
 
-function requireRole(
-  ...roles
-) {
+function requireRole(...roles) {
   return (
     req,
     res,
