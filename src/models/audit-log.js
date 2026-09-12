@@ -1,8 +1,15 @@
-const mongoose = require("mongoose");
+const mongoose =
+  require("mongoose");
 
 const auditLogSchema =
   new mongoose.Schema(
     {
+      accountId: {
+        type: String,
+        index: true,
+        default: null
+      },
+
       actorId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "User",
@@ -39,6 +46,11 @@ const auditLogSchema =
       timestamps: true
     }
   );
+
+auditLogSchema.index({
+  accountId: 1,
+  createdAt: -1
+});
 
 module.exports =
   mongoose.model(
