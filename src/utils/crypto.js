@@ -1,6 +1,8 @@
-const crypto = require("crypto");
+const crypto =
+  require("crypto");
 
-const algorithm = "aes-256-gcm";
+const algorithm =
+  "aes-256-gcm";
 
 function getKey() {
   const raw =
@@ -60,11 +62,20 @@ function decrypt(value) {
     return null;
   }
 
+  const parts =
+    String(value).split(".");
+
+  if (parts.length !== 3) {
+    throw new Error(
+      "Invalid encrypted value"
+    );
+  }
+
   const [
     ivBase64,
     authTagBase64,
     encryptedBase64
-  ] = value.split(".");
+  ] = parts;
 
   const decipher =
     crypto.createDecipheriv(
@@ -83,17 +94,36 @@ function decrypt(value) {
     )
   );
 
-  return Buffer.concat([
-    decipher.update(
-      Buffer.from(
-        encryptedBase64,
-        "base64"
-      )
-    ),
-    decipher.final()
-  ].map(
-    buffer => Buffer.from(buffer)
-  )).toString("utf8");
+  const decrypted =
+    Buffer.concat([
+      decipher.update(
+        Buffer.from(
+          encryptedBase64,
+          "base64"
+        )
+      ),
+      decipher.final()
+    ]);
+
+  return decrypted.toString(
+    "utf8"
+  );
+}
+
+function encryptJson(value) {
+  return encrypt(
+    JSON.stringify(value)
+  );
+}
+
+function decryptJson(value) {
+  if (!value) {
+    return null;
+  }
+
+  return JSON.parse(
+    decrypt(value)
+  );
 }
 
 function hash(value) {
@@ -106,5 +136,7 @@ function hash(value) {
 module.exports = {
   encrypt,
   decrypt,
+  encryptJson,
+  decryptJson,
   hash
 };
