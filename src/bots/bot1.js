@@ -1,8 +1,8 @@
+const crypto =
+  require("crypto");
+
 const Application =
   require("../models/application");
-
-const Client =
-  require("../models/client");
 
 const OtpService =
   require("../services/otp/otp-service");
@@ -10,12 +10,19 @@ const OtpService =
 const FacialService =
   require("../services/facial/facial-service");
 
-const eventBus =
+const {
+  decryptJson
+} = require("../utils/crypto");
+
+const logger =
   require("../utils/logger");
 
 class Bot1 {
   constructor(site) {
     this.site = site;
+
+    this.workerId =
+      crypto.randomUUID();
 
     this.otp =
       new OtpService();
@@ -28,16 +35,25 @@ class Bot1 {
     applicationId
   ) {
     const application =
-      await Application
-        .findById(
-          applicationId
-        )
-        .populate("client");
+      await Application.findById(
+        applicationId
+      )
+        .populate("client")
+        .select(
+          "+preparedDataEncrypted"
+        );
 
     if (!application) {
       throw new Error(
         "Application not found"
       );
+    }
+
+    if (
+      application.status ===
+      "completed"
+    ) {
+      return application;
     }
 
     application.status =
@@ -46,24 +62,43 @@ class Bot1 {
     application.bot1.status =
       "running";
 
+    application.bot1.workerId =
+      this.workerId;
+
     application.bot1.startedAt =
       new Date();
+
+    application.bot1.lastAction =
+      "initializing";
 
     await application.save();
 
     try {
       await this.site.initialize();
 
-      /*
-       * O objetivo aqui é preparar tudo
-       * antes da disponibilidade.
-       */
+      application.bot1.lastAction =
+        "login";
+
+      await application.save();
 
       await this.site.login();
 
+      const preparedData =
+        application.preparedDataEncrypted
+          ? decryptJson(
+              application.preparedDataEncrypted
+            )
+          : null;
+
+      application.bot1.lastAction =
+        "filling_application";
+
+      await application.save();
+
       await this.site.fillApplication(
         application,
-        application.client
+        application.client,
+        preparedData
       );
 
       const otp =
@@ -80,27 +115,18 @@ class Bot1 {
       application.status =
         "otp_required";
 
-      await application.save();
+      application.bot1.lastAction =
+        "waiting_for_otp";
 
-      /*
-       * O fluxo de OTP será retomado
-       * através do provider autorizado.
-       */
+      await application.save();
 
       return application;
     } catch (error) {
-      application.status =
-        "error";
-
-      application.bot1.status =
-        "error";
-
-      application.error = {
-        code: "BOT1_PREPARATION_ERROR",
-        message: error.message
-      };
-
-      await application.save();
+      await this.markError(
+        application,
+        "BOT1_PREPARATION_ERROR",
+        error
+      );
 
       throw error;
     }
@@ -110,11 +136,9 @@ class Bot1 {
     applicationId
   ) {
     const application =
-      await Application
-        .findById(
-          applicationId
-        )
-        .populate("client");
+      await Application.findById(
+        applicationId
+      ).populate("client");
 
     if (!application) {
       throw new Error(
@@ -122,12 +146,36 @@ class Bot1 {
       );
     }
 
-    const started =
-      performance.now();
-
     try {
       application.status =
+        "identity_verification";
+
+      application.bot1.lastAction =
+        "identity_verification";
+
+      await application.save();
+
+      if (
+        application.client
+          ?.facialProfile
+          ?.verificationStatus ===
+        "pending"
+      ) {
+        await this.facial.verify({
+          clientId:
+            application.client._id.toString(),
+          templateReference:
+            application.client
+              .facialProfile
+              .templateReference
+        });
+      }
+
+      application.status =
         "calendar";
+
+      application.bot1.lastAction =
+        "opening_calendar";
 
       await application.save();
 
@@ -139,22 +187,24 @@ class Bot1 {
       application.bot1.status =
         "waiting";
 
-      application.bot1.preparedAt =
+      application.bot1.lastAction =
+        "waiting_for_slot";
+
+      application.preparedAt =
         new Date();
+
+      application.bot2.monitoring =
+        true;
 
       await application.save();
 
       return application;
     } catch (error) {
-      application.status =
-        "error";
-
-      application.error = {
-        code: "BOT1_CALENDAR_ERROR",
-        message: error.message
-      };
-
-      await application.save();
+      await this.markError(
+        application,
+        "BOT1_CALENDAR_ERROR",
+        error
+      );
 
       throw error;
     }
@@ -162,22 +212,24 @@ class Bot1 {
 
   async handleSlot(
     applicationId,
-    slot
+    slotReceivedAt = null
   ) {
-    /*
-     * Lock atómico no MongoDB.
-     *
-     * Isto evita que duas instâncias do worker
-     * tentem concluir o mesmo processo.
-     */
+    const lockOwner =
+      this.workerId;
+
+    const lockExpiry =
+      new Date(
+        Date.now() + 30000
+      );
 
     const application =
       await Application.findOneAndUpdate(
         {
-          _id: applicationId,
+          _id:
+            applicationId,
 
           status:
-            "waiting_for_slot",
+            "slot_received",
 
           $or: [
             {
@@ -194,18 +246,22 @@ class Bot1 {
         {
           $set: {
             status:
-              "slot_received",
+              "continuing",
 
             "lock.owner":
-              process.pid.toString(),
+              lockOwner,
 
             "lock.expiresAt":
-              new Date(
-                Date.now() +
-                30000
-              ),
+              lockExpiry,
 
-            slot
+            "bot1.status":
+              "continuing",
+
+            "bot1.workerId":
+              lockOwner,
+
+            "bot1.lastAction":
+              "claiming_slot"
           }
         },
         {
@@ -217,25 +273,35 @@ class Bot1 {
       return {
         success: false,
         reason:
-          "Already locked or completed"
+          "Slot already claimed or application unavailable"
       };
     }
 
-    const started =
-      performance.now();
+    const startedAt =
+      Date.now();
 
     try {
-      application.status =
-        "continuing";
-
-      application.bot1.status =
-        "continuing";
-
-      await application.save();
+      if (
+        slotReceivedAt
+      ) {
+        application.metrics.resumeMs =
+          Math.max(
+            0,
+            Date.now() -
+              new Date(
+                slotReceivedAt
+              ).getTime()
+          );
+      }
 
       await this.site.selectSlot(
-        slot
+        application.slot
       );
+
+      application.bot1.lastAction =
+        "continuing_application";
+
+      await application.save();
 
       await this.site.continueApplication(
         application,
@@ -248,13 +314,15 @@ class Bot1 {
       const entity =
         await this.site.getEntity();
 
-      const elapsed =
-        performance.now() -
-        started;
+      const completionMs =
+        Date.now() -
+        startedAt;
 
       application.result = {
-        reference,
-        entity
+        reference:
+          reference || null,
+        entity:
+          entity || null
       };
 
       application.status =
@@ -263,19 +331,19 @@ class Bot1 {
       application.bot1.status =
         "completed";
 
+      application.bot1.lastAction =
+        "completed";
+
       application.bot1.completedAt =
         new Date();
 
       application.metrics.completionMs =
-        Math.round(
-          elapsed
-        );
+        completionMs;
 
-      application.lock =
-        {
-          owner: null,
-          expiresAt: null
-        };
+      application.lock = {
+        owner: null,
+        expiresAt: null
+      };
 
       await application.save();
 
@@ -283,24 +351,14 @@ class Bot1 {
         success: true,
         application,
         elapsedMs:
-          Math.round(
-            elapsed
-          )
+          completionMs
       };
     } catch (error) {
-      application.status =
-        "error";
-
-      application.bot1.status =
-        "error";
-
-      application.error = {
-        code:
-          "BOT1_COMPLETION_ERROR",
-
-        message:
-          error.message
-      };
+      await this.markError(
+        application,
+        "BOT1_COMPLETION_ERROR",
+        error
+      );
 
       application.lock = {
         owner: null,
@@ -311,6 +369,37 @@ class Bot1 {
 
       throw error;
     }
+  }
+
+  async markError(
+    application,
+    code,
+    error
+  ) {
+    application.status =
+      "error";
+
+    application.bot1.status =
+      "error";
+
+    application.error = {
+      code,
+      message:
+        error.message
+    };
+
+    await application.save();
+
+    logger.error(
+      "Bot1 failed",
+      {
+        applicationId:
+          application._id.toString(),
+        code,
+        error:
+          error.message
+      }
+    );
   }
 }
 
