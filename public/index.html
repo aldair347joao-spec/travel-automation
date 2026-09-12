@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="description"
+    content="Travel Automation — gestão inteligente de processos de agendamento."
+  >
+
+  <title>
+    Travel Automation
+  </title>
+
+  <link
+    rel="stylesheet"
+    href="/style.css"
+  >
+</head>
+
+<body>
+
+  <div
+    id="toast"
+    class="toast"
+    aria-live="polite"
+  ></div>
+
+  <!-- LOGIN -->
+
+  <section
+    id="loginView"
+    class="auth-view"
+  >
+    <div class="auth-shell">
+
+      <div class="brand-block">
+        <div class="brand-mark">
+          TA
+        </div>
+
+        <div>
+          <strong>
+            Travel Automation
+          </strong>
+
+          <span>
+            Appointment Operations
+          </span>
+        </div>
+      </div>
+
+      <div class="auth-card">
+
+        <div class="eyebrow">
+          SECURE ACCESS
+        </div>
+
+        <h1>
+          Bem-vindo novamente
+        </h1>
+
+        <p>
+          Entre na plataforma para
+          gerir os seus processos.
+        </p>
+
+        <form
+          id="loginForm"
+          autocomplete="on"
+        >
+
+          <label>
+            Email
+
+            <input
+              id="loginEmail"
+              name="email"
+              type="email"
+              autocomplete="username"
+              required
+            >
+          </label>
+
+          <label>
+            Palavra-passe
+
+            <input
+              id="loginPassword"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              required
+            >
+          </label>
+
+          <button
+            class="primary-button"
+            type="submit"
+          >
+            Entrar
+          </button>
+
+        </form>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- APPLICATION -->
+
+  <section
+    id="appView"
+    class="app-view hidden"
+  >
+
+    <header class="topbar">
+
+      <div class="brand-block compact">
+        <div class="brand-mark">
+          TA
+        </div>
+
+        <div>
+          <strong>
+            Travel Automation
+          </strong>
+
+          <span>
+            Operations Center
+          </span>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+
+        <div class="connection-status">
+          <span
+            id="connectionDot"
+            class="status-dot"
+          ></span>
+
+          <span
+            id="connectionText"
+          >
+            Online
+          </span>
+        </div>
+
+        <span
+          id="userName"
+          class="user-name"
+        ></span>
+
+        <button
+          id="logoutButton"
+          class="ghost-button"
+          type="button"
+        >
+          Sair
+        </button>
+
+      </div>
+
+    </header>
+
+    <main class="dashboard">
+
+      <section class="hero">
+
+        <div>
+          <div class="eyebrow">
+            OPERATIONS CENTER
+          </div>
+
+          <h1>
+            Controle os seus
+            <span>processos</span>
+          </h1>
+
+          <p>
+            Prepare aplicações, acompanhe
+            a disponibilidade e mantenha
+            cada processo sincronizado.
+          </p>
+        </div>
+
+        <button
+          id="refreshButton"
+          class="secondary-button"
+          type="button"
+        >
+          Atualizar
+        </button>
+
+      </section>
+
+      <!-- STATS -->
+
+      <section class="stats-grid">
+
+        <article class="stat-card">
+          <span>
+            Processos
+          </span>
+
+          <strong
+            id="statTotal"
+          >
+            0
+          </strong>
+        </article>
+
+        <article class="stat-card">
+          <span>
+            Aguardando vaga
+          </span>
+
+          <strong
+            id="statWaiting"
+          >
+            0
+          </strong>
+        </article>
+
+        <article class="stat-card">
+          <span>
+            Em execução
+          </span>
+
+          <strong
+            id="statProcessing"
+          >
+            0
+          </strong>
+        </article>
+
+        <article class="stat-card">
+          <span>
+            Concluídos
+          </span>
+
+          <strong
+            id="statCompleted"
+          >
+            0
+          </strong>
+        </article>
+
+      </section>
+
+      <!-- NEW CLIENT -->
+
+      <section class="panel">
+
+        <div class="panel-header">
+          <div>
+            <div class="eyebrow">
+              CLIENTE
+            </div>
+
+            <h2>
+              Novo cliente
+            </h2>
+          </div>
+        </div>
+
+        <form
+          id="clientForm"
+          class="form-grid"
+        >
+
+          <label>
+            Nome completo
+
+            <input
+              id="clientFullName"
+              required
+              maxlength="160"
+            >
+          </label>
+
+          <label>
+            Email
+
+            <input
+              id="clientEmail"
+              type="email"
+              required
+            >
+          </label>
+
+          <label>
+            Telefone
+
+            <input
+              id="clientPhone"
+            >
+          </label>
+
+          <label>
+            Data de nascimento
+
+            <input
+              id="clientDateOfBirth"
+              type="date"
+            >
+          </label>
+
+          <label>
+            Nacionalidade
+
+            <input
+              id="clientNationality"
+            >
+          </label>
+
+          <label>
+            Género
+
+            <select id="clientGender">
+              <option value="">
+                Selecionar
+              </option>
+
+              <option value="male">
+                Masculino
+              </option>
+
+              <option value="female">
+                Feminino
+              </option>
+
+              <option value="other">
+                Outro
+              </option>
+            </select>
+          </label>
+
+          <label>
+            Número do passaporte
+
+            <input
+              id="clientPassportNumber"
+            >
+          </label>
+
+          <label>
+            País do passaporte
+
+            <input
+              id="clientPassportCountry"
+            >
+          </label>
+
+          <label>
+            Data de emissão
+
+            <input
+              id="clientPassportIssueDate"
+              type="date"
+            >
+          </label>
+
+          <label>
+            Data de validade
+
+            <input
+              id="clientPassportExpiryDate"
+              type="date"
+            >
+          </label>
+
+          <div class="form-actions">
+            <button
+              class="primary-button"
+              type="submit"
+            >
+              Guardar cliente
+            </button>
+          </div>
+
+        </form>
+
+      </section>
+
+      <!-- NEW APPLICATION -->
+
+      <section class="panel">
+
+        <div class="panel-header">
+          <div>
+            <div class="eyebrow">
+              NOVO PROCESSO
+            </div>
+
+            <h2>
+              Preparar agendamento
+            </h2>
+          </div>
+        </div>
+
+        <form
+          id="applicationForm"
+          class="form-grid"
+        >
+
+          <label>
+            Cliente
+
+            <select
+              id="applicationClient"
+              required
+            >
+              <option value="">
+                Selecione um cliente
+              </option>
+            </select>
+          </label>
+
+          <label>
+            Data inicial
+
+            <input
+              id="preferredStart"
+              type="date"
+            >
+          </label>
+
+          <label>
+            Data final
+
+            <input
+              id="preferredEnd"
+              type="date"
+            >
+          </label>
+
+          <label>
+            Horário preferencial
+
+            <input
+              id="preferredTime"
+              type="time"
+            >
+          </label>
+
+          <div class="form-actions">
+            <button
+              class="primary-button"
+              type="submit"
+            >
+              Criar processo
+            </button>
+          </div>
+
+        </form>
+
+      </section>
+
+      <!-- APPLICATIONS -->
+
+      <section class="panel">
+
+        <div class="panel-header">
+
+          <div>
+            <div class="eyebrow">
+              PROCESSOS
+            </div>
+
+            <h2>
+              Acompanhamento
+            </h2>
+          </div>
+
+          <span
+            id="applicationCount"
+            class="panel-count"
+          >
+            0
+          </span>
+
+        </div>
+
+        <div
+          id="applicationsList"
+          class="applications-list"
+        ></div>
+
+      </section>
+
+    </main>
+
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>
