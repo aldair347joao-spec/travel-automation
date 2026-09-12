@@ -1,13 +1,31 @@
-const mongoose = require("mongoose");
+const mongoose =
+  require("mongoose");
 
 const applicationSchema =
   new mongoose.Schema(
     {
+      accountId: {
+        type: String,
+        required: true,
+        index: true
+      },
+
+      createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
+      },
+
       client: {
         type: mongoose.Schema.Types.ObjectId,
         ref: "Client",
         required: true,
         index: true
+      },
+
+      idempotencyKey: {
+        type: String,
+        default: null
       },
 
       status: {
@@ -30,8 +48,15 @@ const applicationSchema =
       },
 
       preferredDates: {
-        start: String,
-        end: String
+        start: {
+          type: String,
+          default: null
+        },
+
+        end: {
+          type: String,
+          default: null
+        }
       },
 
       preferredTime: {
@@ -40,8 +65,15 @@ const applicationSchema =
       },
 
       slot: {
-        date: String,
-        time: String
+        date: {
+          type: String,
+          default: null
+        },
+
+        time: {
+          type: String,
+          default: null
+        }
       },
 
       result: {
@@ -56,10 +88,26 @@ const applicationSchema =
         }
       },
 
+      preparedDataEncrypted: {
+        type: String,
+        default: null,
+        select: false
+      },
+
+      preparedAt: {
+        type: Date,
+        default: null
+      },
+
       bot1: {
         status: {
           type: String,
           default: "idle"
+        },
+
+        workerId: {
+          type: String,
+          default: null
         },
 
         lastAction: {
@@ -67,11 +115,15 @@ const applicationSchema =
           default: null
         },
 
-        preparedAt: Date,
+        startedAt: {
+          type: Date,
+          default: null
+        },
 
-        startedAt: Date,
-
-        completedAt: Date
+        completedAt: {
+          type: Date,
+          default: null
+        }
       },
 
       bot2: {
@@ -85,7 +137,20 @@ const applicationSchema =
           default: false
         },
 
-        lastCheckAt: Date
+        workerId: {
+          type: String,
+          default: null
+        },
+
+        lastCheckAt: {
+          type: Date,
+          default: null
+        },
+
+        slotDetectedAt: {
+          type: Date,
+          default: null
+        }
       },
 
       otp: {
@@ -108,9 +173,20 @@ const applicationSchema =
       },
 
       metrics: {
-        slotDetectionMs: Number,
-        resumeMs: Number,
-        completionMs: Number
+        slotDetectionMs: {
+          type: Number,
+          default: null
+        },
+
+        resumeMs: {
+          type: Number,
+          default: null
+        },
+
+        completionMs: {
+          type: Number,
+          default: null
+        }
       },
 
       lock: {
@@ -126,8 +202,15 @@ const applicationSchema =
       },
 
       error: {
-        code: String,
-        message: String
+        code: {
+          type: String,
+          default: null
+        },
+
+        message: {
+          type: String,
+          default: null
+        }
       }
     },
     {
@@ -136,9 +219,20 @@ const applicationSchema =
   );
 
 applicationSchema.index({
-  status: 1,
-  "bot2.monitoring": 1
+  accountId: 1,
+  status: 1
 });
+
+applicationSchema.index(
+  {
+    accountId: 1,
+    idempotencyKey: 1
+  },
+  {
+    unique: true,
+    sparse: true
+  }
+);
 
 module.exports =
   mongoose.model(
