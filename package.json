@@ -1,6 +1,6 @@
 {
   "name": "travel-automation",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Secure travel appointment automation platform",
   "main": "server.js",
   "scripts": {
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
@@ -20,7 +21,6 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.0",
-    "morgan": "^1.10.1",
-    "cookie-parser": "^1.4.7"
+    "morgan": "^1.10.1"
   }
 }
