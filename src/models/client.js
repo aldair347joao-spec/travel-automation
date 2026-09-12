@@ -1,4 +1,5 @@
-const mongoose = require("mongoose");
+const mongoose =
+  require("mongoose");
 
 const facePositionSchema =
   new mongoose.Schema(
@@ -12,12 +13,14 @@ const facePositionSchema =
 
       label: {
         type: String,
-        required: true
+        required: true,
+        maxlength: 80
       },
 
       storageReference: {
         type: String,
-        required: true
+        required: true,
+        maxlength: 500
       },
 
       capturedAt: {
@@ -51,8 +54,9 @@ const facialProfileSchema =
       positions: {
         type: [facePositionSchema],
         validate: {
-          validator: value =>
-            value.length <= 10,
+          validator(value) {
+            return value.length <= 10;
+          },
           message:
             "Maximum of 10 facial positions"
         }
@@ -60,7 +64,8 @@ const facialProfileSchema =
 
       videoReference: {
         type: String,
-        default: null
+        default: null,
+        maxlength: 500
       },
 
       verificationStatus: {
@@ -82,10 +87,23 @@ const facialProfileSchema =
 const clientSchema =
   new mongoose.Schema(
     {
+      accountId: {
+        type: String,
+        required: true,
+        index: true
+      },
+
+      createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true
+      },
+
       fullName: {
         type: String,
         required: true,
-        trim: true
+        trim: true,
+        maxlength: 160
       },
 
       email: {
@@ -93,12 +111,13 @@ const clientSchema =
         required: true,
         lowercase: true,
         trim: true,
-        index: true
+        maxlength: 254
       },
 
       phone: {
         type: String,
-        default: null
+        default: null,
+        maxlength: 40
       },
 
       dateOfBirth: {
@@ -136,6 +155,18 @@ const clientSchema =
         default: null
       },
 
+      facialConsent: {
+        accepted: {
+          type: Boolean,
+          default: false
+        },
+
+        acceptedAt: {
+          type: Date,
+          default: null
+        }
+      },
+
       facialProfile: {
         type: facialProfileSchema,
         default: () => ({
@@ -152,6 +183,11 @@ const clientSchema =
       timestamps: true
     }
   );
+
+clientSchema.index({
+  accountId: 1,
+  email: 1
+});
 
 module.exports =
   mongoose.model(
