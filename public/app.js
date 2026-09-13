@@ -1,1975 +1,1534 @@
-const state = {
-  user: null,
-  clients: [],
-  applications: [],
-  selectedPassport: null,
-  activities: []
-};
+(() => {
+  "use strict";
+
+  const state = {
+    user: null,
+    clients: [],
+    applications: [],
+    csrfToken: null,
+    loading: false
+  };
 
 
-const $ = selector =>
-  document.querySelector(selector);
+  /* =========================================================
+     DOM
+  ========================================================= */
+
+  const $ = (id) => document.getElementById(id);
 
 
-function showToast(
-  message,
-  type = "info"
-) {
-  const toast = $("#toast");
+  /* =========================================================
+     HELPERS
+  ========================================================= */
 
-  if (!toast) {
-    return;
+  function escapeHtml(value) {
+    return String(value ?? "")
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
   }
 
-  toast.textContent = message;
 
-  toast.className =
-    `toast ${type} visible`;
+  function formatDate(value) {
+    if (!value) return "—";
 
-  clearTimeout(
-    showToast.timer
-  );
+    const date = new Date(value);
 
-  showToast.timer =
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
+
+    return new Intl.DateTimeFormat("pt-PT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    }).format(date);
+  }
+
+
+  function formatDateTime(value) {
+    if (!value) return "—";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return String(value);
+    }
+
+    return new Intl.DateTimeFormat("pt-PT", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(date);
+  }
+
+
+  function showToast(message, type = "info") {
+    const container = $("toastContainer");
+
+    if (!container) return;
+
+    const toast = document.createElement("div");
+
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+
+    container.appendChild(toast);
+
     setTimeout(() => {
-      toast.classList.remove(
-        "visible"
-      );
+      toast.style.opacity = "0";
+      toast.style.transform = "translateY(8px)";
+
+      setTimeout(() => {
+        toast.remove();
+      }, 200);
     }, 3500);
-}
-
-
-function addActivity(
-  title,
-  detail = ""
-) {
-  state.activities.unshift({
-    title,
-    detail,
-    createdAt: new Date()
-  });
-
-  state.activities =
-    state.activities.slice(0, 12);
-
-  renderActivity();
-}
-
-
-function renderActivity() {
-  const container =
-    $("#activityFeed");
-
-  if (!container) {
-    return;
   }
 
-  if (!state.activities.length) {
-    container.innerHTML = `
-      <div class="activity-empty">
-        Aguardando atividade...
-      </div>
+
+  function setConnection(online, text) {
+    const connectionText = $("connectionText");
+
+    if (connectionText) {
+      connectionText.textContent =
+        text || (online ? "Sistema operacional" : "Sistema indisponível");
+    }
+  }
+
+
+  function getCookie(name) {
+    const cookies = document.cookie.split(";");
+
+    for (const cookie of cookies) {
+      const [key, ...parts] = cookie.trim().split("=");
+
+      if (key === name) {
+        return decodeURIComponent(parts.join("="));
+      }
+    }
+
+    return null;
+  }
+
+
+  function getCsrfToken() {
+    return (
+      state.csrfToken ||
+      getCookie("csrf_token") ||
+      getCookie("csrfToken")
+    );
+  }
+
+
+  /* =========================================================
+     API
+  ========================================================= */
+
+  async function api(url, options = {}) {
+    const config = {
+      credentials: "include",
+      ...options,
+      headers: {
+        ...(options.body instanceof FormData
+          ? {}
+          : {
+              "Content-Type": "application/json"
+            }),
+        ...(options.headers || {})
+      }
+    };
+
+    const csrf = getCsrfToken();
+
+    if (
+      csrf &&
+      ["POST", "PUT", "PATCH", "DELETE"].includes(
+        String(config.method || "GET").toUpperCase()
+      )
+    ) {
+      config.headers["x-csrf-token"] = csrf;
+    }
+
+    const response = await fetch(url, config);
+
+    const contentType = response.headers.get("content-type") || "";
+
+    let data;
+
+    if (contentType.includes("application/json")) {
+      data = await response.json();
+    } else {
+      data = await response.text();
+    }
+
+    if (!response.ok) {
+      const message =
+        typeof data === "object"
+          ? data.message || data.error || "Erro na operação."
+          : data || "Erro na operação.";
+
+      const error = new Error(message);
+
+      error.status = response.status;
+      error.data = data;
+
+      throw error;
+    }
+
+    return data;
+  }
+
+
+  /* =========================================================
+     LOGIN / SESSION
+  ========================================================= */
+
+  function showLogin() {
+    $("loginView")?.classList.remove("hidden");
+    $("appView")?.classList.add("hidden");
+  }
+
+
+  function showApp() {
+    $("loginView")?.classList.add("hidden");
+    $("appView")?.classList.remove("hidden");
+  }
+
+
+  async function loadCurrentUser() {
+    try {
+      const response = await api("/api/auth/me");
+
+      state.user =
+        response?.user ||
+        response?.data ||
+        response ||
+        null;
+
+      showApp();
+
+      updateUserInterface();
+
+      await refreshDashboard();
+
+      setConnection(true, "Sistema operacional");
+
+    } catch (error) {
+      /*
+       * Quando AUTH_ENABLED=false, algumas versões da API
+       * podem não expor /api/auth/me. Nesse caso tentamos
+       * continuar através de /api/health.
+       */
+
+      try {
+        await api("/api/health");
+
+        state.user = {
+          name: "Operations Console",
+          email: "dev@travel-automation.local"
+        };
+
+        showApp();
+
+        updateUserInterface();
+
+        await refreshDashboard();
+
+        setConnection(true, "Sistema operacional");
+
+      } catch (healthError) {
+        console.error(healthError);
+
+        showLogin();
+
+        setConnection(false, "Sistema indisponível");
+      }
+    }
+  }
+
+
+  async function login() {
+    try {
+      const response = await api("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({})
+      });
+
+      state.user =
+        response?.user ||
+        response?.data ||
+        response ||
+        null;
+
+      showApp();
+
+      updateUserInterface();
+
+      await refreshDashboard();
+
+      showToast("Sessão iniciada.", "success");
+
+    } catch (error) {
+
+      /*
+       * AUTH_ENABLED=false não exige login.
+       * Neste cenário mostramos diretamente o console.
+       */
+
+      try {
+        await api("/api/health");
+
+        state.user = {
+          name: "Operations Console",
+          email: "dev@travel-automation.local"
+        };
+
+        showApp();
+
+        updateUserInterface();
+
+        await refreshDashboard();
+
+        showToast("Centro de operações iniciado.", "success");
+
+      } catch (fallbackError) {
+        console.error(error);
+        console.error(fallbackError);
+
+        showToast(
+          error.message || "Não foi possível iniciar a sessão.",
+          "error"
+        );
+      }
+    }
+  }
+
+
+  function updateUserInterface() {
+    const userName = $("userName");
+
+    if (!userName) return;
+
+    userName.textContent =
+      state.user?.name ||
+      state.user?.email ||
+      "Operations Console";
+  }
+
+
+  /* =========================================================
+     CLIENTS
+  ========================================================= */
+
+  async function loadClients() {
+    try {
+      const response = await api("/api/clients");
+
+      state.clients =
+        Array.isArray(response)
+          ? response
+          : response?.clients ||
+            response?.data ||
+            [];
+
+      renderClientSelector();
+      updateClientCount();
+      updateReadiness();
+
+    } catch (error) {
+      console.error("Erro ao carregar clientes:", error);
+
+      state.clients = [];
+
+      renderClientSelector();
+
+      showToast(
+        "Não foi possível carregar os clientes.",
+        "error"
+      );
+    }
+  }
+
+
+  function renderClientSelector() {
+    const select = $("applicationClient");
+
+    if (!select) return;
+
+    const currentValue = select.value;
+
+    select.innerHTML = `
+      <option value="">Selecionar cliente</option>
+      ${state.clients
+        .map((client) => {
+          const id = client._id || client.id;
+
+          const name =
+            client.fullName ||
+            client.name ||
+            "Cliente sem nome";
+
+          return `
+            <option value="${escapeHtml(id)}">
+              ${escapeHtml(name)}
+            </option>
+          `;
+        })
+        .join("")}
     `;
 
-    return;
+    if (currentValue) {
+      select.value = currentValue;
+    }
   }
 
-  container.innerHTML =
-    state.activities
-      .map(activity => {
-        const time =
-          activity.createdAt
-            .toLocaleTimeString(
-              "pt-PT",
-              {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit"
-              }
-            );
+
+  function updateClientCount() {
+    const element = $("clientCount");
+
+    if (element) {
+      element.textContent = state.clients.length;
+    }
+  }
+
+
+  /* =========================================================
+     CLIENT FORM
+  ========================================================= */
+
+  async function handleClientSubmit(event) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+
+    const button = form.querySelector(
+      'button[type="submit"]'
+    );
+
+    if (button) {
+      button.disabled = true;
+    }
+
+    const payload = {
+      fullName: $("clientFullName")?.value.trim(),
+      email: $("clientEmail")?.value.trim(),
+      phone: $("clientPhone")?.value.trim(),
+      dateOfBirth: $("clientDateOfBirth")?.value || null,
+      nationality: $("clientNationality")?.value.trim(),
+      gender: $("clientGender")?.value || null,
+
+      passportNumber:
+        $("clientPassportNumber")?.value.trim(),
+
+      passportIssueDate:
+        $("clientPassportIssueDate")?.value || null,
+
+      passportExpiryDate:
+        $("clientPassportExpiryDate")?.value || null,
+
+      passportCountry:
+        $("clientPassportCountry")?.value.trim(),
+
+      facialConsent:
+        Boolean($("clientFacialConsent")?.checked)
+    };
+
+
+    try {
+      const response = await api("/api/clients", {
+        method: "POST",
+        body: JSON.stringify(payload)
+      });
+
+      const client =
+        response?.client ||
+        response?.data ||
+        response;
+
+      if (client && (client._id || client.id)) {
+        state.clients.unshift(client);
+      }
+
+      renderClientSelector();
+      updateClientCount();
+      updateReadiness();
+
+      form.reset();
+
+      updatePassportChecks();
+
+      showToast(
+        "Perfil do cliente criado com sucesso.",
+        "success"
+      );
+
+      addActivity(
+        "Novo cliente",
+        "Perfil de cliente criado no sistema.",
+        "blue"
+      );
+
+    } catch (error) {
+      console.error(error);
+
+      showToast(
+        error.message ||
+          "Não foi possível criar o cliente.",
+        "error"
+      );
+
+    } finally {
+      if (button) {
+        button.disabled = false;
+      }
+    }
+  }
+
+
+  /* =========================================================
+     PASSPORT READINESS
+  ========================================================= */
+
+  function hasPassportData() {
+    return Boolean(
+      $("clientPassportNumber")?.value.trim() ||
+      $("clientPassportIssueDate")?.value ||
+      $("clientPassportExpiryDate")?.value ||
+      $("clientPassportCountry")?.value.trim()
+    );
+  }
+
+
+  function updatePassportChecks() {
+    const fileCheck = $("passportCheckFile");
+    const dataCheck = $("passportCheckData");
+    const readyCheck = $("passportCheckReady");
+
+    const dataReady = hasPassportData();
+
+    if (fileCheck) {
+      fileCheck.classList.remove("ready");
+      fileCheck.innerHTML = `
+        <span>○</span>
+        <span>Documento anexado</span>
+      `;
+    }
+
+    if (dataCheck) {
+      dataCheck.classList.toggle("ready", dataReady);
+
+      dataCheck.innerHTML = dataReady
+        ? `
+          <span>✓</span>
+          <span>Dados preenchidos</span>
+        `
+        : `
+          <span>○</span>
+          <span>Dados preenchidos</span>
+        `;
+    }
+
+    if (readyCheck) {
+      readyCheck.classList.toggle("ready", dataReady);
+
+      readyCheck.innerHTML = dataReady
+        ? `
+          <span>✓</span>
+          <span>Dados prontos para operação</span>
+        `
+        : `
+          <span>○</span>
+          <span>Pronto para operação</span>
+        `;
+    }
+  }
+
+
+  /* =========================================================
+     APPLICATIONS
+  ========================================================= */
+
+  async function loadApplications() {
+    try {
+      const response = await api("/api/applications");
+
+      state.applications =
+        Array.isArray(response)
+          ? response
+          : response?.applications ||
+            response?.data ||
+            [];
+
+      renderApplications();
+      updateApplicationStats();
+      updateReadiness();
+
+    } catch (error) {
+      console.error("Erro ao carregar aplicações:", error);
+
+      state.applications = [];
+
+      renderApplications();
+      updateApplicationStats();
+
+      showToast(
+        "Não foi possível carregar as aplicações.",
+        "error"
+      );
+    }
+  }
+
+
+  function getStatusLabel(status) {
+    const labels = {
+      created: "Criada",
+      preparing: "Preparando",
+      otp_required: "OTP necessário",
+      otp_verified: "OTP verificado",
+      identity_verification: "Verificação de identidade",
+      calendar: "Calendário",
+      waiting_for_slot: "No radar",
+      slot_received: "Vaga encontrada",
+      continuing: "A continuar",
+      completed: "Concluída",
+      error: "Erro",
+      cancelled: "Cancelada"
+    };
+
+    return labels[status] || status || "Desconhecido";
+  }
+
+
+  function getApplicationClientName(application) {
+    const client =
+      application.client ||
+      application.clientData ||
+      null;
+
+    if (typeof client === "string") {
+      const found = state.clients.find(
+        (item) =>
+          String(item._id || item.id) === String(client)
+      );
+
+      return (
+        found?.fullName ||
+        "Cliente"
+      );
+    }
+
+    return (
+      client?.fullName ||
+      client?.name ||
+      "Cliente"
+    );
+  }
+
+
+  function renderApplications() {
+    const container = $("applicationsList");
+
+    if (!container) return;
+
+    if (!state.applications.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">◎</div>
+
+          <strong>Nenhuma aplicação em operação</strong>
+
+          <p>
+            Crie um cliente e inicie uma aplicação
+            para acompanhar o processo aqui.
+          </p>
+        </div>
+      `;
+
+      return;
+    }
+
+
+    container.innerHTML = state.applications
+      .map((application) => {
+
+        const id =
+          application._id ||
+          application.id;
+
+        const clientName =
+          getApplicationClientName(application);
+
+        const status =
+          application.status || "created";
+
+        const preferredStart =
+          application.preferredDates?.start ||
+          application.preferredStartDate;
+
+        const preferredEnd =
+          application.preferredDates?.end ||
+          application.preferredEndDate;
+
+        const slotDate =
+          application.slot?.date ||
+          application.slotDate;
+
+        const slotTime =
+          application.slot?.time ||
+          application.slotTime;
+
 
         return `
-          <div class="activity-item">
+          <article
+            class="application-card"
+            data-application-id="${escapeHtml(id)}"
+          >
 
-            <span class="activity-dot"></span>
-
-            <div class="activity-content">
+            <div class="application-main">
 
               <strong>
-                ${escapeHtml(
-                  activity.title
-                )}
+                ${escapeHtml(clientName)}
               </strong>
 
-              <span>
-                ${escapeHtml(
-                  activity.detail ||
-                  time
-                )}
-              </span>
+              <small>
+                ID:
+                ${escapeHtml(String(id).slice(-12))}
+              </small>
 
             </div>
 
-          </div>
+
+            <div>
+
+              <span class="application-status">
+                ${escapeHtml(getStatusLabel(status))}
+              </span>
+
+              <div class="application-meta">
+
+                <strong>
+                  ${
+                    slotDate
+                      ? `${escapeHtml(formatDate(slotDate))} ${
+                          slotTime
+                            ? escapeHtml(slotTime)
+                            : ""
+                        }`
+                      : preferredStart && preferredEnd
+                        ? `${escapeHtml(formatDate(preferredStart))} — ${escapeHtml(formatDate(preferredEnd))}`
+                        : "Janela não definida"
+                  }
+                </strong>
+
+                <span>
+                  ${escapeHtml(
+                    application.preferredTime ||
+                    "Horário flexível"
+                  )}
+                </span>
+
+              </div>
+
+            </div>
+
+
+            <div class="application-actions">
+
+              ${
+                status === "created" ||
+                status === "error"
+                  ? `
+                    <button
+                      type="button"
+                      data-action="prepare"
+                      data-id="${escapeHtml(id)}"
+                    >
+                      Preparar
+                    </button>
+                  `
+                  : ""
+              }
+
+
+              ${
+                status === "otp_required"
+                  ? `
+                    <button
+                      type="button"
+                      data-action="continue"
+                      data-id="${escapeHtml(id)}"
+                    >
+                      Continuar
+                    </button>
+                  `
+                  : ""
+              }
+
+
+              ${
+                status !== "completed" &&
+                status !== "cancelled"
+                  ? `
+                    <button
+                      type="button"
+                      data-action="cancel"
+                      data-id="${escapeHtml(id)}"
+                    >
+                      Cancelar
+                    </button>
+                  `
+                  : ""
+              }
+
+            </div>
+
+          </article>
         `;
       })
       .join("");
-}
-
-
-function getCsrfToken() {
-  const match =
-    document.cookie.match(
-      /(?:^|;\s*)csrf_token=([^;]+)/
-    );
-
-  return match
-    ? decodeURIComponent(
-        match[1]
-      )
-    : "";
-}
-
-
-async function api(
-  url,
-  options = {}
-) {
-  const method =
-    (
-      options.method ||
-      "GET"
-    ).toUpperCase();
-
-  const headers = {
-    ...(options.headers || {})
-  };
-
-
-  /*
-   * JSON body
-   */
-
-  if (
-    options.body &&
-    typeof options.body !==
-      "string" &&
-    !(options.body instanceof FormData)
-  ) {
-    headers[
-      "Content-Type"
-    ] =
-      "application/json";
-
-    options.body =
-      JSON.stringify(
-        options.body
-      );
   }
 
 
-  /*
-   * CSRF
-   */
-
-  if (
-    method !== "GET" &&
-    method !== "HEAD" &&
-    method !== "OPTIONS"
-  ) {
-    const csrf =
-      getCsrfToken();
-
-    if (csrf) {
-      headers[
-        "X-CSRF-Token"
-      ] = csrf;
-    }
-  }
-
-
-  const response =
-    await fetch(
-      url,
-      {
-        credentials:
-          "same-origin",
-
-        ...options,
-
-        headers
-      }
-    );
-
-
-  let data = null;
-
-  try {
-    data =
-      await response.json();
-  } catch {
-    data = null;
-  }
-
-
-  if (!response.ok) {
-    throw new Error(
-      data?.error ||
-      data?.message ||
-      "Request failed"
-    );
-  }
-
-
-  return data;
-}
-
-
-/* =========================
-   AUTH
-========================= */
-
-function showLogin() {
-  $("#loginView")
-    .classList.remove(
-      "hidden"
-    );
-
-  $("#appView")
-    .classList.add(
-      "hidden"
-    );
-}
-
-
-function showApplication() {
-  $("#loginView")
-    .classList.add(
-      "hidden"
-    );
-
-  $("#appView")
-    .classList.remove(
-      "hidden"
-    );
-}
-
-
-async function loadCurrentUser() {
-  try {
-    const data =
-      await api(
-        "/api/auth/me"
-      );
-
-    state.user =
-      data.user;
-
-    if (state.user) {
-      $("#userName")
-        .textContent =
-        state.user.name ||
-        state.user.email ||
-        "";
-    }
-
-    showApplication();
-
-    addActivity(
-      "Centro de operações iniciado",
-      "Sessão operacional carregada."
-    );
-
-    await refreshDashboard();
-
-  } catch {
-    /*
-     * AUTH_ENABLED=false is currently
-     * supported by the backend.
-     */
-    showLogin();
-  }
-}
-
-
-async function login(
-  email,
-  password
-) {
-  const data =
-    await api(
-      "/api/auth/login",
-      {
-        method: "POST",
-
-        body: {
-          email,
-          password
-        }
-      }
-    );
-
-  state.user =
-    data.user;
-
-  $("#userName")
-    .textContent =
-    state.user?.name ||
-    state.user?.email ||
-    "";
-
-  showApplication();
-
-  await refreshDashboard();
-}
-
-
-async function logout() {
-  try {
-    await api(
-      "/api/auth/logout",
-      {
-        method: "POST"
-      }
-    );
-  } catch {
-    /*
-     * Session may already
-     * be invalid.
-     */
-  }
-
-  state.user = null;
-
-  showLogin();
-}
-
-
-/* =========================
-   CLIENTS
-========================= */
-
-async function loadClients() {
-  const data =
-    await api(
-      "/api/clients"
-    );
-
-  state.clients =
-    data.clients || [];
-
-  renderClientSelector();
-
-  updateReadiness();
-}
-
-
-function renderClientSelector() {
-  const select =
-    $("#applicationClient");
-
-  if (!select) {
-    return;
-  }
-
-  select.innerHTML =
-    `
-      <option value="">
-        Selecione um cliente
-      </option>
-    `;
-
-
-  for (
-    const client
-    of state.clients
-  ) {
-    const option =
-      document.createElement(
-        "option"
-      );
-
-    option.value =
-      client._id;
-
-    option.textContent =
-      client.fullName ||
-      "Cliente";
-
-    select.appendChild(
-      option
-    );
-  }
-}
-
-
-/* =========================
-   PASSPORT
-========================= */
-
-function formatBytes(
-  bytes
-) {
-  if (!Number.isFinite(bytes)) {
-    return "";
-  }
-
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-
-  if (bytes < 1024 * 1024) {
-    return `${(
-      bytes / 1024
-    ).toFixed(1)} KB`;
-  }
-
-  return `${(
-    bytes /
-    (1024 * 1024)
-  ).toFixed(1)} MB`;
-}
-
-
-function updatePassportUI() {
-  const file =
-    state.selectedPassport;
-
-  const status =
-    $("#passportFileStatus");
-
-  const ring =
-    $("#passportReadinessRing");
-
-  const title =
-    $("#passportReadinessTitle");
-
-  const text =
-    $("#passportReadinessText");
-
-  const checkFile =
-    $("#passportCheckFile");
-
-  const checkData =
-    $("#passportCheckData");
-
-  const checkReady =
-    $("#passportCheckReady");
-
-
-  if (!file) {
-    status.textContent =
-      "Nenhum documento selecionado";
-
-    status.classList.remove(
-      "ready"
-    );
-
-    ring.textContent =
-      "0%";
-
-    title.textContent =
-      "Documento não adicionado";
-
-    text.textContent =
-      "Adicione o passaporte para iniciar a preparação.";
-
-    checkFile.innerHTML =
-      "Passaporte <b>—</b>";
-
-    checkData.innerHTML =
-      "Dados extraídos <b>—</b>";
-
-    checkReady.innerHTML =
-      "Pronto para automação <b>—</b>";
-
-    setReadinessRing(
-      ring,
-      0
-    );
-
-    return;
-  }
-
-
-  status.textContent =
-    `${file.name} · ${formatBytes(file.size)}`;
-
-  status.classList.add(
-    "ready"
-  );
-
-
-  /*
-   * Neste momento o frontend
-   * apenas confirma o documento.
-   *
-   * A extração real será feita
-   * pelo backend no próximo passo.
-   */
-
-  ring.textContent =
-    "33%";
-
-  title.textContent =
-    "Documento selecionado";
-
-  text.textContent =
-    "O passaporte está pronto para ser enviado ao processamento seguro.";
-
-  checkFile.innerHTML =
-    "Passaporte <b>✓</b>";
-
-  checkData.innerHTML =
-    "Dados extraídos <b>—</b>";
-
-  checkReady.innerHTML =
-    "Pronto para automação <b>—</b>";
-
-  setReadinessRing(
-    ring,
-    33
-  );
-}
-
-
-function setReadinessRing(
-  element,
-  percentage
-) {
-  if (!element) {
-    return;
-  }
-
-  const degrees =
-    Math.max(
-      0,
-      Math.min(
-        100,
-        percentage
-      )
-    ) * 3.6;
-
-  element.style.background =
-    `
-      radial-gradient(
-        circle,
-        #101a29 58%,
-        transparent 60%
-      ),
-      conic-gradient(
-        var(--blue)
-        0deg
-        ${degrees}deg,
-        rgba(255,255,255,.08)
-        ${degrees}deg
-      )
-    `;
-}
-
-
-function setScore(
-  percentage
-) {
-  const score =
-    $("#readinessScore");
-
-  if (!score) {
-    return;
-  }
-
-  const safe =
-    Math.max(
-      0,
-      Math.min(
-        100,
-        percentage
-      )
-    );
-
-  score.textContent =
-    `${safe}%`;
-
-  const degrees =
-    safe * 3.6;
-
-  score.parentElement.style.background =
-    `
-      radial-gradient(
-        circle,
-        #111a28 58%,
-        transparent 60%
-      ),
-      conic-gradient(
-        var(--blue)
-        0deg
-        ${degrees}deg,
-        rgba(255,255,255,.08)
-        ${degrees}deg
-      )
-    `;
-}
-
-
-function updateReadiness() {
-  const clients =
-    state.clients.length;
-
-  const applications =
-    state.applications.length;
-
-  const passport =
-    state.selectedPassport
-      ? 1
-      : 0;
-
-  const radar =
-    state.applications.filter(
-      application =>
-        application.status ===
-        "waiting_for_slot"
-    ).length;
-
-
-  $("#readyClient")
-    .textContent =
-    clients > 0
-      ? "✓"
-      : "0";
-
-  $("#readyPassport")
-    .textContent =
-    passport
-      ? "✓"
-      : "0";
-
-  $("#readyApplications")
-    .textContent =
-    applications;
-
-  $("#readyRadar")
-    .textContent =
-    radar;
-
-
-  let score = 0;
-
-  if (clients > 0) {
-    score += 25;
-  }
-
-  if (passport > 0) {
-    score += 25;
-  }
-
-  if (applications > 0) {
-    score += 25;
-  }
-
-  if (radar > 0) {
-    score += 25;
-  }
-
-
-  setScore(score);
-
-
-  if (score === 0) {
-    $("#readinessTitle")
-      .textContent =
-      "A preparar";
-
-    $("#readinessDescription")
-      .textContent =
-      "Adicione clientes e documentos para começar.";
-
-  } else if (score < 50) {
-    $("#readinessTitle")
-      .textContent =
-      "Preparação inicial";
-
-    $("#readinessDescription")
-      .textContent =
-      "Ainda faltam elementos para a automação.";
-
-  } else if (score < 100) {
-    $("#readinessTitle")
-      .textContent =
-      "Quase pronto";
-
-    $("#readinessDescription")
-      .textContent =
-      "Complete os elementos pendentes.";
-
-  } else {
-    $("#readinessTitle")
-      .textContent =
-      "Operacional";
-
-    $("#readinessDescription")
-      .textContent =
-      "O processo possui todos os elementos principais.";
-  }
-}
-
-
-/* =========================
-   APPLICATION STATUS
-========================= */
-
-function statusLabel(
-  status
-) {
-  const labels = {
-
-    created:
-      "Criado",
-
-    preparing:
-      "Preparando",
-
-    otp_required:
-      "Aguardando OTP",
-
-    otp_verified:
-      "OTP verificado",
-
-    identity_verification:
-      "Verificação de identidade",
-
-    calendar:
-      "Calendário",
-
-    waiting_for_slot:
-      "Aguardando vaga",
-
-    slot_received:
-      "Vaga encontrada",
-
-    continuing:
-      "A concluir",
-
-    completed:
-      "Concluído",
-
-    error:
-      "Erro",
-
-    cancelled:
-      "Cancelado"
-  };
-
-  return (
-    labels[status] ||
-    status ||
-    "Desconhecido"
-  );
-}
-
-
-function renderApplications() {
-  const container =
-    $("#applicationsList");
-
-  container.innerHTML =
-    "";
-
-  $("#applicationCount")
-    .textContent =
-    state.applications.length;
-
-
-  if (
-    !state.applications.length
-  ) {
-    container.innerHTML = `
-      <div class="empty-state">
-
-        <div class="empty-icon">
-          +
-        </div>
-
-        <strong>
-          Nenhum processo ainda
-        </strong>
-
-        <span>
-          Crie o primeiro processo acima.
-        </span>
-
-      </div>
-    `;
-
-    updateReadiness();
-
-    return;
-  }
-
-
-  for (
-    const application
-    of state.applications
-  ) {
-
-    const card =
-      document.createElement(
-        "article"
-      );
-
-    card.className =
-      "application-card";
-
-
-    const clientName =
-      application.client
-        ?.fullName ||
-      "Cliente";
-
-
-    const slot =
-      application.slot?.date
-        ? `${application.slot.date} · ${application.slot.time || ""}`
-        : "Sem vaga";
-
-
-    const bot1 =
-      application.bot1?.status ||
-      "idle";
-
-
-    const bot2 =
-      application.bot2?.status ||
-      "idle";
-
-
-    card.innerHTML = `
-
-      <div class="application-main">
-
-        <div class="application-avatar">
-          ${escapeHtml(
-            clientName
-              .slice(0, 1)
-              .toUpperCase()
-          )}
-        </div>
-
-
-        <div class="application-info">
-
-          <strong>
-            ${escapeHtml(
-              clientName
-            )}
-          </strong>
-
-          <span>
-            ${escapeHtml(
-              application._id
-            )}
-          </span>
-
-        </div>
-
-      </div>
-
-
-      <div class="application-status">
-
-        <span
-          class="
-            status-pill
-            status-${escapeHtml(
-              application.status
-            )}
-          "
-        >
-          ${escapeHtml(
-            statusLabel(
-              application.status
-            )
-          )}
-        </span>
-
-
-        <small>
-          ${escapeHtml(
-            slot
-          )}
-        </small>
-
-      </div>
-
-
-      <div class="application-actions">
-
-        ${
-          application.status ===
-          "created"
-            ? `
-              <button
-                class="small-button prepare-button"
-                data-id="${escapeHtml(
-                  application._id
-                )}"
-              >
-                Preparar
-              </button>
-            `
-            : ""
-        }
-
-
-        ${
-          application.status ===
-          "otp_required"
-            ? `
-              <button
-                class="small-button continue-button"
-                data-id="${escapeHtml(
-                  application._id
-                )}"
-              >
-                Continuar
-              </button>
-            `
-            : ""
-        }
-
-
-        ${
-          application.status ===
-          "waiting_for_slot"
-            ? `
-              <span
-                class="small-button"
-              >
-                RADAR: ${escapeHtml(
-                  bot2
-                )}
-              </span>
-            `
-            : ""
-        }
-
-
-        ${
-          application.status ===
-          "preparing"
-            ? `
-              <span
-                class="small-button"
-              >
-                BOT 1: ${escapeHtml(
-                  bot1
-                )}
-              </span>
-            `
-            : ""
-        }
-
-
-        ${
-          [
-            "completed",
-            "cancelled",
-            "error"
-          ].includes(
-            application.status
-          )
-            ? ""
-            : `
-              <button
-                class="
-                  small-button
-                  danger-button
-                  cancel-button
-                "
-                data-id="${escapeHtml(
-                  application._id
-                )}"
-              >
-                Cancelar
-              </button>
-            `
-        }
-
-      </div>
-    `;
-
-
-    container.appendChild(
-      card
-    );
-  }
-
-
-  updateReadiness();
-}
-
-
-/* =========================
-   APPLICATIONS API
-========================= */
-
-async function loadApplications() {
-  const data =
-    await api(
-      "/api/applications"
-    );
-
-  state.applications =
-    data.applications || [];
-
-  renderApplications();
-}
-
-
-/* =========================
-   SYSTEM STATUS
-========================= */
-
-async function loadStats() {
-  try {
-
-    const data =
-      await api(
-        "/api/system/status"
-      );
-
-
-    const apps =
-      data.applications ||
-      {};
-
-
-    $("#statTotal")
-      .textContent =
-      apps.total ??
-      state.applications.length;
-
-
-    $("#statWaiting")
-      .textContent =
-      apps.waiting ??
-      state.applications.filter(
-        application =>
-          application.status ===
-          "waiting_for_slot"
-      ).length;
-
-
-    $("#statProcessing")
-      .textContent =
-      apps.processing ??
-      state.applications.filter(
-        application =>
-          [
-            "preparing",
-            "continuing",
-            "identity_verification",
-            "calendar"
-          ].includes(
-            application.status
-          )
-      ).length;
-
-
-    $("#statCompleted")
-      .textContent =
-      apps.completed ??
-      state.applications.filter(
-        application =>
-          application.status ===
-          "completed"
-      ).length;
-
-
-    $("#connectionDot")
-      .classList.add(
-        "online"
-      );
-
-    $("#connectionText")
-      .textContent =
-      "Online";
-
-
-    $("#systemHeartbeat")
-      .textContent =
-      `Última sincronização: ${
-        new Date()
-          .toLocaleTimeString(
-            "pt-PT"
-          )
-      }`;
-
-
-    /*
-     * Try to reflect supervisor
-     * information when the API
-     * provides it.
-     */
-
-    const supervisor =
-      data.supervisor ||
-      data.orchestrator ||
-      null;
-
-
-    if (supervisor) {
-
-      const running =
-        supervisor.running ??
-        supervisor.status ===
-        "running";
-
-
-      $("#orchestratorState")
-        .textContent =
-        running
-          ? "Running"
-          : "Idle";
-
-
-      $("#orchestratorMetric")
-        .textContent =
-        running
-          ? "Running"
-          : "Idle";
-
-
-      $("#orchestratorPill")
-        .textContent =
-        running
-          ? "RUNNING"
-          : "READY";
-    }
-
-
-  } catch {
-
-    $("#connectionDot")
-      .classList.remove(
-        "online"
-      );
-
-    $("#connectionText")
-      .textContent =
-      "Offline";
-
-    $("#systemHeartbeat")
-      .textContent =
-      "Sem ligação ao backend";
-  }
-}
-
-
-/* =========================
-   BOT UI
-========================= */
-
-function updateBotUi() {
-  const applications =
-    state.applications;
-
-
-  const preparing =
-    applications.filter(
-      application =>
+  function updateApplicationStats() {
+    const total = state.applications.length;
+
+    const prepared = state.applications.filter(
+      (application) =>
         [
-          "preparing",
           "otp_required",
           "otp_verified",
           "identity_verification",
-          "calendar"
-        ].includes(
-          application.status
-        )
+          "calendar",
+          "waiting_for_slot",
+          "slot_received",
+          "continuing",
+          "completed"
+        ].includes(application.status)
+    ).length;
+
+    const monitoring = state.applications.filter(
+      (application) =>
+        application.status === "waiting_for_slot" ||
+        application.bot2?.monitoring === true
     ).length;
 
 
-  const monitoring =
-    applications.filter(
-      application =>
-        application.status ===
-        "waiting_for_slot"
-    ).length;
-
-
-  const completed =
-    applications.filter(
-      application =>
-        application.status ===
-        "completed"
-    ).length;
-
-
-  $("#bot1Metric")
-    .textContent =
-    preparing > 0
-      ? `${preparing} processo(s)`
-      : "Idle";
-
-
-  $("#bot2Metric")
-    .textContent =
-    monitoring;
-
-
-  $("#bot1State")
-    .textContent =
-    preparing > 0
-      ? "Running"
-      : "Ready";
-
-
-  $("#bot2State")
-    .textContent =
-    monitoring > 0
-      ? "Monitoring"
-      : "Ready";
-
-
-  $("#orchestratorState")
-    .textContent =
-    completed > 0
-      ? "Active"
-      : "Ready";
-
-
-  $("#bot1Pill")
-    .textContent =
-    preparing > 0
-      ? "RUNNING"
-      : "READY";
-
-
-  $("#bot2Pill")
-    .textContent =
-    monitoring > 0
-      ? "MONITORING"
-      : "READY";
-
-
-  $("#orchestratorPill")
-    .textContent =
-    completed > 0
-      ? "ACTIVE"
-      : "READY";
-
-
-  $("#orchestratorMetric")
-    .textContent =
-    completed > 0
-      ? `${completed} concluído(s)`
-      : "Idle";
-}
-
-
-/* =========================
-   DASHBOARD
-========================= */
-
-async function refreshDashboard() {
-
-  await Promise.all([
-    loadClients(),
-    loadApplications(),
-    loadStats()
-  ]);
-
-  updateBotUi();
-  updateReadiness();
-}
-
-
-/* =========================
-   EVENTS
-========================= */
-
-
-/*
- * Login
- */
-
-$("#loginForm")
-  .addEventListener(
-    "submit",
-    async event => {
-
-      event.preventDefault();
-
-
-      const email =
-        $("#loginEmail")
-          .value
-          .trim();
-
-
-      const password =
-        $("#loginPassword")
-          .value;
-
-
-      try {
-
-        await login(
-          email,
-          password
-        );
-
-
-        addActivity(
-          "Sessão iniciada",
-          "Centro de operações disponível."
-        );
-
-
-        showToast(
-          "Sessão iniciada.",
-          "success"
-        );
-
-      } catch (error) {
-
-        showToast(
-          error.message,
-          "error"
-        );
-      }
+    if ($("applicationCount")) {
+      $("applicationCount").textContent = total;
     }
-  );
 
-
-/*
- * Logout
- */
-
-$("#logoutButton")
-  .addEventListener(
-    "click",
-    logout
-  );
-
-
-/*
- * Refresh
- */
-
-$("#refreshButton")
-  .addEventListener(
-    "click",
-    async () => {
-
-      try {
-
-        await refreshDashboard();
-
-
-        addActivity(
-          "Dashboard atualizado",
-          "Dados sincronizados com o backend."
-        );
-
-
-        showToast(
-          "Dashboard atualizado.",
-          "success"
-        );
-
-      } catch (error) {
-
-        showToast(
-          error.message,
-          "error"
-        );
-      }
+    if ($("preparedCount")) {
+      $("preparedCount").textContent = prepared;
     }
-  );
 
-
-/*
- * Passport selection
- */
-
-$("#clientPassportFile")
-  .addEventListener(
-    "change",
-    event => {
-
-      const file =
-        event.target.files?.[0] ||
-        null;
-
-
-      if (!file) {
-
-        state.selectedPassport =
-          null;
-
-        updatePassportUI();
-
-        return;
-      }
-
-
-      const maxSize =
-        10 * 1024 * 1024;
-
-
-      if (
-        file.size >
-        maxSize
-      ) {
-
-        event.target.value =
-          "";
-
-        state.selectedPassport =
-          null;
-
-        updatePassportUI();
-
-
-        showToast(
-          "O passaporte não pode ultrapassar 10 MB.",
-          "error"
-        );
-
-        return;
-      }
-
-
-      const allowedTypes = [
-        "image/jpeg",
-        "image/png",
-        "image/webp",
-        "application/pdf"
-      ];
-
-
-      if (
-        !allowedTypes.includes(
-          file.type
-        )
-      ) {
-
-        event.target.value =
-          "";
-
-        state.selectedPassport =
-          null;
-
-        updatePassportUI();
-
-
-        showToast(
-          "Formato de passaporte não suportado.",
-          "error"
-        );
-
-        return;
-      }
-
-
-      state.selectedPassport =
-        file;
-
-
-      updatePassportUI();
-
-
-      addActivity(
-        "Passaporte selecionado",
-        `${file.name} · ${formatBytes(file.size)}`
-      );
+    if ($("monitoringCount")) {
+      $("monitoringCount").textContent = monitoring;
     }
-  );
 
 
-/*
- * Client creation
- */
-
-$("#clientForm")
-  .addEventListener(
-    "submit",
-    async event => {
-
-      event.preventDefault();
-
-
-      const button =
-        $("#saveClientButton");
-
-
-      button.disabled =
-        true;
-
-      button.textContent =
-        "A guardar...";
-
-
-      try {
-
-        /*
-         * The current backend accepts
-         * client information as JSON.
-         *
-         * The actual passport binary
-         * upload will be connected
-         * when the secure upload endpoint
-         * is implemented.
-         */
-
-        const payload = {
-
-          fullName:
-            $("#clientFullName")
-              .value
-              .trim(),
-
-          email:
-            $("#clientEmail")
-              .value
-              .trim(),
-
-          phone:
-            $("#clientPhone")
-              .value
-              .trim(),
-
-          dateOfBirth:
-            $("#clientDateOfBirth")
-              .value,
-
-          nationality:
-            $("#clientNationality")
-              .value
-              .trim(),
-
-          gender:
-            $("#clientGender")
-              .value,
-
-          passportNumber:
-            $("#clientPassportNumber")
-              .value
-              .trim(),
-
-          passportCountry:
-            $("#clientPassportCountry")
-              .value
-              .trim(),
-
-          passportIssueDate:
-            $("#clientPassportIssueDate")
-              .value,
-
-          passportExpiryDate:
-            $("#clientPassportExpiryDate")
-              .value
-        };
-
-
-        const data =
-          await api(
-            "/api/clients",
-            {
-              method: "POST",
-              body: payload
-            }
-          );
-
-
-        event.target.reset();
-
-        state.selectedPassport =
-          null;
-
-
-        updatePassportUI();
-
-
-        await loadClients();
-
-
-        addActivity(
-          "Cliente criado",
-          data.client?.fullName ||
-          "Novo cliente"
-        );
-
-
-        showToast(
-          "Cliente criado com sucesso.",
-          "success"
-        );
-
-
-      } catch (error) {
-
-        showToast(
-          error.message,
-          "error"
-        );
-
-      } finally {
-
-        button.disabled =
-          false;
-
-        button.textContent =
-          "Guardar cliente e documento";
-      }
-    }
-  );
-
-
-/*
- * Application creation
- */
-
-$("#applicationForm")
-  .addEventListener(
-    "submit",
-    async event => {
-
-      event.preventDefault();
-
-
-      const clientId =
-        $("#applicationClient")
-          .value;
-
-
-      if (!clientId) {
-
-        showToast(
-          "Selecione um cliente.",
-          "error"
-        );
-
-        return;
-      }
-
-
-      try {
-
-        const data =
-          await api(
-            "/api/applications",
-            {
-              method: "POST",
-
-              headers: {
-                "Idempotency-Key":
-                  crypto.randomUUID()
-              },
-
-              body: {
-
-                clientId,
-
-                preferredDates: {
-
-                  start:
-                    $("#preferredStart")
-                      .value ||
-                    null,
-
-                  end:
-                    $("#preferredEnd")
-                      .value ||
-                    null
-                },
-
-                preferredTime:
-                  $("#preferredTime")
-                    .value ||
-                  null
-              }
-            }
-          );
-
-
-        event.target.reset();
-
-
-        await loadApplications();
-
-        await loadStats();
-
-
-        updateBotUi();
-
-
-        addActivity(
-          "Novo processo criado",
-          `Processo ${
-            data.application?._id ||
-            ""
-          }`
-        );
-
-
-        showToast(
-          "Processo criado com sucesso.",
-          "success"
-        );
-
-
-      } catch (error) {
-
-        showToast(
-          error.message,
-          "error"
-        );
-      }
-    }
-  );
-
-
-/*
- * Application actions
- */
-
-$("#applicationsList")
-  .addEventListener(
-    "click",
-    async event => {
-
-      const button =
-        event.target.closest(
-          "button"
-        );
-
-
-      if (!button) {
-        return;
-      }
-
-
-      const id =
-        button.dataset.id;
-
-
-      if (!id) {
-        return;
-      }
-
-
-      try {
-
-        /*
-         * PREPARE
-         */
-
-        if (
-          button.classList.contains(
-            "prepare-button"
-          )
-        ) {
-
-          await api(
-            `/api/applications/${id}/prepare`,
-            {
-              method: "POST"
-            }
-          );
-
-
-          addActivity(
-            "PREPARATION iniciada",
-            `Processo ${id}`
-          );
-
-
-          showToast(
-            "Preparação iniciada.",
-            "success"
-          );
-        }
-
-
-        /*
-         * CONTINUE
-         */
-
-        if (
-          button.classList.contains(
-            "continue-button"
-          )
-        ) {
-
-          await api(
-            `/api/applications/${id}/continue`,
-            {
-              method: "POST"
-            }
-          );
-
-
-          addActivity(
-            "Processo retomado",
-            `Processo ${id}`
-          );
-
-
-          showToast(
-            "Processo retomado.",
-            "success"
-          );
-        }
-
-
-        /*
-         * CANCEL
-         */
-
-        if (
-          button.classList.contains(
-            "cancel-button"
-          )
-        ) {
-
-          const confirmed =
-            window.confirm(
-              "Tem a certeza que pretende cancelar este processo?"
-            );
-
-
-          if (!confirmed) {
-            return;
-          }
-
-
-          await api(
-            `/api/applications/${id}/cancel`,
-            {
-              method: "POST"
-            }
-          );
-
-
-          addActivity(
-            "Processo cancelado",
-            `Processo ${id}`
-          );
-
-
-          showToast(
-            "Processo cancelado.",
-            "success"
-          );
-        }
-
-
-        await refreshDashboard();
-
-
-      } catch (error) {
-
-        showToast(
-          error.message,
-          "error"
-        );
-      }
-    }
-  );
-
-
-/* =========================
-   HELPERS
-========================= */
-
-function escapeHtml(
-  value
-) {
-  return String(
-    value ?? ""
-  )
-    .replaceAll(
-      "&",
-      "&amp;"
-    )
-    .replaceAll(
-      "<",
-      "&lt;"
-    )
-    .replaceAll(
-      ">",
-      "&gt;"
-    )
-    .replaceAll(
-      '"',
-      "&quot;"
-    )
-    .replaceAll(
-      "'",
-      "&#039;"
-    );
-}
-
-
-/* =========================
-   AUTO REFRESH
-========================= */
-
-let refreshTimer = null;
-
-
-function startAutoRefresh() {
-
-  if (refreshTimer) {
-    clearInterval(
-      refreshTimer
-    );
+    updateBotCenter();
   }
 
 
-  refreshTimer =
-    setInterval(
+  /* =========================================================
+     CREATE APPLICATION
+  ========================================================= */
+
+  async function handleApplicationSubmit(event) {
+    event.preventDefault();
+
+    const form = event.currentTarget;
+
+    const button = form.querySelector(
+      'button[type="submit"]'
+    );
+
+    const clientId =
+      $("applicationClient")?.value;
+
+    if (!clientId) {
+      showToast(
+        "Selecione um cliente.",
+        "error"
+      );
+
+      return;
+    }
+
+    const payload = {
+      clientId,
+
+      preferredDates: {
+        start:
+          $("preferredStartDate")?.value || null,
+
+        end:
+          $("preferredEndDate")?.value || null
+      },
+
+      preferredTime:
+        $("preferredTime")?.value || null
+    };
+
+
+    if (button) {
+      button.disabled = true;
+    }
+
+
+    try {
+      const response = await api(
+        "/api/applications",
+        {
+          method: "POST",
+          body: JSON.stringify(payload)
+        }
+      );
+
+      const application =
+        response?.application ||
+        response?.data ||
+        response;
+
+      if (application) {
+        state.applications.unshift(application);
+      }
+
+      renderApplications();
+      updateApplicationStats();
+      updateReadiness();
+
+      showToast(
+        "Aplicação criada. A operação está pronta.",
+        "success"
+      );
+
+      addActivity(
+        "Nova aplicação",
+        "Processo criado e disponível para PREPARATION.",
+        "blue"
+      );
+
+      form.reset();
+
+    } catch (error) {
+      console.error(error);
+
+      showToast(
+        error.message ||
+          "Não foi possível criar a aplicação.",
+        "error"
+      );
+
+    } finally {
+      if (button) {
+        button.disabled = false;
+      }
+    }
+  }
+
+
+  /* =========================================================
+     APPLICATION ACTIONS
+  ========================================================= */
+
+  async function prepareApplication(id) {
+    try {
+      showToast(
+        "PREPARATION iniciou o processo.",
+        "info"
+      );
+
+      addActivity(
+        "PREPARATION",
+        "Preparação do processo iniciada.",
+        "blue"
+      );
+
+      await api(
+        `/api/applications/${encodeURIComponent(id)}/prepare`,
+        {
+          method: "POST",
+          body: JSON.stringify({})
+        }
+      );
+
+      await loadApplications();
+
+      showToast(
+        "Processo preparado.",
+        "success"
+      );
+
+    } catch (error) {
+      console.error(error);
+
+      showToast(
+        error.message ||
+          "Falha na preparação.",
+        "error"
+      );
+    }
+  }
+
+
+  async function continueApplication(id) {
+    /*
+     * Mantemos a rota atual, mas não tentamos inventar
+     * um OTP no frontend. Quando o endpoint de verificação
+     * estiver disponível, a UI deverá solicitar o código
+     * antes desta etapa.
+     */
+
+    try {
+      await api(
+        `/api/applications/${encodeURIComponent(id)}/continue`,
+        {
+          method: "POST",
+          body: JSON.stringify({})
+        }
+      );
+
+      await loadApplications();
+
+      addActivity(
+        "ORCHESTRATOR",
+        "Processo continuado.",
+        "blue"
+      );
+
+      showToast(
+        "Processo continuado.",
+        "success"
+      );
+
+    } catch (error) {
+      console.error(error);
+
+      showToast(
+        error.message ||
+          "Não foi possível continuar.",
+        "error"
+      );
+    }
+  }
+
+
+  async function cancelApplication(id) {
+    const confirmed = window.confirm(
+      "Tem a certeza que pretende cancelar esta aplicação?"
+    );
+
+    if (!confirmed) return;
+
+
+    try {
+      await api(
+        `/api/applications/${encodeURIComponent(id)}/cancel`,
+        {
+          method: "POST",
+          body: JSON.stringify({})
+        }
+      );
+
+      await loadApplications();
+
+      addActivity(
+        "Aplicação cancelada",
+        "O processo foi cancelado.",
+        "blue"
+      );
+
+      showToast(
+        "Aplicação cancelada.",
+        "success"
+      );
+
+    } catch (error) {
+      console.error(error);
+
+      showToast(
+        error.message ||
+          "Não foi possível cancelar.",
+        "error"
+      );
+    }
+  }
+
+
+  /* =========================================================
+     APPLICATION EVENT DELEGATION
+  ========================================================= */
+
+  function setupApplicationActions() {
+    const container = $("applicationsList");
+
+    if (!container) return;
+
+    container.addEventListener("click", async (event) => {
+
+      const button =
+        event.target.closest("button[data-action]");
+
+      if (!button) return;
+
+      const action = button.dataset.action;
+      const id = button.dataset.id;
+
+      if (!id) return;
+
+      button.disabled = true;
+
+      try {
+
+        if (action === "prepare") {
+          await prepareApplication(id);
+        }
+
+        if (action === "continue") {
+          await continueApplication(id);
+        }
+
+        if (action === "cancel") {
+          await cancelApplication(id);
+        }
+
+      } finally {
+        button.disabled = false;
+      }
+    });
+  }
+
+
+  /* =========================================================
+     READINESS
+  ========================================================= */
+
+  function updateReadiness() {
+    const hasClients =
+      state.clients.length > 0;
+
+    const hasPassport =
+      hasPassportData();
+
+    const hasApplications =
+      state.applications.length > 0;
+
+    const hasOperationalApplication =
+      state.applications.some(
+        (application) =>
+          [
+            "preparing",
+            "otp_required",
+            "otp_verified",
+            "identity_verification",
+            "calendar",
+            "waiting_for_slot",
+            "slot_received",
+            "continuing",
+            "completed"
+          ].includes(application.status)
+      );
+
+
+    const clientScore =
+      hasClients ? 100 : 0;
+
+    const passportScore =
+      hasPassport ? 100 : 0;
+
+    const applicationScore =
+      hasApplications ? 100 : 0;
+
+    const operationScore =
+      hasOperationalApplication ? 100 : 0;
+
+
+    const score = Math.round(
+      (
+        clientScore +
+        passportScore +
+        applicationScore +
+        operationScore
+      ) / 4
+    );
+
+
+    if ($("readinessScore")) {
+      $("readinessScore").textContent = score;
+    }
+
+    if ($("readinessClient")) {
+      $("readinessClient").textContent =
+        `${clientScore}%`;
+    }
+
+    if ($("readinessPassport")) {
+      $("readinessPassport").textContent =
+        `${passportScore}%`;
+    }
+
+    if ($("readinessApplication")) {
+      $("readinessApplication").textContent =
+        `${applicationScore}%`;
+    }
+
+    if ($("readinessOperation")) {
+      $("readinessOperation").textContent =
+        `${operationScore}%`;
+    }
+
+
+    document
+      .querySelectorAll(".readiness-list > div")
+      .forEach((element, index) => {
+        const values = [
+          clientScore,
+          passportScore,
+          applicationScore,
+          operationScore
+        ];
+
+        element.classList.toggle(
+          "ready",
+          values[index] >= 100
+        );
+      });
+
+
+    const ring =
+      document.querySelector(".score-ring");
+
+    if (ring) {
+      ring.style.background = `
+        conic-gradient(
+          var(--blue-600) ${score * 3.6}deg,
+          #e4eff7 ${score * 3.6}deg
+        )
+      `;
+    }
+
+
+    const label = $("readinessLabel");
+
+    if (label) {
+      if (score === 100) {
+        label.textContent = "Operação pronta";
+      } else if (score >= 75) {
+        label.textContent = "Quase pronta";
+      } else if (score >= 50) {
+        label.textContent = "Em preparação";
+      } else if (score > 0) {
+        label.textContent = "Dados incompletos";
+      } else {
+        label.textContent = "Aguardando dados";
+      }
+    }
+
+
+    updatePassportChecks();
+  }
+
+
+  /* =========================================================
+     BOT CENTER
+  ========================================================= */
+
+  function updateBotCenter() {
+    const activeApplication =
+      state.applications.find(
+        (application) =>
+          application.status === "waiting_for_slot" ||
+          application.status === "preparing" ||
+          application.status === "continuing"
+      );
+
+    const bot1Running =
+      state.applications.some(
+        (application) =>
+          application.bot1?.status === "running" ||
+          application.status === "preparing"
+      );
+
+    const bot2Running =
+      state.applications.some(
+        (application) =>
+          application.bot2?.monitoring === true ||
+          application.status === "waiting_for_slot"
+      );
+
+
+    setBotVisual(
+      "bot1",
+      bot1Running,
+      bot1Running
+        ? "Processando aplicação"
+        : "Aguardando operação"
+    );
+
+
+    setBotVisual(
+      "bot2",
+      bot2Running,
+      bot2Running
+        ? "Monitorização ativa"
+        : "Monitorização inativa"
+    );
+
+
+    setBotVisual(
+      "supervisor",
+      Boolean(activeApplication),
+      activeApplication
+        ? "Coordenando processo"
+        : "Sistema pronto"
+    );
+
+
+    const bot1State = $("bot1State");
+
+    if (bot1State) {
+      bot1State.textContent =
+        bot1Running ? "RUNNING" : "READY";
+    }
+
+
+    const bot2State = $("bot2State");
+
+    if (bot2State) {
+      bot2State.textContent =
+        bot2Running ? "MONITORING" : "IDLE";
+    }
+
+
+    const supervisorState = $("supervisorState");
+
+    if (supervisorState) {
+      supervisorState.textContent =
+        activeApplication
+          ? "ACTIVE"
+          : "READY";
+    }
+  }
+
+
+  function setBotVisual(name, online, message) {
+    const indicator =
+      $(`${name}Indicator`);
+
+    const progress =
+      $(`${name}Progress`);
+
+    const action =
+      $(`${name}LastAction`);
+
+    if (indicator) {
+      indicator.classList.toggle(
+        "online",
+        online
+      );
+    }
+
+    if (progress) {
+      progress.style.width =
+        online ? "68%" : "0%";
+    }
+
+    if (action) {
+      action.textContent = message;
+    }
+  }
+
+
+  /* =========================================================
+     ACTIVITY FEED
+  ========================================================= */
+
+  function addActivity(title, description, color = "") {
+    const feed = $("activityFeed");
+
+    if (!feed) return;
+
+    const item = document.createElement("div");
+
+    item.className = "activity-item";
+
+    item.innerHTML = `
+      <div class="activity-marker ${escapeHtml(color)}"></div>
+
+      <div>
+        <strong>${escapeHtml(title)}</strong>
+        <span>${escapeHtml(description)}</span>
+      </div>
+    `;
+
+    feed.prepend(item);
+
+    while (feed.children.length > 5) {
+      feed.lastElementChild.remove();
+    }
+  }
+
+
+  /* =========================================================
+     DASHBOARD REFRESH
+  ========================================================= */
+
+  async function refreshDashboard() {
+    if (state.loading) return;
+
+    state.loading = true;
+
+    try {
+      await Promise.all([
+        loadClients(),
+        loadApplications()
+      ]);
+
+      setConnection(
+        true,
+        "Sistema operacional"
+      );
+
+    } catch (error) {
+      console.error(error);
+
+      setConnection(
+        false,
+        "Falha na atualização"
+      );
+
+    } finally {
+      state.loading = false;
+    }
+  }
+
+
+  /* =========================================================
+     EVENTS
+  ========================================================= */
+
+  function setupEvents() {
+
+    $("loginButton")?.addEventListener(
+      "click",
+      login
+    );
+
+
+    $("refreshButton")?.addEventListener(
+      "click",
       async () => {
 
-        if (
-          $("#appView")
-            .classList
-            .contains(
-              "hidden"
-            )
-        ) {
-          return;
+        const button =
+          $("refreshButton");
+
+        if (button) {
+          button.style.transform =
+            "rotate(360deg)";
         }
 
+        await refreshDashboard();
 
-        try {
-
-          await refreshDashboard();
-
-        } catch {
-          /*
-           * The status indicator
-           * will show the backend
-           * connection state.
-           */
-        }
-
-      },
-      5000
+        setTimeout(() => {
+          if (button) {
+            button.style.transform = "";
+          }
+        }, 400);
+      }
     );
-}
 
 
-/* =========================
-   START
-========================= */
+    $("clientForm")?.addEventListener(
+      "submit",
+      handleClientSubmit
+    );
 
-updatePassportUI();
 
-renderActivity();
+    $("applicationForm")?.addEventListener(
+      "submit",
+      handleApplicationSubmit
+    );
 
-loadCurrentUser();
 
-startAutoRefresh();
+    [
+      "clientPassportNumber",
+      "clientPassportIssueDate",
+      "clientPassportExpiryDate",
+      "clientPassportCountry"
+    ].forEach((id) => {
+
+      $(id)?.addEventListener(
+        "input",
+        updateReadiness
+      );
+
+      $(id)?.addEventListener(
+        "change",
+        updateReadiness
+      );
+
+    });
+
+
+    $("applicationClient")?.addEventListener(
+      "change",
+      updateReadiness
+    );
+
+
+    setupApplicationActions();
+
+
+    document
+      .querySelectorAll('a[href^="#"]')
+      .forEach((link) => {
+
+        link.addEventListener(
+          "click",
+          (event) => {
+
+            const target =
+              document.querySelector(
+                link.getAttribute("href")
+              );
+
+            if (!target) return;
+
+            event.preventDefault();
+
+            target.scrollIntoView({
+              behavior: "smooth",
+              block: "start"
+            });
+          }
+        );
+
+      });
+  }
+
+
+  /* =========================================================
+     INITIALIZATION
+  ========================================================= */
+
+  async function init() {
+    setupEvents();
+
+    updatePassportChecks();
+
+    updateReadiness();
+
+    await loadCurrentUser();
+  }
+
+
+  document.addEventListener(
+    "DOMContentLoaded",
+    init
+  );
+
+})();
