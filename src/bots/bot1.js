@@ -1,4 +1,5 @@
-const crypto = require("crypto");
+const crypto =
+  require("crypto");
 
 const Application =
   require("../models/application");
@@ -18,23 +19,20 @@ const logger =
 
 const config = {
   lockMs:
-    Number(process.env.BOT1_LOCK_MS) ||
-    60000,
+    Number(
+      process.env.BOT1_LOCK_MS
+    ) || 60000,
 
   maxAttempts:
-    Number(process.env.BOT1_MAX_ATTEMPTS) ||
-    3,
+    Number(
+      process.env.BOT1_MAX_ATTEMPTS
+    ) || 3,
 
   timeoutMs:
-    Number(process.env.BOT1_TIMEOUT_MS) ||
-    30000
+    Number(
+      process.env.BOT1_TIMEOUT_MS
+    ) || 30000
 };
-
-function sleep(ms) {
-  return new Promise(resolve =>
-    setTimeout(resolve, ms)
-  );
-}
 
 async function withTimeout(
   promise,
@@ -44,15 +42,18 @@ async function withTimeout(
   let timer;
 
   const timeout =
-    new Promise((_, reject) => {
-      timer = setTimeout(() => {
-        reject(
-          new Error(
-            `${operation} timed out after ${timeoutMs}ms`
-          )
-        );
-      }, timeoutMs);
-    });
+    new Promise(
+      (_, reject) => {
+        timer =
+          setTimeout(() => {
+            reject(
+              new Error(
+                `${operation} timed out after ${timeoutMs}ms`
+              )
+            );
+          }, timeoutMs);
+      }
+    );
 
   try {
     return await Promise.race([
@@ -84,7 +85,8 @@ class Bot1 {
   ) {
     await Application.updateOne(
       {
-        _id: applicationId,
+        _id:
+          applicationId,
 
         "bot1.workerId":
           this.workerId
@@ -114,54 +116,56 @@ class Bot1 {
           config.lockMs
       );
 
-    return Application.findOneAndUpdate(
-      {
-        _id: applicationId,
+    return Application
+      .findOneAndUpdate(
+        {
+          _id:
+            applicationId,
 
-        status: {
-          $in:
-            allowedStatuses
-        },
-
-        $or: [
-          {
-            "lock.owner":
-              null
+          status: {
+            $in:
+              allowedStatuses
           },
-          {
-            "lock.expiresAt": {
-              $lt: now
+
+          $or: [
+            {
+              "lock.owner":
+                null
+            },
+            {
+              "lock.expiresAt": {
+                $lt: now
+              }
             }
-          }
-        ]
-      },
-      {
-        $set: {
-          "lock.owner":
-            this.workerId,
-
-          "lock.expiresAt":
-            lockExpires,
-
-          "bot1.workerId":
-            this.workerId,
-
-          "bot1.heartbeatAt":
-            now,
-
-          "bot1.lastAttemptAt":
-            now
+          ]
         },
+        {
+          $set: {
+            "lock.owner":
+              this.workerId,
 
-        $inc: {
-          "bot1.attempts":
-            1
+            "lock.expiresAt":
+              lockExpires,
+
+            "bot1.workerId":
+              this.workerId,
+
+            "bot1.heartbeatAt":
+              now,
+
+            "bot1.lastAttemptAt":
+              now
+          },
+
+          $inc: {
+            "bot1.attempts":
+              1
+          }
+        },
+        {
+          new: true
         }
-      },
-      {
-        new: true
-      }
-    )
+      )
       .populate("client")
       .select(
         "+preparedDataEncrypted"
@@ -217,6 +221,18 @@ class Bot1 {
     );
   }
 
+  attemptsExceeded(
+    application
+  ) {
+    return (
+      Number(
+        application.bot1
+          ?.attempts
+      ) >
+      config.maxAttempts
+    );
+  }
+
   async prepare(
     applicationId
   ) {
@@ -245,6 +261,24 @@ class Bot1 {
       }
 
       return existing;
+    }
+
+    if (
+      this.attemptsExceeded(
+        application
+      )
+    ) {
+      await this.markError(
+        application,
+        "BOT1_MAX_ATTEMPTS",
+        new Error(
+          "Maximum Bot 1 attempts exceeded"
+        )
+      );
+
+      throw new Error(
+        "Maximum Bot 1 attempts exceeded"
+      );
     }
 
     application.status =
@@ -292,9 +326,11 @@ class Bot1 {
       );
 
       const preparedData =
-        application.preparedDataEncrypted
+        application
+          .preparedDataEncrypted
           ? decryptJson(
-              application.preparedDataEncrypted
+              application
+                .preparedDataEncrypted
             )
           : null;
 
@@ -325,11 +361,19 @@ class Bot1 {
         "waiting";
 
       application.otp.expiresAt =
-        otp.expiresAt ||
-        new Date(
-          Date.now() +
-            5 * 60 * 1000
-        );
+        otp.expiresAt;
+
+      application.otp.attempts =
+        0;
+
+      await this.otp.requestCode(
+        otp,
+        application.client
+          ?.phone ||
+          application.client
+            ?.email ||
+          null
+      );
 
       application.status =
         "otp_required";
@@ -354,7 +398,6 @@ class Bot1 {
       );
 
       return application;
-
     } catch (error) {
       await this.markError(
         application,
@@ -366,6 +409,158 @@ class Bot1 {
     }
   }
 
+  async verifyOtp(
+    applicationId,
+    code
+  ) {
+    const application =
+      await Application.findOne({
+        _id:
+          applicationId
+      }).select(
+        "+preparedDataEncrypted"
+      );
+
+    if (!application) {
+      throw new Error(
+        "Application not found"
+      );
+    }
+
+    if (
+      application.status !==
+      "otp_required"
+    ) {
+      throw new Error(
+        `OTP cannot be verified from status ${application.status}`
+      );
+    }
+
+    if (
+      application.otp.status !==
+      "waiting"
+    ) {
+      throw new Error(
+        `OTP is not waiting: ${application.otp.status}`
+      );
+    }
+
+    const request = {
+      requestId:
+        application.otp
+          .requestId,
+
+      applicationId:
+        application._id
+          .toString(),
+
+      expiresAt:
+        application.otp
+          .expiresAt
+    };
+
+    const attempts =
+      Number(
+        application.otp
+          .attempts
+      ) || 0;
+
+    const result =
+      await this.otp.verifyCode({
+        request,
+        code,
+        attempts
+      });
+
+    application.otp.attempts =
+      attempts + 1;
+
+    if (
+      result.status ===
+      "expired"
+    ) {
+      application.otp.status =
+        "expired";
+
+      application.status =
+        "error";
+
+      application.error = {
+        code:
+          "OTP_EXPIRED",
+
+        message:
+          "OTP expired",
+
+        at:
+          new Date(),
+
+        attempts:
+          application.otp.attempts
+      };
+
+      application.bot1.status =
+        "error";
+
+      await application.save();
+
+      return application;
+    }
+
+    if (!result.verified) {
+      if (
+        application.otp.attempts >=
+        this.otp.maxAttempts
+      ) {
+        application.otp.status =
+          "failed";
+
+        application.status =
+          "error";
+
+        application.error = {
+          code:
+            "OTP_MAX_ATTEMPTS",
+
+          message:
+            "Maximum OTP attempts exceeded",
+
+          at:
+            new Date(),
+
+          attempts:
+            application.otp.attempts
+        };
+
+        application.bot1.status =
+          "error";
+      }
+
+      await application.save();
+
+      return application;
+    }
+
+    application.otp.status =
+      "verified";
+
+    application.otp.verifiedAt =
+      new Date();
+
+    application.status =
+      "otp_verified";
+
+    application.bot1.status =
+      "waiting";
+
+    application.bot1.lastAction =
+      "otp_verified";
+
+    await application.save();
+
+    return application;
+  }
+
   async continueAfterVerification(
     applicationId
   ) {
@@ -373,8 +568,7 @@ class Bot1 {
       await this.claimApplication(
         applicationId,
         [
-          "otp_verified",
-          "otp_required"
+          "otp_verified"
         ]
       );
 
@@ -390,10 +584,28 @@ class Bot1 {
         );
       }
 
+      if (
+        existing.status ===
+        "otp_required"
+      ) {
+        throw new Error(
+          "OTP must be verified before continuing"
+        );
+      }
+
       return existing;
     }
 
     try {
+      if (
+        application.otp.status !==
+        "verified"
+      ) {
+        throw new Error(
+          "OTP is not verified"
+        );
+      }
+
       application.status =
         "identity_verification";
 
@@ -416,19 +628,29 @@ class Bot1 {
           ?.verificationStatus ===
         "pending"
       ) {
-        await withTimeout(
-          this.facial.verify({
-            clientId:
-              application.client._id.toString(),
+        const result =
+          await withTimeout(
+            this.facial.verify({
+              clientId:
+                application.client._id.toString(),
 
-            templateReference:
-              application.client
-                .facialProfile
-                .templateReference
-          }),
-          config.timeoutMs,
-          "Identity verification"
-        );
+              templateReference:
+                application.client
+                  .facialProfile
+                  .templateReference
+            }),
+            config.timeoutMs,
+            "Identity verification"
+          );
+
+        if (
+          !result ||
+          result.verified !== true
+        ) {
+          throw new Error(
+            "Identity verification was not successful"
+          );
+        }
       }
 
       application.status =
@@ -468,10 +690,6 @@ class Bot1 {
       application.bot2.workerId =
         null;
 
-      application.preparedAt =
-        application.preparedAt ||
-        new Date();
-
       await application.save();
 
       await this.releaseLock(
@@ -479,7 +697,6 @@ class Bot1 {
       );
 
       return application;
-
     } catch (error) {
       await this.markError(
         application,
@@ -514,7 +731,8 @@ class Bot1 {
             },
             {
               "lock.expiresAt": {
-                $lt: new Date()
+                $lt:
+                  new Date()
               }
             }
           ]
@@ -562,10 +780,27 @@ class Bot1 {
     if (!application) {
       return {
         success: false,
-
         reason:
           "Slot already claimed or application unavailable"
       };
+    }
+
+    if (
+      this.attemptsExceeded(
+        application
+      )
+    ) {
+      await this.markError(
+        application,
+        "BOT1_MAX_ATTEMPTS",
+        new Error(
+          "Maximum Bot 1 attempts exceeded"
+        )
+      );
+
+      throw new Error(
+        "Maximum Bot 1 attempts exceeded"
+      );
     }
 
     try {
@@ -676,13 +911,10 @@ class Bot1 {
 
       return {
         success: true,
-
         application,
-
         elapsedMs:
           completionMs
       };
-
     } catch (error) {
       await this.markError(
         application,
@@ -705,7 +937,8 @@ class Bot1 {
   ) {
     const attempts =
       Number(
-        application.error?.attempts
+        application.error
+          ?.attempts
       ) || 0;
 
     application.status =
