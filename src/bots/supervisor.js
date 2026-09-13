@@ -16,6 +16,9 @@ const TelegramService =
 const logger =
   require("../utils/logger");
 
+const crypto =
+  require("crypto");
+
 class Supervisor {
   constructor({
     siteFactory,
@@ -40,10 +43,32 @@ class Supervisor {
             this.getAdapter(
               applicationId
             ),
+
         intervalMs
       });
 
-    this.started = false;
+    this.started =
+      false;
+
+    this.workerId =
+      crypto.randomUUID();
+
+    this.stats = {
+      slotEvents:
+        0,
+
+      completed:
+        0,
+
+      recovered:
+        0,
+
+      errors:
+        0,
+
+      startedAt:
+        null
+    };
 
     this.onSlotFound =
       this.onSlotFound.bind(
@@ -98,7 +123,9 @@ class Supervisor {
       );
 
     const bot =
-      new Bot1(adapter);
+      new Bot1(
+        adapter
+      );
 
     this.bot1.set(
       applicationId,
@@ -142,7 +169,49 @@ class Supervisor {
       detectedAt
     } = payload;
 
+    this.stats.slotEvents++;
+
     try {
+      /*
+       * Fetch current state before
+       * allowing Bot 1 to continue.
+       */
+
+      const application =
+        await Application.findById(
+          applicationId
+        ).populate(
+          "client"
+        );
+
+      if (!application) {
+        logger.warn(
+          "ORCHESTRATOR received slot for missing application",
+          {
+            applicationId
+          }
+        );
+
+        return;
+      }
+
+      if (
+        application.status !==
+        "slot_received"
+      ) {
+        logger.info(
+          "ORCHESTRATOR ignored duplicate slot event",
+          {
+            applicationId,
+
+            status:
+              application.status
+          }
+        );
+
+        return;
+      }
+
       const bot =
         await this.getBot1(
           applicationId
@@ -155,38 +224,66 @@ class Supervisor {
         );
 
       if (
-        result.success &&
-        result.application
+        !result.success
       ) {
+        return;
+      }
+
+      this.stats.completed++;
+
+      try {
         await this.telegram.completed(
           result.application,
           result.application.client
         );
+      } catch (
+        telegramError
+      ) {
+        logger.error(
+          "Telegram completion notification failed",
+          {
+            applicationId,
 
-        await this.closeAdapter(
-          applicationId
+            error:
+              telegramError.message
+          }
         );
       }
+
+      await this.closeAdapter(
+        applicationId
+      );
+
     } catch (error) {
+      this.stats.errors++;
+
       logger.error(
-        "Supervisor slot handler failed",
+        "ORCHESTRATOR slot handler failed",
         {
           applicationId,
+
           error:
             error.message
         }
       );
 
       try {
-        await this.telegram.error(
+        const application =
           await Application.findById(
             applicationId
-          ),
-          error.message
-        );
+          );
+
+        if (application) {
+          await this.telegram.error(
+            application,
+            error.message
+          );
+        }
       } catch {
-        // Do not allow Telegram failure
-        // to break the worker.
+        /*
+         * Notification failure must
+         * never kill the orchestrator.
+         */
       }
     }
   }
@@ -196,19 +293,39 @@ class Supervisor {
       await Application.find({
         status:
           "slot_received"
-      }).limit(50);
+      })
+        .sort({
+          updatedAt:
+            1
+        })
+        .limit(100);
 
     for (
       const application
       of applications
     ) {
+      this.stats.recovered++;
+
+      logger.info(
+        "ORCHESTRATOR recovering slot",
+        {
+          applicationId:
+            application._id.toString(),
+
+          slot:
+            application.slot
+        }
+      );
+
       eventBus.emit(
         "slot_found",
         {
           applicationId:
             application._id.toString(),
+
           slot:
             application.slot,
+
           detectedAt:
             application.bot2
               ?.slotDetectedAt ||
@@ -216,6 +333,109 @@ class Supervisor {
         }
       );
     }
+  }
+
+  async recoverStaleLocks() {
+    const staleBefore =
+      new Date();
+
+    const result =
+      await Application.updateMany(
+        {
+          "lock.owner":
+            {
+              $ne: null
+            },
+
+          "lock.expiresAt":
+            {
+              $lt: staleBefore
+            },
+
+          status: {
+            $nin: [
+              "completed",
+              "cancelled"
+            ]
+          }
+        },
+        {
+          $set: {
+            "lock.owner":
+              null,
+
+            "lock.expiresAt":
+              null
+          }
+        }
+      );
+
+    if (
+      result.modifiedCount
+    ) {
+      logger.warn(
+        "ORCHESTRATOR released stale locks",
+        {
+          count:
+            result.modifiedCount
+        }
+      );
+    }
+  }
+
+  async recoverWaitingApplications() {
+    /*
+     * After a Render restart, an application
+     * can remain in waiting_for_slot while
+     * Bot 2 is no longer marked as monitoring.
+     *
+     * We reactivate monitoring.
+     */
+
+    const result =
+      await Application.updateMany(
+        {
+          status:
+            "waiting_for_slot",
+
+          "bot2.monitoring":
+            {
+              $ne: true
+            }
+        },
+        {
+          $set: {
+            "bot2.monitoring":
+              true,
+
+            "bot2.status":
+              "monitoring",
+
+            "bot2.workerId":
+              null
+          }
+        }
+      );
+
+    if (
+      result.modifiedCount
+    ) {
+      logger.info(
+        "ORCHESTRATOR restored waiting applications",
+        {
+          count:
+            result.modifiedCount
+        }
+      );
+    }
+  }
+
+  async recover() {
+    await this.recoverStaleLocks();
+
+    await this.recoverWaitingApplications();
+
+    await this.recoverSlots();
   }
 
   async closeAdapter(
@@ -232,8 +452,18 @@ class Supervisor {
 
     try {
       await adapter.close();
-    } catch {
-      // Ignore adapter shutdown errors.
+    } catch (
+      error
+    ) {
+      logger.warn(
+        "Site adapter close failed",
+        {
+          applicationId,
+
+          error:
+            error.message
+        }
+      );
     }
 
     this.adapters.delete(
@@ -246,11 +476,17 @@ class Supervisor {
   }
 
   start() {
-    if (this.started) {
+    if (
+      this.started
+    ) {
       return;
     }
 
-    this.started = true;
+    this.started =
+      true;
+
+    this.stats.startedAt =
+      new Date();
 
     eventBus.on(
       "slot_found",
@@ -259,15 +495,36 @@ class Supervisor {
 
     this.bot2.start();
 
-    this.recoverSlots();
+    /*
+     * Recovery happens immediately
+     * after startup.
+     */
+
+    this.recover()
+      .catch(error => {
+        this.stats.errors++;
+
+        logger.error(
+          "ORCHESTRATOR recovery failed",
+          {
+            error:
+              error.message
+          }
+        );
+      });
 
     logger.info(
-      "Automation supervisor started"
+      "ORCHESTRATOR started",
+      {
+        workerId:
+          this.workerId
+      }
     );
   }
 
   stop() {
-    this.started = false;
+    this.started =
+      false;
 
     eventBus.off(
       "slot_found",
@@ -286,7 +543,11 @@ class Supervisor {
     }
 
     logger.info(
-      "Automation supervisor stopped"
+      "ORCHESTRATOR stopped",
+      {
+        workerId:
+          this.workerId
+      }
     );
   }
 
@@ -294,12 +555,21 @@ class Supervisor {
     return {
       started:
         this.started,
+
+      workerId:
+        this.workerId,
+
       activeAdapters:
         this.adapters.size,
+
       activeBot1:
         this.bot1.size,
+
       bot2:
-        this.bot2.status()
+        this.bot2.status(),
+
+      stats:
+        this.stats
     };
   }
 }
