@@ -2,722 +2,538 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
-  <meta
-    name="description"
-    content="Travel Automation — Intelligent Appointment Operations."
-  >
-
-  <title>
-    Travel Automation — Operations Center
-  </title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0756a6">
+  <meta name="description" content="Travel Automation — Intelligent Appointment Operations">
+  <title>TRAVEL AUTOMATION — Centro de Operações</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
 
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
-    rel="stylesheet"
-  >
-
-  <link
-    rel="stylesheet"
-    href="/style.css"
-  >
+  <link rel="stylesheet" href="/style.css">
 </head>
 
 <body>
 
-  <!-- TOAST -->
-
-  <div
-    id="toast"
-    class="toast"
-    aria-live="polite"
-  ></div>
-
+  <!-- BACKGROUND -->
+  <div class="site-background">
+    <div class="background-sky"></div>
+    <div class="background-airplane"></div>
+    <div class="background-overlay"></div>
+  </div>
 
   <!-- LOGIN -->
+  <section id="loginView" class="login-view">
+    <div class="login-shell">
 
-  <section
-    id="loginView"
-    class="auth-view"
-  >
-
-    <div class="auth-shell">
-
-      <div class="brand-block">
-
+      <div class="login-brand">
         <div class="brand-mark">
-          TA
+          <span>TA</span>
         </div>
 
         <div>
-          <strong>
-            Travel Automation
-          </strong>
+          <strong>TRAVEL AUTOMATION</strong>
+          <small>INTELLIGENT APPOINTMENT OPERATIONS</small>
+        </div>
+      </div>
 
-          <span>
-            Intelligent Appointment Operations
-          </span>
+      <div class="login-card">
+
+        <div class="login-card-top">
+          <span class="eyebrow">OPERATIONS PLATFORM</span>
+
+          <h1>
+            Prepare.
+            <span>Monitor.</span>
+            Act.
+          </h1>
+
+          <p>
+            Uma central inteligente para preparar processos,
+            monitorar disponibilidade e continuar automaticamente
+            quando o momento certo chegar.
+          </p>
+        </div>
+
+        <div class="login-status">
+          <span class="status-dot"></span>
+          <span>Sistema operacional</span>
+        </div>
+
+        <button id="loginButton" class="primary-button login-button" type="button">
+          Entrar no Centro de Operações
+          <span>→</span>
+        </button>
+
+        <div class="login-features">
+          <div>
+            <strong>01</strong>
+            <span>PREPARATION</span>
+          </div>
+
+          <div>
+            <strong>02</strong>
+            <span>RADAR</span>
+          </div>
+
+          <div>
+            <strong>03</strong>
+            <span>ORCHESTRATOR</span>
+          </div>
         </div>
 
       </div>
 
-
-      <div class="auth-card">
-
-        <div class="eyebrow">
-          SECURE ACCESS
-        </div>
-
-        <h1>
-          Bem-vindo novamente
-        </h1>
-
-        <p>
-          Entre na plataforma para gerir
-          os seus processos de agendamento.
-        </p>
-
-
-        <form
-          id="loginForm"
-          autocomplete="on"
-        >
-
-          <label>
-            Email
-
-            <input
-              id="loginEmail"
-              name="email"
-              type="email"
-              autocomplete="username"
-              required
-            >
-          </label>
-
-
-          <label>
-            Palavra-passe
-
-            <input
-              id="loginPassword"
-              name="password"
-              type="password"
-              autocomplete="current-password"
-              required
-            >
-          </label>
-
-
-          <button
-            class="primary-button"
-            type="submit"
-          >
-            Entrar
-          </button>
-
-        </form>
-
+      <div class="login-footer">
+        <span>Secure Operations Environment</span>
+        <span>•</span>
+        <span>Travel Automation</span>
       </div>
 
     </div>
-
   </section>
 
 
   <!-- APPLICATION -->
+  <section id="appView" class="app-view hidden">
 
-  <section
-    id="appView"
-    class="app-view hidden"
-  >
-
-    <!-- TOPBAR -->
-
+    <!-- TOP NAVIGATION -->
     <header class="topbar">
 
-      <div class="brand-block compact">
+      <div class="topbar-brand">
 
-        <div class="brand-mark">
-          TA
+        <div class="brand-mark small">
+          <span>TA</span>
         </div>
 
-        <div>
-          <strong>
-            Travel Automation
-          </strong>
-
-          <span>
-            Operations Center
-          </span>
+        <div class="brand-copy">
+          <strong>TRAVEL AUTOMATION</strong>
+          <span>INTELLIGENT APPOINTMENT OPERATIONS</span>
         </div>
 
       </div>
 
+      <div class="topbar-center">
+        <span class="live-indicator"></span>
+        <span id="connectionText">Sistema operacional</span>
+      </div>
 
       <div class="topbar-actions">
 
-        <div class="connection-status">
-
-          <span
-            id="connectionDot"
-            class="status-dot"
-          ></span>
-
-          <span
-            id="connectionText"
-          >
-            Offline
-          </span>
-
-        </div>
-
-
-        <span
-          id="userName"
-          class="user-name"
-        ></span>
-
-
         <button
-          id="logoutButton"
-          class="ghost-button"
+          id="refreshButton"
+          class="icon-button"
           type="button"
+          title="Atualizar"
+          aria-label="Atualizar"
         >
-          Sair
+          ↻
         </button>
+
+        <div class="user-chip">
+          <div class="user-avatar">
+            <span>OP</span>
+          </div>
+
+          <div>
+            <strong id="userName">Operations Console</strong>
+            <small>Administrador</small>
+          </div>
+        </div>
 
       </div>
 
     </header>
 
 
-    <!-- DASHBOARD -->
+    <!-- HERO -->
+    <main class="main-container">
 
-    <main class="dashboard">
+      <section class="operations-hero">
 
+        <div class="hero-content">
 
-      <!-- HERO -->
-
-      <section class="hero">
-
-        <div>
-
-          <div class="eyebrow">
-            OPERATIONS CENTER
+          <div class="hero-eyebrow">
+            <span class="hero-line"></span>
+            CENTRO DE OPERAÇÕES
           </div>
 
           <h1>
-            Prepare tudo.
-            <br>
-
-            <span>
-              Monitore continuamente.
-            </span>
-
-            <br>
-
-            Aja no momento certo.
+            Inteligência para
+            <strong>operações de viagem.</strong>
           </h1>
 
           <p>
-            Prepare clientes e documentos,
-            acompanhe a disponibilidade e
-            retome automaticamente o processo
-            quando surgir uma vaga compatível.
+            Prepare cada processo antes da abertura,
+            monitore continuamente a disponibilidade e esteja
+            pronto para agir quando surgir uma oportunidade.
           </p>
+
+          <div class="hero-actions">
+            <a href="#clientSection" class="hero-button primary">
+              Novo cliente
+              <span>+</span>
+            </a>
+
+            <a href="#applicationSection" class="hero-button secondary">
+              Nova aplicação
+              <span>→</span>
+            </a>
+          </div>
 
         </div>
 
+        <div class="hero-flight-card">
 
-        <button
-          id="refreshButton"
-          class="secondary-button"
-          type="button"
-        >
-          ↻ Atualizar
-        </button>
+          <div class="flight-card-header">
+            <span>OPERATION STATUS</span>
+            <span class="status-pill">
+              <i></i>
+              ONLINE
+            </span>
+          </div>
+
+          <div class="flight-route">
+
+            <div class="route-point">
+              <strong>PREP</strong>
+              <span>Preparation</span>
+            </div>
+
+            <div class="route-line">
+              <div class="route-progress"></div>
+              <span class="route-plane">✈</span>
+            </div>
+
+            <div class="route-point right">
+              <strong>RADAR</strong>
+              <span>Monitoring</span>
+            </div>
+
+          </div>
+
+          <div class="flight-card-footer">
+            <span>ORCHESTRATOR</span>
+            <strong>READY TO ACT</strong>
+          </div>
+
+        </div>
 
       </section>
 
 
-      <!-- SYSTEM STATUS -->
+      <!-- SYSTEM PIPELINE -->
+      <section class="system-pipeline">
 
-      <section class="system-strip">
-
-        <div class="system-main">
-
-          <span
-            class="system-dot online"
-          ></span>
+        <div class="pipeline-item active">
+          <div class="pipeline-number">01</div>
 
           <div>
-
-            <strong>
-              Sistema operacional
-            </strong>
-
-            <small
-              id="systemHeartbeat"
-            >
-              A sincronizar...
-            </small>
-
+            <strong>PREPARATION</strong>
+            <span>Dados e documentos preparados</span>
           </div>
 
+          <div class="pipeline-state" id="bot1State">
+            READY
+          </div>
         </div>
 
+        <div class="pipeline-connector"></div>
 
-        <div class="system-module">
+        <div class="pipeline-item">
+          <div class="pipeline-number">02</div>
 
-          <b>
-            PREPARATION
-          </b>
+          <div>
+            <strong>RADAR</strong>
+            <span>Monitorização de disponibilidade</span>
+          </div>
 
-          <span id="bot1State">
-            Ready
-          </span>
-
+          <div class="pipeline-state" id="bot2State">
+            IDLE
+          </div>
         </div>
 
+        <div class="pipeline-connector"></div>
 
-        <div class="system-module">
+        <div class="pipeline-item">
+          <div class="pipeline-number">03</div>
 
-          <b>
-            RADAR
-          </b>
+          <div>
+            <strong>ORCHESTRATOR</strong>
+            <span>Coordenação e recuperação</span>
+          </div>
 
-          <span id="bot2State">
-            Ready
-          </span>
-
-        </div>
-
-
-        <div class="system-module">
-
-          <b>
-            ORCHESTRATOR
-          </b>
-
-          <span id="orchestratorState">
-            Ready
-          </span>
-
+          <div class="pipeline-state" id="supervisorState">
+            READY
+          </div>
         </div>
 
       </section>
 
 
       <!-- STATS -->
-
       <section class="stats-grid">
 
         <article class="stat-card">
+          <div class="stat-icon blue">◎</div>
 
-          <div class="stat-icon">
-            ◫
+          <div class="stat-content">
+            <span>CLIENTES</span>
+            <strong id="clientCount">0</strong>
+            <small>Perfis registados</small>
           </div>
-
-          <span>
-            Processos
-          </span>
-
-          <strong id="statTotal">
-            0
-          </strong>
-
-          <small>
-            Total
-          </small>
-
         </article>
-
 
         <article class="stat-card">
+          <div class="stat-icon cyan">▣</div>
 
-          <div class="stat-icon">
-            ◌
+          <div class="stat-content">
+            <span>APLICAÇÕES</span>
+            <strong id="applicationCount">0</strong>
+            <small>Processos em operação</small>
           </div>
-
-          <span>
-            Aguardando vaga
-          </span>
-
-          <strong id="statWaiting">
-            0
-          </strong>
-
-          <small>
-            Radar em monitoramento
-          </small>
-
         </article>
-
 
         <article class="stat-card">
+          <div class="stat-icon green">✓</div>
 
-          <div class="stat-icon">
-            ↗
+          <div class="stat-content">
+            <span>PREPARADAS</span>
+            <strong id="preparedCount">0</strong>
+            <small>Prontas para continuar</small>
           </div>
-
-          <span>
-            Em execução
-          </span>
-
-          <strong id="statProcessing">
-            0
-          </strong>
-
-          <small>
-            Preparação ou conclusão
-          </small>
-
         </article>
 
+        <article class="stat-card">
+          <div class="stat-icon orange">◉</div>
 
-        <article class="stat-card highlight">
-
-          <div class="stat-icon">
-            ✓
+          <div class="stat-content">
+            <span>MONITORING</span>
+            <strong id="monitoringCount">0</strong>
+            <small>Processos no radar</small>
           </div>
-
-          <span>
-            Concluídos
-          </span>
-
-          <strong id="statCompleted">
-            0
-          </strong>
-
-          <small>
-            Processos finalizados
-          </small>
-
         </article>
 
       </section>
 
 
-      <!-- WORKSPACE -->
-
-      <section class="workspace-grid">
-
-
-        <!-- MAIN -->
-
-        <div class="workspace-main">
+      <!-- MAIN GRID -->
+      <section class="dashboard-grid">
 
 
-          <!-- CLIENT / PASSPORT -->
+        <!-- LEFT -->
+        <div class="dashboard-main">
 
-          <section class="panel passport-panel">
+
+          <!-- CLIENT -->
+          <section id="clientSection" class="panel client-panel">
 
             <div class="panel-header">
 
-              <div>
+              <div class="panel-heading">
+                <span class="section-number">01</span>
 
-                <div class="eyebrow">
-                  CLIENTE + DOCUMENTO
+                <div>
+                  <span class="panel-eyebrow">CLIENT PROFILE</span>
+                  <h2>Novo cliente</h2>
+                  <p>Prepare a identidade e os dados necessários para a operação.</p>
                 </div>
-
-                <h2>
-                  Novo cliente
-                </h2>
-
-                <p>
-                  O passaporte será a fonte principal
-                  para preparar automaticamente os
-                  dados da candidatura.
-                </p>
-
               </div>
 
-
-              <div class="step-badge">
-                01
-              </div>
+              <span class="panel-status">
+                <i></i>
+                PREPARATION
+              </span>
 
             </div>
 
 
-            <form
-              id="clientForm"
-              class="form-grid"
-              enctype="multipart/form-data"
-            >
+            <form id="clientForm" class="form">
 
+              <div class="form-section-title">
+                <span>Dados pessoais</span>
+                <small>Informação base</small>
+              </div>
 
-              <label>
-                Nome completo
+              <div class="form-grid">
 
-                <input
-                  id="clientFullName"
-                  required
-                  maxlength="160"
-                  placeholder="Nome conforme passaporte"
-                >
-              </label>
-
-
-              <label>
-                Email
-
-                <input
-                  id="clientEmail"
-                  type="email"
-                  required
-                  placeholder="cliente@email.com"
-                >
-              </label>
-
-
-              <label>
-                Telefone
-
-                <input
-                  id="clientPhone"
-                  placeholder="+244 ..."
-                >
-              </label>
-
-
-              <label>
-                Data de nascimento
-
-                <input
-                  id="clientDateOfBirth"
-                  type="date"
-                >
-              </label>
-
-
-              <label>
-                Nacionalidade
-
-                <input
-                  id="clientNationality"
-                  placeholder="Angolana"
-                >
-              </label>
-
-
-              <label>
-                Género
-
-                <select
-                  id="clientGender"
-                >
-
-                  <option value="">
-                    Selecionar
-                  </option>
-
-                  <option value="male">
-                    Masculino
-                  </option>
-
-                  <option value="female">
-                    Feminino
-                  </option>
-
-                  <option value="other">
-                    Outro
-                  </option>
-
-                </select>
-
-              </label>
-
-
-              <label>
-                Número do passaporte
-
-                <input
-                  id="clientPassportNumber"
-                  placeholder="Extraído do documento"
-                >
-              </label>
-
-
-              <label>
-                País do passaporte
-
-                <input
-                  id="clientPassportCountry"
-                  placeholder="Extraído do documento"
-                >
-              </label>
-
-
-              <label>
-                Data de emissão
-
-                <input
-                  id="clientPassportIssueDate"
-                  type="date"
-                >
-              </label>
-
-
-              <label>
-                Data de validade
-
-                <input
-                  id="clientPassportExpiryDate"
-                  type="date"
-                >
-              </label>
-
-
-              <!-- PASSPORT UPLOAD -->
-
-              <div
-                id="passportDropzone"
-                class="passport-upload form-span"
-              >
-
-                <div class="upload-copy">
-
-                  <div class="upload-icon">
-                    ▣
-                  </div>
-
-                  <div>
-
-                    <strong>
-                      Passaporte do cliente
-                    </strong>
-
-                    <span>
-                      JPG, PNG, WEBP ou PDF.
-                      O documento será associado
-                      ao cliente e preparado para
-                      utilização na candidatura.
-                    </span>
-
-                  </div>
-
-                </div>
-
-
-                <label class="file-button">
-
-                  Selecionar documento
-
+                <label class="field">
+                  <span>Nome completo</span>
                   <input
-                    id="clientPassportFile"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    id="clientFullName"
+                    name="fullName"
+                    type="text"
+                    placeholder="Nome completo"
+                    autocomplete="name"
+                    required
                   >
-
                 </label>
 
+                <label class="field">
+                  <span>Email</span>
+                  <input
+                    id="clientEmail"
+                    name="email"
+                    type="email"
+                    placeholder="cliente@email.com"
+                    autocomplete="email"
+                  >
+                </label>
 
-                <div
-                  id="passportFileStatus"
-                  class="file-status"
-                >
-                  Nenhum documento selecionado
-                </div>
+                <label class="field">
+                  <span>Telefone</span>
+                  <input
+                    id="clientPhone"
+                    name="phone"
+                    type="tel"
+                    placeholder="+244 9xx xxx xxx"
+                    autocomplete="tel"
+                  >
+                </label>
+
+                <label class="field">
+                  <span>Data de nascimento</span>
+                  <input
+                    id="clientDateOfBirth"
+                    name="dateOfBirth"
+                    type="date"
+                  >
+                </label>
+
+                <label class="field">
+                  <span>Nacionalidade</span>
+                  <input
+                    id="clientNationality"
+                    name="nationality"
+                    type="text"
+                    placeholder="Angolana"
+                  >
+                </label>
+
+                <label class="field">
+                  <span>Género</span>
+                  <select id="clientGender" name="gender">
+                    <option value="">Selecionar</option>
+                    <option value="male">Masculino</option>
+                    <option value="female">Feminino</option>
+                    <option value="other">Outro</option>
+                  </select>
+                </label>
 
               </div>
 
 
-              <!-- PASSPORT READINESS -->
+              <div class="form-section-title passport-title">
+                <span>Passaporte</span>
+                <small>Documento de viagem</small>
+              </div>
 
-              <div
-                id="passportReadiness"
-                class="readiness-box form-span"
-              >
+              <div class="passport-layout">
 
-                <div class="readiness-summary">
+                <div class="passport-fields">
 
-                  <span
-                    id="passportReadinessRing"
-                    class="readiness-ring"
-                  >
-                    0%
-                  </span>
-
-
-                  <div>
-
-                    <strong
-                      id="passportReadinessTitle"
+                  <label class="field">
+                    <span>Número do passaporte</span>
+                    <input
+                      id="clientPassportNumber"
+                      name="passportNumber"
+                      type="text"
+                      placeholder="Número do passaporte"
+                      autocomplete="off"
                     >
-                      Documento não adicionado
-                    </strong>
+                  </label>
 
-                    <small
-                      id="passportReadinessText"
+                  <label class="field">
+                    <span>Data de emissão</span>
+                    <input
+                      id="clientPassportIssueDate"
+                      name="passportIssueDate"
+                      type="date"
                     >
-                      Adicione o passaporte
-                      para iniciar a preparação.
-                    </small>
+                  </label>
 
+                  <label class="field">
+                    <span>Data de validade</span>
+                    <input
+                      id="clientPassportExpiryDate"
+                      name="passportExpiryDate"
+                      type="date"
+                    >
+                  </label>
+
+                  <label class="field">
+                    <span>País emissor</span>
+                    <input
+                      id="clientPassportCountry"
+                      name="passportCountry"
+                      type="text"
+                      placeholder="AGO"
+                    >
+                  </label>
+
+                </div>
+
+
+                <div class="passport-readiness" id="passportReadiness">
+
+                  <div class="passport-icon">
+                    PASSPORT
+                  </div>
+
+                  <strong>Documento de viagem</strong>
+
+                  <p>
+                    Os dados estruturados do passaporte podem ser
+                    preparados para a aplicação.
+                  </p>
+
+                  <div class="readiness-checks">
+
+                    <div id="passportCheckFile">
+                      <span>○</span>
+                      <span>Documento anexado</span>
+                    </div>
+
+                    <div id="passportCheckData">
+                      <span>○</span>
+                      <span>Dados preenchidos</span>
+                    </div>
+
+                    <div id="passportCheckReady">
+                      <span>○</span>
+                      <span>Pronto para operação</span>
+                    </div>
+
+                  </div>
+
+                  <div id="passportFileStatus" class="document-note">
+                    Upload de documento será ativado quando o endpoint
+                    seguro de documentos estiver disponível.
                   </div>
 
                 </div>
 
-
-                <ul>
-
-                  <li id="passportCheckFile">
-
-                    Passaporte
-
-                    <b>
-                      —
-                    </b>
-
-                  </li>
-
-
-                  <li id="passportCheckData">
-
-                    Dados extraídos
-
-                    <b>
-                      —
-                    </b>
-
-                  </li>
-
-
-                  <li id="passportCheckReady">
-
-                    Pronto para automação
-
-                    <b>
-                      —
-                    </b>
-
-                  </li>
-
-                </ul>
-
               </div>
 
 
-              <div
-                class="form-actions form-span"
-              >
+              <div class="form-footer">
 
-                <button
-                  id="saveClientButton"
-                  class="primary-button"
-                  type="submit"
-                >
-                  Guardar cliente e documento
+                <label class="checkbox-field">
+                  <input
+                    id="clientFacialConsent"
+                    name="facialConsent"
+                    type="checkbox"
+                  >
+                  <span>
+                    O cliente autorizou a utilização dos dados
+                    necessários para verificação de identidade.
+                  </span>
+                </label>
+
+                <button class="primary-button" type="submit">
+                  Criar perfil
+                  <span>→</span>
                 </button>
 
               </div>
@@ -728,131 +544,94 @@
 
 
           <!-- APPLICATION -->
-
-          <section class="panel">
+          <section id="applicationSection" class="panel application-panel">
 
             <div class="panel-header">
 
-              <div>
+              <div class="panel-heading">
+                <span class="section-number">02</span>
 
-                <div class="eyebrow">
-                  NOVO PROCESSO
+                <div>
+                  <span class="panel-eyebrow">APPLICATION</span>
+                  <h2>Nova aplicação</h2>
+                  <p>Defina a janela de procura e coloque o processo no radar.</p>
                 </div>
-
-                <h2>
-                  Preparar agendamento
-                </h2>
-
-                <p>
-                  Escolha o cliente e defina
-                  a janela em que o RADAR deverá
-                  procurar disponibilidade.
-                </p>
-
               </div>
 
-
-              <div class="step-badge">
-                02
-              </div>
+              <span class="panel-status blue">
+                <i></i>
+                READY
+              </span>
 
             </div>
 
 
-            <form
-              id="applicationForm"
-              class="form-grid"
-            >
+            <form id="applicationForm" class="form">
 
-              <label>
+              <div class="form-grid">
 
-                Cliente
+                <label class="field full">
+                  <span>Cliente</span>
 
-                <select
-                  id="applicationClient"
-                  required
-                >
+                  <select id="applicationClient" name="clientId" required>
+                    <option value="">Selecionar cliente</option>
+                  </select>
+                </label>
 
-                  <option value="">
-                    Selecione um cliente
-                  </option>
+                <label class="field">
+                  <span>Data inicial</span>
+                  <input
+                    id="preferredStartDate"
+                    name="preferredStartDate"
+                    type="date"
+                    required
+                  >
+                </label>
 
-                </select>
+                <label class="field">
+                  <span>Data final</span>
+                  <input
+                    id="preferredEndDate"
+                    name="preferredEndDate"
+                    type="date"
+                    required
+                  >
+                </label>
 
-              </label>
-
-
-              <label>
-
-                Horário preferencial
-
-                <input
-                  id="preferredTime"
-                  type="time"
-                >
-
-              </label>
-
-
-              <label>
-
-                Data inicial
-
-                <input
-                  id="preferredStart"
-                  type="date"
-                >
-
-              </label>
-
-
-              <label>
-
-                Data final
-
-                <input
-                  id="preferredEnd"
-                  type="date"
-                >
-
-              </label>
-
-
-              <div
-                class="automation-note form-span"
-              >
-
-                <span>
-                  ✦
-                </span>
-
-                <div>
-
-                  <strong>
-                    Fluxo automático
-                  </strong>
-
-                  <small>
-                    Depois da preparação, o RADAR
-                    monitora a disponibilidade.
-                    Quando encontrar uma vaga,
-                    o ORCHESTRATOR retoma a candidatura.
-                  </small>
-
-                </div>
+                <label class="field full">
+                  <span>Horário preferencial</span>
+                  <input
+                    id="preferredTime"
+                    name="preferredTime"
+                    type="time"
+                  >
+                </label>
 
               </div>
 
 
-              <div
-                class="form-actions form-span"
-              >
+              <div class="application-launch">
 
-                <button
-                  class="primary-button"
-                  type="submit"
-                >
-                  Criar processo
+                <div class="launch-copy">
+                  <span>OPERATION FLOW</span>
+
+                  <strong>
+                    Preparation
+                    <b>→</b>
+                    Radar
+                    <b>→</b>
+                    Orchestrator
+                  </strong>
+
+                  <small>
+                    O processo será preparado antes de iniciar
+                    a monitorização de disponibilidade.
+                  </small>
+                </div>
+
+                <button class="primary-button" type="submit">
+                  Iniciar operação
+                  <span>→</span>
                 </button>
 
               </div>
@@ -861,135 +640,113 @@
 
           </section>
 
-        </div>
 
+          <!-- APPLICATIONS -->
+          <section class="panel applications-panel">
 
-        <!-- SIDE -->
+            <div class="panel-header">
 
-        <aside class="workspace-side">
+              <div class="panel-heading">
+                <span class="section-number">03</span>
 
-
-          <!-- READINESS -->
-
-          <section class="panel readiness-panel">
-
-            <div class="eyebrow">
-              READINESS
-            </div>
-
-            <h2>
-              Estado operacional
-            </h2>
-
-
-            <div class="score-wrap">
-
-              <div class="score-ring">
-
-                <span
-                  id="readinessScore"
-                >
-                  0%
-                </span>
+                <div>
+                  <span class="panel-eyebrow">OPERATIONS</span>
+                  <h2>Aplicações em operação</h2>
+                  <p>Acompanhe o estado real de cada processo.</p>
+                </div>
 
               </div>
 
+              <span class="panel-counter">
+                <strong id="applicationCount">0</strong>
+                processos
+              </span>
 
-              <div>
+            </div>
 
-                <strong
-                  id="readinessTitle"
-                >
-                  A preparar
-                </strong>
 
-                <p
-                  id="readinessDescription"
-                >
-                  Adicione clientes e documentos
-                  para começar.
+            <div id="applicationsList" class="applications-list">
+
+              <div class="empty-state">
+
+                <div class="empty-icon">◎</div>
+
+                <strong>Nenhuma aplicação em operação</strong>
+
+                <p>
+                  Crie um cliente e inicie uma aplicação
+                  para acompanhar o processo aqui.
                 </p>
 
               </div>
 
             </div>
 
+          </section>
 
-            <div class="check-list">
+        </div>
 
+
+        <!-- RIGHT SIDEBAR -->
+        <aside class="dashboard-sidebar">
+
+
+          <!-- READINESS -->
+          <section class="side-panel readiness-panel">
+
+            <div class="side-panel-header">
               <div>
+                <span>OPERATION READINESS</span>
+                <h3>Estado geral</h3>
+              </div>
 
-                <span>
-                  ✓
-                </span>
+              <span class="mini-status">LIVE</span>
+            </div>
 
-                <span>
-                  Dados do cliente
-                </span>
 
-                <b
-                  id="readyClient"
-                >
-                  0
-                </b>
+            <div class="readiness-score">
+
+              <div class="score-ring">
+
+                <div class="score-ring-inner">
+                  <strong id="readinessScore">0</strong>
+                  <span>%</span>
+                </div>
 
               </div>
 
-
-              <div>
-
-                <span>
-                  ✓
-                </span>
-
-                <span>
-                  Passaporte
-                </span>
-
-                <b
-                  id="readyPassport"
-                >
-                  0
-                </b>
-
+              <div class="score-copy">
+                <strong id="readinessLabel">Aguardando dados</strong>
+                <span>Readiness Score</span>
               </div>
 
+            </div>
+
+
+            <div class="readiness-list">
 
               <div>
-
-                <span>
-                  ✓
-                </span>
-
-                <span>
-                  Aplicações
-                </span>
-
-                <b
-                  id="readyApplications"
-                >
-                  0
-                </b>
-
+                <span class="readiness-dot"></span>
+                <span>Perfil do cliente</span>
+                <strong id="readinessClient">0%</strong>
               </div>
 
+              <div>
+                <span class="readiness-dot"></span>
+                <span>Dados do passaporte</span>
+                <strong id="readinessPassport">0%</strong>
+              </div>
 
               <div>
+                <span class="readiness-dot"></span>
+                <span>Aplicação</span>
+                <strong id="readinessApplication">0%</strong>
+              </div>
 
-                <span>
-                  ✓
-                </span>
-
-                <span>
-                  Radar
-                </span>
-
-                <b
-                  id="readyRadar"
-                >
-                  0
-                </b>
-
+              <div>
+                <span class="readiness-dot"></span>
+                <span>Operação</span>
+                <strong id="readinessOperation">0%</strong>
               </div>
 
             </div>
@@ -998,35 +755,159 @@
 
 
           <!-- ACTIVITY -->
+          <section class="side-panel activity-panel">
 
-          <section class="panel activity-panel">
-
-            <div class="panel-header compact-header">
+            <div class="side-panel-header">
 
               <div>
+                <span>ACTIVITY FEED</span>
+                <h3>Atividade recente</h3>
+              </div>
 
-                <div class="eyebrow">
-                  ACTIVITY
+              <span class="live-dot"></span>
+
+            </div>
+
+
+            <div id="activityFeed" class="activity-feed">
+
+              <div class="activity-item">
+
+                <div class="activity-marker blue"></div>
+
+                <div>
+                  <strong>Sistema iniciado</strong>
+                  <span>Centro de operações disponível</span>
                 </div>
 
-                <h2>
-                  Feed operacional
-                </h2>
+              </div>
+
+              <div class="activity-item">
+
+                <div class="activity-marker"></div>
+
+                <div>
+                  <strong>PREPARATION</strong>
+                  <span>Aguardando aplicação</span>
+                </div>
+
+              </div>
+
+              <div class="activity-item">
+
+                <div class="activity-marker"></div>
+
+                <div>
+                  <strong>RADAR</strong>
+                  <span>Monitorização inativa</span>
+                </div>
 
               </div>
 
             </div>
 
+          </section>
 
-            <div
-              id="activityFeed"
-              class="activity-feed"
-            >
 
-              <div class="activity-empty">
-                Aguardando atividade...
+          <!-- BOT CENTER -->
+          <section class="side-panel bot-panel">
+
+            <div class="side-panel-header">
+
+              <div>
+                <span>AUTOMATION CORE</span>
+                <h3>Bot Center</h3>
               </div>
 
+            </div>
+
+
+            <div class="bot-status-card">
+
+              <div class="bot-status-top">
+                <div class="bot-symbol">01</div>
+
+                <div>
+                  <strong>PREPARATION</strong>
+                  <span>Application Worker</span>
+                </div>
+
+                <i id="bot1Indicator"></i>
+              </div>
+
+              <div class="bot-progress">
+                <span id="bot1Progress"></span>
+              </div>
+
+              <small id="bot1LastAction">
+                Aguardando operação
+              </small>
+
+            </div>
+
+
+            <div class="bot-status-card">
+
+              <div class="bot-status-top">
+                <div class="bot-symbol">02</div>
+
+                <div>
+                  <strong>RADAR</strong>
+                  <span>Availability Monitor</span>
+                </div>
+
+                <i id="bot2Indicator"></i>
+              </div>
+
+              <div class="bot-progress">
+                <span id="bot2Progress"></span>
+              </div>
+
+              <small id="bot2LastAction">
+                Monitorização inativa
+              </small>
+
+            </div>
+
+
+            <div class="bot-status-card">
+
+              <div class="bot-status-top">
+                <div class="bot-symbol">03</div>
+
+                <div>
+                  <strong>ORCHESTRATOR</strong>
+                  <span>Recovery & Coordination</span>
+                </div>
+
+                <i id="supervisorIndicator"></i>
+              </div>
+
+              <div class="bot-progress">
+                <span id="supervisorProgress"></span>
+              </div>
+
+              <small id="supervisorLastAction">
+                Sistema pronto
+              </small>
+
+            </div>
+
+          </section>
+
+
+          <!-- SECURITY -->
+          <section class="security-card">
+
+            <div class="security-icon">✓</div>
+
+            <div>
+              <strong>Secure Operations</strong>
+
+              <span>
+                Os dados sensíveis são processados
+                no backend da plataforma.
+              </span>
             </div>
 
           </section>
@@ -1035,211 +916,16 @@
 
       </section>
 
-
-      <!-- BOTS -->
-
-      <section class="panel bot-panel">
-
-        <div class="panel-header">
-
-          <div>
-
-            <div class="eyebrow">
-              AUTOMATION LAYER
-            </div>
-
-            <h2>
-              Centro de bots
-            </h2>
-
-            <p>
-              Os componentes trabalham em sequência:
-              preparação, monitoramento e retomada.
-            </p>
-
-          </div>
-
-        </div>
-
-
-        <div class="bot-grid">
-
-
-          <article class="bot-card">
-
-            <div class="bot-head">
-
-              <span class="bot-number">
-                01
-              </span>
-
-              <span
-                class="live-pill"
-                id="bot1Pill"
-              >
-                READY
-              </span>
-
-            </div>
-
-            <h3>
-              PREPARATION
-            </h3>
-
-            <p>
-              Prepara dados, OTP, identidade,
-              documentos e candidatura.
-            </p>
-
-            <div class="bot-metric">
-
-              <span>
-                Estado
-              </span>
-
-              <strong
-                id="bot1Metric"
-              >
-                Idle
-              </strong>
-
-            </div>
-
-          </article>
-
-
-          <article class="bot-card">
-
-            <div class="bot-head">
-
-              <span class="bot-number">
-                02
-              </span>
-
-              <span
-                class="live-pill"
-                id="bot2Pill"
-              >
-                READY
-              </span>
-
-            </div>
-
-            <h3>
-              RADAR
-            </h3>
-
-            <p>
-              Monitoriza continuamente as aplicações
-              que aguardam uma vaga.
-            </p>
-
-            <div class="bot-metric">
-
-              <span>
-                Monitorizadas
-              </span>
-
-              <strong
-                id="bot2Metric"
-              >
-                0
-              </strong>
-
-            </div>
-
-          </article>
-
-
-          <article class="bot-card">
-
-            <div class="bot-head">
-
-              <span class="bot-number">
-                03
-              </span>
-
-              <span
-                class="live-pill"
-                id="orchestratorPill"
-              >
-                READY
-              </span>
-
-            </div>
-
-            <h3>
-              ORCHESTRATOR
-            </h3>
-
-            <p>
-              Coordena recuperação, seleção da vaga
-              e conclusão da candidatura.
-            </p>
-
-            <div class="bot-metric">
-
-              <span>
-                Estado
-              </span>
-
-              <strong
-                id="orchestratorMetric"
-              >
-                Idle
-              </strong>
-
-            </div>
-
-          </article>
-
-        </div>
-
-      </section>
-
-
-      <!-- APPLICATIONS -->
-
-      <section class="panel">
-
-        <div class="panel-header">
-
-          <div>
-
-            <div class="eyebrow">
-              PROCESSOS
-            </div>
-
-            <h2>
-              Acompanhamento
-            </h2>
-
-          </div>
-
-
-          <span
-            id="applicationCount"
-            class="panel-count"
-          >
-            0
-          </span>
-
-        </div>
-
-
-        <div
-          id="applicationsList"
-          class="applications-list"
-        ></div>
-
-      </section>
-
     </main>
+
+
+    <!-- TOAST -->
+    <div id="toastContainer" class="toast-container"></div>
 
   </section>
 
 
-  <script src="/app.js"></script>
+  <script src="/app.js" defer></script>
 
 </body>
 </html>
