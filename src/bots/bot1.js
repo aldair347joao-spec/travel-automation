@@ -1,5 +1,4 @@
-const crypto =
-  require("crypto");
+const crypto = require("crypto");
 
 const Application =
   require("../models/application");
@@ -17,6 +16,54 @@ const {
 const logger =
   require("../utils/logger");
 
+const config = {
+  lockMs:
+    Number(process.env.BOT1_LOCK_MS) ||
+    60000,
+
+  maxAttempts:
+    Number(process.env.BOT1_MAX_ATTEMPTS) ||
+    3,
+
+  timeoutMs:
+    Number(process.env.BOT1_TIMEOUT_MS) ||
+    30000
+};
+
+function sleep(ms) {
+  return new Promise(resolve =>
+    setTimeout(resolve, ms)
+  );
+}
+
+async function withTimeout(
+  promise,
+  timeoutMs,
+  operation
+) {
+  let timer;
+
+  const timeout =
+    new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        reject(
+          new Error(
+            `${operation} timed out after ${timeoutMs}ms`
+          )
+        );
+      }, timeoutMs);
+    });
+
+  try {
+    return await Promise.race([
+      promise,
+      timeout
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 class Bot1 {
   constructor(site) {
     this.site = site;
@@ -31,29 +78,173 @@ class Bot1 {
       new FacialService();
   }
 
+  async heartbeat(
+    applicationId,
+    action
+  ) {
+    await Application.updateOne(
+      {
+        _id: applicationId,
+
+        "bot1.workerId":
+          this.workerId
+      },
+      {
+        $set: {
+          "bot1.heartbeatAt":
+            new Date(),
+
+          "bot1.lastAction":
+            action
+        }
+      }
+    );
+  }
+
+  async claimApplication(
+    applicationId,
+    allowedStatuses
+  ) {
+    const now =
+      new Date();
+
+    const lockExpires =
+      new Date(
+        Date.now() +
+          config.lockMs
+      );
+
+    return Application.findOneAndUpdate(
+      {
+        _id: applicationId,
+
+        status: {
+          $in:
+            allowedStatuses
+        },
+
+        $or: [
+          {
+            "lock.owner":
+              null
+          },
+          {
+            "lock.expiresAt": {
+              $lt: now
+            }
+          }
+        ]
+      },
+      {
+        $set: {
+          "lock.owner":
+            this.workerId,
+
+          "lock.expiresAt":
+            lockExpires,
+
+          "bot1.workerId":
+            this.workerId,
+
+          "bot1.heartbeatAt":
+            now,
+
+          "bot1.lastAttemptAt":
+            now
+        },
+
+        $inc: {
+          "bot1.attempts":
+            1
+        }
+      },
+      {
+        new: true
+      }
+    )
+      .populate("client")
+      .select(
+        "+preparedDataEncrypted"
+      );
+  }
+
+  async refreshLock(
+    applicationId
+  ) {
+    await Application.updateOne(
+      {
+        _id:
+          applicationId,
+
+        "lock.owner":
+          this.workerId
+      },
+      {
+        $set: {
+          "lock.expiresAt":
+            new Date(
+              Date.now() +
+                config.lockMs
+            ),
+
+          "bot1.heartbeatAt":
+            new Date()
+        }
+      }
+    );
+  }
+
+  async releaseLock(
+    applicationId
+  ) {
+    await Application.updateOne(
+      {
+        _id:
+          applicationId,
+
+        "lock.owner":
+          this.workerId
+      },
+      {
+        $set: {
+          "lock.owner":
+            null,
+
+          "lock.expiresAt":
+            null
+        }
+      }
+    );
+  }
+
   async prepare(
     applicationId
   ) {
+    const startedAt =
+      Date.now();
+
     const application =
-      await Application.findById(
-        applicationId
-      )
-        .populate("client")
-        .select(
-          "+preparedDataEncrypted"
-        );
+      await this.claimApplication(
+        applicationId,
+        [
+          "created",
+          "error"
+        ]
+      );
 
     if (!application) {
-      throw new Error(
-        "Application not found"
-      );
-    }
+      const existing =
+        await Application.findById(
+          applicationId
+        );
 
-    if (
-      application.status ===
-      "completed"
-    ) {
-      return application;
+      if (!existing) {
+        throw new Error(
+          "Application not found"
+        );
+      }
+
+      return existing;
     }
 
     application.status =
@@ -62,26 +253,43 @@ class Bot1 {
     application.bot1.status =
       "running";
 
-    application.bot1.workerId =
-      this.workerId;
-
     application.bot1.startedAt =
       new Date();
 
     application.bot1.lastAction =
       "initializing";
 
+    application.error = {
+      code: null,
+      message: null,
+      at: null,
+      attempts: 0
+    };
+
     await application.save();
 
     try {
-      await this.site.initialize();
+      await this.heartbeat(
+        applicationId,
+        "initializing_site"
+      );
 
-      application.bot1.lastAction =
-        "login";
+      await withTimeout(
+        this.site.initialize(),
+        config.timeoutMs,
+        "Site initialization"
+      );
 
-      await application.save();
+      await this.heartbeat(
+        applicationId,
+        "logging_in"
+      );
 
-      await this.site.login();
+      await withTimeout(
+        this.site.login(),
+        config.timeoutMs,
+        "Site login"
+      );
 
       const preparedData =
         application.preparedDataEncrypted
@@ -90,20 +298,24 @@ class Bot1 {
             )
           : null;
 
-      application.bot1.lastAction =
-        "filling_application";
+      await this.heartbeat(
+        applicationId,
+        "filling_application"
+      );
 
-      await application.save();
-
-      await this.site.fillApplication(
-        application,
-        application.client,
-        preparedData
+      await withTimeout(
+        this.site.fillApplication(
+          application,
+          application.client,
+          preparedData
+        ),
+        config.timeoutMs,
+        "Application preparation"
       );
 
       const otp =
         this.otp.createRequest(
-          application._id.toString()
+          applicationId
         );
 
       application.otp.requestId =
@@ -112,15 +324,37 @@ class Bot1 {
       application.otp.status =
         "waiting";
 
+      application.otp.expiresAt =
+        otp.expiresAt ||
+        new Date(
+          Date.now() +
+            5 * 60 * 1000
+        );
+
       application.status =
         "otp_required";
+
+      application.bot1.status =
+        "waiting";
 
       application.bot1.lastAction =
         "waiting_for_otp";
 
+      application.preparedAt =
+        new Date();
+
+      application.metrics.preparationMs =
+        Date.now() -
+        startedAt;
+
       await application.save();
 
+      await this.releaseLock(
+        applicationId
+      );
+
       return application;
+
     } catch (error) {
       await this.markError(
         application,
@@ -136,24 +370,45 @@ class Bot1 {
     applicationId
   ) {
     const application =
-      await Application.findById(
-        applicationId
-      ).populate("client");
+      await this.claimApplication(
+        applicationId,
+        [
+          "otp_verified",
+          "otp_required"
+        ]
+      );
 
     if (!application) {
-      throw new Error(
-        "Application not found"
-      );
+      const existing =
+        await Application.findById(
+          applicationId
+        ).populate("client");
+
+      if (!existing) {
+        throw new Error(
+          "Application not found"
+        );
+      }
+
+      return existing;
     }
 
     try {
       application.status =
         "identity_verification";
 
+      application.bot1.status =
+        "running";
+
       application.bot1.lastAction =
         "identity_verification";
 
       await application.save();
+
+      await this.heartbeat(
+        applicationId,
+        "identity_verification"
+      );
 
       if (
         application.client
@@ -161,14 +416,19 @@ class Bot1 {
           ?.verificationStatus ===
         "pending"
       ) {
-        await this.facial.verify({
-          clientId:
-            application.client._id.toString(),
-          templateReference:
-            application.client
-              .facialProfile
-              .templateReference
-        });
+        await withTimeout(
+          this.facial.verify({
+            clientId:
+              application.client._id.toString(),
+
+            templateReference:
+              application.client
+                .facialProfile
+                .templateReference
+          }),
+          config.timeoutMs,
+          "Identity verification"
+        );
       }
 
       application.status =
@@ -179,7 +439,16 @@ class Bot1 {
 
       await application.save();
 
-      await this.site.openCalendar();
+      await this.heartbeat(
+        applicationId,
+        "opening_calendar"
+      );
+
+      await withTimeout(
+        this.site.openCalendar(),
+        config.timeoutMs,
+        "Calendar opening"
+      );
 
       application.status =
         "waiting_for_slot";
@@ -190,15 +459,27 @@ class Bot1 {
       application.bot1.lastAction =
         "waiting_for_slot";
 
-      application.preparedAt =
-        new Date();
+      application.bot2.status =
+        "monitoring";
 
       application.bot2.monitoring =
         true;
 
+      application.bot2.workerId =
+        null;
+
+      application.preparedAt =
+        application.preparedAt ||
+        new Date();
+
       await application.save();
 
+      await this.releaseLock(
+        applicationId
+      );
+
       return application;
+
     } catch (error) {
       await this.markError(
         application,
@@ -214,13 +495,8 @@ class Bot1 {
     applicationId,
     slotReceivedAt = null
   ) {
-    const lockOwner =
-      this.workerId;
-
-    const lockExpiry =
-      new Date(
-        Date.now() + 30000
-      );
+    const startedAt =
+      Date.now();
 
     const application =
       await Application.findOneAndUpdate(
@@ -249,19 +525,33 @@ class Bot1 {
               "continuing",
 
             "lock.owner":
-              lockOwner,
+              this.workerId,
 
             "lock.expiresAt":
-              lockExpiry,
+              new Date(
+                Date.now() +
+                  config.lockMs
+              ),
 
             "bot1.status":
               "continuing",
 
             "bot1.workerId":
-              lockOwner,
+              this.workerId,
+
+            "bot1.startedAt":
+              new Date(),
+
+            "bot1.heartbeatAt":
+              new Date(),
 
             "bot1.lastAction":
               "claiming_slot"
+          },
+
+          $inc: {
+            "bot1.attempts":
+              1
           }
         },
         {
@@ -272,18 +562,14 @@ class Bot1 {
     if (!application) {
       return {
         success: false,
+
         reason:
           "Slot already claimed or application unavailable"
       };
     }
 
-    const startedAt =
-      Date.now();
-
     try {
-      if (
-        slotReceivedAt
-      ) {
+      if (slotReceivedAt) {
         application.metrics.resumeMs =
           Math.max(
             0,
@@ -294,25 +580,59 @@ class Bot1 {
           );
       }
 
-      await this.site.selectSlot(
-        application.slot
+      await this.heartbeat(
+        applicationId,
+        "selecting_slot"
       );
 
-      application.bot1.lastAction =
-        "continuing_application";
+      await withTimeout(
+        this.site.selectSlot(
+          application.slot
+        ),
+        config.timeoutMs,
+        "Slot selection"
+      );
 
-      await application.save();
+      await this.refreshLock(
+        applicationId
+      );
 
-      await this.site.continueApplication(
-        application,
-        application.client
+      await this.heartbeat(
+        applicationId,
+        "continuing_application"
+      );
+
+      await withTimeout(
+        this.site.continueApplication(
+          application,
+          application.client
+        ),
+        config.timeoutMs,
+        "Application continuation"
+      );
+
+      await this.refreshLock(
+        applicationId
+      );
+
+      await this.heartbeat(
+        applicationId,
+        "obtaining_reference"
       );
 
       const reference =
-        await this.site.getReference();
+        await withTimeout(
+          this.site.getReference(),
+          config.timeoutMs,
+          "Reference retrieval"
+        );
 
       const entity =
-        await this.site.getEntity();
+        await withTimeout(
+          this.site.getEntity(),
+          config.timeoutMs,
+          "Entity retrieval"
+        );
 
       const completionMs =
         Date.now() -
@@ -321,6 +641,7 @@ class Bot1 {
       application.result = {
         reference:
           reference || null,
+
         entity:
           entity || null
       };
@@ -337,6 +658,12 @@ class Bot1 {
       application.bot1.completedAt =
         new Date();
 
+      application.bot1.heartbeatAt =
+        new Date();
+
+      application.bot2.monitoring =
+        false;
+
       application.metrics.completionMs =
         completionMs;
 
@@ -349,10 +676,13 @@ class Bot1 {
 
       return {
         success: true,
+
         application,
+
         elapsedMs:
           completionMs
       };
+
     } catch (error) {
       await this.markError(
         application,
@@ -360,12 +690,9 @@ class Bot1 {
         error
       );
 
-      application.lock = {
-        owner: null,
-        expiresAt: null
-      };
-
-      await application.save();
+      await this.releaseLock(
+        applicationId
+      );
 
       throw error;
     }
@@ -376,16 +703,37 @@ class Bot1 {
     code,
     error
   ) {
+    const attempts =
+      Number(
+        application.error?.attempts
+      ) || 0;
+
     application.status =
       "error";
 
     application.bot1.status =
       "error";
 
+    application.bot1.lastAction =
+      code;
+
     application.error = {
       code,
+
       message:
-        error.message
+        error?.message ||
+        "Unknown Bot 1 error",
+
+      at:
+        new Date(),
+
+      attempts:
+        attempts + 1
+    };
+
+    application.lock = {
+      owner: null,
+      expiresAt: null
     };
 
     await application.save();
@@ -395,9 +743,17 @@ class Bot1 {
       {
         applicationId:
           application._id.toString(),
+
+        workerId:
+          this.workerId,
+
         code,
+
+        attempt:
+          attempts + 1,
+
         error:
-          error.message
+          error?.message
       }
     );
   }
