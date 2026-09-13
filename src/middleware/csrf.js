@@ -1,6 +1,13 @@
-const crypto = require("crypto");
+const crypto =
+  require("crypto");
 
-function safeEqual(a, b) {
+const config =
+  require("../config/environment");
+
+function safeEqual(
+  a,
+  b
+) {
   if (
     typeof a !== "string" ||
     typeof b !== "string"
@@ -8,10 +15,16 @@ function safeEqual(a, b) {
     return false;
   }
 
-  const first = Buffer.from(a);
-  const second = Buffer.from(b);
+  const first =
+    Buffer.from(a);
 
-  if (first.length !== second.length) {
+  const second =
+    Buffer.from(b);
+
+  if (
+    first.length !==
+    second.length
+  ) {
     return false;
   }
 
@@ -21,14 +34,34 @@ function safeEqual(a, b) {
   );
 }
 
-function csrfProtection(req, res, next) {
-  const safeMethods = new Set([
-    "GET",
-    "HEAD",
-    "OPTIONS"
-  ]);
+function csrfProtection(
+  req,
+  res,
+  next
+) {
+  /*
+   * During temporary development mode,
+   * authentication is disabled and therefore
+   * there is no authenticated browser session
+   * requiring CSRF protection.
+   */
 
-  if (safeMethods.has(req.method)) {
+  if (!config.authEnabled) {
+    return next();
+  }
+
+  const safeMethods =
+    new Set([
+      "GET",
+      "HEAD",
+      "OPTIONS"
+    ]);
+
+  if (
+    safeMethods.has(
+      req.method
+    )
+  ) {
     return next();
   }
 
@@ -36,7 +69,9 @@ function csrfProtection(req, res, next) {
     req.cookies?.csrf_token;
 
   const headerToken =
-    req.get("x-csrf-token");
+    req.get(
+      "x-csrf-token"
+    );
 
   if (
     !cookieToken ||
@@ -48,11 +83,13 @@ function csrfProtection(req, res, next) {
   ) {
     return res.status(403).json({
       success: false,
-      error: "CSRF validation failed"
+      error:
+        "CSRF validation failed"
     });
   }
 
-  next();
+  return next();
 }
 
-module.exports = csrfProtection;
+module.exports =
+  csrfProtection;
