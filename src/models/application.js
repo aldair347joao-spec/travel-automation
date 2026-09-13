@@ -225,6 +225,11 @@ const applicationSchema = new mongoose.Schema(
       verifiedAt: {
         type: Date,
         default: null
+      },
+
+      attempts: {
+        type: Number,
+        default: 0
       }
     },
 
