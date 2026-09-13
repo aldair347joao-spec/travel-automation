@@ -18,7 +18,8 @@ const morgan =
 
 const {
   generalLimiter
-} = require("../middleware/rate-limit");
+} =
+  require("../middleware/rate-limit");
 
 const csrfProtection =
   require("../middleware/csrf");
@@ -26,7 +27,8 @@ const csrfProtection =
 const {
   notFound,
   errorHandler
-} = require("../middleware/error");
+} =
+  require("../middleware/error");
 
 const authRouter =
   require("./auth");
@@ -65,12 +67,17 @@ function createApp({
     })
   );
 
-  if (config.frontendUrl) {
+  if (
+    config.frontendUrl
+  ) {
     app.use(
       cors({
         origin:
           config.frontendUrl,
-        credentials: true,
+
+        credentials:
+          true,
+
         methods: [
           "GET",
           "POST",
@@ -78,6 +85,7 @@ function createApp({
           "DELETE",
           "OPTIONS"
         ],
+
         allowedHeaders: [
           "Content-Type",
           "Authorization",
@@ -107,8 +115,7 @@ function createApp({
 
   app.use(
     morgan(
-      process.env.NODE_ENV ===
-        "production"
+      config.isProduction
         ? "combined"
         : "dev"
     )
@@ -119,18 +126,44 @@ function createApp({
     generalLimiter
   );
 
+  /*
+   * Health endpoint
+   */
+
   app.get(
     "/api/health",
-    async (req, res) => {
+    async (
+      req,
+      res
+    ) => {
       return res.json({
         success: true,
+
         service:
           "travel-automation",
+
+        mode:
+          config.authEnabled
+            ? "authenticated"
+            : "development",
+
+        authentication:
+          config.authEnabled
+            ? "enabled"
+            : "disabled",
+
         timestamp:
           new Date().toISOString()
       });
     }
   );
+
+  /*
+   * Authentication routes remain available.
+   *
+   * They are simply not required while
+   * AUTH_ENABLED=false.
+   */
 
   app.use(
     "/api/auth",
@@ -138,16 +171,23 @@ function createApp({
   );
 
   /*
-   * Authentication endpoints such as login/bootstrap
-   * do not need CSRF because they do not rely on an
-   * existing authenticated browser session.
+   * CSRF
    *
-   * All application/client/system mutations below
-   * require the CSRF token.
+   * Authentication endpoints do not require
+   * an existing session.
+   *
+   * In development mode the middleware itself
+   * automatically skips CSRF validation.
    */
+
   app.use(
     "/api",
-    (req, res, next) => {
+    (
+      req,
+      res,
+      next
+    ) => {
+
       if (
         req.path.startsWith(
           "/auth/"
@@ -163,6 +203,10 @@ function createApp({
       );
     }
   );
+
+  /*
+   * Application APIs
+   */
 
   app.use(
     "/api/clients",
@@ -183,6 +227,10 @@ function createApp({
     })
   );
 
+  /*
+   * Static frontend
+   */
+
   const publicDirectory =
     path.join(
       __dirname,
@@ -194,9 +242,9 @@ function createApp({
       publicDirectory,
       {
         index: false,
+
         maxAge:
-          process.env.NODE_ENV ===
-          "production"
+          config.isProduction
             ? "1h"
             : 0
       }
@@ -205,7 +253,10 @@ function createApp({
 
   app.get(
     "/",
-    (req, res) => {
+    (
+      req,
+      res
+    ) => {
       return res.sendFile(
         path.join(
           publicDirectory,
