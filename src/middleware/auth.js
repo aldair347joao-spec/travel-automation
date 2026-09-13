@@ -10,18 +10,50 @@ const User =
 function createToken(user) {
   return jwt.sign(
     {
-      sub: user._id.toString(),
-      accountId: user.accountId,
-      role: user.role,
+      sub:
+        user._id.toString(),
+
+      accountId:
+        user.accountId,
+
+      role:
+        user.role,
+
       sessionVersion:
         user.sessionVersion
     },
+
     config.jwtSecret,
+
     {
       expiresIn:
         config.jwtExpiresIn
     }
   );
+}
+
+function createDevelopmentUser() {
+  return {
+    _id: null,
+
+    accountId:
+      config.developmentAccountId,
+
+    name:
+      config.developmentUserName,
+
+    email:
+      config.developmentUserEmail,
+
+    role:
+      "owner",
+
+    active:
+      true,
+
+    sessionVersion:
+      0
+  };
 }
 
 async function requireAuth(
@@ -30,13 +62,36 @@ async function requireAuth(
   next
 ) {
   try {
+    /*
+     * TEMPORARY DEVELOPMENT MODE
+     *
+     * When AUTH_ENABLED=false, the application
+     * operates without login.
+     *
+     * The real authentication system remains
+     * available and can be reactivated simply
+     * by setting:
+     *
+     * AUTH_ENABLED=true
+     */
+
+    if (!config.authEnabled) {
+      req.user =
+        createDevelopmentUser();
+
+      return next();
+    }
+
     const token =
-      req.cookies?.[config.cookieName];
+      req.cookies?.[
+        config.cookieName
+      ];
 
     if (!token) {
       return res.status(401).json({
         success: false,
-        error: "Authentication required"
+        error:
+          "Authentication required"
       });
     }
 
@@ -57,7 +112,8 @@ async function requireAuth(
     ) {
       return res.status(401).json({
         success: false,
-        error: "Invalid session"
+        error:
+          "Invalid session"
       });
     }
 
@@ -67,17 +123,21 @@ async function requireAuth(
     ) {
       return res.status(401).json({
         success: false,
-        error: "Session expired"
+        error:
+          "Session expired"
       });
     }
 
-    req.user = user;
+    req.user =
+      user;
 
-    next();
+    return next();
+
   } catch {
     return res.status(401).json({
       success: false,
-      error: "Invalid session"
+      error:
+        "Invalid session"
     });
   }
 }
@@ -88,6 +148,16 @@ function requireRole(...roles) {
     res,
     next
   ) => {
+
+    /*
+     * Development mode has an internal
+     * owner-level operational identity.
+     */
+
+    if (!config.authEnabled) {
+      return next();
+    }
+
     if (
       !req.user ||
       !roles.includes(
@@ -96,11 +166,12 @@ function requireRole(...roles) {
     ) {
       return res.status(403).json({
         success: false,
-        error: "Forbidden"
+        error:
+          "Forbidden"
       });
     }
 
-    next();
+    return next();
   };
 }
 
