@@ -1,6 +1,6 @@
 {
   "name": "travel-automation",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "Secure travel appointment automation platform",
   "main": "server.js",
   "scripts": {
@@ -21,6 +21,7 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.18.0",
-    "morgan": "^1.10.1"
+    "morgan": "^1.10.1",
+    "puppeteer": "^24.20.0"
   }
 }
