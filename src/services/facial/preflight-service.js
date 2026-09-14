@@ -1,66 +1,103 @@
 const REQUIRED_POSITIONS = [
   {
     position: 1,
-    label: "frontal"
+    label: "frontal",
+    instruction:
+      "Olhe diretamente para a câmara. Mantenha o rosto centralizado."
   },
+
   {
     position: 2,
-    label: "left"
+    label: "left",
+    instruction:
+      "Vire lentamente o rosto para a esquerda."
   },
+
   {
     position: 3,
-    label: "right"
+    label: "right",
+    instruction:
+      "Vire lentamente o rosto para a direita."
   },
+
   {
     position: 4,
-    label: "up"
+    label: "up",
+    instruction:
+      "Incline lentamente o rosto para cima."
   },
+
   {
     position: 5,
-    label: "down"
+    label: "down",
+    instruction:
+      "Incline lentamente o rosto para baixo."
   },
+
   {
     position: 6,
-    label: "left_up"
+    label: "left_up",
+    instruction:
+      "Vire o rosto para a esquerda e ligeiramente para cima."
   },
+
   {
     position: 7,
-    label: "right_up"
+    label: "right_up",
+    instruction:
+      "Vire o rosto para a direita e ligeiramente para cima."
   },
+
   {
     position: 8,
-    label: "left_down"
+    label: "left_down",
+    instruction:
+      "Vire o rosto para a esquerda e ligeiramente para baixo."
   },
+
   {
     position: 9,
-    label: "right_down"
+    label: "right_down",
+    instruction:
+      "Vire o rosto para a direita e ligeiramente para baixo."
   },
+
   {
     position: 10,
-    label: "frontal_repeat"
+    label: "smile",
+    instruction:
+      "Volte a olhar para a câmara e sorria naturalmente."
   }
 ];
 
 const MIN_POSITION_SCORE =
   Number(
-    process.env.FACIAL_PREFLIGHT_MIN_POSITION_SCORE
+    process.env
+      .FACIAL_PREFLIGHT_MIN_POSITION_SCORE
   ) || 0.75;
 
 const MIN_OVERALL_SCORE =
   Number(
-    process.env.FACIAL_PREFLIGHT_MIN_SCORE
+    process.env
+      .FACIAL_PREFLIGHT_MIN_SCORE
   ) || 0.82;
 
 function clampScore(value) {
-  const score = Number(value);
+  const score =
+    Number(value);
 
-  if (!Number.isFinite(score)) {
+  if (
+    !Number.isFinite(score)
+  ) {
     return null;
   }
 
   return Math.max(
     0,
-    Math.min(1, score)
+    Math.min(
+      1,
+      score
+    )
   );
 }
 
@@ -79,9 +116,14 @@ function validatePositions(
 ) {
   const issues = [];
 
-  if (!Array.isArray(positions)) {
+  if (
+    !Array.isArray(
+      positions
+    )
+  ) {
     return {
       valid: false,
+
       issues: [
         "positions must be an array"
       ]
@@ -97,14 +139,17 @@ function validatePositions(
     );
   }
 
-  const seen = new Set();
+  const seen =
+    new Set();
 
   for (
-    const position of positions
+    const position
+    of positions
   ) {
-    const number = Number(
-      position?.position
-    );
+    const number =
+      Number(
+        position?.position
+      );
 
     const expected =
       getExpectedPosition(
@@ -168,6 +213,19 @@ function validatePositions(
         `Position ${number} must contain exactly one face`
       );
     }
+
+    /*
+     * Position 10 is the smile test.
+     */
+    if (
+      number === 10 &&
+      position?.smileDetected !==
+        true
+    ) {
+      issues.push(
+        "Position 10 requires a natural smile to be detected"
+      );
+    }
   }
 
   for (
@@ -197,7 +255,9 @@ function calculateAverageScore(
   positions
 ) {
   if (
-    !Array.isArray(positions)
+    !Array.isArray(
+      positions
+    )
   ) {
     return 0;
   }
@@ -215,7 +275,9 @@ function calculateAverageScore(
           score !== null
       );
 
-  if (!scores.length) {
+  if (
+    !scores.length
+  ) {
     return 0;
   }
 
@@ -240,7 +302,8 @@ function evaluate({
   const issues = [];
 
   if (
-    consentAccepted !== true
+    consentAccepted !==
+    true
   ) {
     issues.push(
       "Biometric consent has not been accepted"
@@ -310,6 +373,18 @@ function evaluate({
     }
   }
 
+  const smilePosition =
+    Array.isArray(
+      positions
+    )
+      ? positions.find(
+          position =>
+            Number(
+              position?.position
+            ) === 10
+        )
+      : null;
+
   const passed =
     issues.length === 0;
 
@@ -335,6 +410,18 @@ function evaluate({
     positionsRequired:
       REQUIRED_POSITIONS.length,
 
+    positionsCompleted:
+      Array.isArray(
+        positions
+      )
+        ? positions.length
+        : 0,
+
+    smileDetected:
+      smilePosition
+        ?.smileDetected ===
+      true,
+
     issues,
 
     checkedAt:
@@ -349,12 +436,21 @@ function getInstructions() {
 
     requirements: [
       "Use a well-lit environment",
+
       "Keep the entire face visible",
+
       "Do not use sunglasses",
+
       "Remove masks or objects covering the face",
+
       "Keep only one face inside the frame",
+
       "Keep the camera stable",
+
       "Follow each movement slowly",
+
+      "For position 10, smile naturally while facing the camera",
+
       "Keep the passport information accurate"
     ]
   };
