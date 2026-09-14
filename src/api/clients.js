@@ -15,18 +15,13 @@ const {
 
 const FacialService =
   require("../services/facial/facial-service");
-
-const PreflightService =
+const preflight =
   require("../services/facial/preflight-service");
-
 const router =
   express.Router();
 
 const facial =
   new FacialService();
-
-const preflight =
-  new PreflightService();
 
 router.use(
   requireAuth
