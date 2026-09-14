@@ -10,10 +10,14 @@ const AuditLog =
 const {
   requireAuth,
   requireRole
-} = require("../middleware/auth");
+} =
+  require("../middleware/auth");
 
 const FacialService =
   require("../services/facial/facial-service");
+
+const PreflightService =
+  require("../services/facial/preflight-service");
 
 const router =
   express.Router();
@@ -21,9 +25,18 @@ const router =
 const facial =
   new FacialService();
 
+const preflight =
+  new PreflightService();
+
 router.use(
   requireAuth
 );
+
+/*
+ * =========================================================
+ * CREATE CLIENT
+ * =========================================================
+ */
 
 router.post(
   "/",
@@ -55,11 +68,14 @@ router.post(
         !fullName ||
         !email
       ) {
-        return res.status(400).json({
-          success: false,
-          error:
-            "Full name and email are required"
-        });
+        return res
+          .status(400)
+          .json({
+            success: false,
+
+            error:
+              "Full name and email are required"
+          });
       }
 
       const client =
@@ -71,29 +87,41 @@ router.post(
             req.user._id,
 
           fullName:
-            String(fullName)
+            String(
+              fullName
+            )
               .trim()
-              .slice(0, 160),
+              .slice(
+                0,
+                160
+              ),
 
           email:
-            String(email)
+            String(
+              email
+            )
               .trim()
               .toLowerCase(),
 
           phone:
-            phone || null,
+            phone ||
+            null,
 
           dateOfBirth:
-            dateOfBirth || null,
+            dateOfBirth ||
+            null,
 
           nationality:
-            nationality || null,
+            nationality ||
+            null,
 
           gender:
-            gender || null,
+            gender ||
+            null,
 
           passportNumber:
-            passportNumber || null,
+            passportNumber ||
+            null,
 
           passportIssueDate:
             passportIssueDate ||
@@ -111,24 +139,40 @@ router.post(
       await AuditLog.create({
         actorId:
           req.user._id,
+
         action:
           "client.create",
+
         resource:
           "client",
+
         resourceId:
           client._id.toString(),
-        ip: req.ip
+
+        ip:
+          req.ip
       });
 
-      return res.status(201).json({
-        success: true,
-        client
-      });
-    } catch (error) {
+      return res
+        .status(201)
+        .json({
+          success: true,
+
+          client
+        });
+    } catch (
+      error
+    ) {
       next(error);
     }
   }
 );
+
+/*
+ * =========================================================
+ * LIST CLIENTS
+ * =========================================================
+ */
 
 router.get(
   "/",
@@ -142,22 +186,34 @@ router.get(
         await Client.find({
           accountId:
             req.user.accountId,
-          active: true
+
+          active:
+            true
         })
           .sort({
-            createdAt: -1
+            createdAt:
+              -1
           })
           .limit(200);
 
       return res.json({
         success: true,
+
         clients
       });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(error);
     }
   }
 );
+
+/*
+ * =========================================================
+ * GET CLIENT
+ * =========================================================
+ */
 
 router.get(
   "/:id",
@@ -169,28 +225,42 @@ router.get(
     try {
       const client =
         await Client.findOne({
-          _id: req.params.id,
+          _id:
+            req.params.id,
+
           accountId:
             req.user.accountId
         });
 
       if (!client) {
-        return res.status(404).json({
-          success: false,
-          error:
-            "Client not found"
-        });
+        return res
+          .status(404)
+          .json({
+            success: false,
+
+            error:
+              "Client not found"
+          });
       }
 
       return res.json({
         success: true,
+
         client
       });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(error);
     }
   }
 );
+
+/*
+ * =========================================================
+ * UPDATE CLIENT
+ * =========================================================
+ */
 
 router.patch(
   "/:id",
@@ -221,7 +291,8 @@ router.patch(
       const update = {};
 
       for (
-        const field of allowed
+        const field
+        of allowed
       ) {
         if (
           req.body[field] !==
@@ -232,40 +303,88 @@ router.patch(
         }
       }
 
+      if (
+        update.email !==
+        undefined
+      ) {
+        update.email =
+          String(
+            update.email
+          )
+            .trim()
+            .toLowerCase();
+      }
+
+      if (
+        update.fullName !==
+        undefined
+      ) {
+        update.fullName =
+          String(
+            update.fullName
+          )
+            .trim()
+            .slice(
+              0,
+              160
+            );
+      }
+
       const client =
         await Client.findOneAndUpdate(
           {
             _id:
               req.params.id,
+
             accountId:
               req.user.accountId
           },
+
           {
-            $set: update
+            $set:
+              update
           },
+
           {
             new: true,
-            runValidators: true
+
+            runValidators:
+              true
           }
         );
 
       if (!client) {
-        return res.status(404).json({
-          success: false,
-          error:
-            "Client not found"
-        });
+        return res
+          .status(404)
+          .json({
+            success: false,
+
+            error:
+              "Client not found"
+          });
       }
 
       return res.json({
         success: true,
+
         client
       });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(error);
     }
   }
 );
+
+/*
+ * =========================================================
+ * SAVE OFFICIAL FACIAL PROFILE
+ * =========================================================
+ *
+ * This route remains separate from the internal
+ * facial preflight.
+ */
 
 router.post(
   "/:id/facial-profile",
@@ -288,18 +407,37 @@ router.post(
       } = req.body;
 
       if (
-        consentAccepted !== true
+        consentAccepted !==
+        true
       ) {
-        return res.status(400).json({
-          success: false,
-          error:
-            "Biometric consent is required"
-        });
+        return res
+          .status(400)
+          .json({
+            success: false,
+
+            error:
+              "Biometric consent is required"
+          });
       }
 
       facial.validatePositions(
         positions
       );
+
+      if (
+        !Array.isArray(
+          positions
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+
+            error:
+              "Facial positions are required"
+          });
+      }
 
       if (
         positions.some(
@@ -312,39 +450,50 @@ router.post(
             )
         )
       ) {
-        return res.status(400).json({
-          success: false,
-          error:
-            "Facial media must use secure storage references"
+        return res
+          .status(400)
+          .json({
+            success: false,
+
+            error:
+              "Facial media must use secure storage references"
+          });
+      }
+
+      const client =
+        await Client.findOne({
+          _id:
+            req.params.id,
+
+          accountId:
+            req.user.accountId
         });
+
+      if (!client) {
+        return res
+          .status(404)
+          .json({
+            success: false,
+
+            error:
+              "Client not found"
+          });
       }
 
       const profile =
         await facial.createProfile({
           clientId:
             req.params.id,
+
           positions,
+
           videoReference
         });
 
-      const client =
-        await Client.findOne({
-          _id:
-            req.params.id,
-          accountId:
-            req.user.accountId
-        });
-
-      if (!client) {
-        return res.status(404).json({
-          success: false,
-          error:
-            "Client not found"
-        });
-      }
-
       client.facialConsent = {
-        accepted: true,
+        accepted:
+          true,
+
         acceptedAt:
           new Date()
       };
@@ -352,13 +501,21 @@ router.post(
       client.facialProfile = {
         provider:
           profile.provider,
+
         templateReference:
           templateReference ||
           null,
+
         positions,
+
         videoReference:
           videoReference ||
           null,
+
+        /*
+         * This is the official profile state.
+         * It remains independent from preflight.
+         */
         verificationStatus:
           "pending"
       };
@@ -368,13 +525,19 @@ router.post(
       await AuditLog.create({
         actorId:
           req.user._id,
+
         action:
           "client.facial_profile",
+
         resource:
           "client",
+
         resourceId:
           client._id.toString(),
-        ip: req.ip,
+
+        ip:
+          req.ip,
+
         metadata: {
           positions:
             positions.length
@@ -383,16 +546,27 @@ router.post(
 
       return res.json({
         success: true,
+
         status:
           "pending",
+
         positions:
           positions.length
       });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(error);
     }
   }
 );
+
+/*
+ * =========================================================
+ * FACIAL PREFLIGHT INSTRUCTIONS
+ * =========================================================
+ */
+
 router.get(
   "/:id/facial-preflight/instructions",
   requireRole(
@@ -419,22 +593,16 @@ router.get(
         });
 
       if (!client) {
-        return res.status(404).json({
-          success:
-            false,
+        return res
+          .status(404)
+          .json({
+            success:
+              false,
 
-          error:
-            "Client not found"
-        });
+            error:
+              "Client not found"
+          });
       }
-
-      const PreflightService =
-        require(
-          "../services/facial/preflight-service"
-        );
-
-      const preflight =
-        new PreflightService();
 
       return res.json({
         success:
@@ -444,13 +612,31 @@ router.get(
           client._id,
 
         instructions:
-          preflight.getInstructions()
+          preflight.getInstructions(),
+
+        preflightStatus:
+          client
+            .facialPreflight
+            ?.status ||
+          "not_started"
       });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(error);
     }
   }
 );
+
+/*
+ * =========================================================
+ * FACIAL PREFLIGHT EVALUATION
+ * =========================================================
+ *
+ * This endpoint evaluates preparation quality.
+ *
+ * It does NOT mark VFS facial verification as completed.
+ */
 
 router.post(
   "/:id/facial-preflight",
@@ -478,30 +664,27 @@ router.post(
         });
 
       if (!client) {
-        return res.status(404).json({
-          success:
-            false,
+        return res
+          .status(404)
+          .json({
+            success:
+              false,
 
-          error:
-            "Client not found"
-        });
+            error:
+              "Client not found"
+          });
       }
 
       const {
         consentAccepted,
         positions,
         passportMatch
-      } =
-        req.body;
+      } = req.body;
 
-      const PreflightService =
-        require(
-          "../services/facial/preflight-service"
-        );
-
-      const preflight =
-        new PreflightService();
-
+      /*
+       * Evaluate the complete
+       * 10-position sequence.
+       */
       const result =
         preflight.evaluate({
           positions,
@@ -511,6 +694,10 @@ router.post(
           consentAccepted
         });
 
+      /*
+       * Persist only the internal
+       * preflight state.
+       */
       client.facialConsent = {
         accepted:
           consentAccepted ===
@@ -520,18 +707,86 @@ router.post(
           consentAccepted ===
           true
             ? new Date()
-            : null
+            : client
+                .facialConsent
+                ?.acceptedAt ||
+              null
       };
 
-      if (
-        result.passed
-      ) {
-        client.facialProfile.verificationStatus =
-          "pending";
-      } else {
-        client.facialProfile.verificationStatus =
-          "failed";
-      }
+      client.facialPreflight = {
+        status:
+          result.passed
+            ? "passed"
+            : "requires_user",
+
+        score:
+          result.score,
+
+        minimumScore:
+          result.minimumScore,
+
+        minimumPositionScore:
+          result.minimumPositionScore,
+
+        positionsCompleted:
+          result.positionsCompleted,
+
+        positionsRequired:
+          result.positionsRequired,
+
+        smileDetected:
+          result.smileDetected,
+
+        passportMatch:
+          {
+            name:
+              passportMatch?.name ??
+              null,
+
+            dateOfBirth:
+              passportMatch
+                ?.dateOfBirth ??
+              null,
+
+            passportNumber:
+              passportMatch
+                ?.passportNumber ??
+              null,
+
+            nationality:
+              passportMatch
+                ?.nationality ??
+              null
+          },
+
+        issues:
+          result.issues,
+
+        checkedAt:
+          result.checkedAt,
+
+        consentAcceptedAt:
+          consentAccepted ===
+          true
+            ? new Date()
+            : client
+                .facialPreflight
+                ?.consentAcceptedAt ||
+              null
+      };
+
+      /*
+       * IMPORTANT:
+       *
+       * Never change:
+       *
+       * client.facialProfile.verificationStatus
+       *
+       * here.
+       *
+       * The preflight is not the official
+       * VFS facial verification.
+       */
 
       await client.save();
 
@@ -558,6 +813,15 @@ router.post(
           score:
             result.score,
 
+          positionsCompleted:
+            result.positionsCompleted,
+
+          positionsRequired:
+            result.positionsRequired,
+
+          smileDetected:
+            result.smileDetected,
+
           issues:
             result.issues
         }
@@ -574,18 +838,26 @@ router.post(
           result,
 
         /*
-         * This means our preparation passed.
-         * It does NOT mean that VFS's official
-         * facial verification has been completed.
+         * Explicitly state that
+         * VFS has not been verified.
          */
         vfsVerification:
           "not_completed"
       });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(error);
     }
   }
 );
+
+/*
+ * =========================================================
+ * DELETE / DEACTIVATE CLIENT
+ * =========================================================
+ */
+
 router.delete(
   "/:id",
   requireRole(
@@ -603,34 +875,46 @@ router.delete(
           {
             _id:
               req.params.id,
+
             accountId:
               req.user.accountId
           },
+
           {
             $set: {
-              active: false
+              active:
+                false
             }
           },
+
           {
             new: true
           }
         );
 
       if (!client) {
-        return res.status(404).json({
-          success: false,
-          error:
-            "Client not found"
-        });
+        return res
+          .status(404)
+          .json({
+            success:
+              false,
+
+            error:
+              "Client not found"
+          });
       }
 
       return res.json({
-        success: true
+        success:
+          true
       });
-    } catch (error) {
+    } catch (
+      error
+    ) {
       next(error);
     }
   }
 );
 
-module.exports = router;
+module.exports =
+  router;
