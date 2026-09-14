@@ -613,6 +613,86 @@ function createApplicationRouter({
   }
 );
   router.post(
+    "/:id/resume",
+    requireRole(
+      "owner",
+      "admin",
+      "operator"
+    ),
+    async (
+      req,
+      res,
+      next
+    ) => {
+      try {
+        const application =
+          await Application.findOne({
+            _id:
+              req.params.id,
+
+            accountId:
+              req.user.accountId
+          });
+
+        if (!application) {
+          return res.status(404).json({
+            success:
+              false,
+
+            error:
+              "Application not found"
+          });
+        }
+
+        if (
+          application.status !==
+          "requires_user"
+        ) {
+          return res.status(409).json({
+            success:
+              false,
+
+            error:
+              `Application cannot be resumed from status ${application.status}`
+          });
+        }
+
+        const result =
+          await supervisor.resumeApplication(
+            application._id.toString()
+          );
+
+        return res.json({
+          success:
+            true,
+
+          application:
+            result.application,
+
+          completed:
+            result.completed === true,
+
+          requiresUser:
+            result.requiresUser === true,
+
+          payment:
+            result.payment ||
+            null,
+
+          confirmation:
+            result.confirmation ||
+            null,
+
+          reason:
+            result.reason ||
+            null
+        });
+      } catch (error) {
+        next(error);
+      }
+    }
+  );
+  router.post(
     "/:id/cancel",
     requireRole(
       "owner",
