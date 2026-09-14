@@ -157,7 +157,20 @@ return bot.prepare(
 );
 
 }
+async verifyOtp(
+applicationId,
+code
+) {
+  const bot =
+    await this.getBot1(
+      applicationId
+    );
 
+  return bot.verifyOtp(
+    applicationId,
+    code
+  );
+}
 async continueAfterVerification(
 applicationId
 ) {
