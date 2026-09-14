@@ -1,8 +1,13 @@
+"use strict";
+
 const puppeteer =
   require("puppeteer");
 
 const SiteAdapter =
   require("./site-adapter");
+
+const VfsDomInspector =
+  require("./vfs-dom-inspector");
 
 const logger =
   require("../../utils/logger");
@@ -41,6 +46,15 @@ class VfsPuppeteerAdapter
 
     this.state =
       "UNKNOWN";
+
+    this.domInspector =
+      new VfsDomInspector({
+        applicationId:
+          this.applicationId
+      });
+
+    this.lastDomInspection =
+      null;
   }
 
   async initialize() {
@@ -151,6 +165,27 @@ class VfsPuppeteerAdapter
 
     await this.detectState();
 
+    /*
+     * A VFS usa uma aplicação web
+     * dinâmica. Portanto, depois da
+     * navegação capturamos a estrutura
+     * do DOM real em vez de inventar
+     * selectors.
+     */
+    await this.inspectCurrentDom()
+      .catch(error => {
+        logger.warn(
+          "VFS DOM inspection after navigation failed",
+          {
+            applicationId:
+              this.applicationId,
+
+            error:
+              error.message
+          }
+        );
+      });
+
     return {
       success: true,
 
@@ -176,7 +211,10 @@ class VfsPuppeteerAdapter
         "VFS login/security checkpoint must be completed through the official flow.",
 
       state:
-        this.state
+        this.state,
+
+      dom:
+        this.getDomSummary()
     };
   }
 
@@ -190,14 +228,15 @@ class VfsPuppeteerAdapter
     );
 
     /*
-     * Os selectors reais do VFS não
-     * devem ser inventados.
+     * Não inventamos selectors.
      *
-     * Os dados ficam preparados no
-     * Application e o adapter será
-     * expandido quando os selectors
-     * reais do DOM forem confirmados.
+     * A inspeção do DOM informa ao
+     * próximo estágio exatamente quais
+     * campos existem na sessão atual.
      */
+    const dom =
+      this.getDomSummary();
+
     return {
       success: true,
 
@@ -215,7 +254,9 @@ class VfsPuppeteerAdapter
 
       clientId:
         client?._id?.toString() ||
-        null
+        null,
+
+      dom
     };
   }
 
@@ -226,7 +267,10 @@ class VfsPuppeteerAdapter
       requiresUser: true,
 
       reason:
-        "OTP must be requested through the official VFS flow."
+        "OTP must be requested through the official VFS flow.",
+
+      dom:
+        this.getDomSummary()
     };
   }
 
@@ -250,7 +294,10 @@ class VfsPuppeteerAdapter
       requiresUser: true,
 
       reason:
-        "OTP submission requires selectors from the current VFS DOM."
+        "OTP submission requires selectors from the current VFS DOM.",
+
+      dom:
+        this.getDomSummary()
     };
   }
 
@@ -260,9 +307,12 @@ class VfsPuppeteerAdapter
     );
 
     /*
-     * Não simulamos webcam/liveness.
-     * Se o VFS exigir captura facial
-     * ao vivo, o cliente participa.
+     * Não simulamos webcam,
+     * fotografia ou liveness.
+     *
+     * Se a VFS exigir captura facial
+     * ao vivo, o candidato participa
+     * através do fluxo oficial.
      */
     return {
       success: false,
@@ -270,7 +320,13 @@ class VfsPuppeteerAdapter
       requiresUser: true,
 
       reason:
-        "Facial verification requires the official VFS capture flow."
+        "Facial verification requires the official VFS capture flow.",
+
+      state:
+        this.state,
+
+      dom:
+        this.getDomSummary()
     };
   }
 
@@ -283,7 +339,10 @@ class VfsPuppeteerAdapter
       success: true,
 
       state:
-        this.state
+        this.state,
+
+      dom:
+        this.getDomSummary()
     };
   }
 
@@ -295,6 +354,15 @@ class VfsPuppeteerAdapter
 
     await this.detectState();
 
+    /*
+     * Atualiza o diagnóstico porque
+     * componentes de calendário podem
+     * aparecer somente depois do
+     * carregamento da aplicação.
+     */
+    await this.inspectCurrentDom()
+      .catch(() => {});
+
     const slots =
       await this.extractVisibleSlots(
         page,
@@ -302,7 +370,13 @@ class VfsPuppeteerAdapter
       );
 
     return {
-      slots
+      slots,
+
+      state:
+        this.state,
+
+      dom:
+        this.getDomSummary()
     };
   }
 
@@ -322,8 +396,11 @@ class VfsPuppeteerAdapter
     }
 
     /*
-     * Não assumir classes internas
-     * do VFS sem confirmação do DOM.
+     * Não assumimos classes ou IDs
+     * internos do VFS.
+     *
+     * Primeiro precisamos observar
+     * o DOM real de uma sessão.
      */
     return [];
   }
@@ -346,15 +423,20 @@ class VfsPuppeteerAdapter
       requiresUser: true,
 
       reason:
-        "Calendar selectors must be mapped against the current VFS DOM."
+        "Calendar selectors must be mapped against the current VFS DOM.",
+
+      dom:
+        this.getDomSummary()
     };
   }
 
   async continueApplication() {
     /*
-     * O VFS normalmente leva a REVIEW/PAY
-     * depois da seleção. Não declaramos
-     * pagamento nem confirmação aqui.
+     * O VFS normalmente leva ao
+     * REVIEW/PAY depois da seleção.
+     *
+     * Não declaramos pagamento nem
+     * confirmação automaticamente.
      */
     await this.navigate(
       `${VFS_BASE_URL}/review-pay`
@@ -364,7 +446,10 @@ class VfsPuppeteerAdapter
       success: true,
 
       state:
-        this.state
+        this.state,
+
+      dom:
+        this.getDomSummary()
     };
   }
 
@@ -521,14 +606,11 @@ class VfsPuppeteerAdapter
     }
 
     /*
-     * Não clicamos em controles de
-     * pagamento/segurança sem selectors
-     * confirmados.
-     *
-     * A página é aberta e o estado é
-     * devolvido para o supervisor.
+     * Atualizar diagnóstico da página
+     * final antes de devolver o controle.
      */
-    await this.detectState();
+    await this.inspectCurrentDom()
+      .catch(() => {});
 
     const currentUrl =
       page.url();
@@ -557,7 +639,10 @@ class VfsPuppeteerAdapter
       state:
         this.state,
 
-      payment
+      payment,
+
+      dom:
+        this.getDomSummary()
     };
   }
 
@@ -638,6 +723,102 @@ class VfsPuppeteerAdapter
         url
     };
   }
+
+  /*
+   * ============================================================
+   * DOM INSPECTION
+   * ============================================================
+   */
+
+  async inspectCurrentDom(
+    options = {}
+  ) {
+    const page =
+      await this.ensurePage();
+
+    const inspection =
+      await this.domInspector.inspect(
+        page,
+        {
+          /*
+           * HTML completo fica desligado
+           * por padrão para não armazenar
+           * desnecessariamente dados pessoais.
+           */
+          includeHtml:
+            options.includeHtml === true
+        }
+      );
+
+    /*
+     * Guardamos apenas em memória
+     * durante a sessão do browser.
+     */
+    this.lastDomInspection =
+      inspection;
+
+    return inspection;
+  }
+
+  getLastDomInspection() {
+    if (
+      !this.lastDomInspection
+    ) {
+      return null;
+    }
+
+    return this.lastDomInspection;
+  }
+
+  getDomSummary() {
+    const inspection =
+      this.lastDomInspection;
+
+    if (!inspection) {
+      return null;
+    }
+
+    return {
+      url:
+        inspection.url ||
+        null,
+
+      title:
+        inspection.title ||
+        null,
+
+      inspectedAt:
+        inspection.inspectedAt ||
+        null,
+
+      summary:
+        inspection.summary ||
+        null
+    };
+  }
+
+  /*
+   * Retorna o diagnóstico completo
+   * para uso interno/controlado.
+   *
+   * Não deve ser exposto publicamente
+   * sem autenticação administrativa.
+   */
+  async getCurrentDomInspection() {
+    if (
+      !this.lastDomInspection
+    ) {
+      await this.inspectCurrentDom();
+    }
+
+    return this.lastDomInspection;
+  }
+
+  /*
+   * ============================================================
+   * PAYMENT / URL HELPERS
+   * ============================================================
+   */
 
   parseQueryParameters(
     url
@@ -766,6 +947,12 @@ class VfsPuppeteerAdapter
       );
   }
 
+  /*
+   * ============================================================
+   * STATE DETECTION
+   * ============================================================
+   */
+
   async detectState() {
     if (!this.page) {
       this.state =
@@ -841,6 +1028,12 @@ class VfsPuppeteerAdapter
     return this.state;
   }
 
+  /*
+   * ============================================================
+   * CLOSE
+   * ============================================================
+   */
+
   async close() {
     try {
       if (
@@ -869,6 +1062,12 @@ class VfsPuppeteerAdapter
 
     this.initialized =
       false;
+
+    this.state =
+      "UNKNOWN";
+
+    this.lastDomInspection =
+      null;
 
     logger.info(
       "VFS browser closed",
