@@ -1,12 +1,33 @@
 (() => {
   "use strict";
 
+
+  /* =========================================================
+     STATE
+  ========================================================= */
+
   const state = {
+
     user: null,
+
     clients: [],
+
     applications: [],
+
+    selectedClientId: null,
+
+    selectedClient: null,
+
+    passportFile: null,
+
+    passportValidation: null,
+
+    facialReady: false,
+
     csrfToken: null,
+
     loading: false
+
   };
 
 
@@ -14,7 +35,8 @@
      DOM
   ========================================================= */
 
-  const $ = (id) => document.getElementById(id);
+  const $ = (id) =>
+    document.getElementById(id);
 
 
   /* =========================================================
@@ -22,17 +44,22 @@
   ========================================================= */
 
   function escapeHtml(value) {
+
     return String(value ?? "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+
   }
 
 
   function formatDate(value) {
-    if (!value) return "—";
+
+    if (!value) {
+      return "—";
+    }
 
     const date = new Date(value);
 
@@ -40,86 +67,127 @@
       return String(value);
     }
 
-    return new Intl.DateTimeFormat("pt-PT", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric"
-    }).format(date);
+    return new Intl.DateTimeFormat(
+      "pt-PT",
+      {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric"
+      }
+    ).format(date);
+
   }
 
 
-  function formatDateTime(value) {
-    if (!value) return "—";
+  function showToast(
+    message,
+    type = "info"
+  ) {
 
-    const date = new Date(value);
+    const container =
+      $("toastContainer");
 
-    if (Number.isNaN(date.getTime())) {
-      return String(value);
+    if (!container) {
+      return;
     }
 
-    return new Intl.DateTimeFormat("pt-PT", {
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit"
-    }).format(date);
-  }
+    const toast =
+      document.createElement("div");
 
+    toast.className =
+      `toast ${type}`;
 
-  function showToast(message, type = "info") {
-    const container = $("toastContainer");
+    toast.textContent =
+      message;
 
-    if (!container) return;
-
-    const toast = document.createElement("div");
-
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-
-    container.appendChild(toast);
+    container.appendChild(
+      toast
+    );
 
     setTimeout(() => {
-      toast.style.opacity = "0";
-      toast.style.transform = "translateY(8px)";
+
+      toast.style.opacity =
+        "0";
+
+      toast.style.transform =
+        "translateY(8px)";
 
       setTimeout(() => {
+
         toast.remove();
+
       }, 200);
+
     }, 3500);
+
   }
 
 
-  function setConnection(online, text) {
-    const connectionText = $("connectionText");
+  function setConnection(
+    online,
+    text
+  ) {
 
-    if (connectionText) {
-      connectionText.textContent =
-        text || (online ? "Sistema operacional" : "Sistema indisponível");
+    const element =
+      $("connectionText");
+
+    if (!element) {
+      return;
     }
+
+    element.textContent =
+      text ||
+      (
+        online
+          ? "Sistema operacional"
+          : "Sistema indisponível"
+      );
+
   }
 
 
-  function getCookie(name) {
-    const cookies = document.cookie.split(";");
+  function getCookie(
+    name
+  ) {
 
-    for (const cookie of cookies) {
-      const [key, ...parts] = cookie.trim().split("=");
+    const cookies =
+      document.cookie.split(";");
+
+    for (
+      const cookie of cookies
+    ) {
+
+      const [
+        key,
+        ...parts
+      ] =
+        cookie
+          .trim()
+          .split("=");
 
       if (key === name) {
-        return decodeURIComponent(parts.join("="));
+
+        return decodeURIComponent(
+          parts.join("=")
+        );
+
       }
+
     }
 
     return null;
+
   }
 
 
   function getCsrfToken() {
+
     return (
       state.csrfToken ||
       getCookie("csrf_token") ||
       getCookie("csrfToken")
     );
+
   }
 
 
@@ -127,80 +195,171 @@
      API
   ========================================================= */
 
-  async function api(url, options = {}) {
+  async function api(
+    url,
+    options = {}
+  ) {
+
+    const isFormData =
+      options.body instanceof FormData;
+
     const config = {
-      credentials: "include",
+
+      credentials:
+        "include",
+
       ...options,
+
       headers: {
-        ...(options.body instanceof FormData
+
+        ...(isFormData
           ? {}
           : {
-              "Content-Type": "application/json"
+              "Content-Type":
+                "application/json"
             }),
+
         ...(options.headers || {})
+
       }
+
     };
 
-    const csrf = getCsrfToken();
+
+    const csrf =
+      getCsrfToken();
+
 
     if (
       csrf &&
-      ["POST", "PUT", "PATCH", "DELETE"].includes(
-        String(config.method || "GET").toUpperCase()
+      [
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE"
+      ].includes(
+        String(
+          config.method ||
+          "GET"
+        ).toUpperCase()
       )
     ) {
-      config.headers["x-csrf-token"] = csrf;
+
+      config.headers[
+        "x-csrf-token"
+      ] = csrf;
+
     }
 
-    const response = await fetch(url, config);
 
-    const contentType = response.headers.get("content-type") || "";
+    const response =
+      await fetch(
+        url,
+        config
+      );
+
+
+    const contentType =
+      response.headers.get(
+        "content-type"
+      ) || "";
+
 
     let data;
 
-    if (contentType.includes("application/json")) {
-      data = await response.json();
+
+    if (
+      contentType.includes(
+        "application/json"
+      )
+    ) {
+
+      data =
+        await response.json();
+
     } else {
-      data = await response.text();
+
+      data =
+        await response.text();
+
     }
+
 
     if (!response.ok) {
+
       const message =
         typeof data === "object"
-          ? data.message || data.error || "Erro na operação."
-          : data || "Erro na operação.";
+          ? (
+              data.message ||
+              data.error ||
+              "Erro na operação."
+            )
+          : (
+              data ||
+              "Erro na operação."
+            );
 
-      const error = new Error(message);
 
-      error.status = response.status;
-      error.data = data;
+      const error =
+        new Error(message);
+
+
+      error.status =
+        response.status;
+
+      error.data =
+        data;
+
 
       throw error;
+
     }
 
+
     return data;
+
   }
 
 
   /* =========================================================
-     LOGIN / SESSION
+     AUTH
   ========================================================= */
 
   function showLogin() {
-    $("loginView")?.classList.remove("hidden");
-    $("appView")?.classList.add("hidden");
+
+    $("loginView")
+      ?.classList
+      .remove("hidden");
+
+    $("appView")
+      ?.classList
+      .add("hidden");
+
   }
 
 
   function showApp() {
-    $("loginView")?.classList.add("hidden");
-    $("appView")?.classList.remove("hidden");
+
+    $("loginView")
+      ?.classList
+      .add("hidden");
+
+    $("appView")
+      ?.classList
+      .remove("hidden");
+
   }
 
 
   async function loadCurrentUser() {
+
     try {
-      const response = await api("/api/auth/me");
+
+      const response =
+        await api(
+          "/api/auth/me"
+        );
+
 
       state.user =
         response?.user ||
@@ -208,28 +367,38 @@
         response ||
         null;
 
+
       showApp();
 
       updateUserInterface();
 
       await refreshDashboard();
 
-      setConnection(true, "Sistema operacional");
+      setConnection(
+        true,
+        "Sistema operacional"
+      );
+
 
     } catch (error) {
-      /*
-       * Quando AUTH_ENABLED=false, algumas versões da API
-       * podem não expor /api/auth/me. Nesse caso tentamos
-       * continuar através de /api/health.
-       */
 
       try {
-        await api("/api/health");
+
+        await api(
+          "/api/health"
+        );
+
 
         state.user = {
-          name: "Operations Console",
-          email: "dev@travel-automation.local"
+
+          name:
+            "Operations Console",
+
+          email:
+            "operations@travel-automation.local"
+
         };
+
 
         showApp();
 
@@ -237,31 +406,63 @@
 
         await refreshDashboard();
 
-        setConnection(true, "Sistema operacional");
+        setConnection(
+          true,
+          "Sistema operacional"
+        );
+
 
       } catch (healthError) {
-        console.error(healthError);
+
+        console.error(
+          error
+        );
+
+        console.error(
+          healthError
+        );
 
         showLogin();
 
-        setConnection(false, "Sistema indisponível");
+        setConnection(
+          false,
+          "Sistema indisponível"
+        );
+
       }
+
     }
+
   }
 
 
   async function login() {
-    try {
-      const response = await api("/api/auth/login", {
-        method: "POST",
-        body: JSON.stringify({})
-      });
 
-      state.user =
-        response?.user ||
-        response?.data ||
-        response ||
-        null;
+    /*
+     * A versão atual do backend pode operar
+     * com AUTH_ENABLED=false.
+     *
+     * Quando estiver nesse modo, /api/health
+     * permite abrir o console.
+     */
+
+    try {
+
+      await api(
+        "/api/health"
+      );
+
+
+      state.user = {
+
+        name:
+          "Operations Console",
+
+        email:
+          "operations@travel-automation.local"
+
+      };
+
 
       showApp();
 
@@ -269,53 +470,43 @@
 
       await refreshDashboard();
 
-      showToast("Sessão iniciada.", "success");
+      showToast(
+        "Centro de operações iniciado.",
+        "success"
+      );
+
 
     } catch (error) {
 
-      /*
-       * AUTH_ENABLED=false não exige login.
-       * Neste cenário mostramos diretamente o console.
-       */
+      console.error(
+        error
+      );
 
-      try {
-        await api("/api/health");
+      showToast(
+        error.message ||
+        "Não foi possível iniciar o console.",
+        "error"
+      );
 
-        state.user = {
-          name: "Operations Console",
-          email: "dev@travel-automation.local"
-        };
-
-        showApp();
-
-        updateUserInterface();
-
-        await refreshDashboard();
-
-        showToast("Centro de operações iniciado.", "success");
-
-      } catch (fallbackError) {
-        console.error(error);
-        console.error(fallbackError);
-
-        showToast(
-          error.message || "Não foi possível iniciar a sessão.",
-          "error"
-        );
-      }
     }
+
   }
 
 
   function updateUserInterface() {
-    const userName = $("userName");
 
-    if (!userName) return;
+    const element =
+      $("userName");
 
-    userName.textContent =
+    if (!element) {
+      return;
+    }
+
+    element.textContent =
       state.user?.name ||
       state.user?.email ||
       "Operations Console";
+
   }
 
 
@@ -324,74 +515,371 @@
   ========================================================= */
 
   async function loadClients() {
+
     try {
-      const response = await api("/api/clients");
+
+      const response =
+        await api(
+          "/api/clients"
+        );
+
 
       state.clients =
         Array.isArray(response)
           ? response
-          : response?.clients ||
-            response?.data ||
-            [];
+          : (
+              response?.clients ||
+              response?.data ||
+              []
+            );
 
-      renderClientSelector();
+
+      renderClientSelectors();
+
       updateClientCount();
+
+
+      if (
+        state.selectedClientId
+      ) {
+
+        const found =
+          state.clients.find(
+            client =>
+              String(
+                client._id ||
+                client.id
+              ) ===
+              String(
+                state.selectedClientId
+              )
+          );
+
+
+        if (found) {
+
+          state.selectedClient =
+            found;
+
+          updateSelectedClient();
+
+          await loadPassportStatus(
+            state.selectedClientId
+          );
+
+        }
+
+      }
+
+
       updateReadiness();
 
+
     } catch (error) {
-      console.error("Erro ao carregar clientes:", error);
 
-      state.clients = [];
-
-      renderClientSelector();
+      console.error(
+        "Erro ao carregar clientes:",
+        error
+      );
 
       showToast(
         "Não foi possível carregar os clientes.",
         "error"
       );
+
     }
+
   }
 
 
-  function renderClientSelector() {
-    const select = $("applicationClient");
+  function renderClientSelectors() {
 
-    if (!select) return;
+    const ids = [
+      "applicationClient",
+      "identityClient"
+    ];
 
-    const currentValue = select.value;
 
-    select.innerHTML = `
-      <option value="">Selecionar cliente</option>
-      ${state.clients
-        .map((client) => {
-          const id = client._id || client.id;
+    ids.forEach(id => {
 
-          const name =
-            client.fullName ||
-            client.name ||
-            "Cliente sem nome";
+      const select =
+        $(id);
 
-          return `
-            <option value="${escapeHtml(id)}">
-              ${escapeHtml(name)}
-            </option>
-          `;
-        })
-        .join("")}
-    `;
+      if (!select) {
+        return;
+      }
 
-    if (currentValue) {
-      select.value = currentValue;
+
+      const current =
+        select.value;
+
+
+      select.innerHTML = `
+        <option value="">
+          Selecionar cliente
+        </option>
+
+        ${state.clients
+          .map(client => {
+
+            const id =
+              client._id ||
+              client.id;
+
+            const name =
+              client.fullName ||
+              client.name ||
+              "Cliente sem nome";
+
+            return `
+              <option value="${escapeHtml(id)}">
+                ${escapeHtml(name)}
+              </option>
+            `;
+
+          })
+          .join("")}
+      `;
+
+
+      if (current) {
+        select.value =
+          current;
+      }
+
+    });
+
+
+    if (
+      state.selectedClientId
+    ) {
+
+      [
+        "applicationClient",
+        "identityClient"
+      ].forEach(id => {
+
+        const select =
+          $(id);
+
+        if (select) {
+
+          select.value =
+            state.selectedClientId;
+
+        }
+
+      });
+
     }
+
   }
 
 
   function updateClientCount() {
-    const element = $("clientCount");
+
+    const element =
+      $("clientCount");
 
     if (element) {
-      element.textContent = state.clients.length;
+
+      element.textContent =
+        state.clients.length;
+
     }
+
+  }
+
+
+  function getClientById(
+    clientId
+  ) {
+
+    return state.clients.find(
+      client =>
+        String(
+          client._id ||
+          client.id
+        ) ===
+        String(clientId)
+    );
+
+  }
+
+
+  /* =========================================================
+     SELECT CLIENT
+  ========================================================= */
+
+  async function selectClient(
+    clientId,
+    source = "application"
+  ) {
+
+    if (!clientId) {
+
+      state.selectedClientId =
+        null;
+
+      state.selectedClient =
+        null;
+
+      state.passportValidation =
+        null;
+
+      state.facialReady =
+        false;
+
+      updateSelectedClient();
+
+      resetPassportInterface();
+
+      updateIdentityGate();
+
+      updateReadiness();
+
+      return;
+
+    }
+
+
+    const client =
+      getClientById(
+        clientId
+      );
+
+
+    if (!client) {
+      return;
+    }
+
+
+    state.selectedClientId =
+      String(clientId);
+
+    state.selectedClient =
+      client;
+
+
+    [
+      "applicationClient",
+      "identityClient"
+    ].forEach(id => {
+
+      const select =
+        $(id);
+
+      if (select) {
+
+        select.value =
+          clientId;
+
+      }
+
+    });
+
+
+    updateSelectedClient();
+
+    await loadPassportStatus(
+      clientId
+    );
+
+    updateIdentityGate();
+
+    updateReadiness();
+
+
+    addActivity(
+      "Cliente selecionado",
+      `${client.fullName || "Cliente"} foi selecionado para verificação.`,
+      "blue"
+    );
+
+  }
+
+
+  function updateSelectedClient() {
+
+    const card =
+      $("selectedClientCard");
+
+    const name =
+      $("selectedClientName");
+
+    const passport =
+      $("selectedClientPassport");
+
+
+    if (
+      !state.selectedClient
+    ) {
+
+      card?.classList
+        .add("empty");
+
+      if (name) {
+        name.textContent =
+          "Nenhum cliente";
+      }
+
+      if (passport) {
+        passport.textContent =
+          "Selecione um cliente";
+      }
+
+      return;
+
+    }
+
+
+    card?.classList
+      .remove("empty");
+
+
+    const fullName =
+      state.selectedClient.fullName ||
+      state.selectedClient.name ||
+      "Cliente";
+
+
+    if (name) {
+      name.textContent =
+        fullName;
+    }
+
+
+    if (passport) {
+
+      passport.textContent =
+        state.selectedClient.passportNumber
+          ? `Passaporte ${state.selectedClient.passportNumber}`
+          : "Passaporte não definido";
+
+    }
+
+
+    const avatar =
+      card?.querySelector(
+        ".selected-client-avatar"
+      );
+
+
+    if (avatar) {
+
+      avatar.textContent =
+        fullName
+          .split(/\s+/)
+          .slice(0, 2)
+          .map(
+            part =>
+              part.charAt(0)
+                .toUpperCase()
+          )
+          .join("");
+
+    }
+
   }
 
 
@@ -399,151 +887,1721 @@
      CLIENT FORM
   ========================================================= */
 
-  async function handleClientSubmit(event) {
+  async function handleClientSubmit(
+    event
+  ) {
+
     event.preventDefault();
 
-    const form = event.currentTarget;
 
-    const button = form.querySelector(
-      'button[type="submit"]'
-    );
+    const form =
+      event.currentTarget;
+
+
+    const button =
+      form.querySelector(
+        'button[type="submit"]'
+      );
+
 
     if (button) {
-      button.disabled = true;
+      button.disabled =
+        true;
     }
 
+
     const payload = {
-      fullName: $("clientFullName")?.value.trim(),
-      email: $("clientEmail")?.value.trim(),
-      phone: $("clientPhone")?.value.trim(),
-      dateOfBirth: $("clientDateOfBirth")?.value || null,
-      nationality: $("clientNationality")?.value.trim(),
-      gender: $("clientGender")?.value || null,
+
+      fullName:
+        $("clientFullName")
+          ?.value
+          .trim(),
+
+      email:
+        $("clientEmail")
+          ?.value
+          .trim(),
+
+      phone:
+        $("clientPhone")
+          ?.value
+          .trim(),
+
+      dateOfBirth:
+        $("clientDateOfBirth")
+          ?.value ||
+        null,
+
+      nationality:
+        $("clientNationality")
+          ?.value
+          .trim(),
+
+      gender:
+        $("clientGender")
+          ?.value ||
+        null,
 
       passportNumber:
-        $("clientPassportNumber")?.value.trim(),
+        $("clientPassportNumber")
+          ?.value
+          .trim(),
 
       passportIssueDate:
-        $("clientPassportIssueDate")?.value || null,
+        $("clientPassportIssueDate")
+          ?.value ||
+        null,
 
       passportExpiryDate:
-        $("clientPassportExpiryDate")?.value || null,
+        $("clientPassportExpiryDate")
+          ?.value ||
+        null,
 
       passportCountry:
-        $("clientPassportCountry")?.value.trim(),
+        $("clientPassportCountry")
+          ?.value
+          .trim(),
 
       facialConsent:
-        Boolean($("clientFacialConsent")?.checked)
+        Boolean(
+          $("clientFacialConsent")
+            ?.checked
+        )
+
     };
 
 
     try {
-      const response = await api("/api/clients", {
-        method: "POST",
-        body: JSON.stringify(payload)
-      });
+
+      const response =
+        await api(
+          "/api/clients",
+          {
+            method:
+              "POST",
+
+            body:
+              JSON.stringify(
+                payload
+              )
+          }
+        );
+
 
       const client =
         response?.client ||
         response?.data ||
         response;
 
-      if (client && (client._id || client.id)) {
-        state.clients.unshift(client);
+
+      if (
+        client &&
+        (client._id ||
+          client.id)
+      ) {
+
+        state.clients.unshift(
+          client
+        );
+
       }
 
-      renderClientSelector();
-      updateClientCount();
-      updateReadiness();
 
       form.reset();
 
-      updatePassportChecks();
+
+      renderClientSelectors();
+
+      updateClientCount();
+
+
+      await selectClient(
+        client._id ||
+        client.id
+      );
+
 
       showToast(
         "Perfil do cliente criado com sucesso.",
         "success"
       );
 
+
       addActivity(
         "Novo cliente",
-        "Perfil de cliente criado no sistema.",
+        "Perfil criado e pronto para validação documental.",
         "blue"
       );
 
+
+      document
+        .getElementById(
+          "passportSection"
+        )
+        ?.scrollIntoView({
+          behavior:
+            "smooth",
+          block:
+            "start"
+        });
+
+
     } catch (error) {
-      console.error(error);
+
+      console.error(
+        error
+      );
+
 
       showToast(
         error.message ||
-          "Não foi possível criar o cliente.",
+        "Não foi possível criar o cliente.",
         "error"
       );
 
     } finally {
+
       if (button) {
-        button.disabled = false;
+        button.disabled =
+          false;
       }
+
     }
+
   }
 
 
   /* =========================================================
-     PASSPORT READINESS
+     PASSPORT
   ========================================================= */
 
-  function hasPassportData() {
-    return Boolean(
-      $("clientPassportNumber")?.value.trim() ||
-      $("clientPassportIssueDate")?.value ||
-      $("clientPassportExpiryDate")?.value ||
-      $("clientPassportCountry")?.value.trim()
+  function setupPassportEvents() {
+
+    const fileInput =
+      $("passportFile");
+
+    const dropzone =
+      $("passportDropzone");
+
+    const uploadButton =
+      $("passportUploadButton");
+
+    const clearButton =
+      $("passportClearButton");
+
+
+    fileInput?.addEventListener(
+      "change",
+      event => {
+
+        const file =
+          event.target.files?.[0];
+
+        handlePassportFile(
+          file
+        );
+
+      }
     );
+
+
+    [
+      "dragenter",
+      "dragover"
+    ].forEach(type => {
+
+      dropzone?.addEventListener(
+        type,
+        event => {
+
+          event.preventDefault();
+
+          dropzone.classList
+            .add("dragover");
+
+        }
+      );
+
+    });
+
+
+    [
+      "dragleave",
+      "drop"
+    ].forEach(type => {
+
+      dropzone?.addEventListener(
+        type,
+        event => {
+
+          event.preventDefault();
+
+          dropzone.classList
+            .remove("dragover");
+
+        }
+      );
+
+    });
+
+
+    dropzone?.addEventListener(
+      "drop",
+      event => {
+
+        const file =
+          event.dataTransfer
+            ?.files?.[0];
+
+        handlePassportFile(
+          file
+        );
+
+      }
+    );
+
+
+    uploadButton?.addEventListener(
+      "click",
+      uploadPassport
+    );
+
+
+    clearButton?.addEventListener(
+      "click",
+      clearPassport
+    );
+
   }
 
 
-  function updatePassportChecks() {
-    const fileCheck = $("passportCheckFile");
-    const dataCheck = $("passportCheckData");
-    const readyCheck = $("passportCheckReady");
+  function handlePassportFile(
+    file
+  ) {
 
-    const dataReady = hasPassportData();
+    if (!file) {
+      return;
+    }
 
-    if (fileCheck) {
-      fileCheck.classList.remove("ready");
-      fileCheck.innerHTML = `
-        <span>○</span>
-        <span>Documento anexado</span>
+
+    if (
+      !state.selectedClientId
+    ) {
+
+      showToast(
+        "Selecione primeiro o cliente.",
+        "error"
+      );
+
+      return;
+
+    }
+
+
+    const allowed = [
+      "image/jpeg",
+      "image/png"
+    ];
+
+
+    if (
+      !allowed.includes(
+        file.type
+      )
+    ) {
+
+      showToast(
+        "O passaporte deve ser uma imagem JPEG ou PNG.",
+        "error"
+      );
+
+      return;
+
+    }
+
+
+    if (
+      file.size >
+      6 * 1024 * 1024
+    ) {
+
+      showToast(
+        "A imagem não pode ultrapassar 6 MB.",
+        "error"
+      );
+
+      return;
+
+    }
+
+
+    state.passportFile =
+      file;
+
+
+    const preview =
+      $("passportPreview");
+
+    const image =
+      $("passportPreviewImage");
+
+    const button =
+      $("passportUploadButton");
+
+    const status =
+      $("passportFileStatus");
+
+
+    if (preview && image) {
+
+      const reader =
+        new FileReader();
+
+
+      reader.onload =
+        event => {
+
+          image.src =
+            event.target.result;
+
+          preview.hidden =
+            false;
+
+        };
+
+
+      reader.readAsDataURL(
+        file
+      );
+
+    }
+
+
+    if (button) {
+      button.disabled =
+        false;
+    }
+
+
+    if (status) {
+
+      status.textContent =
+        `${file.name} selecionado — ${Math.round(file.size / 1024)} KB`;
+
+    }
+
+
+    setPassportPanelStatus(
+      "DOCUMENTO",
+      "blue"
+    );
+
+  }
+
+
+  function clearPassport() {
+
+    state.passportFile =
+      null;
+
+    state.passportValidation =
+      null;
+
+
+    const file =
+      $("passportFile");
+
+    if (file) {
+      file.value =
+        "";
+    }
+
+
+    const preview =
+      $("passportPreview");
+
+    if (preview) {
+      preview.hidden =
+        true;
+    }
+
+
+    const button =
+      $("passportUploadButton");
+
+    if (button) {
+      button.disabled =
+        true;
+    }
+
+
+    const status =
+      $("passportFileStatus");
+
+    if (status) {
+
+      status.textContent =
+        state.selectedClientId
+          ? "Selecione uma imagem do passaporte."
+          : "Selecione primeiro o cliente.";
+
+    }
+
+
+    resetPassportChecks();
+
+    updateReadiness();
+
+  }
+
+
+  function resetPassportInterface() {
+
+    state.passportFile =
+      null;
+
+    state.passportValidation =
+      null;
+
+
+    const file =
+      $("passportFile");
+
+    if (file) {
+      file.value =
+        "";
+    }
+
+
+    const preview =
+      $("passportPreview");
+
+    if (preview) {
+      preview.hidden =
+        true;
+    }
+
+
+    const button =
+      $("passportUploadButton");
+
+    if (button) {
+      button.disabled =
+        true;
+    }
+
+
+    const status =
+      $("passportFileStatus");
+
+    if (status) {
+
+      status.textContent =
+        state.selectedClientId
+          ? "Selecione uma imagem do passaporte."
+          : "Selecione primeiro o cliente.";
+
+    }
+
+
+    resetPassportChecks();
+
+  }
+
+
+  function resetPassportChecks() {
+
+    [
+      "passportCheckFile",
+      "passportCheckMrz",
+      "passportCheckMatch",
+      "passportCheckExpiry",
+      "passportCheckStorage"
+    ].forEach(id => {
+
+      const element =
+        $(id);
+
+      if (!element) {
+        return;
+      }
+
+      element.classList
+        .remove(
+          "ready",
+          "bad"
+        );
+
+      const icon =
+        element.querySelector(
+          "i"
+        );
+
+      if (icon) {
+        icon.textContent =
+          "○";
+      }
+
+    });
+
+
+    const result =
+      $("passportResultState");
+
+
+    if (result) {
+
+      result.className =
+        "passport-result-state pending";
+
+
+      result.innerHTML = `
+
+        <div class="result-state-icon">
+          ID
+        </div>
+
+        <div>
+
+          <strong>
+            Nenhuma validação executada
+          </strong>
+
+          <span>
+            O resultado aparecerá aqui.
+          </span>
+
+        </div>
+
       `;
+
     }
 
-    if (dataCheck) {
-      dataCheck.classList.toggle("ready", dataReady);
 
-      dataCheck.innerHTML = dataReady
-        ? `
-          <span>✓</span>
-          <span>Dados preenchidos</span>
-        `
-        : `
-          <span>○</span>
-          <span>Dados preenchidos</span>
+    const title =
+      $("passportResultTitle");
+
+    if (title) {
+
+      title.textContent =
+        "Aguardando documento";
+
+    }
+
+
+    const issues =
+      $("passportIssues");
+
+    if (issues) {
+
+      issues.hidden =
+        true;
+
+      issues.innerHTML =
+        "";
+
+    }
+
+
+    const extracted =
+      $("passportExtractedData");
+
+    if (extracted) {
+
+      extracted.hidden =
+        true;
+
+    }
+
+
+    setPassportPanelStatus(
+      "AGUARDANDO",
+      "blue"
+    );
+
+  }
+
+
+  function setDocumentCheck(
+    id,
+    value
+  ) {
+
+    const element =
+      $(id);
+
+    if (!element) {
+      return;
+    }
+
+
+    element.classList
+      .remove(
+        "ready",
+        "bad"
+      );
+
+
+    const icon =
+      element.querySelector(
+        "i"
+      );
+
+
+    if (value === true) {
+
+      element.classList
+        .add("ready");
+
+      if (icon) {
+        icon.textContent =
+          "✓";
+      }
+
+    } else if (
+      value === false
+    ) {
+
+      element.classList
+        .add("bad");
+
+      if (icon) {
+        icon.textContent =
+          "!";
+      }
+
+    } else {
+
+      if (icon) {
+        icon.textContent =
+          "○";
+      }
+
+    }
+
+  }
+
+
+  function setPassportPanelStatus(
+    text,
+    type = "blue"
+  ) {
+
+    const element =
+      $("passportPanelStatus");
+
+    if (!element) {
+      return;
+    }
+
+
+    element.textContent =
+      text;
+
+
+    element.className =
+      `panel-status ${type}`;
+
+  }
+
+
+  async function uploadPassport() {
+
+    if (
+      !state.selectedClientId
+    ) {
+
+      showToast(
+        "Selecione um cliente antes de validar o passaporte.",
+        "error"
+      );
+
+      return;
+
+    }
+
+
+    if (
+      !state.passportFile
+    ) {
+
+      showToast(
+        "Selecione a imagem do passaporte.",
+        "error"
+      );
+
+      return;
+
+    }
+
+
+    const button =
+      $("passportUploadButton");
+
+
+    if (button) {
+
+      button.disabled =
+        true;
+
+      button.innerHTML =
+        "A validar documento...";
+
+    }
+
+
+    setPassportPanelStatus(
+      "A VALIDAR",
+      "blue"
+    );
+
+
+    setDocumentCheck(
+      "passportCheckFile",
+      true
+    );
+
+
+    try {
+
+      const formData =
+        new FormData();
+
+
+      formData.append(
+        "passport",
+        state.passportFile
+      );
+
+
+      const response =
+        await api(
+          `/api/passports/${encodeURIComponent(
+            state.selectedClientId
+          )}`,
+          {
+            method:
+              "POST",
+
+            body:
+              formData
+          }
+        );
+
+
+      processPassportResponse(
+        response
+      );
+
+
+      await loadPassportStatus(
+        state.selectedClientId
+      );
+
+
+      addActivity(
+        "Passaporte validado",
+        "A validação documental foi concluída.",
+        "blue"
+      );
+
+
+      showToast(
+        "Passaporte validado com sucesso.",
+        "success"
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        "Passport validation:",
+        error
+      );
+
+
+      processPassportError(
+        error
+      );
+
+
+      showToast(
+        error.message ||
+        "O passaporte precisa de correção.",
+        "error"
+      );
+
+    } finally {
+
+      if (button) {
+
+        button.disabled =
+          !state.passportFile;
+
+        button.innerHTML =
+          `
+            Validar documento
+            <span>→</span>
+          `;
+
+      }
+
+    }
+
+  }
+
+
+  function processPassportResponse(
+    response
+  ) {
+
+    const passport =
+      response?.passport ||
+      response?.passportValidation ||
+      {};
+
+
+    state.passportValidation =
+      passport;
+
+
+    const mrz =
+      passport.mrzValid === true;
+
+
+    const match =
+      (
+        passport.clientMatch === true ||
+        passport.match === true
+      );
+
+
+    const expired =
+      passport.expired === true;
+
+
+    const stored =
+      (
+        passport.documentStored === true ||
+        passport.ready === true
+      );
+
+
+    setDocumentCheck(
+      "passportCheckFile",
+      true
+    );
+
+
+    setDocumentCheck(
+      "passportCheckMrz",
+      mrz
+    );
+
+
+    setDocumentCheck(
+      "passportCheckMatch",
+      match
+    );
+
+
+    setDocumentCheck(
+      "passportCheckExpiry",
+      !expired
+    );
+
+
+    setDocumentCheck(
+      "passportCheckStorage",
+      stored
+    );
+
+
+    const passed =
+      (
+        response?.success === true &&
+        (
+          response?.status === "passed" ||
+          passport.ready === true ||
+          (
+            mrz &&
+            match &&
+            !expired
+          )
+        )
+      );
+
+
+    renderPassportResult(
+      passed,
+      passport,
+      response
+    );
+
+
+    updateIdentityGate();
+
+    updateReadiness();
+
+  }
+
+
+  function processPassportError(
+    error
+  ) {
+
+    const data =
+      error?.data || {};
+
+
+    const passport =
+      data?.passportValidation ||
+      {};
+
+
+    state.passportValidation =
+      passport;
+
+
+    const mrz =
+      passport.mrzValid === true
+        ? true
+        : (
+            passport.mrzPresent === true
+              ? false
+              : null
+          );
+
+
+    const match =
+      passport.clientMatch === true
+        ? true
+        : (
+            passport.mrzPresent
+              ? false
+              : null
+          );
+
+
+    const expired =
+      passport.expired === true
+        ? true
+        : (
+            passport.mrzPresent
+              ? false
+              : null
+          );
+
+
+    setDocumentCheck(
+      "passportCheckFile",
+      true
+    );
+
+
+    setDocumentCheck(
+      "passportCheckMrz",
+      mrz
+    );
+
+
+    setDocumentCheck(
+      "passportCheckMatch",
+      match
+    );
+
+
+    setDocumentCheck(
+      "passportCheckExpiry",
+      expired === null
+        ? null
+        : !expired
+    );
+
+
+    setDocumentCheck(
+      "passportCheckStorage",
+      false
+    );
+
+
+    renderPassportResult(
+      false,
+      passport,
+      data
+    );
+
+
+    updateIdentityGate();
+
+    updateReadiness();
+
+  }
+
+
+  function renderPassportResult(
+    passed,
+    passport,
+    response
+  ) {
+
+    const result =
+      $("passportResultState");
+
+
+    const title =
+      $("passportResultTitle");
+
+
+    if (!result) {
+      return;
+    }
+
+
+    if (passed) {
+
+      result.className =
+        "passport-result-state success";
+
+
+      result.innerHTML = `
+
+        <div class="result-state-icon">
+          ✓
+        </div>
+
+        <div>
+
+          <strong>
+            Passaporte aprovado
+          </strong>
+
+          <span>
+            Documento conforme e utilizável
+            na preparação da operação.
+          </span>
+
+        </div>
+
+      `;
+
+
+      if (title) {
+        title.textContent =
+          "Documento conforme";
+      }
+
+
+      setPassportPanelStatus(
+        "APROVADO",
+        ""
+      );
+
+    } else {
+
+      result.className =
+        "passport-result-state error";
+
+
+      result.innerHTML = `
+
+        <div class="result-state-icon">
+          !
+        </div>
+
+        <div>
+
+          <strong>
+            Passaporte precisa de correção
+          </strong>
+
+          <span>
+            O bot não deverá avançar com este documento.
+          </span>
+
+        </div>
+
+      `;
+
+
+      if (title) {
+        title.textContent =
+          "Correção necessária";
+      }
+
+
+      setPassportPanelStatus(
+        "CORRIGIR",
+        ""
+      );
+
+    }
+
+
+    const issues =
+      Array.isArray(
+        passport.issues
+      )
+        ? passport.issues
+        : [];
+
+
+    const issuesBox =
+      $("passportIssues");
+
+
+    if (issuesBox) {
+
+      if (issues.length) {
+
+        issuesBox.hidden =
+          false;
+
+        issuesBox.innerHTML = `
+
+          <strong>
+            O que precisa de atenção
+          </strong>
+
+          <ul>
+            ${issues
+              .slice(0, 8)
+              .map(
+                issue =>
+                  `<li>${escapeHtml(issue)}</li>`
+              )
+              .join("")}
+          </ul>
+
         `;
+
+      } else {
+
+        issuesBox.hidden =
+          true;
+
+      }
+
     }
 
-    if (readyCheck) {
-      readyCheck.classList.toggle("ready", dataReady);
 
-      readyCheck.innerHTML = dataReady
-        ? `
-          <span>✓</span>
-          <span>Dados prontos para operação</span>
-        `
-        : `
-          <span>○</span>
-          <span>Pronto para operação</span>
-        `;
+    const extracted =
+      $("passportExtractedData");
+
+
+    if (extracted) {
+
+      extracted.hidden =
+        false;
+
+      const type =
+        $("passportExtractedType");
+
+      const mrz =
+        $("passportExtractedMrz");
+
+      const match =
+        $("passportExtractedMatch");
+
+      const expiry =
+        $("passportExtractedExpiry");
+
+
+      if (type) {
+
+        type.textContent =
+          passport.passportType ||
+          passport.type ||
+          "—";
+
+      }
+
+
+      if (mrz) {
+
+        mrz.textContent =
+          passport.mrzValid === true
+            ? "Válida"
+            : "Não validada";
+
+      }
+
+
+      if (match) {
+
+        match.textContent =
+          (
+            passport.clientMatch === true ||
+            passport.match === true
+          )
+            ? "Confirmada"
+            : "Não confirmada";
+
+      }
+
+
+      if (expiry) {
+
+        expiry.textContent =
+          passport.expired === true
+            ? "Expirado"
+            : "Válido";
+
+      }
+
     }
+
+  }
+
+
+  async function loadPassportStatus(
+    clientId
+  ) {
+
+    if (!clientId) {
+      return;
+    }
+
+
+    try {
+
+      const response =
+        await api(
+          `/api/passports/${encodeURIComponent(
+            clientId
+          )}/status`
+        );
+
+
+      state.passportValidation =
+        response?.passportValidation ||
+        null;
+
+
+      const validation =
+        state.passportValidation;
+
+
+      if (!validation) {
+
+        resetPassportChecks();
+
+        return;
+
+      }
+
+
+      const passed =
+        validation.status ===
+          "passed";
+
+
+      setDocumentCheck(
+        "passportCheckMrz",
+        validation.mrzValid === true
+      );
+
+
+      setDocumentCheck(
+        "passportCheckMatch",
+        validation.clientMatch === true
+      );
+
+
+      setDocumentCheck(
+        "passportCheckExpiry",
+        validation.expired !== true
+      );
+
+
+      setDocumentCheck(
+        "passportCheckStorage",
+        passed
+      );
+
+
+      if (passed) {
+
+        setPassportPanelStatus(
+          "APROVADO",
+          ""
+        );
+
+      } else {
+
+        setPassportPanelStatus(
+          "CORRIGIR",
+          ""
+        );
+
+      }
+
+
+      updateIdentityGate();
+
+      updateReadiness();
+
+
+    } catch (error) {
+
+      /*
+       * Um cliente novo pode ainda não possuir
+       * validação de passaporte.
+       */
+
+      console.debug(
+        "Passport status:",
+        error.message
+      );
+
+    }
+
+  }
+
+
+  /* =========================================================
+     IDENTITY / FACIAL
+  ========================================================= */
+
+  function setupIdentityEvents() {
+
+    const identitySelect =
+      $("identityClient");
+
+
+    identitySelect?.addEventListener(
+      "change",
+      async event => {
+
+        await selectClient(
+          event.target.value,
+          "identity"
+        );
+
+
+        updateFacialModuleSelection();
+
+      }
+    );
+
+
+    const applicationSelect =
+      $("applicationClient");
+
+
+    applicationSelect?.addEventListener(
+      "change",
+      async event => {
+
+        await selectClient(
+          event.target.value,
+          "application"
+        );
+
+
+        updateFacialModuleSelection();
+
+      }
+    );
+
+
+    /*
+     * O módulo facial existente cria
+     * o painel dinamicamente.
+     *
+     * Depois da criação, movemos o painel
+     * para dentro da secção Identity.
+     */
+
+    setTimeout(
+      moveFacialPanel,
+      250
+    );
+
+  }
+
+
+  function moveFacialPanel() {
+
+    const panel =
+      $("facialPreflightPanel");
+
+
+    const mount =
+      $("facialMount");
+
+
+    if (
+      panel &&
+      mount &&
+      panel.parentElement !== mount
+    ) {
+
+      mount.appendChild(
+        panel
+      );
+
+    }
+
+
+    updateFacialModuleSelection();
+
+  }
+
+
+  function updateFacialModuleSelection() {
+
+    const identitySelect =
+      $("identityClient");
+
+
+    const applicationSelect =
+      $("applicationClient");
+
+
+    if (
+      state.selectedClientId
+    ) {
+
+      if (identitySelect) {
+        identitySelect.value =
+          state.selectedClientId;
+      }
+
+      if (applicationSelect) {
+        applicationSelect.value =
+          state.selectedClientId;
+      }
+
+    }
+
+
+    /*
+     * O módulo existente observa applicationClient.
+     * Disparamos change para sincronizar a UI.
+     */
+
+    if (
+      applicationSelect &&
+      state.selectedClientId
+    ) {
+
+      applicationSelect.dispatchEvent(
+        new Event(
+          "change",
+          {
+            bubbles:
+              true
+          }
+        )
+      );
+
+    }
+
+  }
+
+
+  function updateIdentityGate() {
+
+    const validation =
+      state.passportValidation;
+
+
+    const passportPassed =
+      validation?.status ===
+      "passed";
+
+
+    const selected =
+      Boolean(
+        state.selectedClient
+      );
+
+
+    const facePassed =
+      state.facialReady === true;
+
+
+    const message =
+      $("identityGateMessage");
+
+
+    const summary =
+      $("identityClientSummary");
+
+
+    if (summary) {
+
+      const strong =
+        summary.querySelector(
+          "strong"
+        );
+
+
+      if (strong) {
+
+        strong.textContent =
+          state.selectedClient
+            ? (
+                state.selectedClient.fullName ||
+                state.selectedClient.name ||
+                "Cliente"
+              )
+            : "Nenhum cliente selecionado";
+
+      }
+
+    }
+
+
+    if (!message) {
+      return;
+    }
+
+
+    message.classList
+      .remove(
+        "ready",
+        "bad"
+      );
+
+
+    if (!selected) {
+
+      message.innerHTML = `
+        <div>!</div>
+        <span>
+          Selecione um cliente para iniciar
+          a verificação de identidade.
+        </span>
+      `;
+
+      return;
+
+    }
+
+
+    if (!passportPassed) {
+
+      message.innerHTML = `
+        <div>!</div>
+        <span>
+          Valide primeiro o passaporte deste cliente.
+          O reconhecimento facial não libera a operação
+          sem documento conforme.
+        </span>
+      `;
+
+      return;
+
+    }
+
+
+    if (facePassed) {
+
+      message.classList
+        .add("ready");
+
+      message.innerHTML = `
+        <div>✓</div>
+        <span>
+          Identidade facial aprovada para a preparação.
+          O cliente está apto para o gate da VFS.
+        </span>
+      `;
+
+      return;
+
+    }
+
+
+    message.innerHTML = `
+      <div>!</div>
+      <span>
+        Passaporte aprovado. Execute agora a verificação
+        facial para confirmar a identidade antes da VFS.
+      </span>
+    `;
+
+  }
+
+
+  /*
+   * Verifica o estado exposto pelo módulo facial.
+   *
+   * O módulo existente envia o resultado para o backend.
+   * Aqui monitorizamos a interface e atualizamos o gate.
+   */
+
+  function monitorFacialResult() {
+
+    const result =
+      $("facialPreflightResult");
+
+
+    if (!result) {
+      return;
+    }
+
+
+    const passed =
+      result.classList.contains(
+        "passed"
+      );
+
+
+    const applicationForm =
+      $("applicationForm");
+
+
+    const backendPassed =
+      applicationForm?.dataset
+        ?.facialPreflight ===
+      "passed";
+
+
+    state.facialReady =
+      passed &&
+      backendPassed;
+
+
+    const status =
+      $("facialPanelStatus");
+
+
+    if (status) {
+
+      if (
+        state.facialReady
+      ) {
+
+        status.textContent =
+          "APROVADA";
+
+        status.className =
+          "panel-status";
+
+      } else if (
+        result.classList.contains(
+          "needs-adjustment"
+        )
+      ) {
+
+        status.textContent =
+          "CORRIGIR";
+
+        status.className =
+          "panel-status";
+
+      }
+
+    }
+
+
+    updateIdentityGate();
+
+    updateReadiness();
+
   }
 
 
@@ -552,574 +2610,381 @@
   ========================================================= */
 
   async function loadApplications() {
+
     try {
-      const response = await api("/api/applications");
+
+      const response =
+        await api(
+          "/api/applications"
+        );
+
 
       state.applications =
         Array.isArray(response)
           ? response
-          : response?.applications ||
-            response?.data ||
-            [];
+          : (
+              response?.applications ||
+              response?.data ||
+              []
+            );
+
 
       renderApplications();
+
       updateApplicationStats();
+
       updateReadiness();
 
     } catch (error) {
-      console.error("Erro ao carregar aplicações:", error);
 
-      state.applications = [];
+      console.error(
+        "Erro ao carregar aplicações:",
+        error
+      );
+
+
+      state.applications =
+        [];
+
 
       renderApplications();
+
       updateApplicationStats();
 
-      showToast(
-        "Não foi possível carregar as aplicações.",
-        "error"
-      );
     }
+
   }
 
 
-  function getStatusLabel(status) {
+  function getStatusLabel(
+    status
+  ) {
+
     const labels = {
-      created: "Criada",
-      preparing: "Preparando",
-      otp_required: "OTP necessário",
-      otp_verified: "OTP verificado",
-      identity_verification: "Verificação de identidade",
-      calendar: "Calendário",
-      waiting_for_slot: "No radar",
-      slot_received: "Vaga encontrada",
-      continuing: "A continuar",
-      completed: "Concluída",
-      error: "Erro",
-      cancelled: "Cancelada"
+
+      created:
+        "Criada",
+
+      preparing:
+        "Preparando",
+
+      otp_required:
+        "OTP necessário",
+
+      otp_verified:
+        "OTP verificado",
+
+      identity_verification:
+        "Verificação de identidade",
+
+      calendar:
+        "Calendário",
+
+      waiting_for_slot:
+        "No radar",
+
+      slot_received:
+        "Vaga encontrada",
+
+      continuing:
+        "A continuar",
+
+      completed:
+        "Concluída",
+
+      error:
+        "Erro",
+
+      cancelled:
+        "Cancelada"
+
     };
 
-    return labels[status] || status || "Desconhecido";
+
+    return (
+      labels[status] ||
+      status ||
+      "Desconhecido"
+    );
+
   }
 
 
-  function getApplicationClientName(application) {
+  function getApplicationClientName(
+    application
+  ) {
+
     const client =
       application.client ||
       application.clientData ||
       null;
 
-    if (typeof client === "string") {
-      const found = state.clients.find(
-        (item) =>
-          String(item._id || item.id) === String(client)
-      );
+
+    if (
+      typeof client ===
+      "string"
+    ) {
+
+      const found =
+        getClientById(
+          client
+        );
+
 
       return (
         found?.fullName ||
         "Cliente"
       );
+
     }
+
 
     return (
       client?.fullName ||
       client?.name ||
       "Cliente"
     );
+
   }
 
 
   function renderApplications() {
-    const container = $("applicationsList");
 
-    if (!container) return;
+    const container =
+      $("applicationsList");
 
-    if (!state.applications.length) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">◎</div>
 
-          <strong>Nenhuma aplicação em operação</strong>
-
-          <p>
-            Crie um cliente e inicie uma aplicação
-            para acompanhar o processo aqui.
-          </p>
-        </div>
-      `;
-
+    if (!container) {
       return;
     }
 
 
-    container.innerHTML = state.applications
-      .map((application) => {
+    if (
+      !state.applications.length
+    ) {
 
-        const id =
-          application._id ||
-          application.id;
+      container.innerHTML = `
 
-        const clientName =
-          getApplicationClientName(application);
+        <div class="empty-state">
 
-        const status =
-          application.status || "created";
+          <div class="empty-icon">
+            ◎
+          </div>
 
-        const preferredStart =
-          application.preferredDates?.start ||
-          application.preferredStartDate;
+          <strong>
+            Nenhuma aplicação em operação
+          </strong>
 
-        const preferredEnd =
-          application.preferredDates?.end ||
-          application.preferredEndDate;
+          <p>
+            Complete a preparação e crie
+            uma aplicação.
+          </p>
 
-        const slotDate =
-          application.slot?.date ||
-          application.slotDate;
+        </div>
 
-        const slotTime =
-          application.slot?.time ||
-          application.slotTime;
+      `;
 
+      return;
 
-        return `
-          <article
-            class="application-card"
-            data-application-id="${escapeHtml(id)}"
-          >
-
-            <div class="application-main">
-
-              <strong>
-                ${escapeHtml(clientName)}
-              </strong>
-
-              <small>
-                ID:
-                ${escapeHtml(String(id).slice(-12))}
-              </small>
-
-            </div>
+    }
 
 
-            <div>
+    container.innerHTML =
+      state.applications
+        .map(
+          application => {
 
-              <span class="application-status">
-                ${escapeHtml(getStatusLabel(status))}
-              </span>
+            const id =
+              application._id ||
+              application.id;
 
-              <div class="application-meta">
 
-                <strong>
+            const clientName =
+              getApplicationClientName(
+                application
+              );
+
+
+            const status =
+              application.status ||
+              "created";
+
+
+            const start =
+              application.preferredDates
+                ?.start ||
+              application.preferredStartDate;
+
+
+            const end =
+              application.preferredDates
+                ?.end ||
+              application.preferredEndDate;
+
+
+            const slotDate =
+              application.slot?.date ||
+              application.slotDate;
+
+
+            const slotTime =
+              application.slot?.time ||
+              application.slotTime;
+
+
+            return `
+
+              <article
+                class="application-card"
+                data-application-id="${escapeHtml(id)}"
+              >
+
+                <div class="application-main">
+
+                  <strong>
+                    ${escapeHtml(clientName)}
+                  </strong>
+
+                  <small>
+                    ID:
+                    ${escapeHtml(
+                      String(id).slice(-12)
+                    )}
+                  </small>
+
+                </div>
+
+
+                <div>
+
+                  <span class="application-status">
+                    ${escapeHtml(
+                      getStatusLabel(
+                        status
+                      )
+                    )}
+                  </span>
+
+
+                  <div class="application-meta">
+
+                    <strong>
+                      ${
+                        slotDate
+                          ? `${escapeHtml(
+                              formatDate(
+                                slotDate
+                              )
+                            )} ${
+                              slotTime
+                                ? escapeHtml(
+                                    slotTime
+                                  )
+                                : ""
+                            }`
+                          : (
+                              start &&
+                              end
+                            )
+                            ? `${escapeHtml(
+                                formatDate(
+                                  start
+                                )
+                              )} — ${escapeHtml(
+                                formatDate(
+                                  end
+                                )
+                              )}`
+                            : "Janela não definida"
+                      }
+                    </strong>
+
+
+                    <span>
+                      ${escapeHtml(
+                        application.preferredTime ||
+                        "Horário flexível"
+                      )}
+                    </span>
+
+                  </div>
+
+                </div>
+
+
+                <div class="application-actions">
+
                   ${
-                    slotDate
-                      ? `${escapeHtml(formatDate(slotDate))} ${
-                          slotTime
-                            ? escapeHtml(slotTime)
-                            : ""
-                        }`
-                      : preferredStart && preferredEnd
-                        ? `${escapeHtml(formatDate(preferredStart))} — ${escapeHtml(formatDate(preferredEnd))}`
-                        : "Janela não definida"
+                    (
+                      status === "created" ||
+                      status === "error"
+                    )
+                      ? `
+                        <button
+                          type="button"
+                          data-action="prepare"
+                          data-id="${escapeHtml(id)}"
+                        >
+                          Preparar
+                        </button>
+                      `
+                      : ""
                   }
-                </strong>
-
-                <span>
-                  ${escapeHtml(
-                    application.preferredTime ||
-                    "Horário flexível"
-                  )}
-                </span>
-
-              </div>
-
-            </div>
 
 
-            <div class="application-actions">
-
-              ${
-                status === "created" ||
-                status === "error"
-                  ? `
-                    <button
-                      type="button"
-                      data-action="prepare"
-                      data-id="${escapeHtml(id)}"
-                    >
-                      Preparar
-                    </button>
-                  `
-                  : ""
-              }
+                  ${
+                    status ===
+                    "otp_required"
+                      ? `
+                        <button
+                          type="button"
+                          data-action="continue"
+                          data-id="${escapeHtml(id)}"
+                        >
+                          Continuar
+                        </button>
+                      `
+                      : ""
+                  }
 
 
-              ${
-                status === "otp_required"
-                  ? `
-                    <button
-                      type="button"
-                      data-action="continue"
-                      data-id="${escapeHtml(id)}"
-                    >
-                      Continuar
-                    </button>
-                  `
-                  : ""
-              }
+                  ${
+                    status !== "completed" &&
+                    status !== "cancelled"
+                      ? `
+                        <button
+                          type="button"
+                          data-action="cancel"
+                          data-id="${escapeHtml(id)}"
+                        >
+                          Cancelar
+                        </button>
+                      `
+                      : ""
+                  }
 
+                </div>
 
-              ${
-                status !== "completed" &&
-                status !== "cancelled"
-                  ? `
-                    <button
-                      type="button"
-                      data-action="cancel"
-                      data-id="${escapeHtml(id)}"
-                    >
-                      Cancelar
-                    </button>
-                  `
-                  : ""
-              }
+              </article>
 
-            </div>
+            `;
 
-          </article>
-        `;
-      })
-      .join("");
+          }
+        )
+        .join("");
+
   }
 
 
   function updateApplicationStats() {
-    const total = state.applications.length;
 
-    const prepared = state.applications.filter(
-      (application) =>
-        [
-          "otp_required",
-          "otp_verified",
-          "identity_verification",
-          "calendar",
-          "waiting_for_slot",
-          "slot_received",
-          "continuing",
-          "completed"
-        ].includes(application.status)
-    ).length;
+    const total =
+      state.applications.length;
 
-    const monitoring = state.applications.filter(
-      (application) =>
-        application.status === "waiting_for_slot" ||
-        application.bot2?.monitoring === true
-    ).length;
 
-
-    if ($("applicationCount")) {
-      $("applicationCount").textContent = total;
-    }
-
-    if ($("preparedCount")) {
-      $("preparedCount").textContent = prepared;
-    }
-
-    if ($("monitoringCount")) {
-      $("monitoringCount").textContent = monitoring;
-    }
-
-
-    updateBotCenter();
-  }
-
-
-  /* =========================================================
-     CREATE APPLICATION
-  ========================================================= */
-
-  async function handleApplicationSubmit(event) {
-    event.preventDefault();
-
-    const form = event.currentTarget;
-
-    const button = form.querySelector(
-      'button[type="submit"]'
-    );
-
-    const clientId =
-      $("applicationClient")?.value;
-
-    if (!clientId) {
-      showToast(
-        "Selecione um cliente.",
-        "error"
-      );
-
-      return;
-    }
-
-    const payload = {
-      clientId,
-
-      preferredDates: {
-        start:
-          $("preferredStartDate")?.value || null,
-
-        end:
-          $("preferredEndDate")?.value || null
-      },
-
-      preferredTime:
-        $("preferredTime")?.value || null
-    };
-
-
-    if (button) {
-      button.disabled = true;
-    }
-
-
-    try {
-      const response = await api(
-        "/api/applications",
-        {
-          method: "POST",
-          body: JSON.stringify(payload)
-        }
-      );
-
-      const application =
-        response?.application ||
-        response?.data ||
-        response;
-
-      if (application) {
-        state.applications.unshift(application);
-      }
-
-      renderApplications();
-      updateApplicationStats();
-      updateReadiness();
-
-      showToast(
-        "Aplicação criada. A operação está pronta.",
-        "success"
-      );
-
-      addActivity(
-        "Nova aplicação",
-        "Processo criado e disponível para PREPARATION.",
-        "blue"
-      );
-
-      form.reset();
-
-    } catch (error) {
-      console.error(error);
-
-      showToast(
-        error.message ||
-          "Não foi possível criar a aplicação.",
-        "error"
-      );
-
-    } finally {
-      if (button) {
-        button.disabled = false;
-      }
-    }
-  }
-
-
-  /* =========================================================
-     APPLICATION ACTIONS
-  ========================================================= */
-
-  async function prepareApplication(id) {
-    try {
-      showToast(
-        "PREPARATION iniciou o processo.",
-        "info"
-      );
-
-      addActivity(
-        "PREPARATION",
-        "Preparação do processo iniciada.",
-        "blue"
-      );
-
-      await api(
-        `/api/applications/${encodeURIComponent(id)}/prepare`,
-        {
-          method: "POST",
-          body: JSON.stringify({})
-        }
-      );
-
-      await loadApplications();
-
-      showToast(
-        "Processo preparado.",
-        "success"
-      );
-
-    } catch (error) {
-      console.error(error);
-
-      showToast(
-        error.message ||
-          "Falha na preparação.",
-        "error"
-      );
-    }
-  }
-
-
-  async function continueApplication(id) {
-    /*
-     * Mantemos a rota atual, mas não tentamos inventar
-     * um OTP no frontend. Quando o endpoint de verificação
-     * estiver disponível, a UI deverá solicitar o código
-     * antes desta etapa.
-     */
-
-    try {
-      await api(
-        `/api/applications/${encodeURIComponent(id)}/continue`,
-        {
-          method: "POST",
-          body: JSON.stringify({})
-        }
-      );
-
-      await loadApplications();
-
-      addActivity(
-        "ORCHESTRATOR",
-        "Processo continuado.",
-        "blue"
-      );
-
-      showToast(
-        "Processo continuado.",
-        "success"
-      );
-
-    } catch (error) {
-      console.error(error);
-
-      showToast(
-        error.message ||
-          "Não foi possível continuar.",
-        "error"
-      );
-    }
-  }
-
-
-  async function cancelApplication(id) {
-    const confirmed = window.confirm(
-      "Tem a certeza que pretende cancelar esta aplicação?"
-    );
-
-    if (!confirmed) return;
-
-
-    try {
-      await api(
-        `/api/applications/${encodeURIComponent(id)}/cancel`,
-        {
-          method: "POST",
-          body: JSON.stringify({})
-        }
-      );
-
-      await loadApplications();
-
-      addActivity(
-        "Aplicação cancelada",
-        "O processo foi cancelado.",
-        "blue"
-      );
-
-      showToast(
-        "Aplicação cancelada.",
-        "success"
-      );
-
-    } catch (error) {
-      console.error(error);
-
-      showToast(
-        error.message ||
-          "Não foi possível cancelar.",
-        "error"
-      );
-    }
-  }
-
-
-  /* =========================================================
-     APPLICATION EVENT DELEGATION
-  ========================================================= */
-
-  function setupApplicationActions() {
-    const container = $("applicationsList");
-
-    if (!container) return;
-
-    container.addEventListener("click", async (event) => {
-
-      const button =
-        event.target.closest("button[data-action]");
-
-      if (!button) return;
-
-      const action = button.dataset.action;
-      const id = button.dataset.id;
-
-      if (!id) return;
-
-      button.disabled = true;
-
-      try {
-
-        if (action === "prepare") {
-          await prepareApplication(id);
-        }
-
-        if (action === "continue") {
-          await continueApplication(id);
-        }
-
-        if (action === "cancel") {
-          await cancelApplication(id);
-        }
-
-      } finally {
-        button.disabled = false;
-      }
-    });
-  }
-
-
-  /* =========================================================
-     READINESS
-  ========================================================= */
-
-  function updateReadiness() {
-    const hasClients =
-      state.clients.length > 0;
-
-    const hasPassport =
-      hasPassportData();
-
-    const hasApplications =
-      state.applications.length > 0;
-
-    const hasOperationalApplication =
-      state.applications.some(
-        (application) =>
+    const prepared =
+      state.applications.filter(
+        application =>
           [
             "preparing",
             "otp_required",
@@ -1130,106 +2995,1272 @@
             "slot_received",
             "continuing",
             "completed"
-          ].includes(application.status)
+          ].includes(
+            application.status
+          )
+      ).length;
+
+
+    const monitoring =
+      state.applications.filter(
+        application =>
+          application.status ===
+            "waiting_for_slot" ||
+          application.bot2?.monitoring ===
+            true
+      ).length;
+
+
+    /*
+     * Existem dois elementos com applicationCount
+     * no HTML legado. O novo HTML mantém o mesmo ID
+     * para compatibilidade, por isso atualizamos todos.
+     */
+
+    document
+      .querySelectorAll(
+        "#applicationCount"
+      )
+      .forEach(
+        element => {
+          element.textContent =
+            total;
+        }
       );
 
 
+    if ($("preparedCount")) {
+
+      $("preparedCount")
+        .textContent =
+        prepared;
+
+    }
+
+
+    if ($("monitoringCount")) {
+
+      $("monitoringCount")
+        .textContent =
+        monitoring;
+
+    }
+
+
+    updateBotCenter();
+
+  }
+
+
+  /* =========================================================
+     APPLICATION CREATE
+  ========================================================= */
+
+  function canCreateApplication() {
+
+    const client =
+      state.selectedClient;
+
+
+    const passportPassed =
+      state.passportValidation
+        ?.status ===
+      "passed";
+
+
+    const facialPassed =
+      state.facialReady ===
+      true;
+
+
+    return Boolean(
+      client &&
+      passportPassed &&
+      facialPassed
+    );
+
+  }
+
+
+  async function handleApplicationSubmit(
+    event
+  ) {
+
+    event.preventDefault();
+
+
+    if (
+      !canCreateApplication()
+    ) {
+
+      showToast(
+        "A aplicação está bloqueada. Complete perfil, passaporte e identidade facial.",
+        "error"
+      );
+
+      updateReadiness();
+
+      return;
+
+    }
+
+
+    const form =
+      event.currentTarget;
+
+
+    const button =
+      $("applicationSubmitButton");
+
+
+    const clientId =
+      $("applicationClient")
+        ?.value;
+
+
+    if (!clientId) {
+
+      showToast(
+        "Selecione um cliente.",
+        "error"
+      );
+
+      return;
+
+    }
+
+
+    const payload = {
+
+      clientId,
+
+      preferredDates: {
+
+        start:
+          $("preferredStartDate")
+            ?.value ||
+          null,
+
+        end:
+          $("preferredEndDate")
+            ?.value ||
+          null
+
+      },
+
+      preferredTime:
+        $("preferredTime")
+          ?.value ||
+        null
+
+    };
+
+
+    if (button) {
+      button.disabled =
+        true;
+
+      button.innerHTML =
+        "A iniciar operação...";
+    }
+
+
+    try {
+
+      const response =
+        await api(
+          "/api/applications",
+          {
+            method:
+              "POST",
+
+            body:
+              JSON.stringify(
+                payload
+              )
+          }
+        );
+
+
+      const application =
+        response?.application ||
+        response?.data ||
+        response;
+
+
+      if (application) {
+
+        state.applications.unshift(
+          application
+        );
+
+      }
+
+
+      renderApplications();
+
+      updateApplicationStats();
+
+      updateReadiness();
+
+
+      showToast(
+        "Aplicação criada. O processo pode avançar.",
+        "success"
+      );
+
+
+      addActivity(
+        "VFS Gate liberado",
+        "Aplicação criada depois da validação de identidade.",
+        "blue"
+      );
+
+
+      form.reset();
+
+
+      document
+        .getElementById(
+          "applicationsList"
+        )
+        ?.scrollIntoView({
+          behavior:
+            "smooth",
+          block:
+            "center"
+        });
+
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+
+      showToast(
+        error.message ||
+        "Não foi possível criar a aplicação.",
+        "error"
+      );
+
+    } finally {
+
+      if (button) {
+
+        button.disabled =
+          !canCreateApplication();
+
+        button.innerHTML =
+          `
+            Iniciar operação
+            <span>→</span>
+          `;
+
+      }
+
+    }
+
+  }
+
+
+  /* =========================================================
+     APPLICATION ACTIONS
+  ========================================================= */
+
+  async function prepareApplication(
+    id
+  ) {
+
+    try {
+
+      addActivity(
+        "PREPARATION",
+        "Preparação do processo iniciada.",
+        "blue"
+      );
+
+
+      await api(
+        `/api/applications/${encodeURIComponent(
+          id
+        )}/prepare`,
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify({})
+        }
+      );
+
+
+      await loadApplications();
+
+
+      showToast(
+        "Processo preparado.",
+        "success"
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+
+      showToast(
+        error.message ||
+        "Falha na preparação.",
+        "error"
+      );
+
+    }
+
+  }
+
+
+  async function continueApplication(
+    id
+  ) {
+
+    try {
+
+      await api(
+        `/api/applications/${encodeURIComponent(
+          id
+        )}/continue`,
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify({})
+        }
+      );
+
+
+      await loadApplications();
+
+
+      addActivity(
+        "ORCHESTRATOR",
+        "Processo continuado.",
+        "blue"
+      );
+
+
+      showToast(
+        "Processo continuado.",
+        "success"
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+
+      showToast(
+        error.message ||
+        "Não foi possível continuar.",
+        "error"
+      );
+
+    }
+
+  }
+
+
+  async function cancelApplication(
+    id
+  ) {
+
+    const confirmed =
+      window.confirm(
+        "Tem a certeza que pretende cancelar esta aplicação?"
+      );
+
+
+    if (!confirmed) {
+      return;
+    }
+
+
+    try {
+
+      await api(
+        `/api/applications/${encodeURIComponent(
+          id
+        )}/cancel`,
+        {
+          method:
+            "POST",
+
+          body:
+            JSON.stringify({})
+        }
+      );
+
+
+      await loadApplications();
+
+
+      addActivity(
+        "Aplicação cancelada",
+        "O processo foi cancelado.",
+        "blue"
+      );
+
+
+      showToast(
+        "Aplicação cancelada.",
+        "success"
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        error
+      );
+
+
+      showToast(
+        error.message ||
+        "Não foi possível cancelar.",
+        "error"
+      );
+
+    }
+
+  }
+
+
+  function setupApplicationActions() {
+
+    const container =
+      $("applicationsList");
+
+
+    if (!container) {
+      return;
+    }
+
+
+    container.addEventListener(
+      "click",
+      async event => {
+
+        const button =
+          event.target.closest(
+            "button[data-action]"
+          );
+
+
+        if (!button) {
+          return;
+        }
+
+
+        const action =
+          button.dataset.action;
+
+
+        const id =
+          button.dataset.id;
+
+
+        if (!id) {
+          return;
+        }
+
+
+        button.disabled =
+          true;
+
+
+        try {
+
+          if (
+            action ===
+            "prepare"
+          ) {
+
+            await prepareApplication(
+              id
+            );
+
+          }
+
+
+          if (
+            action ===
+            "continue"
+          ) {
+
+            await continueApplication(
+              id
+            );
+
+          }
+
+
+          if (
+            action ===
+            "cancel"
+          ) {
+
+            await cancelApplication(
+              id
+            );
+
+          }
+
+        } finally {
+
+          button.disabled =
+            false;
+
+        }
+
+      }
+    );
+
+  }
+
+
+  /* =========================================================
+     READINESS
+  ========================================================= */
+
+  function updateReadiness() {
+
+    const client =
+      state.selectedClient;
+
+
     const clientScore =
-      hasClients ? 100 : 0;
+      client
+        ? 100
+        : 0;
+
 
     const passportScore =
-      hasPassport ? 100 : 0;
+      state.passportValidation
+        ?.status === "passed"
+        ? 100
+        : 0;
+
+
+    const identityScore =
+      state.facialReady
+        ? 100
+        : 0;
+
 
     const applicationScore =
-      hasApplications ? 100 : 0;
+      state.applications.length >
+      0
+        ? 100
+        : 0;
 
-    const operationScore =
-      hasOperationalApplication ? 100 : 0;
+
+    const gateScore =
+      canCreateApplication()
+        ? 100
+        : 0;
 
 
-    const score = Math.round(
-      (
-        clientScore +
-        passportScore +
-        applicationScore +
-        operationScore
-      ) / 4
-    );
+    const score =
+      Math.round(
+        (
+          clientScore +
+          passportScore +
+          identityScore +
+          applicationScore +
+          gateScore
+        ) / 5
+      );
 
 
     if ($("readinessScore")) {
-      $("readinessScore").textContent = score;
+
+      $("readinessScore")
+        .textContent =
+        score;
+
     }
 
-    if ($("readinessClient")) {
-      $("readinessClient").textContent =
-        `${clientScore}%`;
-    }
 
-    if ($("readinessPassport")) {
-      $("readinessPassport").textContent =
-        `${passportScore}%`;
-    }
+    setText(
+      "readinessClient",
+      `${clientScore}%`
+    );
 
-    if ($("readinessApplication")) {
-      $("readinessApplication").textContent =
-        `${applicationScore}%`;
-    }
 
-    if ($("readinessOperation")) {
-      $("readinessOperation").textContent =
-        `${operationScore}%`;
-    }
+    setText(
+      "readinessPassport",
+      `${passportScore}%`
+    );
+
+
+    setText(
+      "readinessIdentity",
+      `${identityScore}%`
+    );
+
+
+    setText(
+      "readinessApplication",
+      `${applicationScore}%`
+    );
+
+
+    setText(
+      "readinessOperation",
+      `${gateScore}%`
+    );
+
+
+    const values = [
+      clientScore,
+      passportScore,
+      identityScore,
+      applicationScore,
+      gateScore
+    ];
 
 
     document
-      .querySelectorAll(".readiness-list > div")
-      .forEach((element, index) => {
-        const values = [
-          clientScore,
-          passportScore,
-          applicationScore,
-          operationScore
-        ];
+      .querySelectorAll(
+        ".readiness-list > div"
+      )
+      .forEach(
+        (
+          element,
+          index
+        ) => {
 
-        element.classList.toggle(
-          "ready",
-          values[index] >= 100
-        );
-      });
+          element.classList.toggle(
+            "ready",
+            values[index] >= 100
+          );
+
+        }
+      );
 
 
     const ring =
-      document.querySelector(".score-ring");
+      document.querySelector(
+        ".score-ring"
+      );
+
 
     if (ring) {
-      ring.style.background = `
-        conic-gradient(
-          var(--blue-600) ${score * 3.6}deg,
-          #e4eff7 ${score * 3.6}deg
-        )
-      `;
+
+      const degrees =
+        score * 3.6;
+
+
+      ring.style.background =
+        `
+          conic-gradient(
+            var(--blue-600)
+            ${degrees}deg,
+            #e4eff7
+            ${degrees}deg
+          )
+        `;
+
     }
 
 
-    const label = $("readinessLabel");
+    const label =
+      $("readinessLabel");
+
 
     if (label) {
-      if (score === 100) {
-        label.textContent = "Operação pronta";
-      } else if (score >= 75) {
-        label.textContent = "Quase pronta";
-      } else if (score >= 50) {
-        label.textContent = "Em preparação";
-      } else if (score > 0) {
-        label.textContent = "Dados incompletos";
+
+      if (
+        gateScore === 100
+      ) {
+
+        label.textContent =
+          "Cliente apto para VFS";
+
+      } else if (
+        identityScore === 100
+      ) {
+
+        label.textContent =
+          "Identidade confirmada";
+
+      } else if (
+        passportScore === 100
+      ) {
+
+        label.textContent =
+          "Passaporte confirmado";
+
+      } else if (
+        clientScore > 0
+      ) {
+
+        label.textContent =
+          "Verificação pendente";
+
       } else {
-        label.textContent = "Aguardando dados";
+
+        label.textContent =
+          "Aguardando cliente";
+
       }
+
     }
 
 
-    updatePassportChecks();
+    updateVfsGate();
+
+  }
+
+
+  function setText(
+    id,
+    text
+  ) {
+
+    const element =
+      $(id);
+
+    if (element) {
+      element.textContent =
+        text;
+    }
+
+  }
+
+
+  /* =========================================================
+     VFS GATE
+  ========================================================= */
+
+  function updateVfsGate() {
+
+    const clientReady =
+      Boolean(
+        state.selectedClient
+      );
+
+
+    const passportReady =
+      state.passportValidation
+        ?.status ===
+      "passed";
+
+
+    const faceReady =
+      state.facialReady ===
+      true;
+
+
+    const gateReady =
+      (
+        clientReady &&
+        passportReady &&
+        faceReady
+      );
+
+
+    setGateCheck(
+      "gateClientCheck",
+      clientReady
+    );
+
+
+    setGateCheck(
+      "gatePassportCheck",
+      passportReady
+    );
+
+
+    setGateCheck(
+      "gateFaceCheck",
+      faceReady
+    );
+
+
+    setGateCheck(
+      "gateOperationCheck",
+      gateReady
+    );
+
+
+    const icon =
+      $("vfsGateIcon");
+
+
+    const title =
+      $("vfsGateTitle");
+
+
+    const description =
+      $("vfsGateDescription");
+
+
+    const heroStatus =
+      $("heroGateStatus");
+
+
+    const heroMessage =
+      $("heroGateMessage");
+
+
+    const routeProgress =
+      $("heroRouteProgress");
+
+
+    if (gateReady) {
+
+      icon?.classList.remove(
+        "blocked"
+      );
+
+      icon?.classList.add(
+        "ready"
+      );
+
+
+      if (icon) {
+        icon.textContent =
+          "✓";
+      }
+
+
+      if (title) {
+
+        title.textContent =
+          "CLIENTE APTO PARA VFS";
+
+      }
+
+
+      if (description) {
+
+        description.textContent =
+          "Perfil, passaporte e identidade facial estão conformes. O bot pode avançar para a próxima etapa.";
+
+      }
+
+
+      if (heroStatus) {
+
+        heroStatus.innerHTML =
+          `
+            <i></i>
+            VFS READY
+          `;
+
+      }
+
+
+      if (heroMessage) {
+
+        heroMessage.textContent =
+          "Autorizado para avançar";
+
+      }
+
+
+      if (routeProgress) {
+
+        routeProgress.style.width =
+          "100%";
+
+      }
+
+
+    } else {
+
+      icon?.classList.remove(
+        "ready"
+      );
+
+      icon?.classList.add(
+        "blocked"
+      );
+
+
+      if (icon) {
+        icon.textContent =
+          "!";
+      }
+
+
+      if (title) {
+
+        title.textContent =
+          "VERIFICAÇÕES PENDENTES";
+
+      }
+
+
+      if (description) {
+
+        if (
+          !clientReady
+        ) {
+
+          description.textContent =
+            "Selecione um cliente para iniciar a preparação.";
+
+        } else if (
+          !passportReady
+        ) {
+
+          description.textContent =
+            "O passaporte ainda não foi validado. O bot não deve avançar.";
+
+        } else {
+
+          description.textContent =
+            "O passaporte está conforme, mas a identidade facial ainda precisa ser confirmada.";
+
+        }
+
+      }
+
+
+      if (heroStatus) {
+
+        heroStatus.innerHTML =
+          `
+            <i></i>
+            AGUARDANDO
+          `;
+
+      }
+
+
+      if (heroMessage) {
+
+        heroMessage.textContent =
+          "Verificações pendentes";
+
+      }
+
+
+      if (routeProgress) {
+
+        let width =
+          0;
+
+
+        if (clientReady) {
+          width =
+            30;
+        }
+
+
+        if (passportReady) {
+          width =
+            65;
+        }
+
+
+        if (faceReady) {
+          width =
+            85;
+        }
+
+
+        routeProgress.style.width =
+          `${width}%`;
+
+      }
+
+    }
+
+
+    const applicationNotice =
+      $("applicationSecurityNotice");
+
+
+    const applicationButton =
+      $("applicationSubmitButton");
+
+
+    const applicationStatus =
+      $("applicationPanelStatus");
+
+
+    if (gateReady) {
+
+      applicationNotice
+        ?.classList
+        .add("ready");
+
+
+      if (applicationNotice) {
+
+        applicationNotice.innerHTML = `
+
+          <div class="security-notice-icon">
+            ✓
+          </div>
+
+          <div>
+
+            <strong>
+              Aplicação liberada
+            </strong>
+
+            <span>
+              O cliente passou pelas verificações
+              necessárias para iniciar a operação.
+            </span>
+
+          </div>
+
+        `;
+
+      }
+
+
+      if (applicationButton) {
+
+        applicationButton.disabled =
+          false;
+
+      }
+
+
+      if (applicationStatus) {
+
+        applicationStatus.textContent =
+          "READY";
+
+        applicationStatus.className =
+          "panel-status";
+
+      }
+
+    } else {
+
+      applicationNotice
+        ?.classList
+        .remove("ready");
+
+
+      if (applicationNotice) {
+
+        let message =
+          "Complete as verificações antes de iniciar a operação.";
+
+
+        if (
+          clientReady &&
+          passportReady &&
+          !faceReady
+        ) {
+
+          message =
+            "O passaporte está conforme. Falta confirmar a identidade facial.";
+
+        }
+
+
+        applicationNotice.innerHTML = `
+
+          <div class="security-notice-icon">
+            !
+          </div>
+
+          <div>
+
+            <strong>
+              Aplicação bloqueada
+            </strong>
+
+            <span>
+              ${escapeHtml(message)}
+            </span>
+
+          </div>
+
+        `;
+
+      }
+
+
+      if (applicationButton) {
+
+        applicationButton.disabled =
+          true;
+
+      }
+
+
+      if (applicationStatus) {
+
+        applicationStatus.textContent =
+          "BLOCKED";
+
+        applicationStatus.className =
+          "panel-status blue";
+
+      }
+
+    }
+
+
+    updatePipeline(
+      clientReady,
+      passportReady,
+      faceReady,
+      gateReady
+    );
+
+  }
+
+
+  function setGateCheck(
+    id,
+    ready
+  ) {
+
+    const element =
+      $(id);
+
+
+    if (!element) {
+      return;
+    }
+
+
+    element.classList
+      .remove(
+        "ready",
+        "bad"
+      );
+
+
+    if (ready) {
+
+      element.classList
+        .add("ready");
+
+
+      const icon =
+        element.querySelector(
+          "i"
+        );
+
+
+      if (icon) {
+        icon.textContent =
+          "✓";
+      }
+
+    } else {
+
+      const icon =
+        element.querySelector(
+          "i"
+        );
+
+
+      if (icon) {
+        icon.textContent =
+          "○";
+      }
+
+    }
+
+  }
+
+
+  function updatePipeline(
+    client,
+    passport,
+    face,
+    gate
+  ) {
+
+    const bot1 =
+      $("bot1State");
+
+
+    const bot2 =
+      $("bot2State");
+
+
+    const supervisor =
+      $("supervisorState");
+
+
+    if (bot1) {
+
+      bot1.textContent =
+        client
+          ? "READY"
+          : "WAITING";
+
+    }
+
+
+    if (bot2) {
+
+      if (face) {
+
+        bot2.textContent =
+          "VERIFIED";
+
+      } else if (
+        passport
+      ) {
+
+        bot2.textContent =
+          "FACE CHECK";
+
+      } else {
+
+        bot2.textContent =
+          "WAITING";
+
+      }
+
+    }
+
+
+    if (supervisor) {
+
+      supervisor.textContent =
+        gate
+          ? "AUTHORIZED"
+          : "BLOCKED";
+
+    }
+
+
+    const pipelineVfs =
+      $("pipelineVfs");
+
+
+    if (pipelineVfs) {
+
+      pipelineVfs.classList.toggle(
+        "active",
+        gate
+      );
+
+    }
+
   }
 
 
@@ -1238,26 +4269,37 @@
   ========================================================= */
 
   function updateBotCenter() {
-    const activeApplication =
+
+    const active =
       state.applications.find(
-        (application) =>
-          application.status === "waiting_for_slot" ||
-          application.status === "preparing" ||
-          application.status === "continuing"
+        application =>
+          [
+            "preparing",
+            "waiting_for_slot",
+            "continuing"
+          ].includes(
+            application.status
+          )
       );
+
 
     const bot1Running =
       state.applications.some(
-        (application) =>
-          application.bot1?.status === "running" ||
-          application.status === "preparing"
+        application =>
+          application.bot1?.status ===
+            "running" ||
+          application.status ===
+            "preparing"
       );
+
 
     const bot2Running =
       state.applications.some(
-        (application) =>
-          application.bot2?.monitoring === true ||
-          application.status === "waiting_for_slot"
+        application =>
+          application.bot2?.monitoring ===
+            true ||
+          application.status ===
+            "waiting_for_slot"
       );
 
 
@@ -1265,7 +4307,7 @@
       "bot1",
       bot1Running,
       bot1Running
-        ? "Processando aplicação"
+        ? "Processando preparação"
         : "Aguardando operação"
     );
 
@@ -1281,95 +4323,130 @@
 
     setBotVisual(
       "supervisor",
-      Boolean(activeApplication),
-      activeApplication
+      Boolean(active),
+      active
         ? "Coordenando processo"
-        : "Sistema pronto"
+        : (
+            canCreateApplication()
+              ? "Gate autorizado"
+              : "Aguardando condições"
+          )
     );
 
-
-    const bot1State = $("bot1State");
-
-    if (bot1State) {
-      bot1State.textContent =
-        bot1Running ? "RUNNING" : "READY";
-    }
-
-
-    const bot2State = $("bot2State");
-
-    if (bot2State) {
-      bot2State.textContent =
-        bot2Running ? "MONITORING" : "IDLE";
-    }
-
-
-    const supervisorState = $("supervisorState");
-
-    if (supervisorState) {
-      supervisorState.textContent =
-        activeApplication
-          ? "ACTIVE"
-          : "READY";
-    }
   }
 
 
-  function setBotVisual(name, online, message) {
+  function setBotVisual(
+    name,
+    online,
+    message
+  ) {
+
     const indicator =
       $(`${name}Indicator`);
+
 
     const progress =
       $(`${name}Progress`);
 
+
     const action =
       $(`${name}LastAction`);
 
-    if (indicator) {
-      indicator.classList.toggle(
-        "online",
-        online
-      );
-    }
+
+    indicator?.classList.toggle(
+      "online",
+      online
+    );
+
 
     if (progress) {
+
       progress.style.width =
-        online ? "68%" : "0%";
+        online
+          ? "68%"
+          : "0%";
+
     }
 
+
     if (action) {
-      action.textContent = message;
+
+      action.textContent =
+        message;
+
     }
+
   }
 
 
   /* =========================================================
-     ACTIVITY FEED
+     ACTIVITY
   ========================================================= */
 
-  function addActivity(title, description, color = "") {
-    const feed = $("activityFeed");
+  function addActivity(
+    title,
+    description,
+    color = ""
+  ) {
 
-    if (!feed) return;
+    const feed =
+      $("activityFeed");
 
-    const item = document.createElement("div");
 
-    item.className = "activity-item";
+    if (!feed) {
+      return;
+    }
+
+
+    const item =
+      document.createElement(
+        "div"
+      );
+
+
+    item.className =
+      "activity-item";
+
 
     item.innerHTML = `
-      <div class="activity-marker ${escapeHtml(color)}"></div>
+
+      <div
+        class="activity-marker ${escapeHtml(
+          color
+        )}"
+      ></div>
 
       <div>
-        <strong>${escapeHtml(title)}</strong>
-        <span>${escapeHtml(description)}</span>
+
+        <strong>
+          ${escapeHtml(title)}
+        </strong>
+
+        <span>
+          ${escapeHtml(description)}
+        </span>
+
       </div>
+
     `;
 
-    feed.prepend(item);
 
-    while (feed.children.length > 5) {
-      feed.lastElementChild.remove();
+    feed.prepend(
+      item
+    );
+
+
+    while (
+      feed.children.length >
+      6
+    ) {
+
+      feed.lastElementChild
+        ?.remove();
+
     }
+
   }
 
 
@@ -1378,23 +4455,36 @@
   ========================================================= */
 
   async function refreshDashboard() {
-    if (state.loading) return;
 
-    state.loading = true;
+    if (state.loading) {
+      return;
+    }
+
+
+    state.loading =
+      true;
+
 
     try {
+
       await Promise.all([
         loadClients(),
         loadApplications()
       ]);
+
 
       setConnection(
         true,
         "Sistema operacional"
       );
 
+
     } catch (error) {
-      console.error(error);
+
+      console.error(
+        error
+      );
+
 
       setConnection(
         false,
@@ -1402,8 +4492,19 @@
       );
 
     } finally {
-      state.loading = false;
+
+      state.loading =
+        false;
+
     }
+
+
+    updateIdentityGate();
+
+    updateReadiness();
+
+    updateBotCenter();
+
   }
 
 
@@ -1413,53 +4514,80 @@
 
   function setupEvents() {
 
-    $("loginButton")?.addEventListener(
-      "click",
-      login
-    );
+    $("loginButton")
+      ?.addEventListener(
+        "click",
+        login
+      );
 
 
-    $("refreshButton")?.addEventListener(
-      "click",
-      async () => {
+    $("refreshButton")
+      ?.addEventListener(
+        "click",
+        async () => {
 
-        const button =
-          $("refreshButton");
+          const button =
+            $("refreshButton");
 
-        if (button) {
-          button.style.transform =
-            "rotate(360deg)";
-        }
 
-        await refreshDashboard();
-
-        setTimeout(() => {
           if (button) {
-            button.style.transform = "";
+
+            button.style.transform =
+              "rotate(360deg)";
+
           }
-        }, 400);
-      }
-    );
 
 
-    $("clientForm")?.addEventListener(
-      "submit",
-      handleClientSubmit
-    );
+          await refreshDashboard();
 
 
-    $("applicationForm")?.addEventListener(
-      "submit",
-      handleApplicationSubmit
-    );
+          setTimeout(() => {
 
+            if (button) {
+
+              button.style.transform =
+                "";
+
+            }
+
+          }, 400);
+
+        }
+      );
+
+
+    $("clientForm")
+      ?.addEventListener(
+        "submit",
+        handleClientSubmit
+      );
+
+
+    $("applicationForm")
+      ?.addEventListener(
+        "submit",
+        handleApplicationSubmit
+      );
+
+
+    setupPassportEvents();
+
+    setupIdentityEvents();
+
+    setupApplicationActions();
+
+
+    /*
+     * Campos de passaporte declarados
+     * também atualizam a prontidão.
+     */
 
     [
       "clientPassportNumber",
       "clientPassportIssueDate",
       "clientPassportExpiryDate",
       "clientPassportCountry"
-    ].forEach((id) => {
+    ].forEach(id => {
 
       $(id)?.addEventListener(
         "input",
@@ -1474,55 +4602,88 @@
     });
 
 
-    $("applicationClient")?.addEventListener(
-      "change",
-      updateReadiness
+    /*
+     * Verificação contínua do resultado
+     * produzido pelo módulo facial.
+     */
+
+    setInterval(
+      () => {
+
+        moveFacialPanel();
+
+        monitorFacialResult();
+
+      },
+      500
     );
 
 
-    setupApplicationActions();
-
+    /*
+     * Navegação suave.
+     */
 
     document
-      .querySelectorAll('a[href^="#"]')
-      .forEach((link) => {
+      .querySelectorAll(
+        'a[href^="#"]'
+      )
+      .forEach(link => {
 
         link.addEventListener(
           "click",
-          (event) => {
+          event => {
+
+            const href =
+              link.getAttribute(
+                "href"
+              );
+
 
             const target =
               document.querySelector(
-                link.getAttribute("href")
+                href
               );
 
-            if (!target) return;
+
+            if (!target) {
+              return;
+            }
+
 
             event.preventDefault();
 
+
             target.scrollIntoView({
-              behavior: "smooth",
-              block: "start"
+              behavior:
+                "smooth",
+              block:
+                "start"
             });
+
           }
         );
 
       });
+
   }
 
 
   /* =========================================================
-     INITIALIZATION
+     INIT
   ========================================================= */
 
   async function init() {
+
     setupEvents();
 
-    updatePassportChecks();
+    resetPassportInterface();
+
+    updateIdentityGate();
 
     updateReadiness();
 
     await loadCurrentUser();
+
   }
 
 
