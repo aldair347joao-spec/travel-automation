@@ -293,7 +293,79 @@ const clientSchema =
 
         default: null
       },
+      passportType: {
+  type: String,
+  enum: [
+    "legacy",
+    "electronic",
+    "unknown"
+  ],
+  default: "unknown"
+},
 
+passportValidation: {
+  status: {
+    type: String,
+    enum: [
+      "not_started",
+      "pending",
+      "passed",
+      "requires_user",
+      "failed"
+    ],
+    default: "not_started"
+  },
+
+  passportType: {
+    type: String,
+    enum: [
+      "legacy",
+      "electronic",
+      "unknown"
+    ],
+    default: "unknown"
+  },
+
+  mrzPresent: {
+    type: Boolean,
+    default: false
+  },
+
+  mrzValid: {
+    type: Boolean,
+    default: false
+  },
+
+  ocrValid: {
+    type: Boolean,
+    default: false
+  },
+
+  clientMatch: {
+    type: Boolean,
+    default: false
+  },
+
+  expired: {
+    type: Boolean,
+    default: false
+  },
+
+  fingerprint: {
+    type: String,
+    default: null
+  },
+
+  issues: {
+    type: [String],
+    default: []
+  },
+
+  checkedAt: {
+    type: Date,
+    default: null
+  }
+},
       facialConsent: {
         accepted: {
           type: Boolean,
