@@ -1,37 +1,21 @@
-const crypto =
-  require("crypto");
+const crypto = require("crypto");
 
-const Application =
-  require("../models/application");
+const Application = require("../models/application");
+const OtpService = require("../services/otp/otp-service");
+const FacialService = require("../services/facial/facial-service");
 
-const OtpService =
-  require("../services/otp/otp-service");
-
-const FacialService =
-  require("../services/facial/facial-service");
-
-const {
-  decryptJson
-} = require("../utils/crypto");
-
-const logger =
-  require("../utils/logger");
+const { decryptJson } = require("../utils/crypto");
+const logger = require("../utils/logger");
 
 const config = {
   lockMs:
-    Number(
-      process.env.BOT1_LOCK_MS
-    ) || 60000,
+    Number(process.env.BOT1_LOCK_MS) || 60000,
 
   maxAttempts:
-    Number(
-      process.env.BOT1_MAX_ATTEMPTS
-    ) || 3,
+    Number(process.env.BOT1_MAX_ATTEMPTS) || 3,
 
   timeoutMs:
-    Number(
-      process.env.BOT1_TIMEOUT_MS
-    ) || 30000
+    Number(process.env.BOT1_TIMEOUT_MS) || 30000
 };
 
 async function withTimeout(
@@ -41,19 +25,15 @@ async function withTimeout(
 ) {
   let timer;
 
-  const timeout =
-    new Promise(
-      (_, reject) => {
-        timer =
-          setTimeout(() => {
-            reject(
-              new Error(
-                `${operation} timed out after ${timeoutMs}ms`
-              )
-            );
-          }, timeoutMs);
-      }
-    );
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(
+        new Error(
+          `${operation} timed out after ${timeoutMs}ms`
+        )
+      );
+    }, timeoutMs);
+  });
 
   try {
     return await Promise.race([
@@ -63,6 +43,75 @@ async function withTimeout(
   } finally {
     clearTimeout(timer);
   }
+}
+
+function normalizePaymentDetails(details = {}) {
+  return {
+    reference:
+      details.reference ??
+      details.requestReference ??
+      details.RequestRefNo ??
+      null,
+
+    entity:
+      details.entity ??
+      details.transactionId ??
+      details.TransactionId ??
+      null,
+
+    transactionId:
+      details.transactionId ??
+      details.TransactionId ??
+      null,
+
+    paymentStatus:
+      details.paymentStatus ??
+      details.PaymentStatus ??
+      null,
+
+    amount:
+      details.amount ??
+      details.paymentAmount ??
+      null,
+
+    currency:
+      details.currency ??
+      details.paymentCurrency ??
+      null,
+
+    deadline:
+      details.deadline ??
+      details.paymentDeadline ??
+      null,
+
+    confirmationUrl:
+      details.confirmationUrl ??
+      null,
+
+    requiresUser:
+      details.requiresUser === true
+  };
+}
+
+function isPaidStatus(status) {
+  if (status === null || status === undefined) {
+    return false;
+  }
+
+  const normalized =
+    String(status)
+      .trim()
+      .toLowerCase();
+
+  return [
+    "true",
+    "paid",
+    "success",
+    "successful",
+    "completed",
+    "confirmed",
+    "approved"
+  ].includes(normalized);
 }
 
 class Bot1 {
@@ -85,9 +134,7 @@ class Bot1 {
   ) {
     await Application.updateOne(
       {
-        _id:
-          applicationId,
-
+        _id: applicationId,
         "bot1.workerId":
           this.workerId
       },
@@ -119,8 +166,7 @@ class Bot1 {
     return Application
       .findOneAndUpdate(
         {
-          _id:
-            applicationId,
+          _id: applicationId,
 
           status: {
             $in:
@@ -177,8 +223,7 @@ class Bot1 {
   ) {
     await Application.updateOne(
       {
-        _id:
-          applicationId,
+        _id: applicationId,
 
         "lock.owner":
           this.workerId
@@ -203,8 +248,7 @@ class Bot1 {
   ) {
     await Application.updateOne(
       {
-        _id:
-          applicationId,
+        _id: applicationId,
 
         "lock.owner":
           this.workerId
@@ -319,11 +363,22 @@ class Bot1 {
         "logging_in"
       );
 
-      await withTimeout(
-        this.site.login(),
-        config.timeoutMs,
-        "Site login"
-      );
+      const loginResult =
+        await withTimeout(
+          this.site.login(),
+          config.timeoutMs,
+          "Site login"
+        );
+
+      if (
+        loginResult?.success === false &&
+        loginResult?.requiresUser !== true
+      ) {
+        throw new Error(
+          loginResult.reason ||
+          "VFS login failed"
+        );
+      }
 
       const preparedData =
         application
@@ -368,11 +423,9 @@ class Bot1 {
 
       await this.otp.requestCode(
         otp,
-        application.client
-          ?.phone ||
-          application.client
-            ?.email ||
-          null
+        application.client?.phone ||
+        application.client?.email ||
+        null
       );
 
       application.status =
@@ -690,6 +743,9 @@ class Bot1 {
       application.bot2.workerId =
         null;
 
+      application.radar.enabled =
+        true;
+
       await application.save();
 
       await this.releaseLock(
@@ -764,7 +820,13 @@ class Bot1 {
               new Date(),
 
             "bot1.lastAction":
-              "claiming_slot"
+              "claiming_slot",
+
+            "bot2.monitoring":
+              false,
+
+            "bot2.status":
+              "slot_found"
           },
 
           $inc: {
@@ -780,6 +842,7 @@ class Bot1 {
     if (!application) {
       return {
         success: false,
+
         reason:
           "Slot already claimed or application unavailable"
       };
@@ -820,13 +883,25 @@ class Bot1 {
         "selecting_slot"
       );
 
-      await withTimeout(
-        this.site.selectSlot(
-          application.slot
-        ),
-        config.timeoutMs,
-        "Slot selection"
-      );
+      const selected =
+        await withTimeout(
+          this.site.selectSlot(
+            application.slot,
+            application
+          ),
+          config.timeoutMs,
+          "Slot selection"
+        );
+
+      if (
+        selected?.success === false &&
+        selected?.requiresUser !== true
+      ) {
+        throw new Error(
+          selected.reason ||
+          "Slot selection failed"
+        );
+      }
 
       await this.refreshLock(
         applicationId
@@ -837,14 +912,185 @@ class Bot1 {
         "continuing_application"
       );
 
-      await withTimeout(
-        this.site.continueApplication(
-          application,
-          application.client
-        ),
-        config.timeoutMs,
-        "Application continuation"
+      const continued =
+        await withTimeout(
+          this.site.continueApplication(
+            application,
+            application.client
+          ),
+          config.timeoutMs,
+          "Application continuation"
+        );
+
+      if (
+        continued?.success === false &&
+        continued?.requiresUser !== true
+      ) {
+        throw new Error(
+          continued.reason ||
+          "Application continuation failed"
+        );
+      }
+
+      await this.refreshLock(
+        applicationId
       );
+
+      /*
+       * IMPORTANT:
+       * A candidatura ainda NÃO está concluída.
+       *
+       * Primeiro entramos em REVIEW & PAY.
+       */
+      application.status =
+        "review_pay";
+
+      application.bot1.status =
+        "continuing";
+
+      application.bot1.lastAction =
+        "review_pay";
+
+      await application.save();
+
+      await this.heartbeat(
+        applicationId,
+        "extracting_payment_details"
+      );
+
+      const rawPaymentDetails =
+        await withTimeout(
+          this.site.getPaymentDetails(
+            application,
+            application.client
+          ),
+          config.timeoutMs,
+          "Payment details retrieval"
+        );
+
+      const payment =
+        normalizePaymentDetails(
+          rawPaymentDetails
+        );
+
+      /*
+       * Compatibilidade com adapters
+       * antigos: se o adapter ainda não
+       * devolver referência/entidade,
+       * tentamos os métodos legados.
+       */
+      if (!payment.reference) {
+        payment.reference =
+          await withTimeout(
+            this.site.getReference(
+              application
+            ),
+            config.timeoutMs,
+            "Reference retrieval"
+          ).catch(() => null);
+      }
+
+      if (!payment.entity) {
+        payment.entity =
+          await withTimeout(
+            this.site.getEntity(
+              application
+            ),
+            config.timeoutMs,
+            "Entity retrieval"
+          ).catch(() => null);
+      }
+
+      application.result.reference =
+        payment.reference;
+
+      application.result.entity =
+        payment.entity;
+
+      application.result.transactionId =
+        payment.transactionId;
+
+      application.result.paymentStatus =
+        payment.paymentStatus;
+
+      application.result.paymentAmount =
+        payment.amount;
+
+      application.result.paymentCurrency =
+        payment.currency;
+
+      application.result.paymentDeadline =
+        payment.deadline;
+
+      application.result.confirmationUrl =
+        payment.confirmationUrl;
+
+      await application.save();
+
+      await this.refreshLock(
+        applicationId
+      );
+
+      /*
+       * Se o VFS indicar que o pagamento
+       * ainda precisa ser realizado,
+       * NÃO tentamos fingir que foi pago.
+       */
+      if (
+        payment.requiresUser === true ||
+        (
+          payment.paymentStatus !== null &&
+          !isPaidStatus(
+            payment.paymentStatus
+          )
+        )
+      ) {
+        application.status =
+          "requires_user";
+
+        application.bot1.status =
+          "requires_user";
+
+        application.bot1.lastAction =
+          "payment_required";
+
+        application.bot2.monitoring =
+          false;
+
+        application.radar.enabled =
+          false;
+
+        application.lock = {
+          owner: null,
+          expiresAt: null
+        };
+
+        await application.save();
+
+        return {
+          success: true,
+
+          requiresUser: true,
+
+          reason:
+            "Payment is required before final booking.",
+
+          application
+        };
+      }
+
+      /*
+       * Só avançamos para BOOK_APPOINTMENT
+       * quando o adapter confirma que a etapa
+       * pode prosseguir.
+       */
+      application.status =
+        "book_appointment";
+
+      application.bot1.lastAction =
+        "book_appointment";
+
+      await application.save();
 
       await this.refreshLock(
         applicationId
@@ -852,34 +1098,156 @@ class Bot1 {
 
       await this.heartbeat(
         applicationId,
-        "obtaining_reference"
+        "finalizing_booking"
       );
 
-      const reference =
+      const finalization =
         await withTimeout(
-          this.site.getReference(),
+          this.site.finalizeBooking(
+            application,
+            payment
+          ),
           config.timeoutMs,
-          "Reference retrieval"
+          "Booking finalization"
         );
 
-      const entity =
-        await withTimeout(
-          this.site.getEntity(),
-          config.timeoutMs,
-          "Entity retrieval"
+      if (
+        finalization?.success === false
+      ) {
+        if (
+          finalization.requiresUser === true
+        ) {
+          application.status =
+            "requires_user";
+
+          application.bot1.status =
+            "requires_user";
+
+          application.bot1.lastAction =
+            "finalization_requires_user";
+
+          application.lock = {
+            owner: null,
+            expiresAt: null
+          };
+
+          await application.save();
+
+          return {
+            success: true,
+            requiresUser: true,
+            application
+          };
+        }
+
+        throw new Error(
+          finalization.reason ||
+          "Booking finalization failed"
         );
+      }
+
+      await this.refreshLock(
+        applicationId
+      );
+
+      await this.heartbeat(
+        applicationId,
+        "checking_confirmation"
+      );
+
+      const confirmation =
+        await withTimeout(
+          this.site.getConfirmation(
+            application,
+            payment,
+            finalization
+          ),
+          config.timeoutMs,
+          "Confirmation verification"
+        );
+
+      const normalizedConfirmation =
+        normalizePaymentDetails(
+          confirmation || {}
+        );
+
+      if (
+        normalizedConfirmation.reference
+      ) {
+        application.result.reference =
+          normalizedConfirmation.reference;
+      }
+
+      if (
+        normalizedConfirmation.entity
+      ) {
+        application.result.entity =
+          normalizedConfirmation.entity;
+      }
+
+      if (
+        normalizedConfirmation.transactionId
+      ) {
+        application.result.transactionId =
+          normalizedConfirmation.transactionId;
+      }
+
+      if (
+        normalizedConfirmation.paymentStatus
+      ) {
+        application.result.paymentStatus =
+          normalizedConfirmation.paymentStatus;
+      }
+
+      if (
+        normalizedConfirmation.confirmationUrl
+      ) {
+        application.result.confirmationUrl =
+          normalizedConfirmation.confirmationUrl;
+      }
+
+      const confirmed =
+        confirmation?.confirmed === true ||
+        confirmation?.success === true ||
+        (
+          confirmation?.paymentStatus != null &&
+          isPaidStatus(
+            confirmation.paymentStatus
+          )
+        );
+
+      if (!confirmed) {
+        application.status =
+          "requires_user";
+
+        application.bot1.status =
+          "requires_user";
+
+        application.bot1.lastAction =
+          "confirmation_not_verified";
+
+        application.lock = {
+          owner: null,
+          expiresAt: null
+        };
+
+        await application.save();
+
+        return {
+          success: true,
+
+          requiresUser: true,
+
+          reason:
+            "The booking was not independently confirmed.",
+
+          application
+        };
+      }
 
       const completionMs =
         Date.now() -
         startedAt;
-
-      application.result = {
-        reference:
-          reference || null,
-
-        entity:
-          entity || null
-      };
 
       application.status =
         "completed";
@@ -899,6 +1267,9 @@ class Bot1 {
       application.bot2.monitoring =
         false;
 
+      application.radar.enabled =
+        false;
+
       application.metrics.completionMs =
         completionMs;
 
@@ -911,7 +1282,11 @@ class Bot1 {
 
       return {
         success: true,
+
+        completed: true,
+
         application,
+
         elapsedMs:
           completionMs
       };
@@ -968,6 +1343,12 @@ class Bot1 {
       owner: null,
       expiresAt: null
     };
+
+    application.bot2.monitoring =
+      false;
+
+    application.radar.enabled =
+      false;
 
     await application.save();
 
