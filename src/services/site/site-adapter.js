@@ -71,6 +71,24 @@ class SiteAdapter {
     );
   }
 
+  async getPaymentDetails() {
+    throw new Error(
+      "getPaymentDetails() not implemented"
+    );
+  }
+
+  async finalizeBooking() {
+    throw new Error(
+      "finalizeBooking() not implemented"
+    );
+  }
+
+  async getConfirmation() {
+    throw new Error(
+      "getConfirmation() not implemented"
+    );
+  }
+
   async close() {}
 }
 
