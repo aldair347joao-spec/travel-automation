@@ -1,5 +1,107 @@
 const mongoose = require("mongoose");
 
+const applicantSchema = new mongoose.Schema(
+  {
+    client: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Client",
+      required: true
+    },
+
+    passport: {
+      number: {
+        type: String,
+        default: null
+      },
+
+      nationality: {
+        type: String,
+        default: null
+      },
+
+      expiryDate: {
+        type: String,
+        default: null
+      },
+
+      validationStatus: {
+        type: String,
+        enum: [
+          "not_started",
+          "pending",
+          "passed",
+          "failed"
+        ],
+        default: "not_started"
+      }
+    },
+
+    personalData: {
+      fullName: {
+        type: String,
+        default: null
+      },
+
+      dateOfBirth: {
+        type: String,
+        default: null
+      },
+
+      gender: {
+        type: String,
+        default: null
+      },
+
+      nationality: {
+        type: String,
+        default: null
+      },
+
+      email: {
+        type: String,
+        default: null
+      },
+
+      phone: {
+        type: String,
+        default: null
+      }
+    },
+
+    identityStatus: {
+      type: String,
+      enum: [
+        "not_started",
+        "pending",
+        "ready",
+        "requires_user",
+        "verified",
+        "failed"
+      ],
+      default: "not_started"
+    },
+
+    vfsStatus: {
+      type: String,
+      enum: [
+        "not_started",
+        "prepared",
+        "otp_required",
+        "otp_verified",
+        "identity_required",
+        "identity_verified",
+        "ready",
+        "completed",
+        "error"
+      ],
+      default: "not_started"
+    }
+  },
+  {
+    _id: true
+  }
+);
+
 const applicationSchema = new mongoose.Schema(
   {
     accountId: {
@@ -15,11 +117,46 @@ const applicationSchema = new mongoose.Schema(
       default: null
     },
 
+    /*
+     * Mantido para compatibilidade com
+     * aplicações antigas de candidato único.
+     */
     client: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Client",
-      required: true,
+      required: false,
       index: true
+    },
+
+    /*
+     * Identifica uma operação de grupo.
+     */
+    groupId: {
+      type: String,
+      default: null,
+      index: true
+    },
+
+    bookingMode: {
+      type: String,
+      enum: [
+        "GROUP_REQUIRED",
+        "PARTIAL_ALLOWED",
+        "SINGLE"
+      ],
+      default: "SINGLE",
+      index: true
+    },
+
+    applicantsCount: {
+      type: Number,
+      min: 1,
+      default: 1
+    },
+
+    applicants: {
+      type: [applicantSchema],
+      default: []
     },
 
     idempotencyKey: {
@@ -39,7 +176,10 @@ const applicationSchema = new mongoose.Schema(
         "waiting_for_slot",
         "slot_received",
         "continuing",
+        "review_pay",
+        "book_appointment",
         "completed",
+        "requires_user",
         "error",
         "cancelled"
       ],
@@ -64,6 +204,11 @@ const applicationSchema = new mongoose.Schema(
       default: null
     },
 
+    preferredWeekdays: {
+      type: [Number],
+      default: []
+    },
+
     slot: {
       date: {
         type: String,
@@ -73,6 +218,74 @@ const applicationSchema = new mongoose.Schema(
       time: {
         type: String,
         default: null
+      },
+
+      applicants: {
+        type: [
+          {
+            client: {
+              type: mongoose.Schema.Types.ObjectId,
+              ref: "Client"
+            },
+
+            date: String,
+            time: String
+          }
+        ],
+        default: []
+      }
+    },
+
+    radar: {
+      enabled: {
+        type: Boolean,
+        default: false
+      },
+
+      lastAvailabilityHash: {
+        type: String,
+        default: null
+      },
+
+      lastChangeAt: {
+        type: Date,
+        default: null
+      },
+
+      lastSuccessfulCheckAt: {
+        type: Date,
+        default: null
+      },
+
+      nextCheckAt: {
+        type: Date,
+        default: null
+      },
+
+      consecutiveErrors: {
+        type: Number,
+        default: 0
+      },
+
+      consecutiveEmptyChecks: {
+        type: Number,
+        default: 0
+      },
+
+      currentIntervalMs: {
+        type: Number,
+        default: 5000
+      },
+
+      riskLevel: {
+        type: String,
+        enum: [
+          "normal",
+          "elevated",
+          "cooldown",
+          "blocked_signal"
+        ],
+        default: "normal"
       }
     },
 
@@ -83,6 +296,21 @@ const applicationSchema = new mongoose.Schema(
       },
 
       entity: {
+        type: String,
+        default: null
+      },
+
+      transactionId: {
+        type: String,
+        default: null
+      },
+
+      paymentStatus: {
+        type: String,
+        default: null
+      },
+
+      confirmationUrl: {
         type: String,
         default: null
       }
@@ -109,6 +337,7 @@ const applicationSchema = new mongoose.Schema(
           "waiting",
           "continuing",
           "completed",
+          "requires_user",
           "error"
         ],
         default: "idle"
@@ -157,6 +386,8 @@ const applicationSchema = new mongoose.Schema(
           "idle",
           "monitoring",
           "slot_found",
+          "cooldown",
+          "requires_user",
           "error",
           "stopped"
         ],
@@ -252,6 +483,16 @@ const applicationSchema = new mongoose.Schema(
       preparationMs: {
         type: Number,
         default: null
+      },
+
+      navigationCount: {
+        type: Number,
+        default: 0
+      },
+
+      reloadCount: {
+        type: Number,
+        default: 0
       }
     },
 
@@ -297,6 +538,11 @@ const applicationSchema = new mongoose.Schema(
 applicationSchema.index({
   accountId: 1,
   status: 1
+});
+
+applicationSchema.index({
+  accountId: 1,
+  groupId: 1
 });
 
 applicationSchema.index({
