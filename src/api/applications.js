@@ -536,7 +536,82 @@ function createApplicationRouter({
       }
     }
   );
+  router.post(
+  "/:id/otp/verify",
+  requireRole(
+    "owner",
+    "admin",
+    "operator"
+  ),
+  async (
+    req,
+    res,
+    next
+  ) => {
+    try {
+      const application =
+        await Application.findOne({
+          _id:
+            req.params.id,
 
+          accountId:
+            req.user.accountId
+        });
+
+      if (!application) {
+        return res.status(404).json({
+          success:
+            false,
+
+          error:
+            "Application not found"
+        });
+      }
+
+      const code =
+        typeof req.body.code ===
+        "string"
+          ? req.body.code.trim()
+          : "";
+
+      if (!/^\d{4,8}$/.test(code)) {
+        return res.status(400).json({
+          success:
+            false,
+
+          error:
+            "Invalid OTP format"
+        });
+      }
+
+      const result =
+        await supervisor.verifyOtp(
+          application._id.toString(),
+          code
+        );
+
+      return res.json({
+        success:
+          true,
+
+        application:
+          result,
+
+        otp: {
+          status:
+            result.otp?.status ||
+            null,
+
+          verifiedAt:
+            result.otp?.verifiedAt ||
+            null
+        }
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
   router.post(
     "/:id/cancel",
     requireRole(
