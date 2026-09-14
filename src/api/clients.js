@@ -393,7 +393,199 @@ router.post(
     }
   }
 );
+router.get(
+  "/:id/facial-preflight/instructions",
+  requireRole(
+    "owner",
+    "admin",
+    "operator"
+  ),
+  async (
+    req,
+    res,
+    next
+  ) => {
+    try {
+      const client =
+        await Client.findOne({
+          _id:
+            req.params.id,
 
+          accountId:
+            req.user.accountId,
+
+          active:
+            true
+        });
+
+      if (!client) {
+        return res.status(404).json({
+          success:
+            false,
+
+          error:
+            "Client not found"
+        });
+      }
+
+      const PreflightService =
+        require(
+          "../services/facial/preflight-service"
+        );
+
+      const preflight =
+        new PreflightService();
+
+      return res.json({
+        success:
+          true,
+
+        clientId:
+          client._id,
+
+        instructions:
+          preflight.getInstructions()
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+router.post(
+  "/:id/facial-preflight",
+  requireRole(
+    "owner",
+    "admin",
+    "operator"
+  ),
+  async (
+    req,
+    res,
+    next
+  ) => {
+    try {
+      const client =
+        await Client.findOne({
+          _id:
+            req.params.id,
+
+          accountId:
+            req.user.accountId,
+
+          active:
+            true
+        });
+
+      if (!client) {
+        return res.status(404).json({
+          success:
+            false,
+
+          error:
+            "Client not found"
+        });
+      }
+
+      const {
+        consentAccepted,
+        positions,
+        passportMatch
+      } =
+        req.body;
+
+      const PreflightService =
+        require(
+          "../services/facial/preflight-service"
+        );
+
+      const preflight =
+        new PreflightService();
+
+      const result =
+        preflight.evaluate({
+          positions,
+
+          passportMatch,
+
+          consentAccepted
+        });
+
+      client.facialConsent = {
+        accepted:
+          consentAccepted ===
+          true,
+
+        acceptedAt:
+          consentAccepted ===
+          true
+            ? new Date()
+            : null
+      };
+
+      if (
+        result.passed
+      ) {
+        client.facialProfile.verificationStatus =
+          "pending";
+      } else {
+        client.facialProfile.verificationStatus =
+          "failed";
+      }
+
+      await client.save();
+
+      await AuditLog.create({
+        actorId:
+          req.user._id,
+
+        action:
+          "client.facial_preflight",
+
+        resource:
+          "client",
+
+        resourceId:
+          client._id.toString(),
+
+        ip:
+          req.ip,
+
+        metadata: {
+          passed:
+            result.passed,
+
+          score:
+            result.score,
+
+          issues:
+            result.issues
+        }
+      });
+
+      return res.json({
+        success:
+          true,
+
+        clientId:
+          client._id,
+
+        preflight:
+          result,
+
+        /*
+         * This means our preparation passed.
+         * It does NOT mean that VFS's official
+         * facial verification has been completed.
+         */
+        vfsVerification:
+          "not_completed"
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 router.delete(
   "/:id",
   requireRole(
