@@ -48,7 +48,7 @@ class VfsPuppeteerAdapter
       this.initialized &&
       this.page
     ) {
-      return;
+      return true;
     }
 
     this.browser =
@@ -102,6 +102,8 @@ class VfsPuppeteerAdapter
           this.applicationId
       }
     );
+
+    return true;
   }
 
   async ensurePage() {
@@ -115,15 +117,14 @@ class VfsPuppeteerAdapter
     if (
       this.page.isClosed()
     ) {
+      await this.close();
       await this.initialize();
     }
 
     return this.page;
   }
 
-  async navigate(
-    url
-  ) {
+  async navigate(url) {
     const page =
       await this.ensurePage();
 
@@ -132,6 +133,7 @@ class VfsPuppeteerAdapter
       {
         waitUntil:
           "domcontentloaded",
+
         timeout:
           DEFAULT_TIMEOUT
       }
@@ -141,6 +143,7 @@ class VfsPuppeteerAdapter
       .waitForNetworkIdle({
         idleTime:
           500,
+
         timeout:
           10000
       })
@@ -149,6 +152,8 @@ class VfsPuppeteerAdapter
     await this.detectState();
 
     return {
+      success: true,
+
       url:
         page.url(),
 
@@ -157,27 +162,15 @@ class VfsPuppeteerAdapter
     };
   }
 
-  async login(
-    credentials = {}
-  ) {
-    /*
-     * Não automatizamos CAPTCHA,
-     * MFA indevido ou mecanismos
-     * de segurança do VFS.
-     *
-     * Esta função abre o fluxo
-     * oficial e devolve o estado.
-     */
+  async login() {
     await this.navigate(
       `${VFS_BASE_URL}/dashboard`
     );
 
     return {
-      success:
-        true,
+      success: true,
 
-      requiresUser:
-        true,
+      requiresUser: true,
 
       reason:
         "VFS login/security checkpoint must be completed through the official flow.",
@@ -188,25 +181,25 @@ class VfsPuppeteerAdapter
   }
 
   async fillApplication(
+    application,
+    client,
     preparedData
   ) {
-    const page =
-      await this.ensurePage();
-
-    /*
-     * Os selectors específicos serão
-     * configurados depois de inspeção
-     * do DOM real.
-     *
-     * Não usamos selectors inventados.
-     */
     await this.navigate(
       `${VFS_BASE_URL}/application-detail`
     );
 
+    /*
+     * Os selectors reais do VFS não
+     * devem ser inventados.
+     *
+     * Os dados ficam preparados no
+     * Application e o adapter será
+     * expandido quando os selectors
+     * reais do DOM forem confirmados.
+     */
     return {
-      success:
-        true,
+      success: true,
 
       state:
         this.state,
@@ -214,17 +207,23 @@ class VfsPuppeteerAdapter
       prepared:
         Boolean(
           preparedData
-        )
+        ),
+
+      applicationId:
+        application?._id?.toString() ||
+        this.applicationId,
+
+      clientId:
+        client?._id?.toString() ||
+        null
     };
   }
 
   async requestOtp() {
     return {
-      success:
-        true,
+      success: true,
 
-      requiresUser:
-        true,
+      requiresUser: true,
 
       reason:
         "OTP must be requested through the official VFS flow."
@@ -246,11 +245,9 @@ class VfsPuppeteerAdapter
     }
 
     return {
-      success:
-        true,
+      success: true,
 
-      requiresUser:
-        true,
+      requiresUser: true,
 
       reason:
         "OTP submission requires selectors from the current VFS DOM."
@@ -263,19 +260,14 @@ class VfsPuppeteerAdapter
     );
 
     /*
+     * Não simulamos webcam/liveness.
      * Se o VFS exigir captura facial
-     * ao vivo, o sistema deve parar aqui
-     * e solicitar a participação do cliente.
-     *
-     * Não simulamos uma webcam ao vivo
-     * com vídeo pré-gravado.
+     * ao vivo, o cliente participa.
      */
     return {
-      success:
-        false,
+      success: false,
 
-      requiresUser:
-        true,
+      requiresUser: true,
 
       reason:
         "Facial verification requires the official VFS capture flow."
@@ -288,8 +280,7 @@ class VfsPuppeteerAdapter
     );
 
     return {
-      success:
-        true,
+      success: true,
 
       state:
         this.state
@@ -304,14 +295,6 @@ class VfsPuppeteerAdapter
 
     await this.detectState();
 
-    /*
-     * O adapter deve devolver uma
-     * estrutura normalizada.
-     *
-     * Os selectors/calendário específicos
-     * serão preenchidos após inspeção do
-     * DOM atual do VFS.
-     */
     const slots =
       await this.extractVisibleSlots(
         page,
@@ -327,14 +310,6 @@ class VfsPuppeteerAdapter
     page,
     application
   ) {
-    /*
-     * Não assumir classes internas
-     * do VFS.
-     *
-     * Esta função fica deliberadamente
-     * conservadora até termos os selectors
-     * atuais confirmados.
-     */
     const currentUrl =
       page.url();
 
@@ -346,6 +321,10 @@ class VfsPuppeteerAdapter
       return [];
     }
 
+    /*
+     * Não assumir classes internas
+     * do VFS sem confirmação do DOM.
+     */
     return [];
   }
 
@@ -362,11 +341,9 @@ class VfsPuppeteerAdapter
     }
 
     return {
-      success:
-        false,
+      success: false,
 
-      requiresUser:
-        true,
+      requiresUser: true,
 
       reason:
         "Calendar selectors must be mapped against the current VFS DOM."
@@ -374,13 +351,17 @@ class VfsPuppeteerAdapter
   }
 
   async continueApplication() {
+    /*
+     * O VFS normalmente leva a REVIEW/PAY
+     * depois da seleção. Não declaramos
+     * pagamento nem confirmação aqui.
+     */
     await this.navigate(
       `${VFS_BASE_URL}/review-pay`
     );
 
     return {
-      success:
-        true,
+      success: true,
 
       state:
         this.state
@@ -400,16 +381,103 @@ class VfsPuppeteerAdapter
       await page
         .evaluate(
           () =>
-            document.body
-              ?.innerText ||
+            document.body?.innerText ||
             ""
         )
         .catch(
           () => ""
         );
 
+    const urlData =
+      this.parseQueryParameters(
+        url
+      );
+
+    const textReference =
+      this.extractTextValue(
+        text,
+        [
+          "RequestRefNo",
+          "Reference",
+          "Reference No",
+          "Payment Reference"
+        ]
+      );
+
+    const textAmount =
+      this.extractTextValue(
+        text,
+        [
+          "Amount",
+          "Total Amount",
+          "Fee"
+        ]
+      );
+
+    const textCurrency =
+      this.extractTextValue(
+        text,
+        [
+          "Currency"
+        ]
+      );
+
+    const textDeadline =
+      this.extractTextValue(
+        text,
+        [
+          "Deadline",
+          "Payment Deadline",
+          "Due Date"
+        ]
+      );
+
+    const paymentStatus =
+      urlData.PaymentStatus ||
+      this.extractTextValue(
+        text,
+        [
+          "PaymentStatus",
+          "Payment Status"
+        ]
+      ) ||
+      null;
+
     return {
+      reference:
+        urlData.RequestRefNo ||
+        textReference ||
+        null,
+
+      transactionId:
+        urlData.TransactionId ||
+        null,
+
+      entity:
+        urlData.TransactionId ||
+        null,
+
+      paymentStatus,
+
+      amount:
+        textAmount ||
+        null,
+
+      currency:
+        textCurrency ||
+        null,
+
+      deadline:
+        textDeadline ||
+        null,
+
+      confirmationUrl:
+        this.isConfirmationUrl(url)
+          ? url
+          : null,
+
       url,
+
       text
     };
   }
@@ -418,17 +486,9 @@ class VfsPuppeteerAdapter
     const details =
       await this.getPaymentDetails();
 
-    const match =
-      details.url.match(
-        /RequestRefNo=([^&]+)/i
-      );
-
     return (
-      match
-        ? decodeURIComponent(
-            match[1]
-          )
-        : null
+      details.reference ||
+      null
     );
   }
 
@@ -436,68 +496,274 @@ class VfsPuppeteerAdapter
     const details =
       await this.getPaymentDetails();
 
-    const match =
-      details.url.match(
-        /TransactionId=([^&]+)/i
-      );
-
     return (
-      match
-        ? decodeURIComponent(
-            match[1]
-          )
-        : null
+      details.entity ||
+      null
     );
   }
 
-  async finalize() {
-    await this.navigate(
-      `${VFS_BASE_URL}/book-appointment`
-    );
+  async finalizeBooking(
+    application,
+    payment
+  ) {
+    const page =
+      await this.ensurePage();
+
+    await this.detectState();
+
+    if (
+      this.state !==
+      "BOOK_APPOINTMENT"
+    ) {
+      await this.navigate(
+        `${VFS_BASE_URL}/book-appointment`
+      );
+    }
+
+    /*
+     * Não clicamos em controles de
+     * pagamento/segurança sem selectors
+     * confirmados.
+     *
+     * A página é aberta e o estado é
+     * devolvido para o supervisor.
+     */
+    await this.detectState();
+
+    const currentUrl =
+      page.url();
+
+    if (
+      currentUrl.includes(
+        "/confirmation"
+      )
+    ) {
+      return {
+        success: true,
+
+        state:
+          "CONFIRMATION"
+      };
+    }
 
     return {
-      success:
-        true,
+      success: false,
+
+      requiresUser: true,
+
+      reason:
+        "The official VFS booking/payment step requires the current confirmed DOM flow.",
 
       state:
-        this.state
+        this.state,
+
+      payment
     };
   }
 
-  async parseConfirmation() {
+  async getConfirmation() {
     const page =
       await this.ensurePage();
+
+    await this.detectState();
 
     const url =
       page.url();
 
     const parsed =
-      new URL(url);
+      this.parseQueryParameters(
+        url
+      );
+
+    const isConfirmation =
+      this.state ===
+        "CONFIRMATION" ||
+      url.includes(
+        "/confirmation"
+      );
+
+    if (
+      !isConfirmation
+    ) {
+      return {
+        confirmed: false,
+
+        success: false,
+
+        paymentStatus:
+          parsed.PaymentStatus ||
+          null,
+
+        requestReference:
+          parsed.RequestRefNo ||
+          null,
+
+        transactionId:
+          parsed.TransactionId ||
+          null,
+
+        confirmationUrl:
+          null
+      };
+    }
+
+    const paymentStatus =
+      parsed.PaymentStatus ||
+      null;
 
     return {
-      paymentStatus:
-        parsed.searchParams.get(
-          "PaymentStatus"
-        ),
+      confirmed:
+        String(
+          paymentStatus
+        ).toLowerCase() ===
+        "true",
+
+      success:
+        String(
+          paymentStatus
+        ).toLowerCase() ===
+        "true",
+
+      paymentStatus,
 
       requestReference:
-        parsed.searchParams.get(
-          "RequestRefNo"
-        ),
+        parsed.RequestRefNo ||
+        null,
 
       transactionId:
-        parsed.searchParams.get(
-          "TransactionId"
-        ),
-
-      token:
-        parsed.searchParams.get(
-          "token"
-        ),
+        parsed.TransactionId ||
+        null,
 
       confirmationUrl:
         url
     };
+  }
+
+  parseQueryParameters(
+    url
+  ) {
+    try {
+      const parsed =
+        new URL(url);
+
+      return {
+        PaymentStatus:
+          parsed.searchParams.get(
+            "PaymentStatus"
+          ),
+
+        RequestRefNo:
+          parsed.searchParams.get(
+            "RequestRefNo"
+          ),
+
+        TransactionId:
+          parsed.searchParams.get(
+            "TransactionId"
+          ),
+
+        token:
+          parsed.searchParams.get(
+            "token"
+          )
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  isConfirmationUrl(
+    url
+  ) {
+    return url.includes(
+      "/confirmation"
+    );
+  }
+
+  extractTextValue(
+    text,
+    labels
+  ) {
+    if (!text) {
+      return null;
+    }
+
+    const lines =
+      text
+        .split(/\r?\n/)
+        .map(
+          line =>
+            line.trim()
+        )
+        .filter(Boolean);
+
+    for (
+      const label of labels
+    ) {
+      const exact =
+        new RegExp(
+          `^${this.escapeRegex(label)}\\s*[:\\-]\\s*(.+)$`,
+          "i"
+        );
+
+      const found =
+        lines.find(
+          line =>
+            exact.test(line)
+        );
+
+      if (found) {
+        const match =
+          found.match(exact);
+
+        if (match?.[1]) {
+          return match[1].trim();
+        }
+      }
+
+      const partial =
+        lines.find(
+          line =>
+            line
+              .toLowerCase()
+              .includes(
+                label.toLowerCase()
+              )
+        );
+
+      if (partial) {
+        const value =
+          partial
+            .replace(
+              new RegExp(
+                this.escapeRegex(label),
+                "i"
+              ),
+              ""
+            )
+            .replace(
+              /^[:\-\s]+/,
+              ""
+            )
+            .trim();
+
+        if (value) {
+          return value;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  escapeRegex(
+    value
+  ) {
+    return String(value)
+      .replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
   }
 
   async detectState() {
