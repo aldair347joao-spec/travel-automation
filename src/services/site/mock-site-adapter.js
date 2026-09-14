@@ -6,6 +6,7 @@ const SiteAdapter =
 
 class MockSiteAdapter
   extends SiteAdapter {
+
   constructor() {
     super();
 
@@ -15,19 +16,35 @@ class MockSiteAdapter
     this.applicationId =
       null;
 
-    this.slotSelected = null;
+    this.slotSelected =
+      null;
 
-    this.reference = null;
+    this.reference =
+      null;
 
-    this.entity = null;
+    this.entity =
+      null;
+
+    this.transactionId =
+      null;
+
+    this.paymentDetails =
+      null;
+
+    this.confirmation =
+      null;
   }
 
   async initialize() {
-    return true;
+    return {
+      success: true
+    };
   }
 
   async login() {
-    return true;
+    return {
+      success: true
+    };
   }
 
   async fillApplication(
@@ -36,7 +53,9 @@ class MockSiteAdapter
     this.applicationId =
       application._id.toString();
 
-    return true;
+    return {
+      success: true
+    };
   }
 
   async requestOtp() {
@@ -50,11 +69,16 @@ class MockSiteAdapter
   }
 
   async verifyIdentity() {
-    return true;
+    return {
+      success: true,
+      verified: true
+    };
   }
 
   async openCalendar() {
-    return true;
+    return {
+      success: true
+    };
   }
 
   async checkAvailability() {
@@ -85,17 +109,30 @@ class MockSiteAdapter
   async selectSlot(
     slot
   ) {
+    if (
+      !slot ||
+      !slot.date
+    ) {
+      throw new Error(
+        "Invalid mock slot"
+      );
+    }
+
     this.slotSelected =
       slot;
 
-    return true;
+    return {
+      success: true
+    };
   }
 
   async continueApplication() {
-    return true;
+    return {
+      success: true
+    };
   }
 
-  async getReference() {
+  async getPaymentDetails() {
     if (!this.reference) {
       this.reference =
         `TA-${crypto.randomInt(
@@ -104,10 +141,6 @@ class MockSiteAdapter
         )}`;
     }
 
-    return this.reference;
-  }
-
-  async getEntity() {
     if (!this.entity) {
       this.entity =
         `ENT-${crypto.randomInt(
@@ -116,11 +149,158 @@ class MockSiteAdapter
         )}`;
     }
 
+    if (!this.transactionId) {
+      this.transactionId =
+        `TX-${crypto.randomInt(
+          10000000,
+          99999999
+        )}`;
+    }
+
+    const paymentStatus =
+      String(
+        process.env.MOCK_PAYMENT_STATUS ||
+        "paid"
+      ).toLowerCase();
+
+    this.paymentDetails = {
+      reference:
+        this.reference,
+
+      entity:
+        this.entity,
+
+      transactionId:
+        this.transactionId,
+
+      paymentStatus,
+
+      amount:
+        process.env.MOCK_PAYMENT_AMOUNT ||
+        "50000",
+
+      currency:
+        process.env.MOCK_PAYMENT_CURRENCY ||
+        "AOA",
+
+      deadline:
+        process.env.MOCK_PAYMENT_DEADLINE ||
+        null,
+
+      requiresUser:
+        paymentStatus !== "paid"
+    };
+
+    return this.paymentDetails;
+  }
+
+  async getReference() {
+    if (!this.reference) {
+      await this.getPaymentDetails();
+    }
+
+    return this.reference;
+  }
+
+  async getEntity() {
+    if (!this.entity) {
+      await this.getPaymentDetails();
+    }
+
     return this.entity;
   }
 
+  async finalizeBooking() {
+    const payment =
+      await this.getPaymentDetails();
+
+    if (
+      payment.requiresUser
+    ) {
+      return {
+        success: false,
+
+        requiresUser: true,
+
+        reason:
+          "Mock payment is still pending."
+      };
+    }
+
+    this.confirmation = {
+      confirmed: true,
+
+      success: true,
+
+      paymentStatus:
+        "paid",
+
+      requestReference:
+        payment.reference,
+
+      transactionId:
+        payment.transactionId,
+
+      confirmationUrl:
+        "http://mock.local/confirmation"
+    };
+
+    return {
+      success: true
+    };
+  }
+
+  async getConfirmation() {
+    if (
+      !this.confirmation
+    ) {
+      const payment =
+        await this.getPaymentDetails();
+
+      if (
+        payment.requiresUser
+      ) {
+        return {
+          confirmed: false,
+
+          success: false,
+
+          paymentStatus:
+            payment.paymentStatus,
+
+          requestReference:
+            payment.reference,
+
+          transactionId:
+            payment.transactionId
+        };
+      }
+
+      this.confirmation = {
+        confirmed: true,
+
+        success: true,
+
+        paymentStatus:
+          "paid",
+
+        requestReference:
+          payment.reference,
+
+        transactionId:
+          payment.transactionId,
+
+        confirmationUrl:
+          "http://mock.local/confirmation"
+      };
+    }
+
+    return this.confirmation;
+  }
+
   async close() {
-    this.slotSelected = null;
+    this.slotSelected =
+      null;
   }
 }
 
