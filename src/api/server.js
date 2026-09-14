@@ -36,6 +36,9 @@ const authRouter =
 const clientsRouter =
   require("./clients");
 
+const passportsRouter =
+  require("./passports");
+
 const createApplicationsRouter =
   require("./applications");
 
@@ -98,14 +101,18 @@ function createApp({
 
   app.use(
     express.json({
-      limit: "1mb"
+      limit:
+        "1mb"
     })
   );
 
   app.use(
     express.urlencoded({
-      extended: false,
-      limit: "100kb"
+      extended:
+        false,
+
+      limit:
+        "100kb"
     })
   );
 
@@ -127,7 +134,9 @@ function createApp({
   );
 
   /*
-   * Health endpoint
+   * =========================================================
+   * HEALTH
+   * =========================================================
    */
 
   app.get(
@@ -137,7 +146,8 @@ function createApp({
       res
     ) => {
       return res.json({
-        success: true,
+        success:
+          true,
 
         service:
           "travel-automation",
@@ -159,10 +169,9 @@ function createApp({
   );
 
   /*
-   * Authentication routes remain available.
-   *
-   * They are simply not required while
-   * AUTH_ENABLED=false.
+   * =========================================================
+   * AUTH
+   * =========================================================
    */
 
   app.use(
@@ -171,13 +180,9 @@ function createApp({
   );
 
   /*
+   * =========================================================
    * CSRF
-   *
-   * Authentication endpoints do not require
-   * an existing session.
-   *
-   * In development mode the middleware itself
-   * automatically skips CSRF validation.
+   * =========================================================
    */
 
   app.use(
@@ -187,7 +192,6 @@ function createApp({
       res,
       next
     ) => {
-
       if (
         req.path.startsWith(
           "/auth/"
@@ -205,7 +209,9 @@ function createApp({
   );
 
   /*
-   * Application APIs
+   * =========================================================
+   * CLIENTS
+   * =========================================================
    */
 
   app.use(
@@ -213,12 +219,35 @@ function createApp({
     clientsRouter
   );
 
+  /*
+   * =========================================================
+   * PASSPORTS
+   * =========================================================
+   */
+
+  app.use(
+    "/api/passports",
+    passportsRouter
+  );
+
+  /*
+   * =========================================================
+   * APPLICATIONS
+   * =========================================================
+   */
+
   app.use(
     "/api/applications",
     createApplicationsRouter({
       supervisor
     })
   );
+
+  /*
+   * =========================================================
+   * SYSTEM
+   * =========================================================
+   */
 
   app.use(
     "/api/system",
@@ -228,7 +257,9 @@ function createApp({
   );
 
   /*
-   * Static frontend
+   * =========================================================
+   * STATIC FRONTEND
+   * =========================================================
    */
 
   const publicDirectory =
@@ -241,7 +272,8 @@ function createApp({
     express.static(
       publicDirectory,
       {
-        index: false,
+        index:
+          false,
 
         maxAge:
           config.isProduction
