@@ -16,6 +16,8 @@ require("../services/telegram/telegram-service");
 const logger =
 require("../utils/logger");
 
+const PaymentResumeService =
+  require("../services/payment/payment-resume-service");
 const crypto =
 require("crypto");
 
@@ -184,7 +186,382 @@ return bot.continueAfterVerification(
 );
 
 }
+async resumeApplication(
+  applicationId
+) {
+  const application =
+    await Application.findOne({
+      _id:
+        applicationId,
 
+      status:
+        "requires_user"
+    });
+
+  if (!application) {
+    throw new Error(
+      "Application is not waiting for user resume"
+    );
+  }
+
+  const adapter =
+    await this.getAdapter(
+      applicationId
+    );
+
+  const service =
+    new PaymentResumeService({
+      adapter,
+
+      timeoutMs:
+        Number(
+          process.env.BOT1_TIMEOUT_MS
+        ) || 30000
+    });
+
+  try {
+    /*
+     * O lock impede que dois pedidos
+     * de resume processem o mesmo
+     * pagamento simultaneamente.
+     */
+    const locked =
+      await Application.findOneAndUpdate(
+        {
+          _id:
+            applicationId,
+
+          status:
+            "requires_user",
+
+          $or: [
+            {
+              "lock.owner":
+                null
+            },
+
+            {
+              "lock.expiresAt": {
+                $lt:
+                  new Date()
+              }
+            }
+          ]
+        },
+        {
+          $set: {
+            status:
+              "book_appointment",
+
+            "bot1.status":
+              "resuming",
+
+            "bot1.workerId":
+              this.workerId,
+
+            "bot1.heartbeatAt":
+              new Date(),
+
+            "bot1.lastAction":
+              "resuming_payment",
+
+            "lock.owner":
+              this.workerId,
+
+            "lock.expiresAt":
+              new Date(
+                Date.now() +
+                  (
+                    Number(
+                      process.env.BOT1_LOCK_MS
+                    ) || 60000
+                  )
+              ),
+
+            "bot2.monitoring":
+              false,
+
+            "radar.enabled":
+              false
+          }
+        },
+        {
+          new:
+            true
+        }
+      );
+
+    if (!locked) {
+      throw new Error(
+        "Application is already being resumed"
+      );
+    }
+
+    const result =
+      await service.resume(
+        locked
+      );
+
+    if (
+      result.requiresUser === true
+    ) {
+      await Application.updateOne(
+        {
+          _id:
+            applicationId,
+
+          "lock.owner":
+            this.workerId
+        },
+        {
+          $set: {
+            status:
+              "requires_user",
+
+            "bot1.status":
+              "requires_user",
+
+            "bot1.lastAction":
+              "payment_required",
+
+            "lock.owner":
+              null,
+
+            "lock.expiresAt":
+              null
+          }
+        }
+      );
+
+      const updated =
+        await Application.findById(
+          applicationId
+        );
+
+      return {
+        success:
+          true,
+
+        requiresUser:
+          true,
+
+        completed:
+          false,
+
+        reason:
+          result.reason ||
+          "Payment still requires user action.",
+
+        application:
+          updated,
+
+        payment:
+          result.payment ||
+          null
+      };
+    }
+
+    if (
+      result.completed !== true
+    ) {
+      await Application.updateOne(
+        {
+          _id:
+            applicationId,
+
+          "lock.owner":
+            this.workerId
+        },
+        {
+          $set: {
+            status:
+              "requires_user",
+
+            "bot1.status":
+              "requires_user",
+
+            "bot1.lastAction":
+              "confirmation_not_verified",
+
+            "lock.owner":
+              null,
+
+            "lock.expiresAt":
+              null
+          }
+        }
+      );
+
+      const updated =
+        await Application.findById(
+          applicationId
+        );
+
+      return {
+        success:
+          true,
+
+        requiresUser:
+          true,
+
+        completed:
+          false,
+
+        reason:
+          "Booking confirmation could not be independently verified.",
+
+        application:
+          updated,
+
+        payment:
+          result.payment ||
+          null
+      };
+    }
+
+    /*
+     * Só aqui podemos declarar
+     * COMPLETED.
+     */
+    const completed =
+      await Application.findOneAndUpdate(
+        {
+          _id:
+            applicationId,
+
+          "lock.owner":
+            this.workerId
+        },
+        {
+          $set: {
+            status:
+              "completed",
+
+            "bot1.status":
+              "completed",
+
+            "bot1.lastAction":
+              "completed",
+
+            "bot1.completedAt":
+              new Date(),
+
+            "bot1.heartbeatAt":
+              new Date(),
+
+            "bot2.monitoring":
+              false,
+
+            "radar.enabled":
+              false,
+
+            "lock.owner":
+              null,
+
+            "lock.expiresAt":
+              null
+          }
+        },
+        {
+          new:
+            true
+        }
+      );
+
+    if (!completed) {
+      throw new Error(
+        "Application completion lock was lost"
+      );
+    }
+
+    this.stats.completed++;
+
+    try {
+      await this.telegram.completed(
+        completed,
+        completed.client
+      );
+    } catch (
+      telegramError
+    ) {
+      logger.error(
+        "Telegram completion notification failed after resume",
+        {
+          applicationId,
+
+          error:
+            telegramError.message
+        }
+      );
+    }
+
+    await this.closeAdapter(
+      applicationId
+    );
+
+    return {
+      success:
+        true,
+
+      completed:
+        true,
+
+      requiresUser:
+        false,
+
+      application:
+        completed,
+
+      payment:
+        result.payment ||
+        null,
+
+      confirmation:
+        result.confirmation ||
+        null
+    };
+  } catch (error) {
+    await Application.updateOne(
+      {
+        _id:
+          applicationId,
+
+        "lock.owner":
+          this.workerId
+      },
+      {
+        $set: {
+          status:
+            "requires_user",
+
+          "bot1.status":
+            "requires_user",
+
+          "bot1.lastAction":
+            "resume_error",
+
+          "lock.owner":
+            null,
+
+          "lock.expiresAt":
+            null
+        }
+      }
+    );
+
+    logger.error(
+      "ORCHESTRATOR payment resume failed",
+      {
+        applicationId,
+
+        error:
+          error.message
+      }
+    );
+
+    throw error;
+  }
+}
 async onSlotFound(
 payload
 ) {
