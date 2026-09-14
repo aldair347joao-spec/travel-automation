@@ -1,5 +1,4 @@
-const express =
-  require("express");
+const express = require("express");
 
 const Application =
   require("../models/application");
@@ -18,6 +17,92 @@ const {
   requireAuth,
   requireRole
 } = require("../middleware/auth");
+
+function buildApplicant(client) {
+  return {
+    client: client._id,
+
+    passport: {
+      number:
+        client.passportNumber || null,
+
+      nationality:
+        client.nationality || null,
+
+      expiryDate:
+        client.passportExpiryDate || null,
+
+      validationStatus:
+        "not_started"
+    },
+
+    personalData: {
+      fullName:
+        client.fullName || null,
+
+      dateOfBirth:
+        client.dateOfBirth || null,
+
+      gender:
+        client.gender || null,
+
+      nationality:
+        client.nationality || null,
+
+      email:
+        client.email || null,
+
+      phone:
+        client.phone || null
+    },
+
+    identityStatus:
+      "not_started",
+
+    vfsStatus:
+      "not_started"
+  };
+}
+
+function buildPreparedData(clients) {
+  return {
+    applicants:
+      clients.map(client => ({
+        clientId:
+          client._id.toString(),
+
+        fullName:
+          client.fullName,
+
+        email:
+          client.email,
+
+        phone:
+          client.phone,
+
+        dateOfBirth:
+          client.dateOfBirth,
+
+        nationality:
+          client.nationality,
+
+        gender:
+          client.gender,
+
+        passportNumber:
+          client.passportNumber,
+
+        passportIssueDate:
+          client.passportIssueDate,
+
+        passportExpiryDate:
+          client.passportExpiryDate,
+
+        passportCountry:
+          client.passportCountry
+      }))
+  };
+}
 
 function createApplicationRouter({
   supervisor
@@ -42,33 +127,114 @@ function createApplicationRouter({
       next
     ) => {
       try {
-        const {
-          clientId,
-          preferredDates,
-          preferredTime
-        } = req.body;
+        let clientIds = [];
 
-        if (!clientId) {
+        if (req.body.clientIds) {
+          clientIds =
+            Array.isArray(req.body.clientIds)
+              ? req.body.clientIds
+              : [];
+        }
+
+        if (
+          req.body.clientId &&
+          !clientIds.includes(
+            req.body.clientId
+          )
+        ) {
+          clientIds.push(
+            req.body.clientId
+          );
+        }
+
+        if (!clientIds.length) {
           return res.status(400).json({
             success: false,
             error:
-              "clientId is required"
+              "clientId or clientIds is required"
           });
         }
 
-        const client =
-          await Client.findOne({
-            _id: clientId,
+        const uniqueClientIds =
+          [...new Set(
+            clientIds.map(
+              String
+            )
+          )];
+
+        if (
+          uniqueClientIds.length >
+          20
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              "Maximum of 20 applicants per application"
+          });
+        }
+
+        const clients =
+          await Client.find({
+            _id: {
+              $in:
+                uniqueClientIds
+            },
+
             accountId:
               req.user.accountId,
-            active: true
+
+            active:
+              true
           });
 
-        if (!client) {
+        if (
+          clients.length !==
+          uniqueClientIds.length
+        ) {
           return res.status(404).json({
             success: false,
             error:
-              "Client not found"
+              "One or more clients were not found"
+          });
+        }
+
+        const requestedMode =
+          String(
+            req.body.bookingMode ||
+            (
+              clients.length > 1
+                ? "GROUP_REQUIRED"
+                : "SINGLE"
+            )
+          ).toUpperCase();
+
+        const allowedModes = [
+          "SINGLE",
+          "GROUP_REQUIRED",
+          "PARTIAL_ALLOWED"
+        ];
+
+        if (
+          !allowedModes.includes(
+            requestedMode
+          )
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              "Invalid bookingMode"
+          });
+        }
+
+        if (
+          requestedMode ===
+            "SINGLE" &&
+          clients.length > 1
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              "SINGLE mode accepts only one applicant"
           });
         }
 
@@ -86,6 +252,7 @@ function createApplicationRouter({
             await Application.findOne({
               accountId:
                 req.user.accountId,
+
               idempotencyKey
             });
 
@@ -99,28 +266,18 @@ function createApplicationRouter({
           }
         }
 
-        const preparedData = {
-          fullName:
-            client.fullName,
-          email:
-            client.email,
-          phone:
-            client.phone,
-          dateOfBirth:
-            client.dateOfBirth,
-          nationality:
-            client.nationality,
-          gender:
-            client.gender,
-          passportNumber:
-            client.passportNumber,
-          passportIssueDate:
-            client.passportIssueDate,
-          passportExpiryDate:
-            client.passportExpiryDate,
-          passportCountry:
-            client.passportCountry
-        };
+        const groupId =
+          clients.length > 1
+            ? (
+                req.body.groupId ||
+                `GRP-${Date.now()}`
+              )
+            : null;
+
+        const preparedData =
+          buildPreparedData(
+            clients
+          );
 
         const application =
           await Application.create({
@@ -130,20 +287,45 @@ function createApplicationRouter({
             createdBy:
               req.user._id,
 
+            /*
+             * Compatibilidade com
+             * código antigo.
+             */
             client:
-              client._id,
+              clients[0]._id,
+
+            groupId,
+
+            bookingMode:
+              requestedMode,
+
+            applicantsCount:
+              clients.length,
+
+            applicants:
+              clients.map(
+                buildApplicant
+              ),
 
             idempotencyKey,
 
             preferredDates:
-              preferredDates || {
+              req.body.preferredDates ||
+              {
                 start: null,
                 end: null
               },
 
             preferredTime:
-              preferredTime ||
+              req.body.preferredTime ||
               null,
+
+            preferredWeekdays:
+              Array.isArray(
+                req.body.preferredWeekdays
+              )
+                ? req.body.preferredWeekdays
+                : [],
 
             preparedDataEncrypted:
               encryptJson(
@@ -157,19 +339,25 @@ function createApplicationRouter({
         await AuditLog.create({
           actorId:
             req.user._id,
+
           action:
             "application.create",
+
           resource:
             "application",
+
           resourceId:
             application._id.toString(),
-          ip: req.ip
+
+          ip:
+            req.ip
         });
 
         return res.status(201).json({
           success: true,
           application
         });
+
       } catch (error) {
         next(error);
       }
@@ -193,6 +381,10 @@ function createApplicationRouter({
               "client",
               "fullName email passportNumber"
             )
+            .populate(
+              "applicants.client",
+              "fullName email passportNumber"
+            )
             .sort({
               createdAt: -1
             })
@@ -202,6 +394,7 @@ function createApplicationRouter({
           success: true,
           applications
         });
+
       } catch (error) {
         next(error);
       }
@@ -220,11 +413,16 @@ function createApplicationRouter({
           await Application.findOne({
             _id:
               req.params.id,
+
             accountId:
               req.user.accountId
-          }).populate(
-            "client"
-          );
+          })
+            .populate(
+              "client"
+            )
+            .populate(
+              "applicants.client"
+            );
 
         if (!application) {
           return res.status(404).json({
@@ -238,6 +436,7 @@ function createApplicationRouter({
           success: true,
           application
         });
+
       } catch (error) {
         next(error);
       }
@@ -261,6 +460,7 @@ function createApplicationRouter({
           await Application.findOne({
             _id:
               req.params.id,
+
             accountId:
               req.user.accountId
           });
@@ -283,6 +483,7 @@ function createApplicationRouter({
           application:
             result
         });
+
       } catch (error) {
         next(error);
       }
@@ -306,6 +507,7 @@ function createApplicationRouter({
           await Application.findOne({
             _id:
               req.params.id,
+
             accountId:
               req.user.accountId
           });
@@ -328,6 +530,7 @@ function createApplicationRouter({
           application:
             result
         });
+
       } catch (error) {
         next(error);
       }
@@ -352,8 +555,10 @@ function createApplicationRouter({
             {
               _id:
                 req.params.id,
+
               accountId:
                 req.user.accountId,
+
               status: {
                 $nin: [
                   "completed",
@@ -365,7 +570,11 @@ function createApplicationRouter({
               $set: {
                 status:
                   "cancelled",
+
                 "bot2.monitoring":
+                  false,
+
+                "radar.enabled":
                   false
               }
             },
@@ -386,6 +595,7 @@ function createApplicationRouter({
           success: true,
           application
         });
+
       } catch (error) {
         next(error);
       }
