@@ -296,16 +296,23 @@ router.post(
   requireAuth,
   async (req, res, next) => {
     try {
-      req.user.sessionVersion += 1;
+      if (config.authEnabled) {
+        req.user.sessionVersion += 1;
 
-      await req.user.save();
+        await req.user.save();
+
+        await AuditLog.create({
+          actorId: req.user._id,
+          action: "auth.logout",
+          ip: req.ip
+        });
+      }
 
       res.clearCookie(
         config.cookieName,
         {
           httpOnly: true,
-          secure:
-            config.cookieSecure,
+          secure: config.cookieSecure,
           sameSite: "lax",
           path: "/"
         }
@@ -314,18 +321,11 @@ router.post(
       res.clearCookie(
         "csrf_token",
         {
-          secure:
-            config.cookieSecure,
+          secure: config.cookieSecure,
           sameSite: "lax",
           path: "/"
         }
       );
-
-      await AuditLog.create({
-        actorId: req.user._id,
-        action: "auth.logout",
-        ip: req.ip
-      });
 
       return res.json({
         success: true
