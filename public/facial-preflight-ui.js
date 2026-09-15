@@ -1769,68 +1769,112 @@
 
 
   async function saveResult(
-    result
+  result
+) {
+
+  const applicationForm =
+    document.getElementById(
+      "applicationForm"
+    );
+
+  if (applicationForm) {
+    applicationForm.dataset
+      .facialPreflight =
+      "pending";
+  }
+
+  if (
+    saving ||
+    !selectedClient
   ) {
-    if (
-      saving ||
-      !selectedClient
-    ) {
-      return;
+    return;
+  }
+
+  saving = true;
+
+  showResult(
+    result,
+    null
+  );
+
+  if (
+    !result?.passed
+  ) {
+
+    if (applicationForm) {
+      applicationForm.dataset
+        .facialPreflight =
+        "failed";
     }
 
-    saving = true;
+    saving = false;
+    return;
+  }
+
+  try {
+
+    const data =
+      await window
+        .TravelFacialPreflight
+        .submitToBackend({
+          clientId:
+            selectedClient.id,
+
+          passportMatch:
+            null
+        });
+
+    if (
+      data?.success !== true
+    ) {
+      throw new Error(
+        data?.error ||
+        data?.message ||
+        "O backend não confirmou a verificação facial."
+      );
+    }
+
+    if (applicationForm) {
+      applicationForm.dataset
+        .facialPreflight =
+        "passed";
+    }
 
     showResult(
       result,
-      null
+      data
     );
 
-    if (
-      !result?.passed
-    ) {
-      saving = false;
-      return;
+  } catch (error) {
+
+    if (applicationForm) {
+      applicationForm.dataset
+        .facialPreflight =
+        "failed";
     }
 
-    try {
-      const data =
-        await window
-          .TravelFacialPreflight
-          .submitToBackend({
-            clientId:
-              selectedClient.id,
+    console.error(
+      "[IdentityCenter] backend",
+      error
+    );
 
-            passportMatch:
-              null
-          });
+    setState(
+      "NÃO GUARDADA",
+      "error"
+    );
 
-      showResult(
-        result,
-        data
-      );
+    setStatus(
+      error?.message ||
+      "A preparação terminou, mas não foi possível guardar o resultado."
+    );
 
-    } catch (error) {
-      console.error(
-        "[IdentityCenter] backend",
-        error
-      );
+  } finally {
 
-      setState(
-        "NÃO GUARDADA",
-        "error"
-      );
+    saving = false;
 
-      setStatus(
-        error?.message ||
-        "A preparação terminou, mas não foi possível guardar o resultado."
-      );
-
-    } finally {
-      saving = false;
-    }
   }
 
-
+}
   function showResult(
     result,
     backend
