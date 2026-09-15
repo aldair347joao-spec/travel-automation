@@ -11,12 +11,21 @@ const AuditLog =
 
 const {
   encryptJson
-} = require("../utils/crypto");
+} =
+  require("../utils/crypto");
 
 const {
   requireAuth,
   requireRole
-} = require("../middleware/auth");
+} =
+  require("../middleware/auth");
+
+
+const VISA_TYPES = [
+  "SCHENGEN",
+  "NACIONAL"
+];
+
 
 function buildApplicant(client) {
   return {
@@ -64,8 +73,30 @@ function buildApplicant(client) {
   };
 }
 
-function buildPreparedData(clients) {
+
+function buildPreparedData(
+  clients,
+  travelPreferences
+) {
   return {
+    visaType:
+      travelPreferences.visaType,
+
+    visaCenter:
+      travelPreferences.visaCenter,
+
+    travelPurpose:
+      travelPreferences.travelPurpose,
+
+    preferredDates:
+      travelPreferences.preferredDates,
+
+    preferredTime:
+      travelPreferences.preferredTime,
+
+    preferredWeekdays:
+      travelPreferences.preferredWeekdays,
+
     applicants:
       clients.map(client => ({
         clientId:
@@ -104,15 +135,24 @@ function buildPreparedData(clients) {
   };
 }
 
+
 function createApplicationRouter({
   supervisor
 }) {
   const router =
     express.Router();
 
+
   router.use(
     requireAuth
   );
+
+
+  /*
+   * =========================================================
+   * CREATE APPLICATION
+   * =========================================================
+   */
 
   router.post(
     "/",
@@ -126,15 +166,62 @@ function createApplicationRouter({
       res,
       next
     ) => {
+
       try {
+
+        /*
+         * -----------------------------------------------------
+         * VISA TYPE
+         * -----------------------------------------------------
+         */
+
+        const visaType =
+          String(
+            req.body.visaType ||
+            ""
+          )
+            .trim()
+            .toUpperCase();
+
+
+        if (
+          !VISA_TYPES.includes(
+            visaType
+          )
+        ) {
+
+          return res.status(400).json({
+            success: false,
+
+            error:
+              "Selecione um tipo de visto válido: SCHENGEN ou NACIONAL"
+          });
+
+        }
+
+
+        /*
+         * -----------------------------------------------------
+         * CLIENTS
+         * -----------------------------------------------------
+         */
+
         let clientIds = [];
 
-        if (req.body.clientIds) {
+
+        if (
+          req.body.clientIds
+        ) {
+
           clientIds =
-            Array.isArray(req.body.clientIds)
+            Array.isArray(
+              req.body.clientIds
+            )
               ? req.body.clientIds
               : [];
+
         }
+
 
         if (
           req.body.clientId &&
@@ -142,36 +229,52 @@ function createApplicationRouter({
             req.body.clientId
           )
         ) {
+
           clientIds.push(
             req.body.clientId
           );
+
         }
 
-        if (!clientIds.length) {
+
+        if (
+          !clientIds.length
+        ) {
+
           return res.status(400).json({
             success: false,
+
             error:
               "clientId or clientIds is required"
           });
+
         }
 
+
         const uniqueClientIds =
-          [...new Set(
-            clientIds.map(
-              String
+          [
+            ...new Set(
+              clientIds.map(
+                String
+              )
             )
-          )];
+          ];
+
 
         if (
           uniqueClientIds.length >
           20
         ) {
+
           return res.status(400).json({
             success: false,
+
             error:
               "Maximum of 20 applicants per application"
           });
+
         }
+
 
         const clients =
           await Client.find({
@@ -187,16 +290,27 @@ function createApplicationRouter({
               true
           });
 
+
         if (
           clients.length !==
           uniqueClientIds.length
         ) {
+
           return res.status(404).json({
             success: false,
+
             error:
               "One or more clients were not found"
           });
+
         }
+
+
+        /*
+         * -----------------------------------------------------
+         * BOOKING MODE
+         * -----------------------------------------------------
+         */
 
         const requestedMode =
           String(
@@ -208,35 +322,103 @@ function createApplicationRouter({
             )
           ).toUpperCase();
 
+
         const allowedModes = [
           "SINGLE",
           "GROUP_REQUIRED",
           "PARTIAL_ALLOWED"
         ];
 
+
         if (
           !allowedModes.includes(
             requestedMode
           )
         ) {
+
           return res.status(400).json({
             success: false,
+
             error:
               "Invalid bookingMode"
           });
+
         }
+
 
         if (
           requestedMode ===
             "SINGLE" &&
           clients.length > 1
         ) {
+
           return res.status(400).json({
             success: false,
+
             error:
               "SINGLE mode accepts only one applicant"
           });
+
         }
+
+
+        /*
+         * -----------------------------------------------------
+         * TRAVEL PREFERENCES
+         * -----------------------------------------------------
+         */
+
+        const preferredDates =
+          req.body.preferredDates &&
+          typeof req.body.preferredDates ===
+            "object"
+            ? {
+                start:
+                  req.body.preferredDates.start ||
+                  null,
+
+                end:
+                  req.body.preferredDates.end ||
+                  null
+              }
+            : {
+                start: null,
+                end: null
+              };
+
+
+        const preferredTime =
+          req.body.preferredTime ||
+          null;
+
+
+        const preferredWeekdays =
+          Array.isArray(
+            req.body.preferredWeekdays
+          )
+            ? req.body.preferredWeekdays
+            : [];
+
+
+        const visaCenter =
+          typeof req.body.visaCenter ===
+            "string"
+            ? req.body.visaCenter.trim()
+            : null;
+
+
+        const travelPurpose =
+          typeof req.body.travelPurpose ===
+            "string"
+            ? req.body.travelPurpose.trim()
+            : null;
+
+
+        /*
+         * -----------------------------------------------------
+         * IDEMPOTENCY
+         * -----------------------------------------------------
+         */
 
         const idempotencyKey =
           req.get(
@@ -245,9 +427,11 @@ function createApplicationRouter({
           req.body.idempotencyKey ||
           null;
 
+
         if (
           idempotencyKey
         ) {
+
           const existing =
             await Application.findOne({
               accountId:
@@ -256,15 +440,28 @@ function createApplicationRouter({
               idempotencyKey
             });
 
+
           if (existing) {
+
             return res.status(200).json({
               success: true,
+
               existing: true,
+
               application:
                 existing
             });
+
           }
+
         }
+
+
+        /*
+         * -----------------------------------------------------
+         * GROUP
+         * -----------------------------------------------------
+         */
 
         const groupId =
           clients.length > 1
@@ -274,23 +471,50 @@ function createApplicationRouter({
               )
             : null;
 
+
+        /*
+         * -----------------------------------------------------
+         * PREPARED DATA
+         * -----------------------------------------------------
+         */
+
+        const travelPreferences = {
+          visaType,
+
+          visaCenter,
+
+          travelPurpose,
+
+          preferredDates,
+
+          preferredTime,
+
+          preferredWeekdays
+        };
+
+
         const preparedData =
           buildPreparedData(
-            clients
+            clients,
+            travelPreferences
           );
+
+
+        /*
+         * -----------------------------------------------------
+         * CREATE
+         * -----------------------------------------------------
+         */
 
         const application =
           await Application.create({
+
             accountId:
               req.user.accountId,
 
             createdBy:
               req.user._id,
 
-            /*
-             * Compatibilidade com
-             * código antigo.
-             */
             client:
               clients[0]._id,
 
@@ -307,25 +531,19 @@ function createApplicationRouter({
                 buildApplicant
               ),
 
+            visaType,
+
+            visaCenter,
+
+            travelPurpose,
+
             idempotencyKey,
 
-            preferredDates:
-              req.body.preferredDates ||
-              {
-                start: null,
-                end: null
-              },
+            preferredDates,
 
-            preferredTime:
-              req.body.preferredTime ||
-              null,
+            preferredTime,
 
-            preferredWeekdays:
-              Array.isArray(
-                req.body.preferredWeekdays
-              )
-                ? req.body.preferredWeekdays
-                : [],
+            preferredWeekdays,
 
             preparedDataEncrypted:
               encryptJson(
@@ -336,7 +554,15 @@ function createApplicationRouter({
               "created"
           });
 
+
+        /*
+         * -----------------------------------------------------
+         * AUDIT
+         * -----------------------------------------------------
+         */
+
         await AuditLog.create({
+
           actorId:
             req.user._id,
 
@@ -351,18 +577,32 @@ function createApplicationRouter({
 
           ip:
             req.ip
+
         });
+
 
         return res.status(201).json({
           success: true,
+
           application
         });
 
+
       } catch (error) {
+
         next(error);
+
       }
+
     }
   );
+
+
+  /*
+   * =========================================================
+   * LIST
+   * =========================================================
+   */
 
   router.get(
     "/",
@@ -371,7 +611,9 @@ function createApplicationRouter({
       res,
       next
     ) => {
+
       try {
+
         const applications =
           await Application.find({
             accountId:
@@ -390,16 +632,29 @@ function createApplicationRouter({
             })
             .limit(200);
 
+
         return res.json({
           success: true,
+
           applications
         });
 
+
       } catch (error) {
+
         next(error);
+
       }
+
     }
   );
+
+
+  /*
+   * =========================================================
+   * GET ONE
+   * =========================================================
+   */
 
   router.get(
     "/:id",
@@ -408,14 +663,18 @@ function createApplicationRouter({
       res,
       next
     ) => {
+
       try {
+
         const application =
           await Application.findOne({
+
             _id:
               req.params.id,
 
             accountId:
               req.user.accountId
+
           })
             .populate(
               "client"
@@ -424,247 +683,360 @@ function createApplicationRouter({
               "applicants.client"
             );
 
+
         if (!application) {
+
           return res.status(404).json({
             success: false,
+
             error:
               "Application not found"
           });
+
         }
+
 
         return res.json({
           success: true,
+
           application
         });
 
+
       } catch (error) {
+
         next(error);
+
       }
+
     }
   );
 
+
+  /*
+   * =========================================================
+   * PREPARE
+   * =========================================================
+   */
+
   router.post(
     "/:id/prepare",
+
     requireRole(
       "owner",
       "admin",
       "operator"
     ),
+
     async (
       req,
       res,
       next
     ) => {
+
       try {
+
         const application =
           await Application.findOne({
+
             _id:
               req.params.id,
 
             accountId:
               req.user.accountId
+
           });
 
+
         if (!application) {
+
           return res.status(404).json({
             success: false,
+
             error:
               "Application not found"
           });
+
         }
+
 
         const result =
           await supervisor.prepare(
             application._id.toString()
           );
 
+
         return res.json({
           success: true,
+
           application:
             result
         });
 
+
       } catch (error) {
+
         next(error);
+
       }
+
     }
   );
 
+
+  /*
+   * =========================================================
+   * CONTINUE
+   * =========================================================
+   */
+
   router.post(
     "/:id/continue",
+
     requireRole(
       "owner",
       "admin",
       "operator"
     ),
+
     async (
       req,
       res,
       next
     ) => {
+
       try {
+
         const application =
           await Application.findOne({
+
             _id:
               req.params.id,
 
             accountId:
               req.user.accountId
+
           });
 
+
         if (!application) {
+
           return res.status(404).json({
             success: false,
+
             error:
               "Application not found"
           });
+
         }
+
 
         const result =
           await supervisor.continueAfterVerification(
             application._id.toString()
           );
 
+
         return res.json({
           success: true,
+
           application:
             result
         });
 
+
       } catch (error) {
+
         next(error);
+
       }
+
     }
   );
+
+
+  /*
+   * =========================================================
+   * OTP
+   * =========================================================
+   */
+
   router.post(
-  "/:id/otp/verify",
-  requireRole(
-    "owner",
-    "admin",
-    "operator"
-  ),
-  async (
-    req,
-    res,
-    next
-  ) => {
-    try {
-      const application =
-        await Application.findOne({
-          _id:
-            req.params.id,
+    "/:id/otp/verify",
 
-          accountId:
-            req.user.accountId
-        });
-
-      if (!application) {
-        return res.status(404).json({
-          success:
-            false,
-
-          error:
-            "Application not found"
-        });
-      }
-
-      const code =
-        typeof req.body.code ===
-        "string"
-          ? req.body.code.trim()
-          : "";
-
-      if (!/^\d{4,8}$/.test(code)) {
-        return res.status(400).json({
-          success:
-            false,
-
-          error:
-            "Invalid OTP format"
-        });
-      }
-
-      const result =
-        await supervisor.verifyOtp(
-          application._id.toString(),
-          code
-        );
-
-      return res.json({
-        success:
-          true,
-
-        application:
-          result,
-
-        otp: {
-          status:
-            result.otp?.status ||
-            null,
-
-          verifiedAt:
-            result.otp?.verifiedAt ||
-            null
-        }
-      });
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-  router.post(
-    "/:id/resume",
     requireRole(
       "owner",
       "admin",
       "operator"
     ),
+
     async (
       req,
       res,
       next
     ) => {
+
       try {
+
         const application =
           await Application.findOne({
+
             _id:
               req.params.id,
 
             accountId:
               req.user.accountId
+
           });
 
+
         if (!application) {
+
           return res.status(404).json({
-            success:
-              false,
+            success: false,
 
             error:
               "Application not found"
           });
+
         }
+
+
+        const code =
+          typeof req.body.code ===
+            "string"
+            ? req.body.code.trim()
+            : "";
+
+
+        if (
+          !/^\d{4,8}$/.test(
+            code
+          )
+        ) {
+
+          return res.status(400).json({
+            success: false,
+
+            error:
+              "Invalid OTP format"
+          });
+
+        }
+
+
+        const result =
+          await supervisor.verifyOtp(
+            application._id.toString(),
+            code
+          );
+
+
+        return res.json({
+
+          success: true,
+
+          application:
+            result,
+
+          otp: {
+
+            status:
+              result.otp?.status ||
+              null,
+
+            verifiedAt:
+              result.otp?.verifiedAt ||
+              null
+
+          }
+
+        });
+
+
+      } catch (error) {
+
+        next(error);
+
+      }
+
+    }
+  );
+
+
+  /*
+   * =========================================================
+   * RESUME
+   * =========================================================
+   */
+
+  router.post(
+    "/:id/resume",
+
+    requireRole(
+      "owner",
+      "admin",
+      "operator"
+    ),
+
+    async (
+      req,
+      res,
+      next
+    ) => {
+
+      try {
+
+        const application =
+          await Application.findOne({
+
+            _id:
+              req.params.id,
+
+            accountId:
+              req.user.accountId
+
+          });
+
+
+        if (!application) {
+
+          return res.status(404).json({
+            success: false,
+
+            error:
+              "Application not found"
+          });
+
+        }
+
 
         if (
           application.status !==
           "requires_user"
         ) {
+
           return res.status(409).json({
-            success:
-              false,
+
+            success: false,
 
             error:
               `Application cannot be resumed from status ${application.status}`
+
           });
+
         }
+
 
         const result =
           await supervisor.resumeApplication(
             application._id.toString()
           );
 
+
         return res.json({
-          success:
-            true,
+
+          success: true,
 
           application:
             result.application,
@@ -686,27 +1058,46 @@ function createApplicationRouter({
           reason:
             result.reason ||
             null
+
         });
+
+
       } catch (error) {
+
         next(error);
+
       }
+
     }
   );
+
+
+  /*
+   * =========================================================
+   * CANCEL
+   * =========================================================
+   */
+
   router.post(
     "/:id/cancel",
+
     requireRole(
       "owner",
       "admin",
       "operator"
     ),
+
     async (
       req,
       res,
       next
     ) => {
+
       try {
+
         const application =
           await Application.findOneAndUpdate(
+
             {
               _id:
                 req.params.id,
@@ -721,8 +1112,10 @@ function createApplicationRouter({
                 ]
               }
             },
+
             {
               $set: {
+
                 status:
                   "cancelled",
 
@@ -731,34 +1124,49 @@ function createApplicationRouter({
 
                 "radar.enabled":
                   false
+
               }
             },
+
             {
               new: true
             }
+
           );
 
+
         if (!application) {
+
           return res.status(404).json({
             success: false,
+
             error:
               "Application not found or cannot be cancelled"
           });
+
         }
+
 
         return res.json({
           success: true,
+
           application
         });
 
+
       } catch (error) {
+
         next(error);
+
       }
+
     }
   );
 
+
   return router;
 }
+
 
 module.exports =
   createApplicationRouter;
