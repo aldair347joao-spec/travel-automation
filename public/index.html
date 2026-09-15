@@ -233,45 +233,7 @@
             <small>
               Processo de viagem
             </small>
-          <style>
-  /*
-   * PRIMEIRO PAINT
-   * Evita que os elementos secundários
-   * disputem renderização com o painel inicial.
-   */
-
-  .site-background {
-    pointer-events: none;
-  }
-
-  .stats-grid,
-  .dashboard-grid,
-  .dashboard-sidebar,
-  .security-card,
-  .workflow-stage-mount {
-    content-visibility: auto;
-    contain-intrinsic-size: 700px;
-  }
-
-  .dashboard-sidebar {
-    contain-intrinsic-size: 1000px;
-  }
-
-  .background-airplane {
-    will-change: auto;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
-      animation-duration: 0.001ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.001ms !important;
-      scroll-behavior: auto !important;
-    }
-  }
-</style>
+          
           </div>
 
         </div>
