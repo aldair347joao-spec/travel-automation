@@ -8,10 +8,32 @@ function loadEnvironment() {
   const isProduction =
     process.env.NODE_ENV === "production";
 
+  /*
+   * =========================================================
+   * AUTHENTICATION
+   * =========================================================
+   *
+   * A aplicação pública atualmente não necessita
+   * de login para entrar.
+   *
+   * Para voltar a ativar autenticação:
+   *
+   * AUTH_ENABLED=true
+   *
+   * Por defeito:
+   *
+   * AUTH_ENABLED=false
+   */
   const authEnabled =
     String(
-      process.env.AUTH_ENABLED || "true"
+      process.env.AUTH_ENABLED || "false"
     ).toLowerCase() !== "false";
+
+  /*
+   * =========================================================
+   * PRODUCTION VALIDATION
+   * =========================================================
+   */
 
   if (isProduction) {
     const missing =
@@ -43,6 +65,12 @@ function loadEnvironment() {
   }
 
   return {
+    /*
+     * =======================================================
+     * APPLICATION
+     * =======================================================
+     */
+
     nodeEnv:
       process.env.NODE_ENV ||
       "development",
@@ -55,8 +83,20 @@ function loadEnvironment() {
       Number(process.env.PORT) ||
       10000,
 
+    /*
+     * =======================================================
+     * DATABASE
+     * =======================================================
+     */
+
     mongoUri:
       process.env.MONGODB_URI,
+
+    /*
+     * =======================================================
+     * AUTH / SESSION
+     * =======================================================
+     */
 
     jwtSecret:
       process.env.JWT_SECRET,
@@ -73,26 +113,48 @@ function loadEnvironment() {
       process.env.COOKIE_SECURE !==
       "false",
 
+    /*
+     * =======================================================
+     * FRONTEND
+     * =======================================================
+     */
+
     frontendUrl:
       process.env.FRONTEND_URL ||
       "",
+
+    /*
+     * =======================================================
+     * APPLICATION IDENTITY
+     * =======================================================
+     */
 
     appName:
       process.env.APP_NAME ||
       "Travel Automation",
 
+    /*
+     * =======================================================
+     * DEVELOPMENT / NO-LOGIN IDENTITY
+     * =======================================================
+     *
+     * Esta identidade é utilizada quando
+     * AUTH_ENABLED=false.
+     */
+
     developmentAccountId:
       process.env.DEVELOPMENT_ACCOUNT_ID ||
-      "development-account",
+      "travel-automation-public",
 
     developmentUserName:
       process.env.DEVELOPMENT_USER_NAME ||
-      "Operations Console",
+      "Travel Automation",
 
     developmentUserEmail:
       process.env.DEVELOPMENT_USER_EMAIL ||
-      "dev@travel-automation.local"
+      "system@travel-automation.local"
   };
 }
 
-module.exports = loadEnvironment();
+module.exports =
+  loadEnvironment();
