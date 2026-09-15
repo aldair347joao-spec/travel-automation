@@ -4692,4 +4692,500 @@
     init
   );
 
+  /* =========================================================
+     TRAVEL WORKFLOW
+     Fluxo:
+     Perfil → Viagem → Documentos → Identidade
+     → Candidatura → OTP → VFS → Radar → Vaga
+  ========================================================= */
+
+  const TRAVEL_WORKFLOW_KEY =
+    "travelAutomationPreferences";
+
+  const travelWorkflow = {
+    currentStage: "client",
+
+    stages: [
+      {
+        id: "client",
+        label: "Perfil",
+        description: "Dados do viajante"
+      },
+      {
+        id: "travel",
+        label: "Viagem",
+        description: "Destino e preferências"
+      },
+      {
+        id: "passport",
+        label: "Documentos",
+        description: "Passaporte e documentos"
+      },
+      {
+        id: "identity",
+        label: "Identidade",
+        description: "Verificação de identidade"
+      },
+      {
+        id: "application",
+        label: "Candidatura",
+        description: "Preparação da candidatura"
+      },
+      {
+        id: "otp",
+        label: "OTP",
+        description: "Confirmação"
+      },
+      {
+        id: "vfs",
+        label: "VFS",
+        description: "Preparação do atendimento"
+      },
+      {
+        id: "radar",
+        label: "Radar",
+        description: "Monitorização de vagas"
+      },
+      {
+        id: "slot",
+        label: "Vaga",
+        description: "Agendamento encontrado"
+      }
+    ]
+  };
+
+  function getDefaultTravelPreferences() {
+    return {
+      origin: "Angola",
+      destination: "Portugal",
+      center: "",
+      visaType: "",
+      travelDate: "",
+      appointmentDeadline: "",
+      timePreference: "any",
+      slotFlexibility: "flexible"
+    };
+  }
+
+  function getTravelPreferences() {
+    try {
+      const saved =
+        localStorage.getItem(
+          TRAVEL_WORKFLOW_KEY
+        );
+
+      if (!saved) {
+        return getDefaultTravelPreferences();
+      }
+
+      const parsed =
+        JSON.parse(saved);
+
+      return {
+        ...getDefaultTravelPreferences(),
+        ...(parsed || {}),
+        origin: "Angola",
+        destination: "Portugal"
+      };
+    } catch (error) {
+      console.warn(
+        "Não foi possível carregar as preferências de viagem.",
+        error
+      );
+
+      return getDefaultTravelPreferences();
+    }
+  }
+
+  function saveTravelPreferences(preferences) {
+    const normalized = {
+      ...getDefaultTravelPreferences(),
+      ...(preferences || {}),
+      origin: "Angola",
+      destination: "Portugal"
+    };
+
+    if (
+      !["Schengen", "Nacional"].includes(
+        normalized.visaType
+      )
+    ) {
+      throw new Error(
+        "Selecione Schengen ou Nacional."
+      );
+    }
+
+    if (!normalized.center) {
+      throw new Error(
+        "Selecione o centro VFS."
+      );
+    }
+
+    if (!normalized.travelDate) {
+      throw new Error(
+        "Informe a data pretendida da viagem."
+      );
+    }
+
+    localStorage.setItem(
+      TRAVEL_WORKFLOW_KEY,
+      JSON.stringify(normalized)
+    );
+
+    travelWorkflow.currentStage =
+      "passport";
+
+    document.dispatchEvent(
+      new CustomEvent(
+        "travel:preferences:changed",
+        {
+          detail: normalized
+        }
+      )
+    );
+
+    updateTravelWorkflowUI();
+
+    addActivity?.(
+      "Preferências de viagem",
+      `Viagem para Portugal configurada com visto ${normalized.visaType}.`,
+      "blue"
+    );
+
+    return normalized;
+  }
+
+  function clearTravelPreferences() {
+    localStorage.removeItem(
+      TRAVEL_WORKFLOW_KEY
+    );
+
+    travelWorkflow.currentStage =
+      "travel";
+
+    updateTravelWorkflowUI();
+  }
+
+  function setTravelStage(stage) {
+    const valid =
+      travelWorkflow.stages.some(
+        item => item.id === stage
+      );
+
+    if (!valid) {
+      return false;
+    }
+
+    travelWorkflow.currentStage =
+      stage;
+
+    document.dispatchEvent(
+      new CustomEvent(
+        "travel:stage:changed",
+        {
+          detail: {
+            stage
+          }
+        }
+      )
+    );
+
+    updateTravelWorkflowUI();
+
+    return true;
+  }
+
+  function getTravelStage() {
+    return travelWorkflow.currentStage;
+  }
+
+  function updateTravelWorkflowUI() {
+    const preferences =
+      getTravelPreferences();
+
+    const visaElement =
+      $("visaType");
+
+    if (
+      visaElement &&
+      preferences.visaType
+    ) {
+      visaElement.value =
+        preferences.visaType;
+    }
+
+    const destination =
+      $("travelDestination");
+
+    if (destination) {
+      destination.value =
+        "Portugal";
+    }
+
+    const center =
+      $("travelCenter");
+
+    if (
+      center &&
+      preferences.center
+    ) {
+      center.value =
+        preferences.center;
+    }
+
+    const travelDate =
+      $("travelDate");
+
+    if (
+      travelDate &&
+      preferences.travelDate
+    ) {
+      travelDate.value =
+        preferences.travelDate;
+    }
+
+    const deadline =
+      $("appointmentDeadline");
+
+    if (
+      deadline &&
+      preferences.appointmentDeadline
+    ) {
+      deadline.value =
+        preferences.appointmentDeadline;
+    }
+
+    const timePreference =
+      $("timePreference");
+
+    if (
+      timePreference &&
+      preferences.timePreference
+    ) {
+      timePreference.value =
+        preferences.timePreference;
+    }
+
+    const flexibility =
+      $("slotFlexibility");
+
+    if (
+      flexibility &&
+      preferences.slotFlexibility
+    ) {
+      flexibility.value =
+        preferences.slotFlexibility;
+    }
+
+    document
+      .querySelectorAll(
+        "[data-travel-stage]"
+      )
+      .forEach(element => {
+        const stage =
+          element.dataset.travelStage;
+
+        element.classList.toggle(
+          "active",
+          stage ===
+            travelWorkflow.currentStage
+        );
+
+        element.classList.toggle(
+          "completed",
+          isTravelStageCompleted(stage)
+        );
+      });
+  }
+
+  function isTravelStageCompleted(stage) {
+    const preferences =
+      getTravelPreferences();
+
+    switch (stage) {
+      case "client":
+        return Boolean(
+          state.selectedClient
+        );
+
+      case "travel":
+        return Boolean(
+          preferences.visaType &&
+          preferences.center &&
+          preferences.travelDate
+        );
+
+      case "passport":
+        return Boolean(
+          state.passportValidation
+        );
+
+      case "identity":
+        return Boolean(
+          state.facialReady
+        );
+
+      default:
+        return false;
+    }
+  }
+
+  function collectTravelPreferencesFromDOM() {
+    return {
+      origin: "Angola",
+      destination:
+        $("travelDestination")
+          ?.value ||
+        "Portugal",
+
+      center:
+        $("travelCenter")
+          ?.value ||
+        "",
+
+      visaType:
+        $("visaType")
+          ?.value ||
+        "",
+
+      travelDate:
+        $("travelDate")
+          ?.value ||
+        "",
+
+      appointmentDeadline:
+        $("appointmentDeadline")
+          ?.value ||
+        "",
+
+      timePreference:
+        $("timePreference")
+          ?.value ||
+        "any",
+
+      slotFlexibility:
+        $("slotFlexibility")
+          ?.value ||
+        "flexible"
+    };
+  }
+
+  function handleTravelPreferencesSubmit(
+    event
+  ) {
+    event.preventDefault();
+
+    const form =
+      event.currentTarget;
+
+    const submitButton =
+      form?.querySelector(
+        'button[type="submit"]'
+      );
+
+    if (submitButton) {
+      submitButton.disabled =
+        true;
+    }
+
+    try {
+      const preferences =
+        collectTravelPreferencesFromDOM();
+
+      saveTravelPreferences(
+        preferences
+      );
+
+      showToast(
+        "Preferências de viagem guardadas. O próximo passo é preparar os documentos.",
+        "success"
+      );
+
+      setTravelStage(
+        "passport"
+      );
+    } catch (error) {
+      console.error(error);
+
+      showToast(
+        error.message ||
+          "Não foi possível guardar as preferências.",
+        "error"
+      );
+    } finally {
+      if (submitButton) {
+        submitButton.disabled =
+          false;
+      }
+    }
+  }
+
+  function bindTravelWorkflow() {
+    const travelForm =
+      $("travelForm");
+
+    if (travelForm) {
+      travelForm.addEventListener(
+        "submit",
+        handleTravelPreferencesSubmit
+      );
+    }
+
+    document.addEventListener(
+      "travel:preferences:changed",
+      event => {
+        const preferences =
+          event.detail || {};
+
+        console.info(
+          "Preferências de viagem atualizadas:",
+          preferences
+        );
+
+        updateTravelWorkflowUI();
+      }
+    );
+
+    document.addEventListener(
+      "travel:stage:changed",
+      () => {
+        updateTravelWorkflowUI();
+      }
+    );
+
+    updateTravelWorkflowUI();
+  }
+
+  /*
+   * API pública para os próximos módulos:
+   * radar, VFS, OTP e agendamento.
+   */
+  window.TravelWorkflow = {
+    getTravelPreferences,
+    saveTravelPreferences,
+    clearTravelPreferences,
+    setStage: setTravelStage,
+    getStage: getTravelStage,
+    getStages: () =>
+      travelWorkflow.stages.map(
+        stage => ({ ...stage })
+      )
+  };
+
+  /*
+   * Não falha caso o HTML ainda não tenha
+   * o formulário da viagem.
+   */
+  if (
+    document.readyState ===
+    "loading"
+  ) {
+    document.addEventListener(
+      "DOMContentLoaded",
+      bindTravelWorkflow,
+      { once: true }
+    );
+  } else {
+    bindTravelWorkflow();
+  }
 })();
