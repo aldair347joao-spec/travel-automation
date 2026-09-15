@@ -394,15 +394,6 @@
       "Não foi possível ligar à aplicação.",
       "error"
     );
-
-    /*
-     * Não criamos mais um utilizador falso
-     * no frontend.
-     *
-     * Se AUTH_ENABLED=false estiver corretamente
-     * configurado no backend, /api/auth/me deverá
-     * sempre devolver a identidade interna.
-     */
   }
 }
   function updateUserInterface() {
