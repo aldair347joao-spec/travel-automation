@@ -4631,17 +4631,7 @@
      * produzido pelo módulo facial.
      */
 
-    setInterval(
-      () => {
-
-        moveFacialPanel();
-
-        monitorFacialResult();
-
-      },
-      500
-    );
-
+  
 
     /*
      * Navegação suave.
