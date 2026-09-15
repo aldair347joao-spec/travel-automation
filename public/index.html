@@ -233,7 +233,45 @@
             <small>
               Processo de viagem
             </small>
+          <style>
+  /*
+   * PRIMEIRO PAINT
+   * Evita que os elementos secundários
+   * disputem renderização com o painel inicial.
+   */
 
+  .site-background {
+    pointer-events: none;
+  }
+
+  .stats-grid,
+  .dashboard-grid,
+  .dashboard-sidebar,
+  .security-card,
+  .workflow-stage-mount {
+    content-visibility: auto;
+    contain-intrinsic-size: 700px;
+  }
+
+  .dashboard-sidebar {
+    contain-intrinsic-size: 1000px;
+  }
+
+  .background-airplane {
+    will-change: auto;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+</style>
           </div>
 
         </div>
@@ -1880,10 +1918,70 @@
        SCRIPTS
   ====================================================== -->
 
-  <script src="/facial-preflight.js" defer></script>
   <script src="/app.js" defer></script>
-  <script src="/facial-preflight-ui.js" defer></script>
-  <script src="/workflow.js" defer></script>
+
+<script>
+(() => {
+  "use strict";
+
+  const loadScript = (src, attribute) => {
+    if (document.querySelector(`script[${attribute}="true"]`)) {
+      return;
+    }
+
+    const script = document.createElement("script");
+
+    script.src = src;
+    script.async = true;
+    script.setAttribute(attribute, "true");
+
+    document.head.appendChild(script);
+  };
+
+  const startDeferredModules = () => {
+    /*
+     * Primeiro deixa o painel principal aparecer.
+     * Só depois inicializa o workflow visual.
+     */
+    loadScript(
+      "/workflow.js",
+      "data-travel-workflow"
+    );
+
+    /*
+     * O motor facial e a sua interface deixam
+     * de participar do primeiro carregamento.
+     */
+    setTimeout(() => {
+      loadScript(
+        "/facial-preflight.js",
+        "data-facial-engine"
+      );
+
+      loadScript(
+        "/facial-preflight-ui.js",
+        "data-facial-ui"
+      );
+    }, 900);
+  };
+
+  if (
+    "requestIdleCallback" in window
+  ) {
+    window.requestIdleCallback(
+      startDeferredModules,
+      {
+        timeout: 1200
+      }
+    );
+  } else {
+    setTimeout(
+      startDeferredModules,
+      350
+    );
+  }
+})();
+</script>
 
 </body>
 </html>
