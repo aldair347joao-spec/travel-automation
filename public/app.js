@@ -352,19 +352,20 @@
 
 
   async function loadCurrentUser() {
-
   try {
-
-    const response =
-      await api(
-        "/api/auth/me"
-      );
+    const response = await api("/api/auth/me");
 
     state.user =
       response?.user ||
       response?.data ||
       response ||
       null;
+
+    if (!state.user) {
+      throw new Error(
+        "O backend não devolveu a identidade da sessão."
+      );
+    }
 
     showApp();
 
@@ -375,92 +376,35 @@
       "Sistema operacional"
     );
 
-    /*
-     * A interface já está disponível.
-     * O dashboard é carregado em segundo plano
-     * para não bloquear a abertura da aplicação.
-     */
-    setTimeout(() => {
-
-      refreshDashboard()
-        .catch(error => {
-
-          console.error(
-            "Erro ao atualizar dashboard:",
-            error
-          );
-
-        });
-
-    }, 0);
+    await refreshDashboard();
 
   } catch (error) {
+    console.error(
+      "[AUTH] Falha ao carregar sessão:",
+      error
+    );
 
-    try {
+    setConnection(
+      false,
+      "Backend indisponível"
+    );
 
-      await api(
-        "/api/health"
-      );
+    showToast(
+      error.message ||
+      "Não foi possível ligar à aplicação.",
+      "error"
+    );
 
-      state.user = {
-
-        name:
-          "Operations Console",
-
-        email:
-          "operations@travel-automation.local"
-
-      };
-
-      showApp();
-
-      updateUserInterface();
-
-      setConnection(
-        true,
-        "Sistema operacional"
-      );
-
-      /*
-       * Não esperar pelo dashboard.
-       */
-      setTimeout(() => {
-
-        refreshDashboard()
-          .catch(dashboardError => {
-
-            console.error(
-              "Erro ao atualizar dashboard:",
-              dashboardError
-            );
-
-          });
-
-      }, 0);
-
-    } catch (healthError) {
-
-      console.error(
-        error
-      );
-
-      console.error(
-        healthError
-      );
-
-      showLogin();
-
-      setConnection(
-        false,
-        "Sistema indisponível"
-      );
-
-    }
-
+    /*
+     * Não criamos mais um utilizador falso
+     * no frontend.
+     *
+     * Se AUTH_ENABLED=false estiver corretamente
+     * configurado no backend, /api/auth/me deverá
+     * sempre devolver a identidade interna.
+     */
   }
-
 }
-
   function updateUserInterface() {
 
     const element =
