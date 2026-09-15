@@ -2438,75 +2438,70 @@
 
   function monitorFacialResult() {
 
-    const result =
-      $("facialPreflightResult");
+  const result =
+    $("identityResult");
 
+  const applicationForm =
+    $("applicationForm");
 
-    if (!result) {
-      return;
-    }
+  if (!result) {
+    return;
+  }
 
+  const passed =
+    result.classList.contains(
+      "passed"
+    );
 
-    const passed =
+  const backendPassed =
+    applicationForm?.dataset
+      ?.facialPreflight ===
+    "passed";
+
+  state.facialReady =
+    passed &&
+    backendPassed;
+
+  const status =
+    $("facialPanelStatus");
+
+  if (status) {
+
+    if (state.facialReady) {
+
+      status.textContent =
+        "APROVADA";
+
+      status.className =
+        "panel-status";
+
+    } else if (
       result.classList.contains(
-        "passed"
-      );
+        "failed"
+      )
+    ) {
 
+      status.textContent =
+        "CORRIGIR";
 
-    const applicationForm =
-      $("applicationForm");
+      status.className =
+        "panel-status blue";
 
+    } else {
 
-    const backendPassed =
-      applicationForm?.dataset
-        ?.facialPreflight ===
-      "passed";
+      status.textContent =
+        "AGUARDANDO";
 
-
-    state.facialReady =
-      passed &&
-      backendPassed;
-
-
-    const status =
-      $("facialPanelStatus");
-
-
-    if (status) {
-
-      if (
-        state.facialReady
-      ) {
-
-        status.textContent =
-          "APROVADA";
-
-        status.className =
-          "panel-status";
-
-      } else if (
-        result.classList.contains(
-          "needs-adjustment"
-        )
-      ) {
-
-        status.textContent =
-          "CORRIGIR";
-
-        status.className =
-          "panel-status";
-
-      }
-
+      status.className =
+        "panel-status blue";
     }
-
-
-    updateIdentityGate();
-
-    updateReadiness();
 
   }
 
+  updateIdentityGate();
+  updateReadiness();
+
+}
 
   /* =========================================================
      APPLICATIONS
