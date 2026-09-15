@@ -1,946 +1,1714 @@
 (() => {
-"use strict";
-
-/*
-
-* ==========================================================
-* TRAVEL AUTOMATION
-* Preferências da viagem
-* 
-* IMPORTANTE:
-* Este arquivo NÃO controla a visibilidade da página principal.
-* Não esconde #appView, #loginView ou outras secções.
-* Não remove elementos existentes.
-* Não substitui a lógica principal do app.js.
-* ==========================================================
-  */
-
-const STORAGE_KEY = "travelAutomation.preferences";
-
-const $ = (id) => document.getElementById(id);
-
-const DEFAULTS = {
-residenceCountry: "AO",
-destinationCountry: "PT",
-center: "",
-visaType: "",
-travelDate: "",
-appointmentDeadline: "",
-timePreference: "",
-flexibility: "any"
-};
-
-let initialized = false;
-
-/*
-
-* ---
-* STORAGE
-* ---
-
-*/
-
-function getPreferences() {
-try {
-const raw = localStorage.getItem(STORAGE_KEY);
-
-  if (!raw) {
-    return { ...DEFAULTS };
-  }
-
-  const parsed = JSON.parse(raw);
-
-  if (!parsed || typeof parsed !== "object") {
-    return { ...DEFAULTS };
-  }
-
-  return {
-    ...DEFAULTS,
-    ...parsed
-  };
-} catch (error) {
-  console.warn(
-    "[TravelWorkflow] Não foi possível ler as preferências.",
-    error
-  );
-
-  return { ...DEFAULTS };
-}
-
-}
-
-function savePreferences() {
-const preferences = {
-residenceCountry:
-$("travelResidenceCountry")?.value ||
-DEFAULTS.residenceCountry,
-
-  destinationCountry:
-    $("travelDestination")?.value ||
-    DEFAULTS.destinationCountry,
-
-  center:
-    $("travelCenter")?.value ||
-    DEFAULTS.center,
-
-  visaType:
-    $("travelVisaType")?.value ||
-    DEFAULTS.visaType,
-
-  travelDate:
-    $("travelDate")?.value ||
-    DEFAULTS.travelDate,
-
-  appointmentDeadline:
-    $("travelAppointmentDeadline")?.value ||
-    DEFAULTS.appointmentDeadline,
-
-  timePreference:
-    $("travelTimePreference")?.value ||
-    DEFAULTS.timePreference,
-
-  flexibility:
-    $("travelFlexibility")?.value ||
-    DEFAULTS.flexibility
-};
-
-try {
-  localStorage.setItem(
-    STORAGE_KEY,
-    JSON.stringify(preferences)
-  );
-} catch (error) {
-  console.warn(
-    "[TravelWorkflow] Não foi possível guardar as preferências.",
-    error
-  );
-}
-
-document.dispatchEvent(
-  new CustomEvent("travel:preferencesChanged", {
-    detail: preferences
-  })
-);
-
-return preferences;
-
-}
-
-function restorePreferences() {
-const preferences = getPreferences();
-
-const fields = {
-  travelResidenceCountry:
-    preferences.residenceCountry,
-
-  travelDestination:
-    preferences.destinationCountry,
-
-  travelCenter:
-    preferences.center,
-
-  travelVisaType:
-    preferences.visaType,
-
-  travelDate:
-    preferences.travelDate,
-
-  travelAppointmentDeadline:
-    preferences.appointmentDeadline,
-
-  travelTimePreference:
-    preferences.timePreference,
-
-  travelFlexibility:
-    preferences.flexibility
-};
-
-Object.entries(fields).forEach(([id, value]) => {
-  const element = $(id);
-
-  if (!element) {
-    return;
-  }
-
-  element.value = value ?? "";
-});
-
-updateVisaCards();
-updateSummary();
-
-}
-
-/*
-
-* ---
-* TRAVEL SECTION
-* 
-* Só cria a secção se existir um mount explícito:
-* #travelWorkflowMount
-* 
-* Nunca substitui o conteúdo principal da página.
-* ---
-
-*/
-
-function createTravelSection() {
-const existing = $("travelSection");
-
-if (existing) {
-  return existing;
-}
-
-const mount = $("travelWorkflowMount");
-
-if (!mount) {
-  return null;
-}
-
-const section = document.createElement("section");
-
-section.id = "travelSection";
-section.className =
-  "panel travel-preferences-panel workflow-generated-section";
-
-section.innerHTML = `
-  <div class="travel-preferences-hero">
-
-    <div class="travel-preferences-route">
-
-      <div class="country-node">
-        <span class="country-flag">AO</span>
-
-        <div>
-          <small>Origem</small>
-          <strong>Angola</strong>
-        </div>
-      </div>
-
-      <div class="country-route">
-
-        <span class="route-dash"></span>
-
-        <span class="route-plane" aria-hidden="true">
-          <svg viewBox="0 0 24 24">
-            <path
-              d="M21 3 3.8 10.2c-.8.3-.8 1.4 0 1.7l6.3 2.3 2.3 6.3c.3.8 1.4 1.4 1.7 0L21 3Z"
-            ></path>
-
-            <path d="m10.1 14.1 4.5-4.5"></path>
-          </svg>
-        </span>
-
-        <span class="route-dash"></span>
-
-      </div>
-
-      <div class="country-node">
-
-        <span class="country-flag">PT</span>
-
-        <div>
-          <small>Destino</small>
-          <strong>Portugal</strong>
-        </div>
-
-      </div>
-
-    </div>
-
-    <div class="travel-preferences-copy">
-
-      <span class="travel-kicker">
-        PERFIL DA VIAGEM
-      </span>
-
-      <h2>
-        A sua viagem para Portugal
-      </h2>
-
-      <p>
-        Defina os dados da viagem para que o sistema
-        consiga acompanhar a disponibilidade correspondente.
-      </p>
-
-    </div>
-
-  </div>
-
-  <form
-    id="travelPreferencesForm"
-    class="travel-preferences-form"
-  >
-
-    <div class="travel-section-heading">
-
-      <div>
-        <span>01</span>
-        <strong>Rota</strong>
-      </div>
-
-      <small>
-        Informação base da viagem
-      </small>
-
-    </div>
-
-    <div class="travel-fields-grid">
-
-      <label class="travel-field">
-
-        <span>País de residência</span>
-
-        <div class="travel-readonly-field">
-
-          <span class="field-country-badge">
-            AO
-          </span>
-
-          <strong>Angola</strong>
-
-          <small>
-            Residência atual
-          </small>
-
-        </div>
-
-        <input
-          id="travelResidenceCountry"
-          type="hidden"
-          value="AO"
-        >
-
-      </label>
-
-      <label class="travel-field">
-
-        <span>País de destino</span>
-
-        <div class="travel-readonly-field">
-
-          <span class="field-country-badge">
-            PT
-          </span>
-
-          <strong>Portugal</strong>
-
-          <small>
-            Destino do processo
-          </small>
-
-        </div>
-
-        <input
-          id="travelDestination"
-          type="hidden"
-          value="PT"
-        >
-
-      </label>
-
-      <label class="travel-field">
-
-        <span>
-          Centro de atendimento
-        </span>
-
-        <select
-          id="travelCenter"
-          required
-        >
-
-          <option value="">
-            Selecionar centro
-          </option>
-
-          <option value="luanda">
-            Luanda
-          </option>
-
-        </select>
-
-      </label>
-
-    </div>
-
-    <div class="travel-section-heading visa-heading">
-
-      <div>
-        <span>02</span>
-        <strong>Tipo de visto</strong>
-      </div>
-
-      <small>
-        Escolha o tipo correspondente ao processo
-      </small>
-
-    </div>
-
-    <div
-      id="travelVisaOptions"
-      class="visa-options"
-      role="radiogroup"
-      aria-label="Tipo de visto"
-    >
-
-      <button
-        type="button"
-        class="visa-option"
-        data-visa="schengen"
-        aria-pressed="false"
-      >
-
-        <span class="visa-option-icon">
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              d="M12 3 4.5 6v5.5c0 4.6 3.1 7.7 7.5 9.5 4.4-1.8 7.5-4.9 7.5-9.5V6L12 3Z"
-            ></path>
-
-            <path
-              d="m8.5 12 2.2 2.2 4.8-5"
-            ></path>
-          </svg>
-        </span>
-
-        <span class="visa-option-content">
-
-          <strong>
-            Schengen
-          </strong>
-
-          <small>
-            Processo para estadias de curta duração
-          </small>
-
-        </span>
-
-        <span class="visa-option-check"></span>
-
-      </button>
-
-      <button
-        type="button"
-        class="visa-option"
-        data-visa="national"
-        aria-pressed="false"
-      >
-
-        <span class="visa-option-icon">
-          <svg
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path d="M5 20h14"></path>
-            <path d="M7 20V9l5-5 5 5v11"></path>
-            <path d="M9.5 12h5"></path>
-            <path d="M9.5 15h5"></path>
-          </svg>
-        </span>
-
-        <span class="visa-option-content">
-
-          <strong>
-            Nacional
-          </strong>
-
-          <small>
-            Processo para estadias de longa duração
-          </small>
-
-        </span>
-
-        <span class="visa-option-check"></span>
-
-      </button>
-
-    </div>
-
-    <input
-      id="travelVisaType"
-      type="hidden"
-      value=""
-    >
-
-    <div class="travel-section-heading">
-
-      <div>
-        <span>03</span>
-        <strong>
-          Preferências de marcação
-        </strong>
-      </div>
-
-      <small>
-        Critérios utilizados no acompanhamento
-      </small>
-
-    </div>
-
-    <div class="travel-fields-grid">
-
-      <label class="travel-field">
-
-        <span>
-          Data prevista da viagem
-        </span>
-
-        <input
-          id="travelDate"
-          type="date"
-        >
-
-      </label>
-
-      <label class="travel-field">
-
-        <span>
-          Data limite para conseguir a vaga
-        </span>
-
-        <input
-          id="travelAppointmentDeadline"
-          type="date"
-        >
-
-      </label>
-
-      <label class="travel-field">
-
-        <span>
-          Horário preferido
-        </span>
-
-        <select id="travelTimePreference">
-
-          <option value="">
-            Qualquer horário
-          </option>
-
-          <option value="morning">
-            Manhã
-          </option>
-
-          <option value="afternoon">
-            Tarde
-          </option>
-
-        </select>
-
-      </label>
-
-      <label class="travel-field">
-
-        <span>
-          Flexibilidade
-        </span>
-
-        <select id="travelFlexibility">
-
-          <option value="any">
-            Aceito qualquer vaga
-          </option>
-
-          <option value="same-week">
-            Aceito qualquer dia da semana
-          </option>
-
-          <option value="strict">
-            Apenas dentro das datas indicadas
-          </option>
-
-        </select>
-
-      </label>
-
-    </div>
-
-    <div class="travel-preferences-summary">
-
-      <div class="summary-route">
-
-        <span class="summary-dot"></span>
-
-        <div>
-          <small>
-            Rota configurada
-          </small>
-
-          <strong>
-            Angola → Portugal
-          </strong>
-        </div>
-
-      </div>
-
-      <div
-        id="travelPreferenceSummary"
-        class="summary-visa"
-      >
-
-        <small>
-          Tipo de visto
-        </small>
-
-        <strong>
-          Selecione uma opção
-        </strong>
-
-      </div>
-
-    </div>
-
-  </form>
-`;
-
-/*
- * Apenas adiciona a secção dentro do mount.
- * Não mexemos em nenhuma outra parte da página.
- */
-mount.appendChild(section);
-
-bindTravelForm(section);
-
-return section;
-
-}
-
-/*
-
-* ---
-* VISA
-* ---
-
-*/
-
-function updateVisaCards() {
-const value =
-$("travelVisaType")?.value || "";
-
-document
-  .querySelectorAll(".visa-option")
-  .forEach((button) => {
-    const active =
-      button.dataset.visa === value;
-
-    button.classList.toggle(
-      "selected",
-      active
-    );
-
-    button.setAttribute(
-      "aria-pressed",
-      String(active)
-    );
-  });
-
-}
-
-function updateSummary() {
-const summary =
-$("travelPreferenceSummary");
-
-if (!summary) {
-  return;
-}
-
-const title =
-  summary.querySelector("strong");
-
-if (!title) {
-  return;
-}
-
-const visa =
-  $("travelVisaType")?.value || "";
-
-if (visa === "schengen") {
-  title.textContent =
-    "Visto Schengen";
-  return;
-}
-
-if (visa === "national") {
-  title.textContent =
-    "Visto Nacional";
-  return;
-}
-
-title.textContent =
-  "Selecione uma opção";
-
-}
-
-/*
-
-* ---
-* FORM
-* ---
-
-*/
-
-function bindTravelForm(section) {
-if (!section) {
-return;
-}
-
-const form =
-  section.querySelector(
-    "#travelPreferencesForm"
-  );
-
-if (!form) {
-  return;
-}
-
-const visaButtons =
-  section.querySelectorAll(
-    ".visa-option"
-  );
-
-visaButtons.forEach((button) => {
-  button.addEventListener(
-    "click",
-    () => {
-      const value =
-        button.dataset.visa || "";
-
-      const input =
-        $("travelVisaType");
-
-      if (input) {
-        input.value = value;
-      }
-
-      updateVisaCards();
-      updateSummary();
-      savePreferences();
-      updateStatus();
-    }
-  );
-});
-
-form.addEventListener(
-  "input",
-  () => {
-    savePreferences();
-    updateStatus();
-  }
-);
-
-form.addEventListener(
-  "change",
-  () => {
-    updateVisaCards();
-    updateSummary();
-    savePreferences();
-    updateStatus();
-  }
-);
-
-restorePreferences();
-
-}
-
-/*
-
-* ---
-* VALIDATION
-* ---
-
-*/
-
-function isTravelReady() {
-const visa =
-$("travelVisaType")?.value || "";
-
-const center =
-  $("travelCenter")?.value || "";
-
-return Boolean(
-  visa &&
-  center
-);
-
-}
-
-function getStatus() {
-const preferences =
-getPreferences();
-
-return {
-  ready: isTravelReady(),
-
-  complete:
-    Boolean(
-      preferences.visaType &&
-      preferences.center
-    ),
-
-  preferences
-};
-
-}
-
-function updateStatus() {
-const status =
-getStatus();
-
-document.dispatchEvent(
-  new CustomEvent(
-    "travel:statusChanged",
+  "use strict";
+
+  /*
+   * ==========================================================
+   * TRAVEL AUTOMATION
+   * Guided Travel Workflow
+   * ==========================================================
+   */
+
+  const STEPS = [
     {
-      detail: status
+      id: "client",
+      number: "01",
+      icon: "person",
+      eyebrow: "PRIMEIRA ETAPA",
+      title: "Os seus dados",
+      description:
+        "Comece pelos dados do viajante. Vamos preparar a informação necessária para as próximas etapas.",
+      section: "clientSection",
+      readyLabel: "Dados preparados"
+    },
+
+    {
+      id: "passport",
+      number: "02",
+      icon: "document",
+      eyebrow: "SEGUNDA ETAPA",
+      title: "Documento de viagem",
+      description:
+        "Confirme os dados do passaporte antes de avançarmos para a verificação de identidade.",
+      section: "clientSection",
+      readyLabel: "Documento confirmado"
+    },
+
+    {
+      id: "identity",
+      number: "03",
+      icon: "face",
+      eyebrow: "TERCEIRA ETAPA",
+      title: "Confirmação de identidade",
+      description:
+        "Faça a verificação facial seguindo as instruções apresentadas no ecrã.",
+      section: "applicationSection",
+      readyLabel: "Identidade confirmada"
+    },
+
+    {
+      id: "application",
+      number: "04",
+      icon: "application",
+      eyebrow: "QUARTA ETAPA",
+      title: "Preparação da candidatura",
+      description:
+        "Com as informações confirmadas, prepare o período em que pretende acompanhar o processo.",
+      section: "applicationSection",
+      readyLabel: "Candidatura preparada"
+    },
+
+    {
+      id: "operations",
+      number: "05",
+      icon: "radar",
+      eyebrow: "QUINTA ETAPA",
+      title: "Acompanhamento",
+      description:
+        "Acompanhe o estado do processo depois de concluir a preparação.",
+      section: "verificationSection",
+      readyLabel: "Acompanhamento disponível"
     }
-  )
-);
-
-return status;
-
-}
-
-/*
-
-* ---
-* PUBLIC API
-* ---
-
-*/
-
-const TravelWorkflow = {
-getPreferences,
-savePreferences,
-restorePreferences,
-getStatus,
-isTravelReady,
-updateStatus,
-createTravelSection,
-
-getVisaType() {
-  return (
-    $("travelVisaType")?.value ||
-    getPreferences().visaType ||
-    ""
-  );
-},
-
-getCenter() {
-  return (
-    $("travelCenter")?.value ||
-    getPreferences().center ||
-    ""
-  );
-},
-
-clearPreferences() {
-  try {
-    localStorage.removeItem(
-      STORAGE_KEY
-    );
-  } catch (error) {
-    console.warn(
-      "[TravelWorkflow] Não foi possível limpar as preferências.",
-      error
-    );
-  }
-
-  const fields = [
-    "travelCenter",
-    "travelVisaType",
-    "travelDate",
-    "travelAppointmentDeadline",
-    "travelTimePreference",
-    "travelFlexibility"
   ];
 
-  fields.forEach((id) => {
-    const element = $(id);
 
-    if (element) {
-      element.value = "";
-    }
-  });
+  const state = {
+    currentIndex: 0,
+    completed: new Set(),
+    initialized: false,
+    transitioning: false
+  };
 
-  const flexibility =
-    $("travelFlexibility");
 
-  if (flexibility) {
-    flexibility.value = "any";
+  function $(id) {
+    return document.getElementById(id);
   }
 
-  updateVisaCards();
-  updateSummary();
-  updateStatus();
-}
 
-};
+  function getCurrentStep() {
+    return STEPS[state.currentIndex];
+  }
 
-/*
 
-* ---
-* INITIALIZATION
-* ---
+  function createWorkflow() {
+    if ($("travelWorkflow")) {
+      return $("travelWorkflow");
+    }
 
-*/
+    const workflow = document.createElement("section");
 
-function initialize() {
-if (initialized) {
-return;
-}
+    workflow.id = "travelWorkflow";
+    workflow.className = "travel-workflow";
+    workflow.setAttribute(
+      "aria-label",
+      "Preparação da viagem"
+    );
 
-initialized = true;
+    workflow.innerHTML = `
+      <div class="workflow-atmosphere" aria-hidden="true">
+        <div class="workflow-glow"></div>
+        <div class="workflow-horizon"></div>
+        <div class="workflow-route-orbit"></div>
+      </div>
 
-/*
- * Só criamos a viagem quando existe
- * explicitamente um ponto de montagem.
- *
- * Se #travelWorkflowMount não existir,
- * o workflow simplesmente não interfere
- * na página.
- */
-createTravelSection();
+      <aside class="workflow-sidebar">
 
-restorePreferences();
-updateStatus();
+        <div class="workflow-brand">
 
-document.dispatchEvent(
-  new CustomEvent(
-    "travel:workflowReady"
-  )
-);
+          <div class="workflow-brand-mark">
+            <span>TA</span>
+          </div>
 
-}
+          <div>
+            <strong>TRAVEL AUTOMATION</strong>
+            <span>Preparação de viagem</span>
+          </div>
 
-/*
+        </div>
 
-* Não executamos nada agressivamente.
-* 
-* Se o DOM ainda não estiver pronto,
-* aguardamos.
-  */
 
-if (
-document.readyState ===
-"loading"
-) {
-document.addEventListener(
-"DOMContentLoaded",
-initialize,
-{ once: true }
-);
-} else {
-initialize();
-}
+        <div class="workflow-progress-header">
 
-/*
+          <span>
+            O seu percurso
+          </span>
 
-* Disponibiliza a API sem interferir
-* no restante da aplicação.
-  */
+          <strong id="workflowProgressText">
+            01 de 05
+          </strong>
 
-window.TravelWorkflow =
-TravelWorkflow;
+        </div>
+
+
+        <nav
+          id="workflowProgress"
+          class="workflow-progress"
+          aria-label="Etapas da preparação"
+        ></nav>
+
+
+        <div class="workflow-sidebar-note">
+
+          <span class="workflow-note-icon">
+            <span class="shield-icon"></span>
+          </span>
+
+          <div>
+            <strong>Processo protegido</strong>
+            <span>
+              Avançamos apenas quando a etapa anterior estiver pronta.
+            </span>
+          </div>
+
+        </div>
+
+      </aside>
+
+
+      <div class="workflow-content">
+
+        <div class="workflow-topline">
+
+          <div class="workflow-breadcrumb">
+            <span>Travel Automation</span>
+            <i></i>
+            <strong id="workflowEyebrow">
+              PRIMEIRA ETAPA
+            </strong>
+          </div>
+
+          <div class="workflow-live">
+            <span></span>
+            Preparação ativa
+          </div>
+
+        </div>
+
+
+        <div class="workflow-heading">
+
+          <div class="workflow-heading-copy">
+
+            <div
+              id="workflowStageIcon"
+              class="workflow-stage-icon"
+              aria-hidden="true"
+            >
+              <span class="person-icon"></span>
+            </div>
+
+            <div>
+
+              <span
+                id="workflowEyebrowCopy"
+                class="workflow-eyebrow"
+              >
+                PRIMEIRA ETAPA
+              </span>
+
+              <h1 id="workflowTitle">
+                Os seus dados
+              </h1>
+
+              <p id="workflowDescription">
+                Comece pelos dados do viajante.
+              </p>
+
+            </div>
+
+          </div>
+
+
+          <div class="workflow-counter">
+
+            <span>ETAPA</span>
+
+            <strong id="workflowCounter">
+              01
+            </strong>
+
+            <small>
+              / 05
+            </small>
+
+          </div>
+
+        </div>
+
+
+        <div class="workflow-route">
+
+          <div class="workflow-route-line">
+
+            <span
+              id="workflowFlightProgress"
+              class="workflow-route-progress"
+            ></span>
+
+            <span
+              id="workflowPlane"
+              class="workflow-plane"
+            >
+              ✈
+            </span>
+
+          </div>
+
+          <div class="workflow-route-labels">
+
+            <span>
+              Preparar
+            </span>
+
+            <span>
+              Confirmar
+            </span>
+
+            <span>
+              Verificar
+            </span>
+
+            <span>
+              Candidatar
+            </span>
+
+            <span>
+              Acompanhar
+            </span>
+
+          </div>
+
+        </div>
+
+
+        <div
+          id="workflowStage"
+          class="workflow-stage"
+          aria-live="polite"
+        ></div>
+
+
+        <div class="workflow-assist">
+
+          <div class="workflow-assist-visual">
+
+            <div class="assist-sky"></div>
+
+            <div class="assist-orbit orbit-one"></div>
+            <div class="assist-orbit orbit-two"></div>
+
+            <div
+              id="workflowAssistGraphic"
+              class="workflow-assist-graphic"
+            >
+              <span class="assist-person"></span>
+            </div>
+
+          </div>
+
+
+          <div class="workflow-assist-copy">
+
+            <span class="assist-label">
+              ORIENTAÇÃO
+            </span>
+
+            <strong id="workflowAssistTitle">
+              Vamos começar pelos seus dados
+            </strong>
+
+            <p id="workflowAssistText">
+              Preencha as informações apresentadas.
+              Quando estiver tudo pronto, poderá avançar.
+            </p>
+
+          </div>
+
+        </div>
+
+
+        <div
+          id="workflowStatus"
+          class="workflow-status"
+        >
+
+          <div class="workflow-status-indicator">
+            <span></span>
+          </div>
+
+          <div>
+
+            <strong id="workflowStatusTitle">
+              Etapa atual
+            </strong>
+
+            <span id="workflowStatusText">
+              Complete esta etapa para continuar.
+            </span>
+
+          </div>
+
+        </div>
+
+
+        <div class="workflow-bottom">
+
+          <button
+            id="workflowBack"
+            class="workflow-button workflow-button-secondary"
+            type="button"
+          >
+            <span>←</span>
+            Voltar
+          </button>
+
+
+          <div class="workflow-bottom-center">
+
+            <span id="workflowBottomHint">
+              Complete a etapa atual para avançar.
+            </span>
+
+          </div>
+
+
+          <button
+            id="workflowNext"
+            class="workflow-button workflow-button-primary"
+            type="button"
+          >
+            Continuar
+            <span>→</span>
+          </button>
+
+        </div>
+
+      </div>
+    `;
+
+    return workflow;
+  }
+
+
+  function buildProgress() {
+    const container = $("workflowProgress");
+
+    if (!container) {
+      return;
+    }
+
+    container.innerHTML = "";
+
+    STEPS.forEach((step, index) => {
+
+      const button = document.createElement("button");
+
+      button.type = "button";
+      button.className = "workflow-progress-item";
+      button.dataset.index = String(index);
+
+      button.innerHTML = `
+        <span class="workflow-progress-number">
+          ${step.number}
+        </span>
+
+        <span class="workflow-progress-icon">
+          <span class="${step.icon}-icon"></span>
+        </span>
+
+        <span class="workflow-progress-copy">
+
+          <strong>${step.title}</strong>
+
+          <small>${getProgressDescription(step.id)}</small>
+
+        </span>
+
+        <span class="workflow-progress-state"></span>
+      `;
+
+      button.addEventListener("click", () => {
+
+        if (index > state.currentIndex) {
+          return;
+        }
+
+        goTo(index);
+
+      });
+
+      container.appendChild(button);
+
+    });
+  }
+
+
+  function getProgressDescription(id) {
+
+    const descriptions = {
+      client: "Informação pessoal",
+      passport: "Documento de viagem",
+      identity: "Verificação facial",
+      application: "Período pretendido",
+      operations: "Estado do processo"
+    };
+
+    return descriptions[id] || "";
+  }
+
+
+  function updateProgress() {
+
+    document
+      .querySelectorAll(".workflow-progress-item")
+      .forEach((item, index) => {
+
+        const completed = state.completed.has(
+          STEPS[index].id
+        );
+
+        const active =
+          index === state.currentIndex;
+
+        const locked =
+          index > state.currentIndex &&
+          !state.completed.has(STEPS[index - 1]?.id);
+
+        item.classList.toggle("active", active);
+        item.classList.toggle("completed", completed);
+        item.classList.toggle("locked", locked);
+
+        item.disabled = locked;
+
+        const stateElement =
+          item.querySelector(
+            ".workflow-progress-state"
+          );
+
+        if (stateElement) {
+
+          if (completed) {
+            stateElement.textContent = "Concluído";
+          } else if (active) {
+            stateElement.textContent = "Atual";
+          } else {
+            stateElement.textContent = "A seguir";
+          }
+
+        }
+
+      });
+
+
+    const progressText =
+      $("workflowProgressText");
+
+    if (progressText) {
+
+      progressText.textContent =
+        `${String(state.currentIndex + 1).padStart(2, "0")} de 05`;
+
+    }
+
+  }
+
+
+  function getIconMarkup(icon) {
+
+    const map = {
+      person: "person-icon",
+      document: "document-icon",
+      face: "face-icon",
+      application: "application-icon",
+      radar: "radar-icon"
+    };
+
+    return `<span class="${map[icon] || "person-icon"}"></span>`;
+  }
+
+
+  function updateHeader() {
+
+    const step = getCurrentStep();
+
+    const eyebrow = $("workflowEyebrow");
+    const eyebrowCopy = $("workflowEyebrowCopy");
+    const title = $("workflowTitle");
+    const description = $("workflowDescription");
+    const counter = $("workflowCounter");
+    const icon = $("workflowStageIcon");
+
+    if (eyebrow) {
+      eyebrow.textContent = step.eyebrow;
+    }
+
+    if (eyebrowCopy) {
+      eyebrowCopy.textContent = step.eyebrow;
+    }
+
+    if (title) {
+      title.textContent = step.title;
+    }
+
+    if (description) {
+      description.textContent = step.description;
+    }
+
+    if (counter) {
+      counter.textContent = step.number;
+    }
+
+    if (icon) {
+      icon.innerHTML = getIconMarkup(step.icon);
+      icon.dataset.stage = step.id;
+    }
+
+
+    const assistTitle =
+      $("workflowAssistTitle");
+
+    const assistText =
+      $("workflowAssistText");
+
+    const assistGraphic =
+      $("workflowAssistGraphic");
+
+    if (assistTitle) {
+
+      const titles = {
+        client:
+          "Comece pelos seus dados",
+
+        passport:
+          "Confirme o seu documento",
+
+        identity:
+          "Vamos confirmar a sua identidade",
+
+        application:
+          "Prepare a sua candidatura",
+
+        operations:
+          "Agora pode acompanhar o processo"
+      };
+
+      assistTitle.textContent =
+        titles[step.id];
+    }
+
+
+    if (assistText) {
+
+      const texts = {
+        client:
+          "Preencha os dados apresentados. Eles serão usados para preparar as próximas etapas.",
+
+        passport:
+          "Verifique cuidadosamente os dados do passaporte antes de continuar.",
+
+        identity:
+          "Siga as instruções da verificação facial e mantenha o rosto dentro da área indicada.",
+
+        application:
+          "Escolha o período pretendido para que o processo possa ser preparado.",
+
+        operations:
+          "O processo está preparado. A partir daqui poderá acompanhar o seu estado."
+      };
+
+      assistText.textContent =
+        texts[step.id];
+    }
+
+
+    if (assistGraphic) {
+
+      assistGraphic.className =
+        `workflow-assist-graphic stage-${step.id}`;
+
+    }
+
+  }
+
+
+  function updateRoute() {
+
+    const progress =
+      $("workflowFlightProgress");
+
+    const plane =
+      $("workflowPlane");
+
+    if (!progress || !plane) {
+      return;
+    }
+
+    const percentage =
+      (state.currentIndex /
+        (STEPS.length - 1)) *
+      100;
+
+    progress.style.width =
+      `${Math.max(8, percentage)}%`;
+
+    plane.style.left =
+      `${Math.min(96, Math.max(4, percentage))}%`;
+
+  }
+
+
+  function updateStatus() {
+
+    const step =
+      getCurrentStep();
+
+    const statusTitle =
+      $("workflowStatusTitle");
+
+    const statusText =
+      $("workflowStatusText");
+
+    const bottomHint =
+      $("workflowBottomHint");
+
+    const next =
+      $("workflowNext");
+
+    const ready =
+      isCurrentReady();
+
+
+    if (statusTitle) {
+
+      statusTitle.textContent =
+        ready
+          ? step.readyLabel
+          : getWaitingTitle(step.id);
+
+    }
+
+
+    if (statusText) {
+
+      statusText.textContent =
+        ready
+          ? getReadyDescription(step.id)
+          : getWaitingDescription(step.id);
+
+    }
+
+
+    if (bottomHint) {
+
+      bottomHint.textContent =
+        ready
+          ? "Tudo pronto para continuar."
+          : getWaitingDescription(step.id);
+
+    }
+
+
+    if (next) {
+
+      next.disabled =
+        !ready;
+
+      next.classList.toggle(
+        "is-ready",
+        ready
+      );
+
+      next.innerHTML =
+        state.currentIndex ===
+        STEPS.length - 1
+          ? `Concluir <span>✓</span>`
+          : `Continuar <span>→</span>`;
+
+    }
+
+  }
+
+
+  function getWaitingTitle(id) {
+
+    const map = {
+
+      client:
+        "Preencha os dados do viajante",
+
+      passport:
+        "Confirme os dados do passaporte",
+
+      identity:
+        "Conclua a verificação de identidade",
+
+      application:
+        "Prepare a candidatura",
+
+      operations:
+        "Acompanhamento ainda bloqueado"
+
+    };
+
+    return map[id] || "Complete a etapa atual";
+
+  }
+
+
+  function getWaitingDescription(id) {
+
+    const map = {
+
+      client:
+        "Complete os campos obrigatórios para poder continuar.",
+
+      passport:
+        "Confirme o documento antes de avançar.",
+
+      identity:
+        "A verificação facial precisa de ser concluída antes da candidatura.",
+
+      application:
+        "Prepare uma candidatura válida para continuar.",
+
+      operations:
+        "Conclua as etapas anteriores para desbloquear o acompanhamento."
+
+    };
+
+    return map[id] ||
+      "Complete a etapa atual para continuar.";
+
+  }
+
+
+  function getReadyDescription(id) {
+
+    const map = {
+
+      client:
+        "Os dados essenciais estão preparados.",
+
+      passport:
+        "Os dados do documento estão prontos para a próxima etapa.",
+
+      identity:
+        "A sua identidade foi confirmada.",
+
+      application:
+        "A candidatura está preparada.",
+
+      operations:
+        "O processo está disponível para acompanhamento."
+
+    };
+
+    return map[id] || "Etapa concluída.";
+
+  }
+
+
+  function isClientReady() {
+
+    const form =
+      $("clientForm");
+
+    const name =
+      $("clientFullName");
+
+    if (!form || !name) {
+      return false;
+    }
+
+    return Boolean(
+      name.value.trim() &&
+      (
+        typeof form.checkValidity !== "function" ||
+        form.checkValidity()
+      )
+    );
+
+  }
+
+
+  function isPassportReady() {
+
+    const explicit =
+      $("passportResultState");
+
+    if (explicit) {
+
+      const value =
+        String(
+          explicit.textContent ||
+          explicit.value ||
+          ""
+        ).toLowerCase();
+
+      if (
+        value.includes("success") ||
+        value.includes("valid") ||
+        value.includes("confirm")
+      ) {
+        return true;
+      }
+
+    }
+
+    const ready =
+      $("passportCheckReady");
+
+    if (ready) {
+
+      const text =
+        String(
+          ready.textContent || ""
+        ).toLowerCase();
+
+      if (
+        text.includes("pronto") ||
+        text.includes("confirmado") ||
+        ready.classList.contains("complete") ||
+        ready.classList.contains("success")
+      ) {
+        return true;
+      }
+
+    }
+
+    const number =
+      $("clientPassportNumber");
+
+    const expiry =
+      $("clientPassportExpiryDate");
+
+    return Boolean(
+      number?.value?.trim() &&
+      expiry?.value
+    );
+
+  }
+
+
+  function getFacialState() {
+
+    try {
+
+      if (
+        window.TravelFacialPreflight &&
+        typeof window.TravelFacialPreflight.getState === "function"
+      ) {
+
+        const stateResult =
+          window.TravelFacialPreflight.getState();
+
+        return normalizeFacialState(
+          stateResult
+        );
+
+      }
+
+      if (
+        window.TravelFacialPreflight &&
+        typeof window.TravelFacialPreflight.isReady === "function"
+      ) {
+
+        return {
+          ready:
+            Boolean(
+              window.TravelFacialPreflight.isReady()
+            ),
+          failed: false
+        };
+
+      }
+
+    } catch (error) {
+
+      console.warn(
+        "[TravelWorkflow] Facial state error:",
+        error
+      );
+
+    }
+
+
+    const result =
+      $("facialPreflightResult");
+
+    if (result) {
+
+      const text =
+        String(
+          result.textContent ||
+          result.value ||
+          ""
+        ).toLowerCase();
+
+      if (
+        text.includes("failed") ||
+        text.includes("rejected") ||
+        text.includes("falhou") ||
+        text.includes("reprov")
+      ) {
+
+        return {
+          ready: false,
+          failed: true
+        };
+
+      }
+
+      if (
+        text.includes("success") ||
+        text.includes("approved") ||
+        text.includes("aprov") ||
+        text.includes("confirm")
+      ) {
+
+        return {
+          ready: true,
+          failed: false
+        };
+
+      }
+
+    }
+
+
+    return {
+      ready: false,
+      failed: false
+    };
+
+  }
+
+
+  function normalizeFacialState(value) {
+
+    if (!value) {
+
+      return {
+        ready: false,
+        failed: false
+      };
+
+    }
+
+    if (typeof value === "boolean") {
+
+      return {
+        ready: value,
+        failed: false
+      };
+
+    }
+
+    const status =
+      String(
+        value.status ||
+        value.state ||
+        value.result ||
+        ""
+      ).toLowerCase();
+
+    const failed =
+      Boolean(
+        value.failed ||
+        status.includes("fail") ||
+        status.includes("reject") ||
+        status.includes("reprov")
+      );
+
+    const ready =
+      Boolean(
+        value.ready ||
+        value.approved ||
+        value.success ||
+        status.includes("success") ||
+        status.includes("approved") ||
+        status.includes("aprov") ||
+        status.includes("confirm")
+      );
+
+    return {
+      ready: ready && !failed,
+      failed
+    };
+
+  }
+
+
+  function isIdentityReady() {
+
+    return getFacialState().ready;
+
+  }
+
+
+  function isApplicationReady() {
+
+    const list =
+      $("applicationsList");
+
+    if (list) {
+
+      const cards =
+        list.querySelectorAll(
+          ".application-card"
+        );
+
+      if (cards.length > 0) {
+        return true;
+      }
+
+    }
+
+    const explicit =
+      document.querySelector(
+        "[data-application-ready='true']"
+      );
+
+    return Boolean(explicit);
+
+  }
+
+
+  function isCurrentReady() {
+
+    const step =
+      getCurrentStep();
+
+    if (state.completed.has(step.id)) {
+      return true;
+    }
+
+    switch (step.id) {
+
+      case "client":
+        return isClientReady();
+
+      case "passport":
+        return isPassportReady();
+
+      case "identity":
+        return isIdentityReady();
+
+      case "application":
+        return isApplicationReady();
+
+      case "operations":
+        return isApplicationReady();
+
+      default:
+        return false;
+
+    }
+
+  }
+
+
+  function getSection(step) {
+
+    if (!step) {
+      return null;
+    }
+
+    return $(step.section);
+
+  }
+
+
+  function mountCurrentSection() {
+
+    const stage =
+      $("workflowStage");
+
+    if (!stage) {
+      return;
+    }
+
+    stage.innerHTML = "";
+
+    const step =
+      getCurrentStep();
+
+    const section =
+      getSection(step);
+
+    if (!section) {
+      return;
+    }
+
+
+    section.classList.add(
+      "workflow-mounted-section"
+    );
+
+    stage.appendChild(section);
+
+
+    if (step.id === "passport") {
+
+      const passportTitle =
+        section.querySelector(
+          ".passport-title"
+        );
+
+      if (passportTitle) {
+        passportTitle.scrollIntoView({
+          behavior: "smooth",
+          block: "center"
+        });
+      }
+
+    }
+
+
+    if (step.id === "identity") {
+
+      const mount =
+        $("facialPreflightMount");
+
+      if (mount) {
+
+        setTimeout(() => {
+
+          mount.scrollIntoView({
+            behavior:
+              prefersReducedMotion()
+                ? "auto"
+                : "smooth",
+            block: "center"
+          });
+
+        }, 100);
+
+      }
+
+    }
+
+  }
+
+
+  function hideLegacyLayout() {
+
+    const main =
+      document.querySelector(
+        ".main-container"
+      );
+
+    if (!main) {
+      return;
+    }
+
+    main.classList.add(
+      "workflow-managed"
+    );
+
+
+    Array.from(main.children)
+      .forEach(child => {
+
+        if (
+          child.id !==
+          "travelWorkflow"
+        ) {
+
+          child.classList.add(
+            "workflow-legacy-hidden"
+          );
+
+        }
+
+      });
+
+  }
+
+
+  function installWorkflow() {
+
+    const main =
+      document.querySelector(
+        ".main-container"
+      );
+
+    if (!main) {
+      return;
+    }
+
+
+    const workflow =
+      createWorkflow();
+
+    main.prepend(workflow);
+
+    buildProgress();
+
+    $("workflowBack")?.addEventListener(
+      "click",
+      back
+    );
+
+    $("workflowNext")?.addEventListener(
+      "click",
+      next
+    );
+
+
+    mountCurrentSection();
+
+    updateHeader();
+    updateProgress();
+    updateRoute();
+    updateStatus();
+
+    bindReadinessObservers();
+
+    state.initialized = true;
+
+  }
+
+
+  function bindReadinessObservers() {
+
+    const refresh =
+      () => {
+
+        if (!state.initialized) {
+          return;
+        }
+
+        updateProgress();
+        updateStatus();
+
+      };
+
+
+    document.addEventListener(
+      "input",
+      refresh,
+      true
+    );
+
+    document.addEventListener(
+      "change",
+      refresh,
+      true
+    );
+
+
+    const observer =
+      new MutationObserver(
+        refresh
+      );
+
+
+    observer.observe(
+      document.body,
+      {
+        subtree: true,
+        childList: true,
+        attributes: true
+      }
+    );
+
+  }
+
+
+  function completeCurrent() {
+
+    const step =
+      getCurrentStep();
+
+    if (!step) {
+      return;
+    }
+
+    state.completed.add(
+      step.id
+    );
+
+    updateProgress();
+    updateStatus();
+
+  }
+
+
+  function next() {
+
+    if (state.transitioning) {
+      return false;
+    }
+
+    const step =
+      getCurrentStep();
+
+    if (!isCurrentReady()) {
+
+      showIncompleteMessage(
+        step.id
+      );
+
+      return false;
+
+    }
+
+
+    completeCurrent();
+
+
+    if (
+      state.currentIndex >=
+      STEPS.length - 1
+    ) {
+
+      showFinalState();
+
+      return true;
+
+    }
+
+
+    state.currentIndex += 1;
+
+    transitionToCurrent();
+
+    return true;
+
+  }
+
+
+  function back() {
+
+    if (state.transitioning) {
+      return false;
+    }
+
+    if (state.currentIndex <= 0) {
+      return false;
+    }
+
+    state.currentIndex -= 1;
+
+    transitionToCurrent();
+
+    return true;
+
+  }
+
+
+  function goTo(index) {
+
+    const target =
+      Number(index);
+
+    if (
+      !Number.isInteger(target) ||
+      target < 0 ||
+      target >= STEPS.length
+    ) {
+      return false;
+    }
+
+
+    if (
+      target > state.currentIndex
+    ) {
+      return false;
+    }
+
+
+    state.currentIndex =
+      target;
+
+    transitionToCurrent();
+
+    return true;
+
+  }
+
+
+  function transitionToCurrent() {
+
+    if (state.transitioning) {
+      return;
+    }
+
+    state.transitioning = true;
+
+
+    const workflow =
+      $("travelWorkflow");
+
+    if (!workflow) {
+      state.transitioning = false;
+      return;
+    }
+
+
+    workflow.classList.add(
+      "is-transitioning"
+    );
+
+
+    const delay =
+      prefersReducedMotion()
+        ? 0
+        : 180;
+
+
+    setTimeout(() => {
+
+      mountCurrentSection();
+
+      updateHeader();
+      updateProgress();
+      updateRoute();
+      updateStatus();
+
+      workflow.classList.remove(
+        "is-transitioning"
+      );
+
+      state.transitioning = false;
+
+
+      const content =
+        document.querySelector(
+          ".workflow-content"
+        );
+
+      if (content) {
+
+        content.scrollTo({
+          top: 0,
+          behavior:
+            prefersReducedMotion()
+              ? "auto"
+              : "smooth"
+        });
+
+      }
+
+      window.scrollTo({
+        top: 0,
+        behavior:
+          prefersReducedMotion()
+            ? "auto"
+            : "smooth"
+      });
+
+    }, delay);
+
+  }
+
+
+  function showIncompleteMessage(id) {
+
+    const status =
+      $("workflowStatus");
+
+    if (status) {
+
+      status.classList.add(
+        "is-warning"
+      );
+
+      setTimeout(() => {
+
+        status.classList.remove(
+          "is-warning"
+        );
+
+      }, 1000);
+
+    }
+
+
+    const title =
+      $("workflowStatusTitle");
+
+    const text =
+      $("workflowStatusText");
+
+
+    if (id === "identity") {
+
+      const facial =
+        getFacialState();
+
+      if (facial.failed) {
+
+        if (title) {
+          title.textContent =
+            "A verificação não foi concluída";
+        }
+
+        if (text) {
+          text.textContent =
+            "Repita a captura facial seguindo as instruções apresentadas.";
+        }
+
+        return;
+
+      }
+
+    }
+
+
+    if (title) {
+      title.textContent =
+        getWaitingTitle(id);
+    }
+
+    if (text) {
+      text.textContent =
+        getWaitingDescription(id);
+    }
+
+  }
+
+
+  function showFinalState() {
+
+    const title =
+      $("workflowStatusTitle");
+
+    const text =
+      $("workflowStatusText");
+
+    const next =
+      $("workflowNext");
+
+    if (title) {
+      title.textContent =
+        "Preparação concluída";
+    }
+
+    if (text) {
+      text.textContent =
+        "Todas as etapas disponíveis foram concluídas. O processo pode agora ser acompanhado.";
+    }
+
+    if (next) {
+      next.disabled = true;
+      next.innerHTML =
+        `Preparação concluída <span>✓</span>`;
+    }
+
+    const workflow =
+      $("travelWorkflow");
+
+    workflow?.classList.add(
+      "workflow-complete"
+    );
+
+  }
+
+
+  function prefersReducedMotion() {
+
+    return window.matchMedia &&
+      window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+      ).matches;
+
+  }
+
+
+  function markComplete(stepId) {
+
+    if (
+      !STEPS.some(
+        step => step.id === stepId
+      )
+    ) {
+      return false;
+    }
+
+    state.completed.add(
+      stepId
+    );
+
+    updateProgress();
+    updateStatus();
+
+    return true;
+
+  }
+
+
+  function init() {
+
+    if (state.initialized) {
+      return;
+    }
+
+    const start =
+      () => {
+
+        installWorkflow();
+
+      };
+
+
+    if (
+      document.readyState ===
+      "loading"
+    ) {
+
+      document.addEventListener(
+        "DOMContentLoaded",
+        start,
+        {
+          once: true
+        }
+      );
+
+    } else {
+
+      start();
+
+    }
+
+  }
+
+
+  window.TravelWorkflow = {
+
+    init,
+
+    next,
+
+    back,
+
+    goTo,
+
+    markComplete,
+
+    getState() {
+
+      return {
+
+        current:
+          getCurrentStep()?.id ||
+          null,
+
+        currentIndex:
+          state.currentIndex,
+
+        completed:
+          Array.from(
+            state.completed
+          )
+
+      };
+
+    }
+
+  };
+
+
+  init();
 
 })();
