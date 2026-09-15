@@ -1232,7 +1232,57 @@
             >
 
               <div class="form-section-title">
+                <div class="field">
+  <label for="applicationVisaType">
+    Tipo de visto
+  </label>
 
+  <select
+    id="applicationVisaType"
+    name="visaType"
+    required
+  >
+    <option value="">
+      Selecionar tipo de visto
+    </option>
+
+    <option value="SCHENGEN">
+      Schengen
+    </option>
+
+    <option value="NACIONAL">
+      Nacional
+    </option>
+  </select>
+</div>
+
+
+<div class="field">
+  <label for="applicationVisaCenter">
+    Centro de atendimento
+  </label>
+
+  <input
+    id="applicationVisaCenter"
+    name="visaCenter"
+    type="text"
+    placeholder="Centro VFS"
+  >
+</div>
+
+
+<div class="field">
+  <label for="applicationTravelPurpose">
+    Motivo da viagem
+  </label>
+
+  <input
+    id="applicationTravelPurpose"
+    name="travelPurpose"
+    type="text"
+    placeholder="Turismo, estudo, trabalho..."
+  >
+</div>
                 <span>
                   Preferências da candidatura
                 </span>
