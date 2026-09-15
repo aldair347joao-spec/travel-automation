@@ -353,89 +353,113 @@
 
   async function loadCurrentUser() {
 
+  try {
+
+    const response =
+      await api(
+        "/api/auth/me"
+      );
+
+    state.user =
+      response?.user ||
+      response?.data ||
+      response ||
+      null;
+
+    showApp();
+
+    updateUserInterface();
+
+    setConnection(
+      true,
+      "Sistema operacional"
+    );
+
+    /*
+     * A interface já está disponível.
+     * O dashboard é carregado em segundo plano
+     * para não bloquear a abertura da aplicação.
+     */
+    setTimeout(() => {
+
+      refreshDashboard()
+        .catch(error => {
+
+          console.error(
+            "Erro ao atualizar dashboard:",
+            error
+          );
+
+        });
+
+    }, 0);
+
+  } catch (error) {
+
     try {
 
-      const response =
-        await api(
-          "/api/auth/me"
-        );
+      await api(
+        "/api/health"
+      );
 
+      state.user = {
 
-      state.user =
-        response?.user ||
-        response?.data ||
-        response ||
-        null;
+        name:
+          "Operations Console",
 
+        email:
+          "operations@travel-automation.local"
+
+      };
 
       showApp();
 
       updateUserInterface();
-
-      await refreshDashboard();
 
       setConnection(
         true,
         "Sistema operacional"
       );
 
+      /*
+       * Não esperar pelo dashboard.
+       */
+      setTimeout(() => {
 
-    } catch (error) {
+        refreshDashboard()
+          .catch(dashboardError => {
 
-      try {
+            console.error(
+              "Erro ao atualizar dashboard:",
+              dashboardError
+            );
 
-        await api(
-          "/api/health"
-        );
+          });
 
+      }, 0);
 
-        state.user = {
+    } catch (healthError) {
 
-          name:
-            "Operations Console",
+      console.error(
+        error
+      );
 
-          email:
-            "operations@travel-automation.local"
+      console.error(
+        healthError
+      );
 
-        };
+      showLogin();
 
-
-        showApp();
-
-        updateUserInterface();
-
-        await refreshDashboard();
-
-        setConnection(
-          true,
-          "Sistema operacional"
-        );
-
-
-      } catch (healthError) {
-
-        console.error(
-          error
-        );
-
-        console.error(
-          healthError
-        );
-
-        showLogin();
-
-        setConnection(
-          false,
-          "Sistema indisponível"
-        );
-
-      }
+      setConnection(
+        false,
+        "Sistema indisponível"
+      );
 
     }
 
   }
 
-
+}
   async function login() {
 
     /*
