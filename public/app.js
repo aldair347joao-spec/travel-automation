@@ -460,62 +460,6 @@
   }
 
 }
-  async function login() {
-
-    /*
-     * A versão atual do backend pode operar
-     * com AUTH_ENABLED=false.
-     *
-     * Quando estiver nesse modo, /api/health
-     * permite abrir o console.
-     */
-
-    try {
-
-      await api(
-        "/api/health"
-      );
-
-
-      state.user = {
-
-        name:
-          "Operations Console",
-
-        email:
-          "operations@travel-automation.local"
-
-      };
-
-
-      showApp();
-
-      updateUserInterface();
-
-      await refreshDashboard();
-
-      showToast(
-        "Centro de operações iniciado.",
-        "success"
-      );
-
-
-    } catch (error) {
-
-      console.error(
-        error
-      );
-
-      showToast(
-        error.message ||
-        "Não foi possível iniciar o console.",
-        "error"
-      );
-
-    }
-
-  }
-
 
   function updateUserInterface() {
 
