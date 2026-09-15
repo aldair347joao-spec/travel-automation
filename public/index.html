@@ -2,58 +2,48 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8">
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <meta
     name="theme-color"
-    content="#0756a6"
+    content="#061b3a"
   >
 
   <meta
     name="description"
-    content="Travel Automation — Intelligent Appointment Operations"
+    content="Travel Automation — preparação, verificação e acompanhamento de processos de viagem."
   >
 
-  <title>TRAVEL AUTOMATION — Centro de Operações</title>
+  <title>Travel Automation — Prepare a sua viagem</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link
-    rel="preconnect"
-    href="https://fonts.gstatic.com"
-    crossorigin
-  >
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
     rel="stylesheet"
   >
 
-  <link
-    rel="stylesheet"
-    href="/style.css"
-  >
+  <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/workflow-premium.css">
 </head>
 
 <body>
 
   <!-- =====================================================
-       BACKGROUND
+       FUNDO
   ====================================================== -->
 
-  <div class="site-background">
+  <div class="site-background" aria-hidden="true">
     <div class="background-sky"></div>
     <div class="background-airplane"></div>
-    <div class="background-overlay"></div>
     <div class="background-grid"></div>
+    <div class="background-overlay"></div>
   </div>
 
 
   <!-- =====================================================
-       LOGIN
+       ENTRADA
   ====================================================== -->
 
   <section
@@ -69,11 +59,9 @@
           <span>TA</span>
         </div>
 
-        <div>
+        <div class="brand-copy-main">
           <strong>TRAVEL AUTOMATION</strong>
-          <small>
-            INTELLIGENT APPOINTMENT OPERATIONS
-          </small>
+          <small>Preparação inteligente de viagens</small>
         </div>
 
       </div>
@@ -81,31 +69,36 @@
 
       <div class="login-card">
 
+        <div class="login-card-glow"></div>
+
         <div class="login-card-top">
 
           <span class="eyebrow">
-            OPERATIONS PLATFORM
+            PREPARAÇÃO DE VIAGEM
           </span>
 
           <h1>
-            Prepare.
-            <span>Verify.</span>
-            Act.
+            Prepare a sua
+            <span>viagem.</span>
           </h1>
 
           <p>
-            Prepare clientes, valide documentos,
-            confirme a identidade e deixe o sistema
-            pronto para avançar para a VFS quando
-            todas as condições estiverem conformes.
+            Organize os seus dados, confirme os documentos,
+            verifique a sua identidade e acompanhe cada etapa
+            num único processo.
           </p>
 
         </div>
 
 
         <div class="login-status">
+
           <span class="status-dot"></span>
-          <span>Sistema operacional</span>
+
+          <span>
+            Plataforma disponível
+          </span>
+
         </div>
 
 
@@ -114,26 +107,35 @@
           class="primary-button login-button"
           type="button"
         >
-          Entrar no Centro de Operações
-          <span>→</span>
+          Começar preparação
+          <span class="button-arrow">→</span>
         </button>
 
 
         <div class="login-features">
 
-          <div>
-            <strong>01</strong>
-            <span>CLIENT</span>
+          <div class="login-feature">
+            <span class="feature-icon person-icon"></span>
+            <div>
+              <strong>01</strong>
+              <span>Os seus dados</span>
+            </div>
           </div>
 
-          <div>
-            <strong>02</strong>
-            <span>VERIFY</span>
+          <div class="login-feature">
+            <span class="feature-icon document-icon"></span>
+            <div>
+              <strong>02</strong>
+              <span>Documentos</span>
+            </div>
           </div>
 
-          <div>
-            <strong>03</strong>
-            <span>VFS</span>
+          <div class="login-feature">
+            <span class="feature-icon face-icon"></span>
+            <div>
+              <strong>03</strong>
+              <span>Identidade</span>
+            </div>
           </div>
 
         </div>
@@ -142,9 +144,17 @@
 
 
       <div class="login-footer">
-        <span>Secure Operations Environment</span>
-        <span>•</span>
-        <span>Travel Automation</span>
+
+        <span>
+          Os seus dados são tratados com segurança
+        </span>
+
+        <span class="footer-separator"></span>
+
+        <span>
+          Travel Automation
+        </span>
+
       </div>
 
     </div>
@@ -153,7 +163,7 @@
 
 
   <!-- =====================================================
-       APPLICATION
+       APLICAÇÃO
   ====================================================== -->
 
   <section
@@ -162,7 +172,7 @@
   >
 
     <!-- ===================================================
-         TOPBAR
+         TOPO
     ==================================================== -->
 
     <header class="topbar">
@@ -174,10 +184,15 @@
         </div>
 
         <div class="brand-copy">
-          <strong>TRAVEL AUTOMATION</strong>
+
+          <strong>
+            TRAVEL AUTOMATION
+          </strong>
+
           <span>
-            INTELLIGENT APPOINTMENT OPERATIONS
+            Preparação de viagens
           </span>
+
         </div>
 
       </div>
@@ -188,7 +203,7 @@
         <span class="live-indicator"></span>
 
         <span id="connectionText">
-          Sistema operacional
+          Plataforma disponível
         </span>
 
       </div>
@@ -200,27 +215,29 @@
           id="refreshButton"
           class="icon-button"
           type="button"
-          title="Atualizar"
-          aria-label="Atualizar"
+          title="Atualizar informação"
+          aria-label="Atualizar informação"
         >
-          ↻
+          <span class="refresh-icon">↻</span>
         </button>
 
 
         <div class="user-chip">
 
           <div class="user-avatar">
-            <span>OP</span>
+            <span>TA</span>
           </div>
 
           <div>
+
             <strong id="userName">
-              Operations Console
+              Utilizador
             </strong>
 
             <small>
-              Operador
+              Processo de viagem
             </small>
+
           </div>
 
         </div>
@@ -231,14 +248,13 @@
 
 
     <!-- ===================================================
-         MAIN
+         CONTEÚDO
     ==================================================== -->
 
     <main class="main-container">
 
-
       <!-- =================================================
-           HERO
+           HERO DE APOIO
       ================================================== -->
 
       <section class="operations-hero">
@@ -246,22 +262,25 @@
         <div class="hero-content">
 
           <div class="hero-eyebrow">
+
             <span class="hero-line"></span>
-            CENTRO DE OPERAÇÕES
+
+            A SUA JORNADA
+
           </div>
 
 
           <h1>
-            Identidade verificada.
-            <strong>Operação pronta.</strong>
+            Vamos preparar a sua viagem
+            <strong>passo a passo.</strong>
           </h1>
 
 
           <p>
-            A Travel Automation prepara o cliente,
-            valida o passaporte, verifica a identidade
-            facial e só libera o processo quando os
-            requisitos necessários estiverem conformes.
+            Começamos pelos seus dados e avançamos
+            apenas quando cada etapa estiver pronta.
+            Assim, o seu processo permanece organizado
+            do início ao acompanhamento.
           </p>
 
 
@@ -271,16 +290,15 @@
               href="#clientSection"
               class="hero-button primary"
             >
-              Novo cliente
-              <span>+</span>
+              Começar pelos dados
+              <span>→</span>
             </a>
 
-
             <a
-              href="#verificationSection"
+              href="#applicationSection"
               class="hero-button secondary"
             >
-              Verificação
+              Ver candidatura
               <span>→</span>
             </a>
 
@@ -294,15 +312,14 @@
           <div class="flight-card-header">
 
             <span>
-              OPERATION GATE
+              PERCURSO
             </span>
 
             <span
-              id="heroGateStatus"
               class="status-pill"
             >
               <i></i>
-              AGUARDANDO
+              EM PREPARAÇÃO
             </span>
 
           </div>
@@ -312,10 +329,12 @@
 
             <div class="route-point">
 
-              <strong>IDENTITY</strong>
+              <strong>
+                PREPARAR
+              </strong>
 
               <span>
-                Client + Passport
+                Dados e documentos
               </span>
 
             </div>
@@ -323,10 +342,7 @@
 
             <div class="route-line">
 
-              <div
-                id="heroRouteProgress"
-                class="route-progress"
-              ></div>
+              <div class="route-progress"></div>
 
               <span class="route-plane">
                 ✈
@@ -337,10 +353,12 @@
 
             <div class="route-point right">
 
-              <strong>VFS</strong>
+              <strong>
+                ACOMPANHAR
+              </strong>
 
               <span>
-                Ready to advance
+                Processo de viagem
               </span>
 
             </div>
@@ -351,11 +369,11 @@
           <div class="flight-card-footer">
 
             <span>
-              AUTOMATION GATE
+              PRÓXIMO PASSO
             </span>
 
-            <strong id="heroGateMessage">
-              Verificações pendentes
+            <strong>
+              Preparar os seus dados
             </strong>
 
           </div>
@@ -366,33 +384,38 @@
 
 
       <!-- =================================================
-           SECURITY PIPELINE
+           PROGRESSO PRINCIPAL
       ================================================== -->
 
       <section class="system-pipeline">
 
-        <div
-          id="pipelineClient"
-          class="pipeline-item active"
-        >
+        <div class="pipeline-item active">
 
           <div class="pipeline-number">
             01
           </div>
 
-          <div>
-            <strong>CLIENT</strong>
+          <div class="pipeline-icon">
+            <span class="person-icon"></span>
+          </div>
+
+          <div class="pipeline-copy">
+
+            <strong>
+              Os seus dados
+            </strong>
 
             <span>
-              Perfil e dados pessoais
+              Informação do viajante
             </span>
+
           </div>
 
           <div
-            id="bot1State"
             class="pipeline-state"
+            id="bot1State"
           >
-            READY
+            Em aberto
           </div>
 
         </div>
@@ -401,28 +424,33 @@
         <div class="pipeline-connector"></div>
 
 
-        <div
-          id="pipelineIdentity"
-          class="pipeline-item"
-        >
+        <div class="pipeline-item">
 
           <div class="pipeline-number">
             02
           </div>
 
-          <div>
-            <strong>IDENTITY</strong>
+          <div class="pipeline-icon">
+            <span class="document-icon"></span>
+          </div>
+
+          <div class="pipeline-copy">
+
+            <strong>
+              Verificação
+            </strong>
 
             <span>
-              Passaporte + reconhecimento facial
+              Documento e identidade
             </span>
+
           </div>
 
           <div
-            id="bot2State"
             class="pipeline-state"
+            id="bot2State"
           >
-            WAITING
+            A seguir
           </div>
 
         </div>
@@ -431,28 +459,33 @@
         <div class="pipeline-connector"></div>
 
 
-        <div
-          id="pipelineVfs"
-          class="pipeline-item"
-        >
+        <div class="pipeline-item">
 
           <div class="pipeline-number">
             03
           </div>
 
-          <div>
-            <strong>VFS GATE</strong>
+          <div class="pipeline-icon">
+            <span class="radar-icon"></span>
+          </div>
+
+          <div class="pipeline-copy">
+
+            <strong>
+              Acompanhamento
+            </strong>
 
             <span>
-              Autorização para avançar
+              Processo em monitorização
             </span>
+
           </div>
 
           <div
-            id="supervisorState"
             class="pipeline-state"
+            id="supervisorState"
           >
-            BLOCKED
+            Bloqueado
           </div>
 
         </div>
@@ -461,7 +494,7 @@
 
 
       <!-- =================================================
-           STATS
+           RESUMO
       ================================================== -->
 
       <section class="stats-grid">
@@ -469,15 +502,23 @@
         <article class="stat-card">
 
           <div class="stat-icon blue">
-            ◎
+            <span class="person-icon"></span>
           </div>
 
           <div class="stat-content">
-            <span>CLIENTES</span>
-            <strong id="clientCount">0</strong>
+
+            <span>
+              VIAJANTES
+            </span>
+
+            <strong id="clientCount">
+              0
+            </strong>
+
             <small>
               Perfis registados
             </small>
+
           </div>
 
         </article>
@@ -486,15 +527,23 @@
         <article class="stat-card">
 
           <div class="stat-icon cyan">
-            ▣
+            <span class="document-icon"></span>
           </div>
 
           <div class="stat-content">
-            <span>APLICAÇÕES</span>
-            <strong id="applicationCount">0</strong>
+
+            <span>
+              CANDIDATURAS
+            </span>
+
+            <strong id="applicationCount">
+              0
+            </strong>
+
             <small>
-              Processos em operação
+              Processos preparados
             </small>
+
           </div>
 
         </article>
@@ -503,15 +552,23 @@
         <article class="stat-card">
 
           <div class="stat-icon green">
-            ✓
+            <span class="check-icon"></span>
           </div>
 
           <div class="stat-content">
-            <span>IDENTIDADES OK</span>
-            <strong id="preparedCount">0</strong>
+
+            <span>
+              PRONTOS
+            </span>
+
+            <strong id="preparedCount">
+              0
+            </strong>
+
             <small>
-              Prontas para avançar
+              Prontos para avançar
             </small>
+
           </div>
 
         </article>
@@ -520,15 +577,23 @@
         <article class="stat-card">
 
           <div class="stat-icon orange">
-            ◉
+            <span class="radar-icon"></span>
           </div>
 
           <div class="stat-content">
-            <span>NO RADAR</span>
-            <strong id="monitoringCount">0</strong>
+
+            <span>
+              EM ACOMPANHAMENTO
+            </span>
+
+            <strong id="monitoringCount">
+              0
+            </strong>
+
             <small>
-              Processos monitorizados
+              Processos acompanhados
             </small>
+
           </div>
 
         </article>
@@ -537,150 +602,7 @@
 
 
       <!-- =================================================
-           SELECTED CLIENT / GATE
-      ================================================== -->
-
-      <section
-        id="verificationSection"
-        class="verification-overview"
-      >
-
-        <div class="verification-overview-main">
-
-          <div class="verification-title">
-
-            <span class="section-number">
-              GATE
-            </span>
-
-            <div>
-
-              <span class="panel-eyebrow">
-                IDENTITY CONTROL
-              </span>
-
-              <h2>
-                Prontidão para VFS
-              </h2>
-
-              <p>
-                O bot só deve avançar quando o cliente,
-                o documento e a identidade facial estiverem
-                conformes.
-              </p>
-
-            </div>
-
-          </div>
-
-
-          <div class="gate-result">
-
-            <div
-              id="vfsGateIcon"
-              class="gate-result-icon"
-            >
-              !
-            </div>
-
-            <div class="gate-result-copy">
-
-              <span>
-                ESTADO DA OPERAÇÃO
-              </span>
-
-              <strong id="vfsGateTitle">
-                Verificações pendentes
-              </strong>
-
-              <p id="vfsGateDescription">
-                Selecione um cliente e conclua as verificações
-                necessárias antes de avançar para a VFS.
-              </p>
-
-            </div>
-
-          </div>
-
-        </div>
-
-
-        <div class="verification-checks">
-
-          <div
-            id="gateClientCheck"
-            class="gate-check"
-          >
-
-            <i>○</i>
-
-            <div>
-              <strong>Perfil</strong>
-              <span>
-                Dados do cliente
-              </span>
-            </div>
-
-          </div>
-
-
-          <div
-            id="gatePassportCheck"
-            class="gate-check"
-          >
-
-            <i>○</i>
-
-            <div>
-              <strong>Passaporte</strong>
-              <span>
-                OCR / MRZ / validade
-              </span>
-            </div>
-
-          </div>
-
-
-          <div
-            id="gateFaceCheck"
-            class="gate-check"
-          >
-
-            <i>○</i>
-
-            <div>
-              <strong>Identidade facial</strong>
-              <span>
-                Correspondência / preflight
-              </span>
-            </div>
-
-          </div>
-
-
-          <div
-            id="gateOperationCheck"
-            class="gate-check"
-          >
-
-            <i>○</i>
-
-            <div>
-              <strong>VFS Gate</strong>
-              <span>
-                Bot autorizado
-              </span>
-            </div>
-
-          </div>
-
-        </div>
-
-      </section>
-
-
-      <!-- =================================================
-           DASHBOARD GRID
+           ÁREA PRINCIPAL
       ================================================== -->
 
       <section class="dashboard-grid">
@@ -688,9 +610,9 @@
         <div class="dashboard-main">
 
 
-          <!-- ===============================================
-               CLIENT
-          ================================================ -->
+          <!-- =============================================
+               DADOS DO VIAJANTE
+          ============================================== -->
 
           <section
             id="clientSection"
@@ -708,16 +630,16 @@
                 <div>
 
                   <span class="panel-eyebrow">
-                    CLIENT PROFILE
+                    PRIMEIRA ETAPA
                   </span>
 
                   <h2>
-                    Novo cliente
+                    Os seus dados
                   </h2>
 
                   <p>
-                    Registe a identidade base do cliente
-                    antes da validação documental.
+                    Comece por preencher os dados do viajante.
+                    Estas informações serão usadas nas etapas seguintes.
                   </p>
 
                 </div>
@@ -726,8 +648,11 @@
 
 
               <span class="panel-status">
+
                 <i></i>
-                PREPARATION
+
+                Em preparação
+
               </span>
 
             </div>
@@ -741,11 +666,11 @@
               <div class="form-section-title">
 
                 <span>
-                  Dados pessoais
+                  Informação pessoal
                 </span>
 
                 <small>
-                  Identidade base
+                  Dados do viajante
                 </small>
 
               </div>
@@ -763,7 +688,7 @@
                     id="clientFullName"
                     name="fullName"
                     type="text"
-                    placeholder="Nome completo"
+                    placeholder="Digite o nome completo"
                     autocomplete="name"
                     required
                   >
@@ -873,84 +798,166 @@
               <div class="form-section-title passport-title">
 
                 <span>
-                  Dados declarados do passaporte
+                  Documento de viagem
                 </span>
 
                 <small>
-                  Serão confrontados com o documento
+                  Passaporte
                 </small>
 
               </div>
 
 
-              <div class="form-grid">
+              <div class="passport-layout">
 
-                <label class="field">
+                <div class="passport-fields">
 
-                  <span>
-                    Número do passaporte
-                  </span>
+                  <label class="field">
 
-                  <input
-                    id="clientPassportNumber"
-                    name="passportNumber"
-                    type="text"
-                    placeholder="Número"
-                    autocomplete="off"
+                    <span>
+                      Número do passaporte
+                    </span>
+
+                    <input
+                      id="clientPassportNumber"
+                      name="passportNumber"
+                      type="text"
+                      placeholder="Número do passaporte"
+                      autocomplete="off"
+                    >
+
+                  </label>
+
+
+                  <label class="field">
+
+                    <span>
+                      Data de emissão
+                    </span>
+
+                    <input
+                      id="clientPassportIssueDate"
+                      name="passportIssueDate"
+                      type="date"
+                    >
+
+                  </label>
+
+
+                  <label class="field">
+
+                    <span>
+                      Data de validade
+                    </span>
+
+                    <input
+                      id="clientPassportExpiryDate"
+                      name="passportExpiryDate"
+                      type="date"
+                    >
+
+                  </label>
+
+
+                  <label class="field">
+
+                    <span>
+                      País emissor
+                    </span>
+
+                    <input
+                      id="clientPassportCountry"
+                      name="passportCountry"
+                      type="text"
+                      placeholder="AGO"
+                      autocomplete="off"
+                    >
+
+                  </label>
+
+                </div>
+
+
+                <div
+                  class="passport-readiness"
+                  id="passportReadiness"
+                >
+
+                  <div class="passport-icon">
+                    <span class="document-icon"></span>
+                  </div>
+
+                  <strong>
+                    Passaporte
+                  </strong>
+
+                  <p>
+                    Preencha os dados essenciais para
+                    preparar esta etapa.
+                  </p>
+
+
+                  <div class="readiness-checks">
+
+                    <div id="passportCheckFile">
+
+                      <span>
+                        ○
+                      </span>
+
+                      <span>
+                        Documento preparado
+                      </span>
+
+                    </div>
+
+
+                    <div id="passportCheckData">
+
+                      <span>
+                        ○
+                      </span>
+
+                      <span>
+                        Dados preenchidos
+                      </span>
+
+                    </div>
+
+
+                    <div id="passportCheckReady">
+
+                      <span>
+                        ○
+                      </span>
+
+                      <span>
+                        Etapa pronta
+                      </span>
+
+                    </div>
+
+                  </div>
+
+
+                  <div
+                    id="passportFileStatus"
+                    class="document-note"
                   >
+                    O documento será utilizado quando
+                    esta etapa estiver disponível.
+                  </div>
 
-                </label>
-
-
-                <label class="field">
-
-                  <span>
-                    Data de emissão
-                  </span>
-
-                  <input
-                    id="clientPassportIssueDate"
-                    name="passportIssueDate"
-                    type="date"
-                  >
-
-                </label>
-
-
-                <label class="field">
-
-                  <span>
-                    Data de validade
-                  </span>
-
-                  <input
-                    id="clientPassportExpiryDate"
-                    name="passportExpiryDate"
-                    type="date"
-                  >
-
-                </label>
-
-
-                <label class="field">
-
-                  <span>
-                    País emissor
-                  </span>
-
-                  <input
-                    id="clientPassportCountry"
-                    name="passportCountry"
-                    type="text"
-                    placeholder="AGO"
-                  >
-
-                </label>
+                </div>
 
               </div>
 
 
-              <div class="form-footer">
+              <div class="facial-consent-card">
+
+                <div class="consent-icon">
+                  <span class="face-icon"></span>
+                </div>
 
                 <label class="checkbox-field">
 
@@ -961,19 +968,35 @@
                   >
 
                   <span>
-                    O cliente autorizou a utilização dos
-                    dados necessários para a verificação
-                    de identidade.
+
+                    <strong>
+                      Preparar verificação de identidade
+                    </strong>
+
+                    <small>
+                      Permite preparar a etapa de verificação
+                      facial. A verificação oficial será realizada
+                      na etapa correspondente.
+                    </small>
+
                   </span>
 
                 </label>
 
+              </div>
+
+
+              <div class="form-footer">
+
+                <span class="form-hint">
+                  Confirme se os dados correspondem ao documento.
+                </span>
 
                 <button
                   class="primary-button"
                   type="submit"
                 >
-                  Criar perfil
+                  Guardar e continuar
                   <span>→</span>
                 </button>
 
@@ -984,460 +1007,9 @@
           </section>
 
 
-          <!-- ===============================================
-               PASSPORT
-          ================================================ -->
-
-          <section
-            id="passportSection"
-            class="panel passport-panel"
-          >
-
-            <div class="panel-header">
-
-              <div class="panel-heading">
-
-                <span class="section-number">
-                  02
-                </span>
-
-                <div>
-
-                  <span class="panel-eyebrow">
-                    DOCUMENT VERIFICATION
-                  </span>
-
-                  <h2>
-                    Validar passaporte
-                  </h2>
-
-                  <p>
-                    Envie uma fotografia clara do passaporte.
-                    O sistema fará OCR, leitura da MRZ,
-                    comparação e validação da validade.
-                  </p>
-
-                </div>
-
-              </div>
-
-
-              <span
-                id="passportPanelStatus"
-                class="panel-status blue"
-              >
-                <i></i>
-                AGUARDANDO
-              </span>
-
-            </div>
-
-
-            <div class="passport-workspace">
-
-              <div class="passport-upload-column">
-
-                <div class="form-section-title">
-
-                  <span>
-                    Documento
-                  </span>
-
-                  <small>
-                    JPEG ou PNG · máximo 6 MB
-                  </small>
-
-                </div>
-
-
-                <label
-                  id="passportDropzone"
-                  class="passport-dropzone"
-                  for="passportFile"
-                >
-
-                  <div class="passport-drop-icon">
-                    ↑
-                  </div>
-
-                  <strong>
-                    Carregar passaporte
-                  </strong>
-
-                  <span>
-                    Toque aqui ou arraste a fotografia
-                  </span>
-
-                  <small>
-                    A imagem deve mostrar o documento completo
-                    e a MRZ deve estar legível.
-                  </small>
-
-                  <input
-                    id="passportFile"
-                    type="file"
-                    accept="image/jpeg,image/png"
-                    hidden
-                  >
-
-                </label>
-
-
-                <div
-                  id="passportPreview"
-                  class="passport-preview"
-                  hidden
-                >
-
-                  <img
-                    id="passportPreviewImage"
-                    alt="Pré-visualização do passaporte"
-                  >
-
-                  <div class="passport-preview-overlay">
-                    <span>
-                      DOCUMENTO SELECIONADO
-                    </span>
-                  </div>
-
-                </div>
-
-
-                <div class="passport-upload-actions">
-
-                  <button
-                    id="passportUploadButton"
-                    class="primary-button"
-                    type="button"
-                    disabled
-                  >
-                    Validar documento
-                    <span>→</span>
-                  </button>
-
-                  <button
-                    id="passportClearButton"
-                    class="secondary-button"
-                    type="button"
-                  >
-                    Limpar
-                  </button>
-
-                </div>
-
-
-                <div
-                  id="passportFileStatus"
-                  class="document-note"
-                >
-                  Selecione primeiro o cliente que será
-                  associado ao documento.
-                </div>
-
-              </div>
-
-
-              <div class="passport-result-column">
-
-                <div class="passport-result-header">
-
-                  <span>
-                    DOCUMENT VERIFICATION
-                  </span>
-
-                  <strong id="passportResultTitle">
-                    Aguardando documento
-                  </strong>
-
-                </div>
-
-
-                <div
-                  id="passportResultState"
-                  class="passport-result-state pending"
-                >
-
-                  <div class="result-state-icon">
-                    ID
-                  </div>
-
-                  <div>
-                    <strong>
-                      Nenhuma validação executada
-                    </strong>
-
-                    <span>
-                      O resultado aparecerá aqui.
-                    </span>
-                  </div>
-
-                </div>
-
-
-                <div class="passport-check-list">
-
-                  <div
-                    id="passportCheckFile"
-                    class="document-check"
-                  >
-                    <i>○</i>
-                    <span>
-                      Documento recebido
-                    </span>
-                  </div>
-
-
-                  <div
-                    id="passportCheckMrz"
-                    class="document-check"
-                  >
-                    <i>○</i>
-                    <span>
-                      MRZ válida
-                    </span>
-                  </div>
-
-
-                  <div
-                    id="passportCheckMatch"
-                    class="document-check"
-                  >
-                    <i>○</i>
-                    <span>
-                      Dados coincidem com o cliente
-                    </span>
-                  </div>
-
-
-                  <div
-                    id="passportCheckExpiry"
-                    class="document-check"
-                  >
-                    <i>○</i>
-                    <span>
-                      Documento dentro da validade
-                    </span>
-                  </div>
-
-
-                  <div
-                    id="passportCheckStorage"
-                    class="document-check"
-                  >
-                    <i>○</i>
-                    <span>
-                      Documento armazenado com segurança
-                    </span>
-                  </div>
-
-                </div>
-
-
-                <div
-                  id="passportIssues"
-                  class="passport-issues"
-                  hidden
-                ></div>
-
-              </div>
-
-            </div>
-
-
-            <div
-              id="passportExtractedData"
-              class="passport-extracted-data"
-              hidden
-            >
-
-              <div class="form-section-title">
-
-                <span>
-                  Resultado da leitura
-                </span>
-
-                <small>
-                  Dados retornados pela validação
-                </small>
-
-              </div>
-
-
-              <div class="extracted-grid">
-
-                <div>
-                  <span>Tipo</span>
-                  <strong id="passportExtractedType">—</strong>
-                </div>
-
-                <div>
-                  <span>MRZ</span>
-                  <strong id="passportExtractedMrz">—</strong>
-                </div>
-
-                <div>
-                  <span>Correspondência</span>
-                  <strong id="passportExtractedMatch">—</strong>
-                </div>
-
-                <div>
-                  <span>Validade</span>
-                  <strong id="passportExtractedExpiry">—</strong>
-                </div>
-
-              </div>
-
-            </div>
-
-          </section>
-
-
-          <!-- ===============================================
-               IDENTITY
-          ================================================ -->
-
-          <section
-            id="identitySection"
-            class="panel identity-panel"
-          >
-
-            <div class="panel-header">
-
-              <div class="panel-heading">
-
-                <span class="section-number">
-                  03
-                </span>
-
-                <div>
-
-                  <span class="panel-eyebrow">
-                    IDENTITY VERIFICATION
-                  </span>
-
-                  <h2>
-                    Reconhecimento facial
-                  </h2>
-
-                  <p>
-                    Confirme que o rosto apresentado pelo
-                    cliente está conforme antes de permitir
-                    que o processo avance para a VFS.
-                  </p>
-
-                </div>
-
-              </div>
-
-
-              <span
-                id="facialPanelStatus"
-                class="panel-status blue"
-              >
-                <i></i>
-                AGUARDANDO
-              </span>
-
-            </div>
-
-
-            <div class="identity-introduction">
-
-              <div class="identity-introduction-icon">
-                FACE
-              </div>
-
-              <div>
-
-                <strong>
-                  O objetivo desta etapa é proteger a operação.
-                </strong>
-
-                <p>
-                  O cliente deve apresentar o próprio rosto.
-                  O sistema verifica a qualidade da captura,
-                  executa a sequência facial e utiliza o resultado
-                  juntamente com a validação do passaporte para
-                  determinar se o processo pode avançar.
-                </p>
-
-              </div>
-
-            </div>
-
-
-            <div class="identity-client-selector">
-
-              <label class="field">
-
-                <span>
-                  Cliente para verificação
-                </span>
-
-                <select
-                  id="identityClient"
-                >
-
-                  <option value="">
-                    Selecionar cliente
-                  </option>
-
-                </select>
-
-              </label>
-
-
-              <div
-                id="identityClientSummary"
-                class="identity-client-summary"
-              >
-
-                <span>
-                  CLIENTE
-                </span>
-
-                <strong>
-                  Nenhum cliente selecionado
-                </strong>
-
-              </div>
-
-            </div>
-
-
-            <div
-              id="identityGateMessage"
-              class="identity-gate-message"
-            >
-
-              <div>
-                !
-              </div>
-
-              <span>
-                Selecione um cliente e valide o passaporte
-                antes de iniciar a conferência facial.
-              </span>
-
-            </div>
-
-
-            <!--
-              facial-preflight-ui.js cria aqui o painel
-              completo da câmera automaticamente.
-            -->
-
-            <div
-              id="facialMount"
-              class="facial-mount"
-            ></div>
-
-          </section>
-
-
-          <!-- ===============================================
-               APPLICATION
-          ================================================ -->
+          <!-- =============================================
+               CANDIDATURA
+          ============================================== -->
 
           <section
             id="applicationSection"
@@ -1455,16 +1027,17 @@
                 <div>
 
                   <span class="panel-eyebrow">
-                    APPLICATION
+                    QUARTA ETAPA
                   </span>
 
                   <h2>
-                    Nova aplicação
+                    Preparação da candidatura
                   </h2>
 
                   <p>
-                    Só será possível iniciar a aplicação
-                    quando o cliente estiver apto.
+                    Depois de confirmar os dados e a identidade,
+                    defina a janela em que pretende acompanhar
+                    o processo.
                   </p>
 
                 </div>
@@ -1472,39 +1045,18 @@
               </div>
 
 
-              <span
-                id="applicationPanelStatus"
-                class="panel-status"
-              >
-                BLOCKED
+              <span class="panel-status blue">
+
+                <i></i>
+
+                Aguardando
+
               </span>
 
             </div>
 
 
-            <div
-              id="applicationSecurityNotice"
-              class="application-security-notice blocked"
-            >
-
-              <div class="security-notice-icon">
-                !
-              </div>
-
-              <div>
-
-                <strong>
-                  Aplicação bloqueada
-                </strong>
-
-                <span>
-                  Complete perfil, passaporte e identidade
-                  antes de colocar este cliente no processo.
-                </span>
-
-              </div>
-
-            </div>
+            <div id="facialPreflightMount"></div>
 
 
             <form
@@ -1512,12 +1064,25 @@
               class="form"
             >
 
+              <div class="form-section-title">
+
+                <span>
+                  Preferências da viagem
+                </span>
+
+                <small>
+                  Período pretendido
+                </small>
+
+              </div>
+
+
               <div class="form-grid">
 
                 <label class="field full">
 
                   <span>
-                    Cliente
+                    Viajante
                   </span>
 
                   <select
@@ -1527,7 +1092,7 @@
                   >
 
                     <option value="">
-                      Selecionar cliente
+                      Selecionar viajante
                     </option>
 
                   </select>
@@ -1589,34 +1154,30 @@
                 <div class="launch-copy">
 
                   <span>
-                    SECURE OPERATION FLOW
+                    PERCURSO
                   </span>
 
                   <strong>
-                    Identity
+                    Preparar
                     <b>→</b>
-                    VFS
+                    Confirmar
                     <b>→</b>
-                    Radar
-                    <b>→</b>
-                    Slot
+                    Acompanhar
                   </strong>
 
                   <small>
-                    O sistema não deverá avançar enquanto
-                    a identidade do cliente estiver bloqueada.
+                    O processo será preparado antes de entrar
+                    em acompanhamento.
                   </small>
 
                 </div>
 
 
                 <button
-                  id="applicationSubmitButton"
                   class="primary-button"
                   type="submit"
-                  disabled
                 >
-                  Iniciar operação
+                  Iniciar preparação
                   <span>→</span>
                 </button>
 
@@ -1627,9 +1188,9 @@
           </section>
 
 
-          <!-- ===============================================
-               APPLICATIONS
-          ================================================ -->
+          <!-- =============================================
+               PROCESSOS
+          ============================================== -->
 
           <section class="panel applications-panel">
 
@@ -1644,15 +1205,16 @@
                 <div>
 
                   <span class="panel-eyebrow">
-                    OPERATIONS
+                    QUINTA ETAPA
                   </span>
 
                   <h2>
-                    Aplicações em operação
+                    Acompanhamento
                   </h2>
 
                   <p>
-                    Acompanhe o estado real dos processos.
+                    Aqui poderá acompanhar os processos
+                    que já estão preparados.
                   </p>
 
                 </div>
@@ -1681,16 +1243,16 @@
               <div class="empty-state">
 
                 <div class="empty-icon">
-                  ◎
+                  <span class="radar-icon"></span>
                 </div>
 
                 <strong>
-                  Nenhuma aplicação em operação
+                  Ainda não existem processos em acompanhamento
                 </strong>
 
                 <p>
-                  Um processo aparecerá aqui depois
-                  de ser criado.
+                  Prepare um viajante e inicie uma candidatura
+                  para acompanhar o processo aqui.
                 </p>
 
               </div>
@@ -1703,36 +1265,34 @@
 
 
         <!-- =================================================
-             SIDEBAR
+             LATERAL
         ================================================== -->
 
         <aside class="dashboard-sidebar">
 
 
-          <!-- ===============================================
-               READINESS
-          ================================================ -->
+          <!-- =============================================
+               ESTADO
+          ============================================== -->
 
-          <section
-            class="side-panel readiness-panel"
-          >
+          <section class="side-panel readiness-panel">
 
             <div class="side-panel-header">
 
               <div>
 
                 <span>
-                  OPERATION READINESS
+                  PROGRESSO
                 </span>
 
                 <h3>
-                  Estado geral
+                  Estado da preparação
                 </h3>
 
               </div>
 
               <span class="mini-status">
-                LIVE
+                AO VIVO
               </span>
 
             </div>
@@ -1764,7 +1324,7 @@
                 </strong>
 
                 <span>
-                  Readiness Score
+                  Preparação concluída
                 </span>
 
               </div>
@@ -1779,7 +1339,7 @@
                 <span class="readiness-dot"></span>
 
                 <span>
-                  Perfil do cliente
+                  Dados do viajante
                 </span>
 
                 <strong id="readinessClient">
@@ -1794,7 +1354,7 @@
                 <span class="readiness-dot"></span>
 
                 <span>
-                  Passaporte validado
+                  Passaporte
                 </span>
 
                 <strong id="readinessPassport">
@@ -1809,22 +1369,7 @@
                 <span class="readiness-dot"></span>
 
                 <span>
-                  Identidade facial
-                </span>
-
-                <strong id="readinessIdentity">
-                  0%
-                </strong>
-
-              </div>
-
-
-              <div>
-
-                <span class="readiness-dot"></span>
-
-                <span>
-                  Aplicação
+                  Candidatura
                 </span>
 
                 <strong id="readinessApplication">
@@ -1839,7 +1384,7 @@
                 <span class="readiness-dot"></span>
 
                 <span>
-                  VFS Gate
+                  Acompanhamento
                 </span>
 
                 <strong id="readinessOperation">
@@ -1853,75 +1398,22 @@
           </section>
 
 
-          <!-- ===============================================
-               SELECTED CLIENT
-          ================================================ -->
+          <!-- =============================================
+               ATIVIDADE
+          ============================================== -->
 
-          <section
-            class="side-panel selected-client-panel"
-          >
+          <section class="side-panel activity-panel">
 
             <div class="side-panel-header">
 
               <div>
 
                 <span>
-                  ACTIVE CLIENT
+                  ATIVIDADE
                 </span>
 
                 <h3>
-                  Cliente selecionado
-                </h3>
-
-              </div>
-
-            </div>
-
-
-            <div
-              id="selectedClientCard"
-              class="selected-client-card empty"
-            >
-
-              <div class="selected-client-avatar">
-                ?
-              </div>
-
-              <div>
-
-                <strong id="selectedClientName">
-                  Nenhum cliente
-                </strong>
-
-                <span id="selectedClientPassport">
-                  Selecione um cliente
-                </span>
-
-              </div>
-
-            </div>
-
-          </section>
-
-
-          <!-- ===============================================
-               ACTIVITY
-          ================================================ -->
-
-          <section
-            class="side-panel activity-panel"
-          >
-
-            <div class="side-panel-header">
-
-              <div>
-
-                <span>
-                  ACTIVITY FEED
-                </span>
-
-                <h3>
-                  Atividade recente
+                  Atualizações
                 </h3>
 
               </div>
@@ -1943,11 +1435,49 @@
                 <div>
 
                   <strong>
-                    Sistema iniciado
+                    Preparação iniciada
                   </strong>
 
                   <span>
-                    Centro de operações disponível
+                    A plataforma está pronta
+                  </span>
+
+                </div>
+
+              </div>
+
+
+              <div class="activity-item">
+
+                <div class="activity-marker"></div>
+
+                <div>
+
+                  <strong>
+                    Dados do viajante
+                  </strong>
+
+                  <span>
+                    Aguardando preenchimento
+                  </span>
+
+                </div>
+
+              </div>
+
+
+              <div class="activity-item">
+
+                <div class="activity-marker"></div>
+
+                <div>
+
+                  <strong>
+                    Acompanhamento
+                  </strong>
+
+                  <span>
+                    Será ativado após a preparação
                   </span>
 
                 </div>
@@ -1959,24 +1489,22 @@
           </section>
 
 
-          <!-- ===============================================
-               BOT CENTER
-          ================================================ -->
+          <!-- =============================================
+               AUTOMATIZAÇÃO
+          ============================================== -->
 
-          <section
-            class="side-panel bot-panel"
-          >
+          <section class="side-panel bot-panel">
 
             <div class="side-panel-header">
 
               <div>
 
                 <span>
-                  AUTOMATION CORE
+                  SISTEMA
                 </span>
 
                 <h3>
-                  Bot Center
+                  Acompanhamento automático
                 </h3>
 
               </div>
@@ -1995,11 +1523,11 @@
                 <div>
 
                   <strong>
-                    PREPARATION
+                    Preparação
                   </strong>
 
                   <span>
-                    Application Worker
+                    Organização do processo
                   </span>
 
                 </div>
@@ -2010,14 +1538,12 @@
 
 
               <div class="bot-progress">
-
                 <span id="bot1Progress"></span>
-
               </div>
 
 
               <small id="bot1LastAction">
-                Aguardando operação
+                Aguardando dados
               </small>
 
             </div>
@@ -2034,11 +1560,11 @@
                 <div>
 
                   <strong>
-                    RADAR
+                    Acompanhamento
                   </strong>
 
                   <span>
-                    Availability Monitor
+                    Disponibilidade e processo
                   </span>
 
                 </div>
@@ -2049,14 +1575,12 @@
 
 
               <div class="bot-progress">
-
                 <span id="bot2Progress"></span>
-
               </div>
 
 
               <small id="bot2LastAction">
-                Monitorização inativa
+                Ainda não iniciado
               </small>
 
             </div>
@@ -2073,11 +1597,11 @@
                 <div>
 
                   <strong>
-                    ORCHESTRATOR
+                    Coordenação
                   </strong>
 
                   <span>
-                    Recovery & Coordination
+                    Estado geral do processo
                   </span>
 
                 </div>
@@ -2088,14 +1612,12 @@
 
 
               <div class="bot-progress">
-
                 <span id="supervisorProgress"></span>
-
               </div>
 
 
               <small id="supervisorLastAction">
-                Sistema pronto
+                Sistema preparado
               </small>
 
             </div>
@@ -2103,25 +1625,26 @@
           </section>
 
 
-          <!-- ===============================================
-               SECURITY
-          ================================================ -->
+          <!-- =============================================
+               SEGURANÇA
+          ============================================== -->
 
           <section class="security-card">
 
             <div class="security-icon">
-              ✓
+              <span class="check-icon"></span>
             </div>
 
             <div>
 
               <strong>
-                Secure Operations
+                Processo protegido
               </strong>
 
               <span>
-                Documentos e operações sensíveis
-                são processados através do backend.
+                As informações sensíveis são tratadas pelo
+                sistema e não são expostas desnecessariamente
+                no painel.
               </span>
 
             </div>
@@ -2135,34 +1658,22 @@
     </main>
 
 
-    <!-- TOAST -->
-
     <div
       id="toastContainer"
       class="toast-container"
+      aria-live="polite"
     ></div>
 
   </section>
 
 
   <!-- =====================================================
-       FACIAL ENGINE
+       SCRIPTS
   ====================================================== -->
 
-  <script
-    src="/facial-preflight.js"
-    defer
-  ></script>
-
-  <script
-    src="/facial-preflight-ui.js"
-    defer
-  ></script>
-
-  <script
-    src="/app.js"
-    defer
-  ></script>
+  <script src="/facial-preflight.js" defer></script>
+  <script src="/app.js" defer></script>
+  <script src="/facial-preflight-ui.js" defer></script>
   <script src="/workflow.js" defer></script>
 
 </body>
