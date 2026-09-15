@@ -1,83 +1,67 @@
 (() => {
-  "use strict";
+  'use strict';
 
   /*
-   * ============================================================
    * TRAVEL AUTOMATION
-   * TRAVEL WORKFLOW CONTROLLER — PREMIUM JOURNEY
-   * ============================================================
+   * Premium one-stage workflow controller
    *
-   * Este ficheiro controla somente a experiência visual do fluxo.
-   *
-   * ETAPAS:
-   * 01 — Viajante
-   * 02 — Passaporte
-   * 03 — Identidade
-   * 04 — Aplicação
-   * 05 — Operações
-   *
-   * IMPORTANTE:
-   * - Não cria endpoints.
-   * - Não altera APIs.
-   * - Não altera IDs existentes.
-   * - Reutiliza as secções existentes.
-   * - Impede avanço prematuro.
-   * - Mantém compatibilidade com os módulos existentes.
-   * ============================================================
+   * IMPORTANT:
+   * - Existing IDs are preserved.
+   * - Existing forms and event listeners are preserved.
+   * - No backend/API logic is implemented here.
+   * - Only one workflow stage is mounted at a time.
    */
-
-  const $ = (id) => document.getElementById(id);
 
   const STEPS = [
     {
-      id: "client",
-      number: "01",
-      eyebrow: "TRAVELER",
-      short: "Viajante",
-      title: "Preparar viajante",
+      id: 'client',
+      number: '01',
+      eyebrow: 'TRAVELER',
+      title: 'Dados do viajante',
       description:
-        "Comece pelo perfil do viajante. Todos os dados serão usados nas etapas seguintes.",
-      icon: "user"
+        'Comece por registar os dados essenciais do viajante. Estas informações serão utilizadas nas próximas etapas da operação.',
+      section: '#clientSection',
+      icon: 'traveler'
     },
     {
-      id: "passport",
-      number: "02",
-      eyebrow: "PASSPORT",
-      short: "Passaporte",
-      title: "Validar passaporte",
+      id: 'passport',
+      number: '02',
+      eyebrow: 'DOCUMENTS',
+      title: 'Passaporte e documentos',
       description:
-        "Valide os dados do passaporte antes de avançar para a confirmação de identidade.",
-      icon: "passport"
+        'Valide o documento de viagem antes de avançar. O processo só continua quando esta etapa estiver pronta.',
+      section: '#passportSection',
+      icon: 'passport'
     },
     {
-      id: "identity",
-      number: "03",
-      eyebrow: "IDENTITY",
-      short: "Identidade",
-      title: "Confirmar identidade",
+      id: 'identity',
+      number: '03',
+      eyebrow: 'IDENTITY',
+      title: 'Reconhecimento facial',
       description:
-        "Faça a verificação facial seguindo as instruções apresentadas no centro de validação.",
-      icon: "face"
+        'Confirme a identidade do viajante através da verificação facial. Uma aprovação é necessária para continuar.',
+      section: '#identitySection',
+      icon: 'face'
     },
     {
-      id: "application",
-      number: "04",
-      eyebrow: "APPLICATION",
-      short: "Aplicação",
-      title: "Preparar aplicação",
+      id: 'application',
+      number: '04',
+      eyebrow: 'APPLICATION',
+      title: 'Preparar aplicação',
       description:
-        "Depois da aprovação da identidade, prepare a aplicação para entrar em operação.",
-      icon: "document"
+        'Com os dados e a identidade validados, prepare a aplicação para a próxima fase do processo.',
+      section: '#applicationSection',
+      icon: 'application'
     },
     {
-      id: "operations",
-      number: "05",
-      eyebrow: "OPERATIONS",
-      short: "Operações",
-      title: "Centro de operações",
+      id: 'operations',
+      number: '05',
+      eyebrow: 'OPERATIONS',
+      title: 'Centro de operações',
       description:
-        "Acompanhe VFS, OTP, radar de disponibilidade e os próximos eventos da operação.",
-      icon: "radar"
+        'Acompanhe o estado da operação, monitorização e próximos acontecimentos num único centro.',
+      section: '#verificationSection',
+      icon: 'radar'
     }
   ];
 
@@ -85,1023 +69,876 @@
     current: 0,
     completed: new Set(),
     initialized: false,
-    transitioning: false
+    busy: false
   };
 
   let shell = null;
-  let stageContainer = null;
-  let progressContainer = null;
-  let bottomBar = null;
-  let observersStarted = false;
+  let stageHost = null;
+  let progressRail = null;
+  let titleNode = null;
+  let descriptionNode = null;
+  let eyebrowNode = null;
+  let counterNode = null;
+  let planeNode = null;
+  let statusNode = null;
+  let backButton = null;
+  let nextButton = null;
+  let assistNode = null;
 
-  const sectionMap = {
-    client: "clientSection",
-    passport: "passportSection",
-    identity: "identitySection",
-    application: "applicationSection",
-    operations: "verificationSection"
-  };
+  const $ = (selector, root = document) =>
+    root.querySelector(selector);
 
-  function reducedMotion() {
-    return (
-      window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches
-    );
+  const $$ = (selector, root = document) =>
+    Array.from(root.querySelectorAll(selector));
+
+  function getMainContainer() {
+    return $('.main-container');
   }
 
-  function escapeHtml(value) {
-    return String(value ?? "")
-      .replaceAll("&", "&amp;")
-      .replaceAll("<", "&lt;")
-      .replaceAll(">", "&gt;")
-      .replaceAll('"', "&quot;")
-      .replaceAll("'", "&#039;");
+  function getSection(step) {
+    return $(step.section);
   }
 
-  function icon(name) {
+  function iconSvg(type) {
     const icons = {
-      user: `
+      traveler: `
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="8" r="3.5"></circle>
-          <path d="M5 20c.8-3.5 3.1-5.3 7-5.3s6.2 1.8 7 5.3"></path>
+          <circle cx="12" cy="7.5" r="3.2"></circle>
+          <path d="M5.5 20c.7-4 2.8-6 6.5-6s5.8 2 6.5 6"></path>
         </svg>
       `,
-
       passport: `
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <rect x="5" y="3.5" width="14" height="17" rx="2"></rect>
-          <circle cx="12" cy="9" r="2.6"></circle>
-          <path d="M8.5 15.2h7"></path>
-          <path d="M8.5 17.5h5"></path>
+          <circle cx="12" cy="10" r="3"></circle>
+          <path d="M8.7 10h6.6M12 7v6"></path>
+          <path d="M8.5 16.5h7"></path>
         </svg>
       `,
-
       face: `
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="4" y="4" width="16" height="16" rx="4"></rect>
-          <circle cx="9" cy="10" r="1"></circle>
-          <circle cx="15" cy="10" r="1"></circle>
-          <path d="M8.5 14c1.8 1.6 5.2 1.6 7 0"></path>
+          <path d="M8 3H5a2 2 0 0 0-2 2v3"></path>
+          <path d="M16 3h3a2 2 0 0 1 2 2v3"></path>
+          <path d="M21 16v3a2 2 0 0 1-2 2h-3"></path>
+          <path d="M3 16v3a2 2 0 0 0 2 2h3"></path>
+          <circle cx="9" cy="10" r=".8"></circle>
+          <circle cx="15" cy="10" r=".8"></circle>
+          <path d="M8.5 15c2 1.4 5 1.4 7 0"></path>
         </svg>
       `,
-
-      document: `
+      application: `
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M7 3.5h7l4 4V20.5H7z"></path>
-          <path d="M14 3.5v4h4"></path>
-          <path d="M9.5 12h5"></path>
-          <path d="M9.5 15.5h5"></path>
+          <path d="M6 3.5h9l3 3V20.5H6z"></path>
+          <path d="M14.5 3.5v4h3.5"></path>
+          <path d="M9 12h6M9 15.5h6M9 8.5h2"></path>
         </svg>
       `,
-
       radar: `
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M4.5 14a7.5 7.5 0 0 1 15 0"></path>
-          <path d="M7.5 14a4.5 4.5 0 0 1 9 0"></path>
-          <path d="M12 14l5.5-6"></path>
-          <circle cx="12" cy="14" r="1.5"></circle>
-          <path d="M3 18.5h18"></path>
-        </svg>
-      `,
-
-      check: `
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 12.5l4.2 4.2L19 7"></path>
-        </svg>
-      `,
-
-      lock: `
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <rect x="5" y="10" width="14" height="10" rx="2"></rect>
-          <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
-        </svg>
-      `,
-
-      arrow: `
-        <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M5 12h13"></path>
-          <path d="M13 6l6 6-6 6"></path>
-        </svg>
-      `,
-
-      plane: `
-        <svg viewBox="0 0 32 32" aria-hidden="true">
-          <path d="M29 14.1 18.4 11V4.8c0-1.2-.9-2.1-2.1-2.1s-2.1.9-2.1 2.1V11L3.6 14.1c-.9.3-1.5 1.1-1.5 2 0 .8.6 1.5 1.4 1.7l10.7 1.9v5.4l-3.3 2.2c-.6.4-.9 1.1-.9 1.8h12c0-.7-.3-1.4-.9-1.8l-3.3-2.2v-5.4l10.7-1.9c.8-.2 1.4-.9 1.4-1.7 0-.9-.6-1.7-1.5-2Z"></path>
+          <circle cx="12" cy="12" r="8.5"></circle>
+          <circle cx="12" cy="12" r="4.5"></circle>
+          <path d="M12 12 18.5 5.5"></path>
+          <circle cx="12" cy="12" r="1"></circle>
         </svg>
       `
     };
 
-    return icons[name] || "";
-  }
-
-  function getExistingSection(id) {
-    return $(sectionMap[id]);
+    return icons[type] || icons.traveler;
   }
 
   function createShell() {
-    const appView = $("appView");
+    const main = getMainContainer();
 
-    if (!appView) {
+    if (!main) {
       return false;
     }
 
-    shell = $("travelWorkflow");
+    const existing = document.getElementById('travelWorkflow');
 
-    if (shell) {
-      stageContainer = $("workflowStage");
-      progressContainer = $("workflowProgress");
-      bottomBar = $("workflowBottom");
+    if (existing) {
+      shell = existing;
+      stageHost = $('#workflowStage', shell);
+      progressRail = $('#workflowProgress', shell);
+      titleNode = $('#workflowTitle', shell);
+      descriptionNode = $('#workflowDescription', shell);
+      eyebrowNode = $('#workflowEyebrow', shell);
+      counterNode = $('#workflowCounter', shell);
+      planeNode = $('#workflowPlane', shell);
+      statusNode = $('#workflowStatus', shell);
+      assistNode = $('#workflowAssist', shell);
+      backButton = $('#workflowBack', shell);
+      nextButton = $('#workflowNext', shell);
       return true;
     }
 
-    shell = document.createElement("div");
-    shell.id = "travelWorkflow";
-    shell.className = "travel-workflow";
+    shell = document.createElement('section');
+    shell.id = 'travelWorkflow';
+    shell.className = 'travel-workflow';
+    shell.setAttribute('aria-label', 'Travel Automation workflow');
 
     shell.innerHTML = `
-      <div class="workflow-sky-layer" aria-hidden="true">
-        <div class="workflow-cloud cloud-one"></div>
-        <div class="workflow-cloud cloud-two"></div>
-        <div class="workflow-glow glow-one"></div>
-        <div class="workflow-glow glow-two"></div>
-
-        <div class="workflow-aircraft">
-          ${icon("plane")}
-        </div>
-
-        <div class="workflow-grid"></div>
+      <div class="workflow-atmosphere" aria-hidden="true">
+        <div class="workflow-glow workflow-glow-one"></div>
+        <div class="workflow-glow workflow-glow-two"></div>
+        <div class="workflow-orbit workflow-orbit-one"></div>
+        <div class="workflow-orbit workflow-orbit-two"></div>
+        <div class="workflow-flight-line"></div>
       </div>
 
-      <aside class="workflow-sidebar">
+      <div class="workflow-sidebar">
 
         <div class="workflow-brand">
           <div class="workflow-brand-mark">
-            TA
+            <span>TA</span>
           </div>
 
-          <div class="workflow-brand-text">
-            <strong>TRAVEL AUTOMATION</strong>
-            <span>OPERATIONS CENTER</span>
+          <div class="workflow-brand-copy">
+            <strong>TRAVEL</strong>
+            <span>AUTOMATION</span>
           </div>
         </div>
 
-        <div class="workflow-route-heading">
-          <span>YOUR JOURNEY</span>
-          <strong>Preparação de viagem</strong>
+        <div class="workflow-sidebar-heading">
+          <span>OPERATION FLOW</span>
+          <small>STEP BY STEP</small>
         </div>
 
         <nav
           id="workflowProgress"
           class="workflow-progress"
-          aria-label="Progresso da operação"
-        ></nav>
+          aria-label="Etapas da operação">
+        </nav>
 
         <div class="workflow-sidebar-footer">
-
-          <div class="workflow-secure-status">
-            <span class="workflow-secure-pulse"></span>
-            <strong>SISTEMA ONLINE</strong>
+          <div class="workflow-security">
+            <span class="security-dot"></span>
+            <div>
+              <strong>SECURE SESSION</strong>
+              <small>Protected workflow</small>
+            </div>
           </div>
-
-          <small>
-            Ambiente seguro de preparação e monitorização
-          </small>
-
         </div>
+      </div>
 
-      </aside>
-
-      <section class="workflow-content">
+      <div class="workflow-content">
 
         <header class="workflow-header">
 
           <div class="workflow-header-copy">
-
             <div class="workflow-kicker">
-              <span class="workflow-kicker-line"></span>
-              <span id="workflowEyebrow">TRAVELER</span>
+              <span class="workflow-live-dot"></span>
+              TRAVEL APPLICATION
             </div>
 
-            <h1 id="workflowTitle">
-              Preparar viajante
-            </h1>
-
-            <p id="workflowDescription">
-              Comece pelo perfil do viajante.
-            </p>
-
-          </div>
-
-          <div class="workflow-live-status">
-            <span class="workflow-live-indicator"></span>
-
-            <div>
-              <strong>LIVE</strong>
-              <small>OPERATIONS</small>
+            <div
+              id="workflowEyebrow"
+              class="workflow-eyebrow">
             </div>
+
+            <h1 id="workflowTitle"></h1>
+
+            <p id="workflowDescription"></p>
           </div>
 
+          <div class="workflow-counter">
+            <span>STAGE</span>
+            <strong id="workflowCounter">01</strong>
+            <small>/ 05</small>
+          </div>
         </header>
 
-        <div class="workflow-flight-progress">
-
-          <div class="workflow-flight-label">
-            <span>ROTA DE PREPARAÇÃO</span>
-            <strong id="workflowFlightPercent">20%</strong>
+        <div class="workflow-route">
+          <div class="workflow-route-track">
+            <div class="workflow-route-progress"></div>
           </div>
 
-          <div class="workflow-flight-track">
-
-            <div
-              id="workflowFlightProgress"
-              class="workflow-flight-fill"
-            ></div>
-
-            <div
-              id="workflowPlane"
-              class="workflow-plane"
-              aria-hidden="true"
-            >
-              ${icon("plane")}
-            </div>
-
-            <div class="workflow-flight-points">
-              ${STEPS.map(
-                (step, index) => `
-                  <span
-                    class="workflow-flight-point"
-                    data-flight-point="${index}"
-                  ></span>
-                `
-              ).join("")}
-            </div>
-
+          <div class="workflow-route-plane" id="workflowPlane">
+            <svg viewBox="0 0 48 48" aria-hidden="true">
+              <path d="M42 23.5 25 18V7.5c0-1.2-.8-2-1.8-2h-.4c-1 0-1.8.8-1.8 2V18L6 23.5c-.7.2-1.1.8-1.1 1.5s.4 1.3 1.1 1.5L21 30v10.5c0 1.2.8 2 1.8 2h.4c1 0 1.8-.8 1.8-2V30l17-3.5c.7-.2 1.1-.8 1.1-1.5S42.7 23.7 42 23.5Z"></path>
+            </svg>
           </div>
 
+          <div class="workflow-route-label">
+            <span>ROUTE</span>
+            <strong>PREPARE → VERIFY → OPERATE</strong>
+          </div>
         </div>
 
-        <main
-          id="workflowStage"
-          class="workflow-stage"
-        ></main>
+        <div
+          id="workflowStatus"
+          class="workflow-status"
+          aria-live="polite">
+        </div>
 
-        <footer
-          id="workflowBottom"
-          class="workflow-bottom"
-        ></footer>
+        <div class="workflow-main-card">
 
-      </section>
+          <div class="workflow-card-top">
+            <div class="workflow-stage-number" id="workflowStageNumber">
+              01
+            </div>
+
+            <div class="workflow-stage-label">
+              <span>ACTIVE STAGE</span>
+              <strong id="workflowStageLabel">
+                TRAVELER
+              </strong>
+            </div>
+
+            <div class="workflow-card-lock">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="5" y="10" width="14" height="10" rx="2"></rect>
+                <path d="M8 10V7a4 4 0 0 1 8 0v3"></path>
+              </svg>
+              <span>CONTROLLED</span>
+            </div>
+          </div>
+
+          <div
+            id="workflowAssist"
+            class="workflow-assist">
+          </div>
+
+          <div
+            id="workflowStage"
+            class="workflow-stage-host"
+            aria-live="polite">
+          </div>
+
+          <div class="workflow-navigation">
+
+            <button
+              id="workflowBack"
+              class="workflow-button workflow-button-secondary"
+              type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M19 12H5"></path>
+                <path d="m11 18-6-6 6-6"></path>
+              </svg>
+              <span>Voltar</span>
+            </button>
+
+            <div class="workflow-navigation-info">
+              <span id="workflowNavigationHint">
+                Complete esta etapa para continuar.
+              </span>
+            </div>
+
+            <button
+              id="workflowNext"
+              class="workflow-button workflow-button-primary"
+              type="button">
+              <span>Continuar</span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 12h14"></path>
+                <path d="m13 6 6 6-6 6"></path>
+              </svg>
+            </button>
+
+          </div>
+        </div>
+
+        <footer class="workflow-footer">
+          <span>TRAVEL AUTOMATION</span>
+          <span class="workflow-footer-separator"></span>
+          <span>CONTROLLED APPLICATION ENVIRONMENT</span>
+        </footer>
+
+      </div>
     `;
 
-    const mainContainer = appView.querySelector(".main-container");
+    main.appendChild(shell);
 
-    if (mainContainer) {
-      mainContainer.classList.add("workflow-managed");
-      mainContainer.prepend(shell);
-    } else {
-      appView.appendChild(shell);
-    }
-
-    stageContainer = $("workflowStage");
-    progressContainer = $("workflowProgress");
-    bottomBar = $("workflowBottom");
+    stageHost = $('#workflowStage', shell);
+    progressRail = $('#workflowProgress', shell);
+    titleNode = $('#workflowTitle', shell);
+    descriptionNode = $('#workflowDescription', shell);
+    eyebrowNode = $('#workflowEyebrow', shell);
+    counterNode = $('#workflowCounter', shell);
+    planeNode = $('#workflowPlane', shell);
+    statusNode = $('#workflowStatus', shell);
+    assistNode = $('#workflowAssist', shell);
+    backButton = $('#workflowBack', shell);
+    nextButton = $('#workflowNext', shell);
 
     return true;
   }
 
-  function renderProgress() {
-    if (!progressContainer) {
+  function buildProgress() {
+    if (!progressRail) {
       return;
     }
 
-    progressContainer.innerHTML = STEPS.map((step, index) => {
-      const active = index === state.current;
-      const completed = state.completed.has(step.id);
-      const locked = index > state.current && !completed;
+    progressRail.innerHTML = '';
 
-      return `
-        <button
-          type="button"
-          class="workflow-step
-            ${active ? "is-active" : ""}
-            ${completed ? "is-complete" : ""}
-            ${locked ? "is-locked" : ""}
-          "
-          data-workflow-step="${escapeHtml(step.id)}"
-          ${locked ? "disabled" : ""}
-          aria-current="${active ? "step" : "false"}"
-        >
+    STEPS.forEach((step, index) => {
+      const button = document.createElement('button');
 
-          <span class="workflow-step-icon">
-            ${
-              completed
-                ? icon("check")
-                : locked
-                  ? icon("lock")
-                  : icon(step.icon)
-            }
-          </span>
+      button.type = 'button';
+      button.className = 'workflow-progress-item';
+      button.dataset.index = String(index);
 
-          <span class="workflow-step-copy">
+      button.innerHTML = `
+        <span class="workflow-progress-line"></span>
 
-            <span class="workflow-step-number">
-              ${escapeHtml(step.number)}
-            </span>
+        <span class="workflow-progress-icon">
+          ${iconSvg(step.icon)}
+        </span>
 
-            <strong>
-              ${escapeHtml(step.short)}
-            </strong>
+        <span class="workflow-progress-copy">
+          <small>${step.number}</small>
+          <strong>${step.eyebrow}</strong>
+          <em>${step.title}</em>
+        </span>
 
-            <small>
-              ${escapeHtml(step.title)}
-            </small>
-
-          </span>
-
-          <span class="workflow-step-arrow">
-            ${icon("arrow")}
-          </span>
-
-        </button>
+        <span class="workflow-progress-check">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m5 12 4 4L19 6"></path>
+          </svg>
+        </span>
       `;
-    }).join("");
 
-    progressContainer
-      .querySelectorAll("[data-workflow-step]")
-      .forEach((button) => {
-        button.addEventListener("click", () => {
-          const id = button.dataset.workflowStep;
+      button.addEventListener('click', () => {
+        const target = Number(button.dataset.index);
 
-          const index = STEPS.findIndex(
-            (step) => step.id === id
-          );
-
-          if (index < 0) {
-            return;
-          }
-
-          if (
-            index <= state.current ||
-            state.completed.has(id)
-          ) {
-            goTo(index);
-          }
-        });
+        if (target <= state.current || state.completed.has(target - 1)) {
+          goTo(target);
+        }
       });
+
+      progressRail.appendChild(button);
+    });
   }
 
-  function getCurrentStep() {
-    return STEPS[state.current];
+  function updateProgress() {
+    if (!progressRail) {
+      return;
+    }
+
+    const items = $$('.workflow-progress-item', progressRail);
+
+    items.forEach((item, index) => {
+      const isCurrent = index === state.current;
+      const isCompleted = state.completed.has(index);
+      const isAvailable =
+        index <= state.current ||
+        state.completed.has(index - 1);
+
+      item.classList.toggle('is-current', isCurrent);
+      item.classList.toggle('is-completed', isCompleted);
+      item.classList.toggle('is-available', isAvailable);
+      item.disabled = !isAvailable;
+      item.setAttribute(
+        'aria-current',
+        isCurrent ? 'step' : 'false'
+      );
+    });
+
+    const progress =
+      STEPS.length <= 1
+        ? 0
+        : (state.current / (STEPS.length - 1)) * 100;
+
+    const routeProgress =
+      shell.querySelector('.workflow-route-progress');
+
+    if (routeProgress) {
+      routeProgress.style.width = `${progress}%`;
+    }
+
+    if (planeNode) {
+      planeNode.style.left = `${progress}%`;
+    }
+  }
+
+  function hideLegacyLayout() {
+    const main = getMainContainer();
+
+    if (!main) {
+      return;
+    }
+
+    /*
+     * The workflow becomes the only primary surface.
+     * Existing top-level dashboard components are hidden visually,
+     * while the five real sections are moved into the workflow.
+     */
+    main.classList.add('workflow-isolated');
+
+    Array.from(main.children).forEach(child => {
+      if (child === shell) {
+        return;
+      }
+
+      child.classList.add('workflow-legacy-hidden');
+    });
+  }
+
+  function collectSections() {
+    STEPS.forEach(step => {
+      const section = getSection(step);
+
+      if (!section) {
+        return;
+      }
+
+      section.dataset.travelWorkflowSection = step.id;
+      section.classList.add('workflow-managed-section');
+    });
+  }
+
+  function mountCurrentSection() {
+    if (!stageHost) {
+      return;
+    }
+
+    const step = STEPS[state.current];
+    const section = getSection(step);
+
+    stageHost.innerHTML = '';
+
+    if (!section) {
+      showStatus(
+        'Esta etapa ainda não foi encontrada na página. Verifique se o ID da secção foi preservado.',
+        'error'
+      );
+      return;
+    }
+
+    section.hidden = false;
+    section.removeAttribute('aria-hidden');
+    section.classList.remove('workflow-stage-hidden');
+    section.classList.add('workflow-stage-active');
+
+    stageHost.appendChild(section);
+
+    stageHost.scrollTop = 0;
+
+    if (titleNode) {
+      titleNode.textContent = step.title;
+    }
+
+    if (descriptionNode) {
+      descriptionNode.textContent = step.description;
+    }
+
+    if (eyebrowNode) {
+      eyebrowNode.textContent = `${step.number} / ${step.eyebrow}`;
+    }
+
+    if (counterNode) {
+      counterNode.textContent = step.number;
+    }
+
+    const stageNumber = $('#workflowStageNumber', shell);
+    const stageLabel = $('#workflowStageLabel', shell);
+
+    if (stageNumber) {
+      stageNumber.textContent = step.number;
+    }
+
+    if (stageLabel) {
+      stageLabel.textContent = step.eyebrow;
+    }
+
+    renderAssist(step);
+    updateNavigation();
+    updateProgress();
+
+    shell.dataset.activeStage = step.id;
+
+    requestAnimationFrame(() => {
+      shell.classList.remove('workflow-changing');
+
+      requestAnimationFrame(() => {
+        shell.classList.add('workflow-visible');
+      });
+    });
   }
 
   function renderAssist(step) {
-    const assist = document.createElement("div");
+    if (!assistNode) {
+      return;
+    }
 
-    assist.className = `workflow-assist workflow-assist-${step.id}`;
+    let content = '';
 
-    const content = {
-      client: {
-        eyebrow: "ANTES DE COMEÇAR",
-        title: "Vamos preparar o viajante",
-        text:
-          "Preencha os dados principais. Depois de guardar o perfil, poderá avançar para a validação do passaporte.",
-        items: [
-          "Dados pessoais",
-          "Contacto",
-          "Informação da viagem"
-        ]
-      },
-
-      passport: {
-        eyebrow: "VALIDAÇÃO DOCUMENTAL",
-        title: "Primeiro o documento. Depois a identidade.",
-        text:
-          "O passaporte precisa de ser validado antes da etapa facial ficar disponível.",
-        items: [
-          "OCR e MRZ",
-          "Dados do documento",
-          "Validade e correspondência"
-        ]
-      },
-
-      identity: {
-        eyebrow: "VERIFICAÇÃO FACIAL",
-        title: "Confirme que é realmente o viajante",
-        text:
-          "Siga as instruções do centro facial. Faça os movimentos pedidos e aguarde o resultado.",
-        items: [
-          "Posicione o rosto",
-          "Siga os movimentos",
-          "Aguarde a decisão"
-        ]
-      },
-
-      application: {
-        eyebrow: "PREPARAÇÃO",
-        title: "A aplicação está quase pronta",
-        text:
-          "Depois da aprovação da identidade, organize a aplicação antes de entrar no centro de operações.",
-        items: [
-          "Dados da aplicação",
-          "Documentação",
-          "Estado de preparação"
-        ]
-      },
-
-      operations: {
-        eyebrow: "CENTRO DE OPERAÇÕES",
-        title: "Agora acompanhe a operação",
-        text:
-          "A partir daqui o processo passa para monitorização, radar e operações.",
-        items: [
-          "VFS",
-          "OTP",
-          "Radar de disponibilidade"
-        ]
-      }
-    };
-
-    const data = content[step.id];
-
-    assist.innerHTML = `
-      <div class="workflow-assist-visual">
-
+    if (step.id === 'client') {
+      content = `
         <div class="workflow-assist-icon">
-          ${icon(step.icon)}
+          ${iconSvg('traveler')}
         </div>
-
-        ${
-          step.id === "identity"
-            ? `
-              <div class="workflow-face-scan">
-                <span></span>
-                <i></i>
-              </div>
-            `
-            : ""
-        }
-
-        ${
-          step.id === "operations"
-            ? `
-              <div class="workflow-radar-animation">
-                <span></span>
-                <i></i>
-                <b></b>
-              </div>
-            `
-            : ""
-        }
-
-      </div>
-
-      <div class="workflow-assist-copy">
-
-        <span class="workflow-assist-eyebrow">
-          ${escapeHtml(data.eyebrow)}
-        </span>
-
-        <strong>
-          ${escapeHtml(data.title)}
-        </strong>
-
-        <p>
-          ${escapeHtml(data.text)}
-        </p>
-
-        <div class="workflow-assist-items">
-          ${data.items
-            .map(
-              (item, index) => `
-                <span>
-                  <b>${index + 1}</b>
-                  ${escapeHtml(item)}
-                </span>
-              `
-            )
-            .join("")}
-        </div>
-
-      </div>
-    `;
-
-    return assist;
-  }
-
-  function renderFeedback(step) {
-    const feedback = document.createElement("div");
-
-    feedback.id = "workflowFeedback";
-    feedback.className = "workflow-feedback";
-
-    const status = getStepStatus(step.id);
-
-    if (status === "success") {
-      feedback.classList.add("is-success");
-
-      feedback.innerHTML = `
-        <div class="workflow-feedback-icon">
-          ${icon("check")}
-        </div>
-
         <div>
-          <strong>Etapa aprovada</strong>
-          <p>
-            Esta etapa foi concluída. Pode continuar para a próxima.
-          </p>
+          <strong>Prepare o viajante</strong>
+          <span>
+            Preencha os dados com atenção. Campos obrigatórios
+            serão validados antes de avançar.
+          </span>
         </div>
       `;
-
-      return feedback;
     }
 
-    if (status === "error") {
-      feedback.classList.add("is-error");
-
-      feedback.innerHTML = `
-        <div class="workflow-feedback-icon">
-          !
+    if (step.id === 'passport') {
+      content = `
+        <div class="workflow-assist-icon">
+          ${iconSvg('passport')}
         </div>
-
         <div>
-          <strong>Validação não aprovada</strong>
-          <p>
-            Corrija os dados ou siga as instruções apresentadas no módulo
-            desta etapa antes de tentar novamente.
-          </p>
+          <strong>Validação documental</strong>
+          <span>
+            O documento precisa estar validado antes de a
+            identidade ser verificada.
+          </span>
         </div>
       `;
-
-      return feedback;
     }
 
-    feedback.classList.add("is-neutral");
-
-    feedback.innerHTML = `
-      <div class="workflow-feedback-icon">
-        i
-      </div>
-
-      <div>
-        <strong>Próximo passo bloqueado</strong>
-        <p>
-          Conclua esta etapa primeiro. O sistema liberará automaticamente
-          a próxima fase quando os requisitos forem cumpridos.
-        </p>
-      </div>
-    `;
-
-    return feedback;
-  }
-
-  function getStepStatus(id) {
-    if (id === "passport") {
-      const result = $("passportResultState");
-
-      if (
-        result &&
-        (
-          result.classList.contains("error") ||
-          result.classList.contains("failed") ||
-          result.classList.contains("rejected") ||
-          /reprov|rejeit|inválid|invalido|falhou/i.test(
-            result.textContent || ""
-          )
-        )
-      ) {
-        return "error";
-      }
-
-      if (isPassportReady()) {
-        return "success";
-      }
-    }
-
-    if (id === "identity") {
-      const result =
-        $("facialPreflightResult") ||
-        $("passportResultState");
-
-      if (
-        result &&
-        /reprov|rejeit|falhou|não aprovado|nao aprovado/i.test(
-          result.textContent || ""
-        )
-      ) {
-        return "error";
-      }
-
-      if (isIdentityReady()) {
-        return "success";
-      }
-    }
-
-    if (state.completed.has(id)) {
-      return "success";
-    }
-
-    return "neutral";
-  }
-
-  function renderStage() {
-    if (!stageContainer) {
-      return;
-    }
-
-    const step = getCurrentStep();
-    const section = getExistingSection(step.id);
-
-    stageContainer.innerHTML = "";
-
-    const frame = document.createElement("div");
-
-    frame.className = "workflow-stage-frame";
-    frame.dataset.stage = step.id;
-
-    const stageTop = document.createElement("div");
-
-    stageTop.className = "workflow-stage-top";
-
-    stageTop.innerHTML = `
-      <div class="workflow-stage-badge">
-        <span>${escapeHtml(step.number)}</span>
-        ${icon(step.icon)}
-      </div>
-
-      <div>
-        <span class="workflow-stage-eyebrow">
-          ${escapeHtml(step.eyebrow)}
-        </span>
-
-        <strong>
-          ${escapeHtml(step.title)}
-        </strong>
-      </div>
-
-      <div class="workflow-stage-secure">
-        <span></span>
-        Seguro
-      </div>
-    `;
-
-    frame.appendChild(stageTop);
-    frame.appendChild(renderAssist(step));
-
-    if (section) {
-      section.classList.add("workflow-section-host");
-      section.classList.remove("is-hidden");
-
-      frame.appendChild(section);
-    } else {
-      const missing = document.createElement("div");
-
-      missing.className = "workflow-missing";
-
-      missing.innerHTML = `
-        <div class="workflow-missing-icon">!</div>
-
-        <strong>
-          Etapa indisponível
-        </strong>
-
-        <p>
-          A interface desta etapa ainda não está disponível.
-        </p>
-      `;
-
-      frame.appendChild(missing);
-    }
-
-    if (
-      step.id === "passport" ||
-      step.id === "identity"
-    ) {
-      frame.appendChild(renderFeedback(step));
-    }
-
-    stageContainer.appendChild(frame);
-
-    if (reducedMotion()) {
-      frame.classList.add("is-visible");
-    } else {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          frame.classList.add("is-visible");
-        });
-      });
-    }
-  }
-
-  function renderBottom() {
-    if (!bottomBar) {
-      return;
-    }
-
-    const step = getCurrentStep();
-    const isLast = state.current === STEPS.length - 1;
-    const completed = state.completed.has(step.id);
-
-    bottomBar.innerHTML = `
-      <div class="workflow-bottom-left">
-
-        <div class="workflow-bottom-status">
-          <span></span>
-
-          <div>
-            <strong>
-              ETAPA ${escapeHtml(step.number)} DE ${STEPS.length}
-            </strong>
-
-            <small>
-              ${
-                completed
-                  ? "Requisitos cumpridos"
-                  : "Aguardando conclusão"
-              }
-            </small>
+    if (step.id === 'identity') {
+      content = `
+        <div class="workflow-face-visual" aria-hidden="true">
+          <div class="face-grid"></div>
+          <div class="face-corners"></div>
+          <div class="face-ring"></div>
+          <div class="face-scan-line"></div>
+          <div class="face-target">
+            ${iconSvg('face')}
           </div>
         </div>
 
-        <div class="workflow-bottom-hint">
-          ${
-            isLast
-              ? "O centro de operações está ativo."
-              : completed
-                ? "Pode avançar para a próxima etapa."
-                : "Conclua a etapa atual para continuar."
-          }
+        <div class="workflow-assist-face-copy">
+          <strong>Verificação biométrica</strong>
+          <span>
+            Posicione o rosto corretamente e siga as instruções
+            apresentadas pelo módulo de reconhecimento facial.
+          </span>
+        </div>
+      `;
+    }
+
+    if (step.id === 'application') {
+      content = `
+        <div class="workflow-assist-icon">
+          ${iconSvg('application')}
+        </div>
+        <div>
+          <strong>Aplicação pronta para preparação</strong>
+          <span>
+            Os dados anteriores já podem ser utilizados para
+            preparar a aplicação.
+          </span>
+        </div>
+      `;
+    }
+
+    if (step.id === 'operations') {
+      content = `
+        <div class="workflow-radar-visual" aria-hidden="true">
+          <div class="radar-circle radar-circle-one"></div>
+          <div class="radar-circle radar-circle-two"></div>
+          <div class="radar-circle radar-circle-three"></div>
+          <div class="radar-sweep"></div>
+          <div class="radar-center"></div>
+          <span class="radar-blip radar-blip-one"></span>
+          <span class="radar-blip radar-blip-two"></span>
         </div>
 
-      </div>
-
-      <div class="workflow-bottom-actions">
-
-        ${
-          state.current > 0
-            ? `
-              <button
-                id="workflowBack"
-                type="button"
-                class="workflow-button workflow-button-secondary"
-              >
-                <span>←</span>
-                Voltar
-              </button>
-            `
-            : ""
-        }
-
-        ${
-          !isLast
-            ? `
-              <button
-                id="workflowNext"
-                type="button"
-                class="workflow-button workflow-button-primary"
-              >
-                ${
-                  completed
-                    ? "Continuar"
-                    : "Verificar etapa"
-                }
-                ${icon("arrow")}
-              </button>
-            `
-            : `
-              <button
-                id="workflowOperationsRefresh"
-                type="button"
-                class="workflow-button workflow-button-primary"
-              >
-                Atualizar operação
-                <span class="refresh-symbol">↻</span>
-              </button>
-            `
-        }
-
-      </div>
-    `;
-
-    const back = $("workflowBack");
-
-    if (back) {
-      back.addEventListener("click", () => {
-        goTo(state.current - 1);
-      });
+        <div>
+          <strong>Centro de operações</strong>
+          <span>
+            A operação entra agora na fase de acompanhamento
+            e monitorização.
+          </span>
+        </div>
+      `;
     }
 
-    const next = $("workflowNext");
-
-    if (next) {
-      next.addEventListener("click", handleNext);
-    }
-
-    const refresh = $("workflowOperationsRefresh");
-
-    if (refresh) {
-      refresh.addEventListener("click", () => {
-        refresh.classList.add("is-loading");
-        refresh.disabled = true;
-
-        const refreshButton = $("refreshButton");
-
-        if (refreshButton) {
-          refreshButton.click();
-        }
-
-        setTimeout(() => {
-          refresh.classList.remove("is-loading");
-          refresh.disabled = false;
-        }, 1000);
-      });
-    }
+    assistNode.innerHTML = content;
+    assistNode.dataset.type = step.id;
   }
 
-  function updateHeader() {
-    const step = getCurrentStep();
-
-    const eyebrow = $("workflowEyebrow");
-    const title = $("workflowTitle");
-    const description = $("workflowDescription");
-
-    if (eyebrow) {
-      eyebrow.textContent = step.eyebrow;
-    }
-
-    if (title) {
-      title.textContent = step.title;
-    }
-
-    if (description) {
-      description.textContent = step.description;
-    }
-  }
-
-  function updateFlight() {
-    const progress = $("workflowFlightProgress");
-    const plane = $("workflowPlane");
-    const percentElement = $("workflowFlightPercent");
-
-    const percentage =
-      STEPS.length <= 1
-        ? 100
-        : ((state.current + 1) / STEPS.length) * 100;
-
-    if (progress) {
-      progress.style.width = `${percentage}%`;
-    }
-
-    if (percentElement) {
-      percentElement.textContent =
-        `${Math.round(percentage)}%`;
-    }
-
-    if (plane) {
-      const position =
-        STEPS.length <= 1
-          ? 100
-          : (state.current / (STEPS.length - 1)) * 100;
-
-      plane.style.left = `${position}%`;
-
-      plane.classList.toggle(
-        "is-flying",
-        !reducedMotion()
-      );
-    }
-
-    document
-      .querySelectorAll("[data-flight-point]")
-      .forEach((point) => {
-        const index =
-          Number(point.dataset.flightPoint);
-
-        point.classList.toggle(
-          "is-active",
-          index <= state.current
-        );
-      });
-  }
-
-  function render() {
-    if (!createShell()) {
+  function updateNavigation() {
+    if (!backButton || !nextButton) {
       return;
     }
 
-    renderProgress();
-    updateHeader();
-    updateFlight();
-    renderStage();
-    renderBottom();
+    backButton.disabled = state.current === 0;
 
-    document.body.dataset.workflowStep =
-      getCurrentStep().id;
+    const last = state.current === STEPS.length - 1;
+
+    nextButton.classList.toggle('is-final', last);
+
+    const nextLabel = nextButton.querySelector('span');
+
+    if (nextLabel) {
+      if (last) {
+        nextLabel.textContent = 'Concluir';
+      } else if (state.current === 2) {
+        nextLabel.textContent = 'Continuar';
+      } else {
+        nextLabel.textContent = 'Continuar';
+      }
+    }
+
+    const hint = $('#workflowNavigationHint', shell);
+
+    if (hint) {
+      if (last) {
+        hint.textContent =
+          'O fluxo principal foi concluído.';
+      } else if (state.completed.has(state.current)) {
+        hint.textContent =
+          'Etapa concluída. Pode continuar.';
+      } else {
+        hint.textContent =
+          'Complete esta etapa para continuar.';
+      }
+    }
+  }
+
+  function showStatus(message, type = 'info') {
+    if (!statusNode) {
+      return;
+    }
+
+    statusNode.className = `workflow-status is-${type}`;
+
+    statusNode.innerHTML = `
+      <span class="workflow-status-symbol">
+        ${
+          type === 'success'
+            ? '✓'
+            : type === 'error'
+              ? '!'
+              : 'i'
+        }
+      </span>
+
+      <span class="workflow-status-message">
+        ${escapeHtml(message)}
+      </span>
+    `;
+
+    statusNode.classList.add('is-visible');
+  }
+
+  function clearStatus() {
+    if (!statusNode) {
+      return;
+    }
+
+    statusNode.className = 'workflow-status';
+    statusNode.innerHTML = '';
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function focusElement(selector) {
+    const element = $(selector);
+
+    if (!element) {
+      return false;
+    }
+
+    try {
+      element.focus({ preventScroll: true });
+    } catch {
+      element.focus();
+    }
+
+    element.scrollIntoView({
+      behavior:
+        window.matchMedia &&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches
+          ? 'auto'
+          : 'smooth',
+      block: 'center'
+    });
+
+    return true;
   }
 
   function isClientReady() {
-    const name = $("clientFullName");
+    const section = $('#clientSection');
 
-    return Boolean(
+    if (!section) {
+      return false;
+    }
+
+    const form = $('#clientForm', section);
+
+    if (form) {
+      const requiredFields = $$(
+        'input[required], select[required], textarea[required]',
+        form
+      );
+
+      if (requiredFields.length > 0) {
+        return requiredFields.every(field => {
+          if (typeof field.checkValidity === 'function') {
+            return field.checkValidity();
+          }
+
+          return String(field.value || '').trim().length > 0;
+        });
+      }
+    }
+
+    const name = $('#clientFullName', section);
+
+    return !!(
       name &&
-      typeof name.value === "string" &&
-      name.value.trim().length >= 2
+      String(name.value || '').trim().length >= 2
     );
   }
 
   function isPassportReady() {
-    const result = $("passportResultState");
+    const successState = $('#passportResultState');
 
-    if (result) {
-      const text =
-        result.textContent || "";
+    if (successState) {
+      const text = (
+        successState.textContent ||
+        ''
+      ).toLowerCase();
+
+      const successClass =
+        successState.classList.contains('success') ||
+        successState.classList.contains('is-success') ||
+        successState.dataset.status === 'success';
 
       if (
-        result.classList.contains("success") ||
-        result.classList.contains("approved") ||
-        result.dataset.status === "success" ||
-        /aprovado|validado|sucesso|success/i.test(text)
+        successClass ||
+        text.includes('válido') ||
+        text.includes('validado') ||
+        text.includes('aprovado') ||
+        text.includes('approved') ||
+        text.includes('valid')
       ) {
         return true;
       }
     }
 
-    const check = $("passportCheckReady");
+    const ready = $('#passportCheckReady');
 
-    if (check) {
-      return (
-        check.dataset.ready === "true" ||
-        check.value === "true" ||
-        check.classList.contains("success") ||
-        check.classList.contains("ready")
-      );
+    if (ready) {
+      if (
+        ready.checked === true ||
+        ready.getAttribute('aria-checked') === 'true' ||
+        ready.dataset.ready === 'true'
+      ) {
+        return true;
+      }
     }
 
     return false;
   }
 
-  function isIdentityReady() {
+  function getFacialPreflightState() {
     if (
       window.TravelFacialPreflight &&
-      typeof window.TravelFacialPreflight.isReady === "function"
+      typeof window.TravelFacialPreflight.isReady === 'function'
     ) {
       try {
-        if (
-          window.TravelFacialPreflight.isReady()
-        ) {
-          return true;
-        }
-      } catch (_) {}
+        return {
+          ready: !!window.TravelFacialPreflight.isReady(),
+          source: 'api'
+        };
+      } catch {
+        // Continue with DOM fallback.
+      }
     }
 
-    const candidates = [
-      $("facialPreflightResult"),
-      $("identityResult"),
-      $("faceResult"),
-      $("facialResult")
-    ].filter(Boolean);
+    const result = $('#facialPreflightResult');
 
-    for (const element of candidates) {
-      const text =
-        element.textContent || "";
+    if (result) {
+      const text = (
+        result.textContent ||
+        ''
+      ).toLowerCase();
 
-      if (
-        element.dataset.status === "success" ||
-        element.dataset.result === "success" ||
-        element.classList.contains("success") ||
-        element.classList.contains("approved") ||
-        /aprovado|validado|verificado|sucesso|success/i.test(text)
-      ) {
-        return true;
-      }
+      const success =
+        result.classList.contains('success') ||
+        result.classList.contains('is-success') ||
+        result.dataset.status === 'success' ||
+        text.includes('aprovado') ||
+        text.includes('aprovada') ||
+        text.includes('approved') ||
+        text.includes('sucesso') ||
+        text.includes('verificado');
+
+      const failure =
+        result.classList.contains('error') ||
+        result.classList.contains('is-error') ||
+        result.classList.contains('failed') ||
+        result.dataset.status === 'error' ||
+        text.includes('rejeitado') ||
+        text.includes('rejeitada') ||
+        text.includes('falhou') ||
+        text.includes('failed');
+
+      return {
+        ready: success,
+        failed: failure,
+        source: 'dom',
+        text
+      };
+    }
+
+    return {
+      ready: false,
+      failed: false,
+      source: 'none'
+    };
+  }
+
+  function isIdentityReady() {
+    const result = getFacialPreflightState();
+
+    if (result.ready) {
+      return true;
     }
 
     return false;
   }
 
   function isApplicationReady() {
-    const list = $("applicationsList");
+    const list = $('#applicationsList');
 
     if (list) {
-      const cards =
-        list.querySelectorAll(
-          ".application-card, [data-application-id]"
-        );
+      const cards = $$('.application-card', list);
 
       if (cards.length > 0) {
         return true;
       }
+
+      /*
+       * Some versions of the application may use a different
+       * application item class. We only accept an explicit
+       * application state instead of guessing.
+       */
+      if (
+        list.dataset.ready === 'true' ||
+        list.dataset.status === 'ready' ||
+        list.dataset.status === 'approved'
+      ) {
+        return true;
+      }
     }
 
-    const result = $("applicationResultState");
+    const section = $('#applicationSection');
 
-    if (result) {
-      const text =
-        result.textContent || "";
+    if (section) {
+      const readyElement = $(
+        '[data-application-ready="true"], [data-status="ready"]',
+        section
+      );
 
-      if (
-        result.dataset.status === "success" ||
-        /aprovado|preparado|criado|sucesso|success/i.test(text)
-      ) {
+      if (readyElement) {
         return true;
       }
     }
@@ -1109,665 +946,485 @@
     return false;
   }
 
-  function isOperationsReady() {
-    return true;
-  }
-
-  function isStepReady(id) {
-    switch (id) {
-      case "client":
+  function isStepReady(index) {
+    switch (STEPS[index].id) {
+      case 'client':
         return isClientReady();
 
-      case "passport":
+      case 'passport':
         return isPassportReady();
 
-      case "identity":
+      case 'identity':
         return isIdentityReady();
 
-      case "application":
+      case 'application':
         return isApplicationReady();
 
-      case "operations":
-        return isOperationsReady();
+      case 'operations':
+        return true;
 
       default:
         return false;
     }
   }
 
-  function markComplete(id) {
-    if (!id) {
-      return;
+  function triggerClientSubmit() {
+    const form = $('#clientForm');
+
+    if (!form) {
+      return false;
     }
 
-    state.completed.add(id);
-
-    renderProgress();
-    renderBottom();
-  }
-
-  function showStepError(id) {
-    const step = STEPS.find(
-      (item) => item.id === id
-    );
-
-    if (!step) {
-      return;
-    }
-
-    const stage = document.querySelector(
-      ".workflow-stage-frame"
-    );
-
-    if (!stage) {
-      return;
-    }
-
-    stage.classList.remove(
-      "workflow-shake"
-    );
-
-    void stage.offsetWidth;
-
-    stage.classList.add(
-      "workflow-shake"
-    );
-
-    let message =
-      "Conclua os requisitos desta etapa antes de continuar.";
-
-    if (id === "client") {
-      message =
-        "Preencha pelo menos o nome completo do viajante antes de continuar.";
-    }
-
-    if (id === "passport") {
-      message =
-        "O passaporte ainda não foi validado. Conclua a validação e aguarde o resultado.";
-    }
-
-    if (id === "identity") {
-      const result =
-        $("facialPreflightResult");
-
-      const resultText =
-        result?.textContent || "";
-
-      if (
-        /reprov|rejeit|falhou|não aprovado|nao aprovado/i.test(
-          resultText
-        )
-      ) {
-        message =
-          "A verificação facial não foi aprovada. Siga as instruções mostradas no módulo facial e tente novamente.";
-      } else {
-        message =
-          "A verificação facial ainda não foi concluída. Inicie o processo e siga todos os movimentos solicitados.";
+    if (
+      typeof form.checkValidity === 'function' &&
+      !form.checkValidity()
+    ) {
+      if (typeof form.reportValidity === 'function') {
+        form.reportValidity();
       }
+
+      return false;
     }
 
-    if (id === "application") {
-      message =
-        "Crie ou prepare pelo menos uma aplicação antes de entrar no centro de operações.";
+    try {
+      if (typeof form.requestSubmit === 'function') {
+        form.requestSubmit();
+      } else {
+        form.dispatchEvent(
+          new Event('submit', {
+            bubbles: true,
+            cancelable: true
+          })
+        );
+      }
+    } catch {
+      // Existing application code remains responsible for persistence.
     }
 
-    const old =
-      document.getElementById(
-        "workflowInlineError"
-      );
-
-    if (old) {
-      old.remove();
-    }
-
-    const error =
-      document.createElement("div");
-
-    error.id =
-      "workflowInlineError";
-
-    error.className =
-      "workflow-inline-error";
-
-    error.innerHTML = `
-      <span>!</span>
-
-      <div>
-        <strong>
-          Ainda não é possível avançar
-        </strong>
-
-        <p>
-          ${escapeHtml(message)}
-        </p>
-      </div>
-    `;
-
-    const host =
-      stage.querySelector(
-        ".workflow-section-host"
-      ) || stage;
-
-    host.prepend(error);
-
-    error.scrollIntoView({
-      behavior: reducedMotion()
-        ? "auto"
-        : "smooth",
-      block: "nearest"
-    });
-
-    if (id === "client") {
-      focusClient();
-    }
-
-    if (id === "passport") {
-      focusPassport();
-    }
-
-    if (id === "identity") {
-      openFacialCenter();
-    }
-
-    if (id === "application") {
-      focusApplication();
-    }
-
-    setTimeout(() => {
-      error.classList.add(
-        "is-visible"
-      );
-    }, 20);
-  }
-
-  function focusClient() {
-    const name =
-      $("clientFullName");
-
-    if (name) {
-      name.focus();
-      name.scrollIntoView({
-        behavior: reducedMotion()
-          ? "auto"
-          : "smooth",
-        block: "center"
-      });
-    } else {
-      const section =
-        $("clientSection");
-
-      section?.scrollIntoView({
-        behavior: reducedMotion()
-          ? "auto"
-          : "smooth",
-        block: "center"
-      });
-    }
-  }
-
-  function focusPassport() {
-    const section =
-      $("passportSection");
-
-    if (section) {
-      section.scrollIntoView({
-        behavior: reducedMotion()
-          ? "auto"
-          : "smooth",
-        block: "center"
-      });
-    }
-  }
-
-  function focusApplication() {
-    const section =
-      $("applicationSection");
-
-    if (section) {
-      section.scrollIntoView({
-        behavior: reducedMotion()
-          ? "auto"
-          : "smooth",
-        block: "center"
-      });
-    }
+    return true;
   }
 
   function openFacialCenter() {
-    const ids = [
-      "facialPreflightStart",
-      "startFacialPreflight",
-      "identityStartButton"
+    const candidates = [
+      '#facialPreflightStart',
+      '#startFacialPreflight',
+      '#identityStartButton'
     ];
 
-    for (const id of ids) {
-      const button = $(id);
+    for (const selector of candidates) {
+      if (focusElement(selector)) {
+        const button = $(selector);
 
-      if (
-        button &&
-        typeof button.click === "function"
-      ) {
-        button.click();
-        return;
+        if (
+          button &&
+          typeof button.click === 'function'
+        ) {
+          button.click();
+        }
+
+        return true;
       }
     }
 
     if (
       window.FacialPreflightUI &&
-      typeof window.FacialPreflightUI.open === "function"
+      typeof window.FacialPreflightUI.open === 'function'
     ) {
       try {
         window.FacialPreflightUI.open();
-        return;
-      } catch (_) {}
+        return true;
+      } catch {
+        // Ignore and provide generic guidance below.
+      }
     }
 
-    const section =
-      $("identitySection");
+    return false;
+  }
 
-    if (section) {
-      section.scrollIntoView({
-        behavior: reducedMotion()
-          ? "auto"
-          : "smooth",
-        block: "center"
+  function focusPassport() {
+    const section = $('#passportSection');
+
+    if (!section) {
+      return;
+    }
+
+    const button =
+      $('#passportCheckButton', section) ||
+      $('#checkPassportButton', section) ||
+      $('button[type="submit"]', section);
+
+    if (button) {
+      button.scrollIntoView({
+        behavior: getScrollBehavior(),
+        block: 'center'
       });
     }
   }
 
-  function handleNext() {
-    if (state.transitioning) {
+  function focusApplication() {
+    const section = $('#applicationSection');
+
+    if (!section) {
       return;
     }
 
-    const step =
-      getCurrentStep();
+    const form = $('form', section);
 
-    if (state.completed.has(step.id)) {
-      if (
-        state.current <
-        STEPS.length - 1
-      ) {
-        goTo(state.current + 1);
-      }
-
-      return;
-    }
-
-    if (!isStepReady(step.id)) {
-      showStepError(step.id);
-      return;
-    }
-
-    markComplete(step.id);
-
-    if (
-      state.current <
-      STEPS.length - 1
-    ) {
-      setTimeout(() => {
-        goTo(state.current + 1);
-      }, reducedMotion() ? 0 : 180);
+    if (form) {
+      form.scrollIntoView({
+        behavior: getScrollBehavior(),
+        block: 'center'
+      });
     }
   }
 
-  function goTo(index) {
+  function getScrollBehavior() {
     if (
-      index < 0 ||
-      index >= STEPS.length ||
-      state.transitioning
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
     ) {
-      return;
+      return 'auto';
     }
 
-    if (index > state.current) {
-      for (
-        let i = 0;
-        i < index;
-        i += 1
+    return 'smooth';
+  }
+
+  function validateCurrentStage() {
+    const step = STEPS[state.current];
+
+    if (step.id === 'client') {
+      const form = $('#clientForm');
+
+      if (
+        form &&
+        typeof form.checkValidity === 'function' &&
+        !form.checkValidity()
       ) {
-        if (!state.completed.has(STEPS[i].id)) {
-          showStepError(
-            STEPS[i].id
-          );
-          return;
+        if (typeof form.reportValidity === 'function') {
+          form.reportValidity();
         }
-      }
-    }
 
-    if (index === state.current) {
-      return;
-    }
-
-    state.transitioning = true;
-
-    const previousFrame =
-      stageContainer?.querySelector(
-        ".workflow-stage-frame"
-      );
-
-    const finish = () => {
-      state.current = index;
-      state.transitioning = false;
-
-      render();
-
-      const newFrame =
-        stageContainer?.querySelector(
-          ".workflow-stage-frame"
+        showStatus(
+          'Preencha corretamente os campos obrigatórios antes de continuar.',
+          'error'
         );
 
-      if (newFrame) {
-        newFrame.scrollIntoView({
-          behavior: reducedMotion()
-            ? "auto"
-            : "smooth",
-          block: "start"
-        });
+        return false;
       }
-    };
 
+      if (!isClientReady()) {
+        showStatus(
+          'Complete os dados do viajante antes de continuar.',
+          'error'
+        );
+
+        focusElement('#clientFullName');
+
+        return false;
+      }
+
+      triggerClientSubmit();
+
+      return true;
+    }
+
+    if (step.id === 'passport') {
+      if (!isPassportReady()) {
+        showStatus(
+          'O passaporte ainda não foi validado. Faça a verificação documental para continuar.',
+          'error'
+        );
+
+        focusPassport();
+
+        return false;
+      }
+
+      return true;
+    }
+
+    if (step.id === 'identity') {
+      const facial = getFacialPreflightState();
+
+      if (facial.failed) {
+        showStatus(
+          'A verificação facial não foi aprovada. Repita a captura seguindo as instruções apresentadas.',
+          'error'
+        );
+
+        openFacialCenter();
+
+        return false;
+      }
+
+      if (!isIdentityReady()) {
+        showStatus(
+          'A identidade ainda não foi aprovada. Inicie ou conclua a verificação facial para continuar.',
+          'error'
+        );
+
+        openFacialCenter();
+
+        return false;
+      }
+
+      return true;
+    }
+
+    if (step.id === 'application') {
+      if (!isApplicationReady()) {
+        showStatus(
+          'A aplicação ainda não está pronta. Conclua a preparação da aplicação antes de continuar.',
+          'error'
+        );
+
+        focusApplication();
+
+        return false;
+      }
+
+      return true;
+    }
+
+    return true;
+  }
+
+  function markComplete(index) {
     if (
-      reducedMotion() ||
-      !previousFrame
+      typeof index !== 'number' ||
+      index < 0 ||
+      index >= STEPS.length
     ) {
-      finish();
       return;
     }
 
-    previousFrame.classList.add(
-      "is-leaving"
-    );
+    state.completed.add(index);
 
-    setTimeout(
-      finish,
-      220
+    updateProgress();
+    updateNavigation();
+
+    document.dispatchEvent(
+      new CustomEvent('travelworkflow:completed', {
+        detail: {
+          index,
+          step: STEPS[index].id
+        }
+      })
     );
   }
 
   function next() {
-    handleNext();
+    if (state.busy) {
+      return false;
+    }
+
+    if (state.current >= STEPS.length - 1) {
+      markComplete(state.current);
+
+      showStatus(
+        'Fluxo principal concluído. O centro de operações está disponível.',
+        'success'
+      );
+
+      nextButton?.classList.add('is-complete');
+
+      return true;
+    }
+
+    clearStatus();
+
+    if (!validateCurrentStage()) {
+      return false;
+    }
+
+    markComplete(state.current);
+
+    const nextIndex = state.current + 1;
+
+    return goTo(nextIndex);
   }
 
   function back() {
-    if (state.current > 0) {
-      goTo(state.current - 1);
+    if (state.busy || state.current === 0) {
+      return false;
+    }
+
+    clearStatus();
+
+    const previous = state.current - 1;
+
+    return goTo(previous, true);
+  }
+
+  function goTo(index, fromBack = false) {
+    if (
+      state.busy ||
+      index < 0 ||
+      index >= STEPS.length
+    ) {
+      return false;
+    }
+
+    if (index > state.current) {
+      for (let i = 0; i < index; i += 1) {
+        if (!state.completed.has(i)) {
+          showStatus(
+            'Esta etapa está bloqueada. Complete as etapas anteriores primeiro.',
+            'error'
+          );
+
+          return false;
+        }
+      }
+    }
+
+    if (index === state.current && !fromBack) {
+      return true;
+    }
+
+    state.busy = true;
+
+    shell?.classList.add('workflow-changing');
+
+    window.setTimeout(() => {
+      state.current = index;
+
+      mountCurrentSection();
+
+      state.busy = false;
+
+      document.dispatchEvent(
+        new CustomEvent('travelworkflow:stagechange', {
+          detail: {
+            index,
+            step: STEPS[index].id
+          }
+        })
+      );
+
+      window.setTimeout(() => {
+        scrollWorkflowIntoView();
+      }, 30);
+    }, prefersReducedMotion() ? 0 : 180);
+
+    return true;
+  }
+
+  function scrollWorkflowIntoView() {
+    if (!shell) {
+      return;
+    }
+
+    const top =
+      shell.getBoundingClientRect().top +
+      window.scrollY -
+      18;
+
+    window.scrollTo({
+      top: Math.max(0, top),
+      behavior: getScrollBehavior()
+    });
+  }
+
+  function prefersReducedMotion() {
+    return (
+      window.matchMedia &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    );
+  }
+
+  function bindNavigation() {
+    if (nextButton) {
+      nextButton.addEventListener('click', next);
+    }
+
+    if (backButton) {
+      backButton.addEventListener('click', back);
     }
   }
 
-  function syncCompletion() {
-    STEPS.forEach((step, index) => {
+  function bindExternalStateListeners() {
+    /*
+     * Existing modules can update facial/passport/application
+     * state asynchronously. Re-evaluate the navigation state
+     * without changing the existing modules.
+     */
+    const observer = new MutationObserver(() => {
+      if (!shell || !state.initialized) {
+        return;
+      }
+
+      updateNavigation();
+      updateProgress();
+
+      const facial = getFacialPreflightState();
+
       if (
-        index < state.current &&
-        isStepReady(step.id)
+        state.current === 2 &&
+        facial.failed
       ) {
-        state.completed.add(
-          step.id
+        showStatus(
+          'A verificação facial não foi aprovada. Corrija as condições indicadas e tente novamente.',
+          'error'
+        );
+      }
+
+      if (
+        state.current === 2 &&
+        facial.ready
+      ) {
+        showStatus(
+          'Identidade aprovada. Pode continuar para a preparação da aplicação.',
+          'success'
         );
       }
     });
 
-    renderProgress();
-    renderBottom();
-  }
-
-  function observeApplicationChanges() {
-    if (observersStarted) {
-      return;
-    }
-
-    observersStarted = true;
-
-    const observeTarget = (
-      element,
-      callback
-    ) => {
-      if (!element) {
-        return;
-      }
-
-      const observer =
-        new MutationObserver(() => {
-          callback();
-        });
-
-      observer.observe(
-        element,
-        {
-          childList: true,
-          subtree: true,
-          attributes: true,
-          attributeFilter: [
-            "class",
-            "data-status",
-            "data-result"
-          ]
-        }
-      );
-    };
-
-    observeTarget(
-      $("applicationsList"),
-      () => {
-        if (
-          state.current === 3 &&
-          isApplicationReady()
-        ) {
-          markComplete(
-            "application"
-          );
-        }
-      }
-    );
-
-    observeTarget(
-      $("facialPreflightResult"),
-      () => {
-        renderFeedback(
-          getCurrentStep()
-        );
-
-        if (
-          state.current === 2 &&
-          isIdentityReady()
-        ) {
-          markComplete(
-            "identity"
-          );
-        }
-      }
-    );
-
-    observeTarget(
-      $("passportResultState"),
-      () => {
-        if (
-          state.current === 1 &&
-          isPassportReady()
-        ) {
-          markComplete(
-            "passport"
-          );
-        }
-      }
-    );
-
-    const appView =
-      $("appView");
-
-    if (appView) {
-      const visibilityObserver =
-        new MutationObserver(() => {
-          if (
-            !state.initialized &&
-            isAppVisible()
-          ) {
-            init();
-          }
-        });
-
-      visibilityObserver.observe(
-        appView,
-        {
-          attributes: true,
-          attributeFilter: [
-            "class",
-            "style"
-          ]
-        }
-      );
-    }
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: [
+        'class',
+        'data-status',
+        'data-ready',
+        'aria-checked'
+      ]
+    });
 
     document.addEventListener(
-      "input",
-      () => {
-        if (
-          state.current === 0 &&
-          isClientReady()
-        ) {
-          markComplete(
-            "client"
-          );
-        }
-      },
-      true
-    );
-
-    document.addEventListener(
-      "change",
-      () => {
-        syncCompletion();
-      },
-      true
-    );
-
-    document.addEventListener(
-      "submit",
-      () => {
-        setTimeout(
-          syncCompletion,
-          300
-        );
-      },
-      true
-    );
-  }
-
-  function isAppVisible() {
-    const appView =
-      $("appView");
-
-    if (!appView) {
-      return false;
-    }
-
-    const style =
-      window.getComputedStyle(
-        appView
-      );
-
-    return (
-      style.display !== "none" &&
-      style.visibility !== "hidden"
+      'travelworkflow:external-update',
+      updateNavigation
     );
   }
 
   function init() {
-    if (
-      state.initialized &&
-      $("travelWorkflow")
-    ) {
-      return;
+    if (state.initialized) {
+      return window.TravelWorkflow;
     }
 
     if (!createShell()) {
-      return;
+      return null;
     }
+
+    collectSections();
+    buildProgress();
+    hideLegacyLayout();
+    bindNavigation();
+    bindExternalStateListeners();
 
     state.initialized = true;
 
-    syncInitialState();
-    render();
-    observeApplicationChanges();
-  }
+    mountCurrentSection();
 
-  function syncInitialState() {
-    /*
-     * Não saltamos automaticamente etapas futuras.
-     * Apenas reconhecemos etapas que já estejam comprovadamente
-     * concluídas pelo estado da aplicação.
-     */
+    shell.classList.add('workflow-visible');
 
-    if (isClientReady()) {
-      state.completed.add(
-        "client"
-      );
-    }
-
-    if (isPassportReady()) {
-      state.completed.add(
-        "passport"
-      );
-    }
-
-    if (isIdentityReady()) {
-      state.completed.add(
-        "identity"
-      );
-    }
-
-    if (isApplicationReady()) {
-      state.completed.add(
-        "application"
-      );
-    }
-
-    /*
-     * Mantém a experiência guiada:
-     * a primeira etapa incompleta vira a etapa actual.
-     */
-
-    const firstIncomplete =
-      STEPS.findIndex(
-        (step) =>
-          !state.completed.has(
-            step.id
-          )
-      );
-
-    if (
-      firstIncomplete >= 0
-    ) {
-      state.current =
-        firstIncomplete;
-    } else {
-      state.current =
-        STEPS.length - 1;
-    }
-
-    /*
-     * Evita que uma etapa futura seja considerada desbloqueada
-     * apenas porque existe conteúdo no DOM.
-     */
-    for (
-      let i = state.current + 1;
-      i < STEPS.length;
-      i += 1
-    ) {
-      if (
-        !isStepReady(
-          STEPS[i].id
-        )
-      ) {
-        state.completed.delete(
-          STEPS[i].id
-        );
-      }
-    }
+    return window.TravelWorkflow;
   }
 
   /*
-   * API pública para os outros módulos.
+   * Public API kept intentionally compatible with the previous
+   * controller.
    */
   window.TravelWorkflow = {
     init,
@@ -1778,43 +1435,37 @@
     getState() {
       return {
         current: state.current,
-        currentStep:
-          STEPS[state.current]?.id ||
-          null,
-        completed:
-          Array.from(
-            state.completed
-          ),
-        initialized:
-          state.initialized
+        currentStep: STEPS[state.current]?.id || null,
+        completed: Array.from(state.completed),
+        initialized: state.initialized
       };
     }
   };
 
-  /*
-   * Inicialização.
-   */
   function boot() {
-    if (
-      document.readyState ===
-      "loading"
-    ) {
+    const attempt = () => {
+      if (document.body) {
+        init();
+      }
+    };
+
+    if (document.readyState === 'loading') {
       document.addEventListener(
-        "DOMContentLoaded",
-        init,
+        'DOMContentLoaded',
+        attempt,
         { once: true }
       );
     } else {
-      init();
+      attempt();
     }
 
     /*
-     * O login pode mostrar appView posteriormente.
-     * Por isso tentamos novamente de forma segura.
+     * Some existing application versions render #appView after
+     * authentication. Give the controller another opportunity
+     * without rebuilding the workflow.
      */
-    setTimeout(init, 400);
-    setTimeout(init, 1200);
-    setTimeout(init, 2500);
+    window.setTimeout(attempt, 250);
+    window.setTimeout(attempt, 1000);
   }
 
   boot();
