@@ -4,17 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <meta
-    name="theme-color"
-    content="#061b3a"
-  >
+  <meta name="theme-color" content="#061b3a">
 
   <meta
     name="description"
-    content="Travel Automation — preparação, verificação e acompanhamento de processos de viagem."
+    content="Travel Automation — preparação inteligente de viagens de Angola para Portugal."
   >
 
-  <title>Travel Automation — Prepare a sua viagem</title>
+  <title>Travel Automation — Angola → Portugal</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -43,13 +40,10 @@
 
 
   <!-- =====================================================
-       ENTRADA
+       LOGIN
   ====================================================== -->
 
-  <section
-    id="loginView"
-    class="login-view"
-  >
+  <section id="loginView" class="login-view">
 
     <div class="login-shell">
 
@@ -74,7 +68,7 @@
         <div class="login-card-top">
 
           <span class="eyebrow">
-            PREPARAÇÃO DE VIAGEM
+            ANGOLA → PORTUGAL
           </span>
 
           <h1>
@@ -83,9 +77,8 @@
           </h1>
 
           <p>
-            Organize os seus dados, confirme os documentos,
-            verifique a sua identidade e acompanhe cada etapa
-            num único processo.
+            Organize os seus dados, documentos, identidade e
+            preferências de viagem num único processo.
           </p>
 
         </div>
@@ -116,22 +109,27 @@
 
           <div class="login-feature">
             <span class="feature-icon person-icon"></span>
+
             <div>
               <strong>01</strong>
-              <span>Os seus dados</span>
+              <span>Perfil</span>
             </div>
           </div>
 
+
           <div class="login-feature">
             <span class="feature-icon document-icon"></span>
+
             <div>
               <strong>02</strong>
               <span>Documentos</span>
             </div>
           </div>
 
+
           <div class="login-feature">
             <span class="feature-icon face-icon"></span>
+
             <div>
               <strong>03</strong>
               <span>Identidade</span>
@@ -146,7 +144,7 @@
       <div class="login-footer">
 
         <span>
-          Os seus dados são tratados com segurança
+          Processo organizado passo a passo
         </span>
 
         <span class="footer-separator"></span>
@@ -172,7 +170,7 @@
   >
 
     <!-- ===================================================
-         TOPO
+         TOPBAR
     ==================================================== -->
 
     <header class="topbar">
@@ -190,7 +188,7 @@
           </strong>
 
           <span>
-            Preparação de viagens
+            Angola → Portugal
           </span>
 
         </div>
@@ -248,13 +246,13 @@
 
 
     <!-- ===================================================
-         CONTEÚDO
+         MAIN
     ==================================================== -->
 
     <main class="main-container">
 
       <!-- =================================================
-           HERO DE APOIO
+           HERO
       ================================================== -->
 
       <section class="operations-hero">
@@ -271,16 +269,15 @@
 
 
           <h1>
-            Vamos preparar a sua viagem
+            Prepare a sua viagem
             <strong>passo a passo.</strong>
           </h1>
 
 
           <p>
-            Começamos pelos seus dados e avançamos
-            apenas quando cada etapa estiver pronta.
-            Assim, o seu processo permanece organizado
-            do início ao acompanhamento.
+            Começamos pelo perfil, definimos a viagem,
+            confirmamos os documentos e avançamos até
+            ao acompanhamento da disponibilidade.
           </p>
 
 
@@ -290,7 +287,7 @@
               href="#clientSection"
               class="hero-button primary"
             >
-              Começar pelos dados
+              Começar preparação
               <span>→</span>
             </a>
 
@@ -312,12 +309,10 @@
           <div class="flight-card-header">
 
             <span>
-              PERCURSO
+              ROTA
             </span>
 
-            <span
-              class="status-pill"
-            >
+            <span class="status-pill">
               <i></i>
               EM PREPARAÇÃO
             </span>
@@ -330,11 +325,11 @@
             <div class="route-point">
 
               <strong>
-                PREPARAR
+                ANGOLA
               </strong>
 
               <span>
-                Dados e documentos
+                Perfil do viajante
               </span>
 
             </div>
@@ -354,7 +349,7 @@
             <div class="route-point right">
 
               <strong>
-                ACOMPANHAR
+                PORTUGAL
               </strong>
 
               <span>
@@ -369,11 +364,11 @@
           <div class="flight-card-footer">
 
             <span>
-              PRÓXIMO PASSO
+              PRÓXIMA ETAPA
             </span>
 
             <strong>
-              Preparar os seus dados
+              Definir a viagem
             </strong>
 
           </div>
@@ -384,10 +379,13 @@
 
 
       <!-- =================================================
-           PROGRESSO PRINCIPAL
+           WORKFLOW
       ================================================== -->
 
-      <section class="system-pipeline">
+      <section
+        class="system-pipeline"
+        aria-label="Progresso da preparação"
+      >
 
         <div class="pipeline-item active">
 
@@ -402,11 +400,11 @@
           <div class="pipeline-copy">
 
             <strong>
-              Os seus dados
+              Perfil
             </strong>
 
             <span>
-              Informação do viajante
+              Dados do viajante
             </span>
 
           </div>
@@ -431,17 +429,49 @@
           </div>
 
           <div class="pipeline-icon">
+            <span class="route-icon">→</span>
+          </div>
+
+          <div class="pipeline-copy">
+
+            <strong>
+              Viagem
+            </strong>
+
+            <span>
+              Rota e tipo de visto
+            </span>
+
+          </div>
+
+          <div class="pipeline-state">
+            A seguir
+          </div>
+
+        </div>
+
+
+        <div class="pipeline-connector"></div>
+
+
+        <div class="pipeline-item">
+
+          <div class="pipeline-number">
+            03
+          </div>
+
+          <div class="pipeline-icon">
             <span class="document-icon"></span>
           </div>
 
           <div class="pipeline-copy">
 
             <strong>
-              Verificação
+              Documentos
             </strong>
 
             <span>
-              Documento e identidade
+              Passaporte
             </span>
 
           </div>
@@ -462,7 +492,71 @@
         <div class="pipeline-item">
 
           <div class="pipeline-number">
-            03
+            04
+          </div>
+
+          <div class="pipeline-icon">
+            <span class="face-icon"></span>
+          </div>
+
+          <div class="pipeline-copy">
+
+            <strong>
+              Identidade
+            </strong>
+
+            <span>
+              Verificação facial
+            </span>
+
+          </div>
+
+          <div class="pipeline-state">
+            Bloqueado
+          </div>
+
+        </div>
+
+
+        <div class="pipeline-connector"></div>
+
+
+        <div class="pipeline-item">
+
+          <div class="pipeline-number">
+            05
+          </div>
+
+          <div class="pipeline-icon">
+            <span class="document-icon"></span>
+          </div>
+
+          <div class="pipeline-copy">
+
+            <strong>
+              Candidatura
+            </strong>
+
+            <span>
+              Preparação do processo
+            </span>
+
+          </div>
+
+          <div class="pipeline-state">
+            Bloqueado
+          </div>
+
+        </div>
+
+
+        <div class="pipeline-connector"></div>
+
+
+        <div class="pipeline-item">
+
+          <div class="pipeline-number">
+            06
           </div>
 
           <div class="pipeline-icon">
@@ -476,7 +570,7 @@
             </strong>
 
             <span>
-              Processo em monitorização
+              Disponibilidade de vagas
             </span>
 
           </div>
@@ -611,7 +705,7 @@
 
 
           <!-- =============================================
-               DADOS DO VIAJANTE
+               01 — PERFIL
           ============================================== -->
 
           <section
@@ -634,12 +728,13 @@
                   </span>
 
                   <h2>
-                    Os seus dados
+                    Perfil do viajante
                   </h2>
 
                   <p>
                     Comece por preencher os dados do viajante.
-                    Estas informações serão usadas nas etapas seguintes.
+                    Estas informações serão utilizadas nas
+                    etapas seguintes do processo.
                   </p>
 
                 </div>
@@ -794,6 +889,10 @@
 
               </div>
 
+
+              <!-- =========================================
+                   DOCUMENTO
+              ========================================== -->
 
               <div class="form-section-title passport-title">
 
@@ -975,7 +1074,7 @@
 
                     <small>
                       Permite preparar a etapa de verificação
-                      facial. A verificação oficial será realizada
+                      facial. A confirmação será realizada
                       na etapa correspondente.
                     </small>
 
@@ -1008,7 +1107,77 @@
 
 
           <!-- =============================================
-               CANDIDATURA
+               MOUNT DA ETAPA 02 — VIAGEM
+               O workflow.js cria esta secção dinamicamente.
+          ============================================== -->
+
+          <div
+            id="travelWorkflowMount"
+            class="workflow-stage-mount"
+          ></div>
+
+
+          <!-- =============================================
+               MOUNT DA ETAPA 03 — DOCUMENTOS
+          ============================================== -->
+
+          <section
+            id="documentsSection"
+            class="panel workflow-placeholder"
+            aria-hidden="true"
+          >
+
+            <div class="panel-header">
+
+              <div class="panel-heading">
+
+                <span class="section-number">
+                  03
+                </span>
+
+                <div>
+
+                  <span class="panel-eyebrow">
+                    TERCEIRA ETAPA
+                  </span>
+
+                  <h2>
+                    Documentos
+                  </h2>
+
+                  <p>
+                    Confirme o passaporte e os documentos
+                    necessários para continuar.
+                  </p>
+
+                </div>
+
+              </div>
+
+            </div>
+
+            <div class="workflow-placeholder-content">
+
+              <div class="empty-icon">
+                <span class="document-icon"></span>
+              </div>
+
+              <strong>
+                Documentos preparados através do perfil
+              </strong>
+
+              <p>
+                A validação do passaporte será ativada
+                depois de concluir as etapas anteriores.
+              </p>
+
+            </div>
+
+          </section>
+
+
+          <!-- =============================================
+               04 — CANDIDATURA / IDENTIDADE
           ============================================== -->
 
           <section
@@ -1027,17 +1196,17 @@
                 <div>
 
                   <span class="panel-eyebrow">
-                    QUARTA ETAPA
+                    IDENTIDADE E CANDIDATURA
                   </span>
 
                   <h2>
-                    Preparação da candidatura
+                    Preparação do processo
                   </h2>
 
                   <p>
-                    Depois de confirmar os dados e a identidade,
-                    defina a janela em que pretende acompanhar
-                    o processo.
+                    Depois de confirmar o perfil, viagem,
+                    documentos e identidade, poderá preparar
+                    a candidatura.
                   </p>
 
                 </div>
@@ -1067,7 +1236,7 @@
               <div class="form-section-title">
 
                 <span>
-                  Preferências da viagem
+                  Preferências da candidatura
                 </span>
 
                 <small>
@@ -1154,7 +1323,7 @@
                 <div class="launch-copy">
 
                   <span>
-                    PERCURSO
+                    PROCESSO
                   </span>
 
                   <strong>
@@ -1166,8 +1335,8 @@
                   </strong>
 
                   <small>
-                    O processo será preparado antes de entrar
-                    em acompanhamento.
+                    O acompanhamento só será ativado
+                    depois de o processo estar preparado.
                   </small>
 
                 </div>
@@ -1189,23 +1358,26 @@
 
 
           <!-- =============================================
-               PROCESSOS
+               06 — ACOMPANHAMENTO
           ============================================== -->
 
-          <section class="panel applications-panel">
+          <section
+            id="verificationSection"
+            class="panel applications-panel"
+          >
 
             <div class="panel-header">
 
               <div class="panel-heading">
 
                 <span class="section-number">
-                  05
+                  06
                 </span>
 
                 <div>
 
                   <span class="panel-eyebrow">
-                    QUINTA ETAPA
+                    SEXTA ETAPA
                   </span>
 
                   <h2>
@@ -1213,8 +1385,9 @@
                   </h2>
 
                   <p>
-                    Aqui poderá acompanhar os processos
-                    que já estão preparados.
+                    Acompanhe a disponibilidade de vagas
+                    de acordo com o perfil, destino e tipo
+                    de visto definidos.
                   </p>
 
                 </div>
@@ -1252,7 +1425,7 @@
 
                 <p>
                   Prepare um viajante e inicie uma candidatura
-                  para acompanhar o processo aqui.
+                  para ativar o acompanhamento.
                 </p>
 
               </div>
@@ -1265,14 +1438,14 @@
 
 
         <!-- =================================================
-             LATERAL
+             SIDEBAR
         ================================================== -->
 
         <aside class="dashboard-sidebar">
 
 
           <!-- =============================================
-               ESTADO
+               PROGRESSO
           ============================================== -->
 
           <section class="side-panel readiness-panel">
@@ -1339,10 +1512,25 @@
                 <span class="readiness-dot"></span>
 
                 <span>
-                  Dados do viajante
+                  Perfil
                 </span>
 
                 <strong id="readinessClient">
+                  0%
+                </strong>
+
+              </div>
+
+
+              <div>
+
+                <span class="readiness-dot"></span>
+
+                <span>
+                  Viagem
+                </span>
+
+                <strong id="readinessTravel">
                   0%
                 </strong>
 
@@ -1454,11 +1642,30 @@
                 <div>
 
                   <strong>
-                    Dados do viajante
+                    Perfil do viajante
                   </strong>
 
                   <span>
                     Aguardando preenchimento
+                  </span>
+
+                </div>
+
+              </div>
+
+
+              <div class="activity-item">
+
+                <div class="activity-marker"></div>
+
+                <div>
+
+                  <strong>
+                    Viagem
+                  </strong>
+
+                  <span>
+                    Será configurada depois do perfil
                   </span>
 
                 </div>
@@ -1490,7 +1697,7 @@
 
 
           <!-- =============================================
-               AUTOMATIZAÇÃO
+               ESTADO DO SISTEMA
           ============================================== -->
 
           <section class="side-panel bot-panel">
@@ -1504,7 +1711,7 @@
                 </span>
 
                 <h3>
-                  Acompanhamento automático
+                  Estado do processo
                 </h3>
 
               </div>
@@ -1642,9 +1849,9 @@
               </strong>
 
               <span>
-                As informações sensíveis são tratadas pelo
-                sistema e não são expostas desnecessariamente
-                no painel.
+                As informações sensíveis são tratadas
+                pelo sistema e não são expostas
+                desnecessariamente no painel.
               </span>
 
             </div>
@@ -1657,6 +1864,10 @@
 
     </main>
 
+
+    <!-- ===================================================
+         TOASTS
+    ==================================================== -->
 
     <div
       id="toastContainer"
