@@ -1,11 +1,21 @@
 const jwt =
   require("jsonwebtoken");
 
+const mongoose =
+  require("mongoose");
+
 const config =
   require("../config/environment");
 
 const User =
   require("../models/user");
+
+
+/*
+ * =========================================================
+ * CREATE JWT
+ * =========================================================
+ */
 
 function createToken(user) {
   return jwt.sign(
@@ -32,9 +42,36 @@ function createToken(user) {
   );
 }
 
+
+/*
+ * =========================================================
+ * DEVELOPMENT / PUBLIC USER
+ * =========================================================
+ *
+ * IMPORTANTE:
+ *
+ * Mesmo sem login precisamos de uma identidade
+ * válida para o backend.
+ *
+ * O Client model exige createdBy como ObjectId.
+ *
+ * Por isso NÃO usamos _id: null.
+ *
+ * Criamos um ObjectId válido por processo.
+ *
+ * Não é necessário existir um User no MongoDB,
+ * porque o modo público não consulta o User.
+ * =========================================================
+ */
+
+const developmentUserId =
+  new mongoose.Types.ObjectId();
+
+
 function createDevelopmentUser() {
   return {
-    _id: null,
+    _id:
+      developmentUserId,
 
     accountId:
       config.developmentAccountId,
@@ -56,31 +93,48 @@ function createDevelopmentUser() {
   };
 }
 
+
+/*
+ * =========================================================
+ * REQUIRE AUTH
+ * =========================================================
+ */
+
 async function requireAuth(
   req,
   res,
   next
 ) {
   try {
+
     /*
-     * TEMPORARY DEVELOPMENT MODE
+     * =====================================================
+     * PUBLIC MODE
+     * =====================================================
      *
-     * When AUTH_ENABLED=false, the application
-     * operates without login.
+     * Quando AUTH_ENABLED=false:
      *
-     * The real authentication system remains
-     * available and can be reactivated simply
-     * by setting:
+     * não existe login;
+     * não existe sessão;
+     * não existe JWT obrigatório.
      *
-     * AUTH_ENABLED=true
+     * A aplicação recebe uma identidade operacional.
      */
 
     if (!config.authEnabled) {
+
       req.user =
         createDevelopmentUser();
 
       return next();
     }
+
+
+    /*
+     * =====================================================
+     * AUTHENTICATED MODE
+     * =====================================================
+     */
 
     const token =
       req.cookies?.[
@@ -88,12 +142,17 @@ async function requireAuth(
       ];
 
     if (!token) {
-      return res.status(401).json({
-        success: false,
-        error:
-          "Authentication required"
-      });
+
+      return res
+        .status(401)
+        .json({
+          success: false,
+
+          error:
+            "Authentication required"
+        });
     }
+
 
     const payload =
       jwt.verify(
@@ -101,48 +160,80 @@ async function requireAuth(
         config.jwtSecret
       );
 
+
     const user =
       await User.findById(
         payload.sub
       );
 
+
     if (
       !user ||
       !user.active
     ) {
-      return res.status(401).json({
-        success: false,
-        error:
-          "Invalid session"
-      });
+
+      return res
+        .status(401)
+        .json({
+          success: false,
+
+          error:
+            "Invalid session"
+        });
     }
+
 
     if (
       user.sessionVersion !==
       payload.sessionVersion
     ) {
-      return res.status(401).json({
-        success: false,
-        error:
-          "Session expired"
-      });
+
+      return res
+        .status(401)
+        .json({
+          success: false,
+
+          error:
+            "Session expired"
+        });
     }
+
 
     req.user =
       user;
 
+
     return next();
 
-  } catch {
-    return res.status(401).json({
-      success: false,
-      error:
-        "Invalid session"
-    });
+  } catch (error) {
+
+    console.error(
+      "[AUTH]",
+      error.message
+    );
+
+    return res
+      .status(401)
+      .json({
+        success: false,
+
+        error:
+          "Invalid session"
+      });
   }
 }
 
-function requireRole(...roles) {
+
+/*
+ * =========================================================
+ * REQUIRE ROLE
+ * =========================================================
+ */
+
+function requireRole(
+  ...roles
+) {
+
   return (
     req,
     res,
@@ -150,13 +241,19 @@ function requireRole(...roles) {
   ) => {
 
     /*
-     * Development mode has an internal
-     * owner-level operational identity.
+     * Public mode:
+     *
+     * A identidade operacional possui
+     * permissões de owner.
      */
 
-    if (!config.authEnabled) {
+    if (
+      !config.authEnabled
+    ) {
+
       return next();
     }
+
 
     if (
       !req.user ||
@@ -164,19 +261,33 @@ function requireRole(...roles) {
         req.user.role
       )
     ) {
-      return res.status(403).json({
-        success: false,
-        error:
-          "Forbidden"
-      });
+
+      return res
+        .status(403)
+        .json({
+          success: false,
+
+          error:
+            "Forbidden"
+        });
     }
+
 
     return next();
   };
 }
 
+
+/*
+ * =========================================================
+ * EXPORT
+ * =========================================================
+ */
+
 module.exports = {
   createToken,
+
   requireAuth,
+
   requireRole
 };
