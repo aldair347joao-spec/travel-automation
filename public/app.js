@@ -3030,28 +3030,47 @@
 
     const payload = {
 
-      clientId,
+  clientId,
 
-      preferredDates: {
+  visaType:
+    $("applicationVisaType")
+      ?.value ||
+    "",
 
-        start:
-          $("preferredStartDate")
-            ?.value ||
-          null,
+  visaCenter:
+    $("applicationVisaCenter")
+      ?.value
+      ?.trim() ||
+    null,
 
-        end:
-          $("preferredEndDate")
-            ?.value ||
-          null
+  travelPurpose:
+    $("applicationTravelPurpose")
+      ?.value
+      ?.trim() ||
+    null,
 
-      },
+  preferredDates: {
 
-      preferredTime:
-        $("preferredTime")
-          ?.value ||
-        null
+    start:
+      $("preferredStartDate")
+        ?.value ||
+      null,
 
-    };
+    end:
+      $("preferredEndDate")
+        ?.value ||
+      null
+
+  },
+
+  preferredTime:
+    $("preferredTime")
+      ?.value ||
+    null,
+
+  preferredWeekdays: []
+
+};
 
 
     if (button) {
