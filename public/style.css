@@ -3800,3 +3800,208 @@ button:disabled {
       .01ms !important;
   }
 }
+/* ============================================================
+   PERFORMANCE MODE
+   Travel Automation
+   Mantém a identidade visual, reduzindo efeitos pesados
+   ============================================================ */
+
+/* Evita scroll suave permanente em dispositivos mais fracos */
+html {
+  scroll-behavior: auto;
+}
+
+/* Fundo mais simples */
+body {
+  background:
+    linear-gradient(
+      135deg,
+      #f8fbff 0%,
+      #edf5fb 55%,
+      #e7f1f9 100%
+    );
+}
+
+/* Atmosfera sem blur pesado */
+.background-airplane {
+  filter: none !important;
+  opacity: .035 !important;
+}
+
+/* Grid sem mask-image */
+.background-grid {
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+  opacity: .10 !important;
+}
+
+/* ============================================================
+   GLASS EFFECTS
+   ============================================================ */
+
+.login-card,
+.topbar,
+.workflow-shell,
+.workflow-card,
+.workflow-panel,
+.workflow-content,
+.modal,
+.dropdown,
+.popover {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ============================================================
+   SOMBRAS MAIS LEVES
+   ============================================================ */
+
+.login-card {
+  box-shadow:
+    0 12px 32px rgba(3, 27, 61, .10) !important;
+}
+
+.workflow-shell {
+  box-shadow:
+    0 14px 38px rgba(3, 27, 61, .10) !important;
+}
+
+.primary-button,
+.login-button {
+  box-shadow:
+    0 8px 18px rgba(3, 27, 61, .14) !important;
+}
+
+.topbar {
+  box-shadow: none !important;
+}
+
+/* ============================================================
+   WORKFLOW
+   ============================================================ */
+
+.travel-workflow {
+  background:
+    linear-gradient(
+      135deg,
+      #f8fbff,
+      #edf5fb
+    ) !important;
+}
+
+/* Desliga órbitas decorativas */
+.workflow-orbit {
+  animation: none !important;
+  opacity: .45 !important;
+}
+
+.workflow-atmosphere {
+  opacity: .65;
+}
+
+/* ============================================================
+   ANIMAÇÕES DECORATIVAS
+   ============================================================ */
+
+.status-dot,
+.live-indicator,
+.workflow-live-dot {
+  animation: none !important;
+}
+
+/* Não manter elementos decorativos em movimento */
+.route-aircraft,
+.workflow-aircraft,
+.background-airplane {
+  animation: none !important;
+}
+
+/* ============================================================
+   TRANSITIONS
+   ============================================================ */
+
+.primary-button,
+.login-button,
+.icon-button,
+.workflow-progress-item,
+.workflow-card,
+.workflow-panel {
+  transition:
+    transform 140ms ease,
+    border-color 140ms ease,
+    background-color 140ms ease,
+    box-shadow 140ms ease !important;
+}
+
+/* ============================================================
+   REDUÇÃO PARA ECRÃS PEQUENOS
+   ============================================================ */
+
+@media (max-width: 768px) {
+
+  body {
+    text-rendering: auto;
+  }
+
+  .topbar {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: #ffffff !important;
+  }
+
+  .login-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+
+    box-shadow:
+      0 8px 24px rgba(3, 27, 61, .09) !important;
+  }
+
+  .workflow-shell {
+    box-shadow:
+      0 8px 24px rgba(3, 27, 61, .08) !important;
+  }
+
+  .workflow-atmosphere,
+  .workflow-orbit,
+  .background-grid {
+    display: none !important;
+  }
+
+  .background-airplane {
+    display: none !important;
+  }
+
+}
+
+/* ============================================================
+   ANDROID / LOW POWER
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+}
+
+/* ============================================================
+   EVITAR BLUR/FILTER ACIDENTAL EM ELEMENTOS NOVOS
+   ============================================================ */
+
+.workflow-shell *,
+.login-card *,
+.topbar * {
+  filter: none;
+}
+
+/* Mantém sombras apenas onde são realmente úteis */
+.workflow-sidebar::after {
+  box-shadow: none !important;
+}
