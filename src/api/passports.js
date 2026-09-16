@@ -85,7 +85,904 @@ router.use(
 
 /*
  * =========================================================
- * UPLOAD + VALIDATE PASSPORT
+ * HELPERS
+ * =========================================================
+ */
+
+function createFingerprint(
+  buffer
+) {
+  return crypto
+    .createHash("sha256")
+    .update(buffer)
+    .digest("hex");
+}
+
+function normalizeText(
+  value
+) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeCompact(
+  value
+) {
+  return normalizeText(value)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
+}
+
+function createInternalEmail(
+  passportNumber
+) {
+  const normalized =
+    normalizeCompact(
+      passportNumber
+    );
+
+  const safe =
+    normalized ||
+    crypto
+      .createHash("sha256")
+      .update(
+        String(
+          Date.now()
+        )
+      )
+      .digest("hex")
+      .slice(0, 20);
+
+  return `passport-${safe.toLowerCase()}@travel-automation.local`;
+}
+
+function mapMrzSex(
+  sex
+) {
+  const normalized =
+    String(sex || "")
+      .trim()
+      .toUpperCase();
+
+  if (normalized === "M") {
+    return "male";
+  }
+
+  if (normalized === "F") {
+    return "female";
+  }
+
+  return null;
+}
+
+function buildPassportValidation(
+  {
+    status,
+    passportType,
+    fingerprint,
+    mrzPresent,
+    mrzValid,
+    ocrValid,
+    clientMatch,
+    expired,
+    issues
+  }
+) {
+  return {
+    status,
+
+    passportType:
+      passportType || "unknown",
+
+    mrzPresent:
+      Boolean(mrzPresent),
+
+    mrzValid:
+      Boolean(mrzValid),
+
+    ocrValid:
+      Boolean(ocrValid),
+
+    clientMatch:
+      Boolean(clientMatch),
+
+    expired:
+      Boolean(expired),
+
+    fingerprint:
+      fingerprint || null,
+
+    issues:
+      Array.isArray(issues)
+        ? issues
+        : [],
+
+    checkedAt:
+      new Date()
+  };
+}
+
+/**
+ * O OCR já produz vários pares candidatos.
+ *
+ * Não confiamos simplesmente no primeiro par.
+ * Cada candidato é passado pelo validador MRZ.
+ */
+function findValidMrz(
+  ocrResult
+) {
+  const pairs =
+    Array.isArray(
+      ocrResult?.mrzPairs
+    )
+      ? ocrResult.mrzPairs
+      : [];
+
+  const validCandidates = [];
+
+  for (
+    const pair of pairs
+  ) {
+    if (
+      !pair ||
+      !pair.line1 ||
+      !pair.line2
+    ) {
+      continue;
+    }
+
+    const result =
+      validation.validateMrz({
+        line1:
+          pair.line1,
+
+        line2:
+          pair.line2
+      });
+
+    if (
+      result.success &&
+      result.passed &&
+      result.data
+    ) {
+      validCandidates.push({
+        pair,
+        validation:
+          result
+      });
+    }
+  }
+
+  if (
+    validCandidates.length === 0
+  ) {
+    return null;
+  }
+
+  /*
+   * O OCR já ordena os pares por score.
+   * Entre pares que realmente passaram na
+   * validação, usamos o score original.
+   */
+  validCandidates.sort(
+    (a, b) =>
+      Number(
+        b.pair?.score || 0
+      ) -
+      Number(
+        a.pair?.score || 0
+      )
+  );
+
+  return (
+    validCandidates[0]
+  );
+}
+
+/**
+ * Cria um novo Client a partir dos dados
+ * efetivamente presentes no passaporte.
+ *
+ * O cliente não precisa preencher previamente
+ * um perfil manual.
+ */
+async function createClientFromPassport(
+  {
+    accountId,
+    createdBy,
+    mrzData,
+    passportType
+  }
+) {
+  const passportNumber =
+    normalizeText(
+      mrzData.passportNumber
+    );
+
+  if (!passportNumber) {
+    throw new Error(
+      "Passport number could not be extracted"
+    );
+  }
+
+  /*
+   * Primeiro procuramos um cliente existente
+   * pelo número do passaporte.
+   */
+  let client =
+    await Client.findOne({
+      accountId,
+
+      passportNumber,
+
+      active: true
+    });
+
+  const fullName =
+    normalizeText(
+      mrzData.fullName
+    );
+
+  if (!fullName) {
+    throw new Error(
+      "Full name could not be extracted from passport"
+    );
+  }
+
+  const email =
+    createInternalEmail(
+      passportNumber
+    );
+
+  const gender =
+    mapMrzSex(
+      mrzData.sex
+    );
+
+  if (!client) {
+    client =
+      new Client({
+        accountId,
+
+        createdBy,
+
+        fullName,
+
+        email,
+
+        phone:
+          null,
+
+        dateOfBirth:
+          mrzData.dateOfBirth ||
+          null,
+
+        nationality:
+          mrzData.nationality ||
+          null,
+
+        gender,
+
+        passportNumber,
+
+        passportIssueDate:
+          null,
+
+        passportExpiryDate:
+          mrzData.passportExpiryDate ||
+          null,
+
+        passportCountry:
+          mrzData.issuingCountry ||
+          null,
+
+        passportType:
+          passportType || "unknown",
+
+        passportValidation:
+          {
+            status:
+              "pending",
+
+            passportType:
+              passportType ||
+              "unknown",
+
+            mrzPresent:
+              true,
+
+            mrzValid:
+              true,
+
+            ocrValid:
+              false,
+
+            clientMatch:
+              true,
+
+            expired:
+              false,
+
+            fingerprint:
+              null,
+
+            issues: [],
+
+            checkedAt:
+              new Date()
+          },
+
+        active:
+          true
+      });
+  } else {
+    /*
+     * Atualizamos os dados documentais com
+     * a fonte primária: o passaporte.
+     */
+    client.fullName =
+      fullName;
+
+    client.dateOfBirth =
+      mrzData.dateOfBirth ||
+      client.dateOfBirth ||
+      null;
+
+    client.nationality =
+      mrzData.nationality ||
+      client.nationality ||
+      null;
+
+    client.gender =
+      gender ||
+      client.gender ||
+      null;
+
+    client.passportNumber =
+      passportNumber;
+
+    client.passportExpiryDate =
+      mrzData.passportExpiryDate ||
+      client.passportExpiryDate ||
+      null;
+
+    client.passportCountry =
+      mrzData.issuingCountry ||
+      client.passportCountry ||
+      null;
+
+    client.passportType =
+      passportType ||
+      "unknown";
+  }
+
+  return client;
+}
+
+/*
+ * =========================================================
+ * IMPORTAÇÃO AUTOMÁTICA DO PASSAPORTE
+ *
+ * Fluxo:
+ *
+ * fotografia
+ *    ↓
+ * OCR
+ *    ↓
+ * candidatos MRZ
+ *    ↓
+ * validação MRZ
+ *    ↓
+ * validade do passaporte
+ *    ↓
+ * criação/atualização automática do Client
+ *    ↓
+ * armazenamento privado
+ *    ↓
+ * resposta com clientId
+ *
+ * IMPORTANTE:
+ * Esta rota vem ANTES de /:clientId.
+ * =========================================================
+ */
+
+router.post(
+  "/import",
+  requireRole(
+    "owner",
+    "admin",
+    "operator"
+  ),
+  upload.single(
+    "passport"
+  ),
+  async (
+    req,
+    res,
+    next
+  ) => {
+    try {
+      if (!req.file) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+
+            status:
+              "requires_user",
+
+            error:
+              "Passport image is required"
+          });
+      }
+
+      const fingerprint =
+        createFingerprint(
+          req.file.buffer
+        );
+
+      /*
+       * =====================================================
+       * 1. OCR
+       * =====================================================
+       */
+
+      const ocrResult =
+        await ocr.extract(
+          req.file.buffer
+        );
+
+      /*
+       * =====================================================
+       * 2. ENCONTRAR UM PAR MRZ REALMENTE VÁLIDO
+       * =====================================================
+       */
+
+      const validMrz =
+        findValidMrz(
+          ocrResult
+        );
+
+      if (!validMrz) {
+        return res
+          .status(422)
+          .json({
+            success: false,
+
+            status:
+              "requires_user",
+
+            error:
+              "Não foi possível validar o passaporte. Fotografe o documento completo, sem reflexos e com a zona inferior perfeitamente visível.",
+
+            passportValidation:
+              buildPassportValidation({
+                status:
+                  "requires_user",
+
+                passportType:
+                  "unknown",
+
+                fingerprint,
+
+                mrzPresent:
+                  Array.isArray(
+                    ocrResult?.mrzPairs
+                  ) &&
+                  ocrResult.mrzPairs.length >
+                    0,
+
+                mrzValid:
+                  false,
+
+                ocrValid:
+                  Number(
+                    ocrResult?.confidence
+                  ) >= 70,
+
+                clientMatch:
+                  false,
+
+                expired:
+                  false,
+
+                issues: [
+                  "Nenhum par MRZ passou na validação de segurança"
+                ]
+              })
+          });
+      }
+
+      const mrzResult =
+        validMrz.validation;
+
+      const mrzData =
+        mrzResult.data;
+
+      /*
+       * =====================================================
+       * 3. VALIDAR EXPIRAÇÃO
+       * =====================================================
+       */
+
+      const expiry =
+        validation.validateExpiry(
+          mrzData
+        );
+
+      if (!expiry.passed) {
+        return res
+          .status(422)
+          .json({
+            success: false,
+
+            status:
+              "requires_user",
+
+            error:
+              "O passaporte está expirado ou a data de validade não pôde ser confirmada.",
+
+            passportValidation:
+              buildPassportValidation({
+                status:
+                  "requires_user",
+
+                passportType:
+                  "unknown",
+
+                fingerprint,
+
+                mrzPresent:
+                  true,
+
+                mrzValid:
+                  true,
+
+                ocrValid:
+                  Number(
+                    ocrResult?.confidence
+                  ) >= 70,
+
+                clientMatch:
+                  false,
+
+                expired:
+                  true,
+
+                issues: [
+                  expiry.reason ||
+                    "Passport expiry validation failed"
+                ]
+              })
+          });
+      }
+
+      /*
+       * =====================================================
+       * 4. DETECTAR TIPO
+       * =====================================================
+       *
+       * Não alegamos que NFC foi validado.
+       */
+
+      const passportType =
+        validation.detectPassportType({
+          declaredType:
+            null,
+
+          ocrText:
+            ocrResult.text,
+
+          documentType:
+            mrzData.documentType,
+
+          issuingCountry:
+            mrzData.issuingCountry
+        });
+
+      /*
+       * =====================================================
+       * 5. CRIAR/ATUALIZAR CLIENTE AUTOMATICAMENTE
+       * =====================================================
+       */
+
+      const client =
+        await createClientFromPassport({
+          accountId:
+            req.user.accountId,
+
+          createdBy:
+            req.user._id,
+
+          mrzData,
+
+          passportType:
+            passportType.type
+        });
+
+      /*
+       * =====================================================
+       * 6. VALIDAR O DOCUMENTO CONTRA O PERFIL
+       * =====================================================
+       *
+       * Para um cliente recém-criado os dados foram
+       * originados do próprio MRZ.
+       *
+       * Para um cliente existente fazemos uma nova
+       * comparação antes de aceitar o documento.
+       */
+
+      const clientComparison =
+        validation.compareWithClient(
+          mrzData,
+          client
+        );
+
+      if (
+        !clientComparison.passed
+      ) {
+        client.passportValidation =
+          buildPassportValidation({
+            status:
+              "requires_user",
+
+            passportType:
+              passportType.type,
+
+            fingerprint,
+
+            mrzPresent:
+              true,
+
+            mrzValid:
+              true,
+
+            ocrValid:
+              Number(
+                ocrResult?.confidence
+              ) >= 70,
+
+            clientMatch:
+              false,
+
+            expired:
+              false,
+
+            issues:
+              clientComparison.mismatches.map(
+                field =>
+                  `Client/MRZ mismatch: ${field}`
+              )
+          });
+
+        await client.save();
+
+        return res
+          .status(422)
+          .json({
+            success: false,
+
+            status:
+              "requires_user",
+
+            error:
+              "Os dados do passaporte não coincidem com o perfil existente.",
+
+            clientId:
+              client._id,
+
+            passportValidation:
+              client.passportValidation
+          });
+      }
+
+      /*
+       * =====================================================
+       * 7. MARCAR O PASSAPORTE COMO VALIDADO
+       * =====================================================
+       */
+
+      client.passportType =
+        passportType.type;
+
+      client.passportValidation =
+        buildPassportValidation({
+          status:
+            "passed",
+
+          passportType:
+            passportType.type,
+
+          fingerprint,
+
+          mrzPresent:
+            true,
+
+          mrzValid:
+            true,
+
+          ocrValid:
+            Number(
+              ocrResult?.confidence
+            ) >= 70,
+
+          clientMatch:
+            true,
+
+          expired:
+            false,
+
+          issues: []
+        });
+
+      /*
+       * =====================================================
+       * 8. GUARDAR DOCUMENTO PRIVADO E CRIPTOGRAFADO
+       * =====================================================
+       */
+
+      const stored =
+        await storage.save({
+          accountId:
+            req.user.accountId,
+
+          clientId:
+            client._id,
+
+          buffer:
+            req.file.buffer,
+
+          mimeType:
+            req.file.mimetype,
+
+          originalName:
+            req.file.originalname,
+
+          validationStatus:
+            "passed"
+        });
+
+      await client.save();
+
+      /*
+       * =====================================================
+       * 9. AUDITORIA
+       * =====================================================
+       */
+
+      await AuditLog.create({
+        actorId:
+          req.user._id,
+
+        action:
+          "client.passport_import",
+
+        resource:
+          "client",
+
+        resourceId:
+          client._id.toString(),
+
+        ip:
+          req.ip,
+
+        metadata: {
+          documentId:
+            stored.document._id.toString(),
+
+          mimeType:
+            req.file.mimetype,
+
+          size:
+            req.file.size,
+
+          validation:
+            "passed",
+
+          duplicate:
+            stored.duplicate,
+
+          fingerprint,
+
+          passportType:
+            passportType.type
+        }
+      });
+
+      /*
+       * =====================================================
+       * 10. RESPOSTA PARA O FRONTEND
+       * =====================================================
+       *
+       * O frontend recebe o clientId e pode imediatamente
+       * iniciar o reconhecimento facial.
+       */
+
+      return res.json({
+        success: true,
+
+        status:
+          "passed",
+
+        next:
+          "facial_preflight",
+
+        clientId:
+          client._id,
+
+        client: {
+          id:
+            client._id,
+
+          fullName:
+            client.fullName,
+
+          email:
+            client.email,
+
+          dateOfBirth:
+            client.dateOfBirth,
+
+          nationality:
+            client.nationality,
+
+          gender:
+            client.gender,
+
+          passportNumber:
+            client.passportNumber,
+
+          passportExpiryDate:
+            client.passportExpiryDate,
+
+          passportCountry:
+            client.passportCountry,
+
+          passportType:
+            client.passportType
+        },
+
+        passport: {
+          ready:
+            true,
+
+          passportType:
+            passportType.type,
+
+          mrzValid:
+            true,
+
+          clientMatch:
+            true,
+
+          expired:
+            false,
+
+          documentStored:
+            true,
+
+          documentId:
+            stored.document._id,
+
+          duplicate:
+            stored.duplicate
+        },
+
+        passportValidation:
+          client.passportValidation
+      });
+    } catch (
+      error
+    ) {
+      next(error);
+    }
+  }
+);
+
+/*
+ * =========================================================
+ * UPLOAD + VALIDATE PASSPORT PARA CLIENTE EXISTENTE
  * =========================================================
  */
 
@@ -148,6 +1045,11 @@ router.post(
           req.file.buffer
         );
 
+      const fingerprint =
+        createFingerprint(
+          req.file.buffer
+        );
+
       if (
         !ocrResult.mrz
       ) {
@@ -173,13 +1075,7 @@ router.post(
           expired:
             false,
 
-          fingerprint:
-            crypto
-              .createHash("sha256")
-              .update(
-                req.file.buffer
-              )
-              .digest("hex"),
+          fingerprint,
 
           issues: [
             "MRZ do passaporte não foi identificada com qualidade suficiente"
@@ -202,49 +1098,23 @@ router.post(
             error:
               "Não foi possível ler a MRZ do passaporte. Envie uma fotografia mais nítida e completa.",
 
-            passportValidation: {
-              status:
-                "requires_user",
-
-              passportType:
-                "unknown",
-
-              mrzPresent:
-                false,
-
-              mrzValid:
-                false,
-
-              ocrValid:
-                false,
-
-              clientMatch:
-                false,
-
-              expired:
-                false
-            }
+            passportValidation:
+              client.passportValidation
           });
       }
 
       /*
        * =====================================================
-       * 2. MRZ
+       * 2. ENCONTRAR MRZ VALIDADA
        * =====================================================
        */
 
-      const mrzResult =
-        validation.validateMrz({
-          line1:
-            ocrResult.mrz.line1,
+      const validMrz =
+        findValidMrz(
+          ocrResult
+        );
 
-          line2:
-            ocrResult.mrz.line2
-        });
-
-      if (
-        !mrzResult.passed
-      ) {
+      if (!validMrz) {
         client.passportValidation = {
           status:
             "requires_user",
@@ -269,16 +1139,11 @@ router.post(
           expired:
             false,
 
-          fingerprint:
-            crypto
-              .createHash("sha256")
-              .update(
-                req.file.buffer
-              )
-              .digest("hex"),
+          fingerprint,
 
-          issues:
-            mrzResult.errors,
+          issues: [
+            "A MRZ foi encontrada, mas não passou na validação de segurança."
+          ],
 
           checkedAt:
             new Date()
@@ -297,39 +1162,20 @@ router.post(
             error:
               "A MRZ foi encontrada, mas não passou na validação de segurança.",
 
-            passportValidation: {
-              status:
-                "requires_user",
-
-              passportType:
-                "unknown",
-
-              mrzPresent:
-                true,
-
-              mrzValid:
-                false,
-
-              ocrValid:
-                Number(
-                  ocrResult.confidence
-                ) >= 70,
-
-              clientMatch:
-                false,
-
-              expired:
-                false
-            }
+            passportValidation:
+              client.passportValidation
           });
       }
+
+      const mrzResult =
+        validMrz.validation;
 
       const mrzData =
         mrzResult.data;
 
       /*
        * =====================================================
-       * 3. COMPARAR COM O CLIENTE
+       * 3. COMPARAR COM CLIENTE
        * =====================================================
        */
 
@@ -354,9 +1200,6 @@ router.post(
        * =====================================================
        * 5. DETERMINAR TIPO
        * =====================================================
-       *
-       * Não fingimos detectar NFC apenas
-       * olhando para uma fotografia.
        */
 
       const passportType =
@@ -373,14 +1216,6 @@ router.post(
           issuingCountry:
             mrzData.issuingCountry
         });
-
-      const fingerprint =
-        crypto
-          .createHash("sha256")
-          .update(
-            req.file.buffer
-          )
-          .digest("hex");
 
       const issues = [
         ...clientComparison.mismatches
@@ -442,12 +1277,6 @@ router.post(
           new Date()
       };
 
-      /*
-       * Se a validação não passou,
-       * não guardamos o documento como
-       * documento utilizável pelo bot.
-       */
-
       if (!passed) {
         await client.save();
 
@@ -462,38 +1291,14 @@ router.post(
             error:
               "O passaporte precisa de correção antes de poder ser utilizado pelo bot.",
 
-            passportValidation: {
-              status:
-                "requires_user",
-
-              passportType:
-                passportType.type,
-
-              mrzPresent:
-                true,
-
-              mrzValid:
-                mrzResult.passed,
-
-              ocrValid:
-                Number(
-                  ocrResult.confidence
-                ) >= 70,
-
-              clientMatch:
-                clientComparison.passed,
-
-              expired:
-                expiry.expired,
-
-              issues
-            }
+            passportValidation:
+              client.passportValidation
           });
       }
 
       /*
        * =====================================================
-       * 7. GUARDAR DOCUMENTO CRIPTOGRAFADO
+       * 7. GUARDAR DOCUMENTO
        * =====================================================
        */
 
@@ -519,6 +1324,12 @@ router.post(
         });
 
       await client.save();
+
+      /*
+       * =====================================================
+       * 8. AUDITORIA
+       * =====================================================
+       */
 
       await AuditLog.create({
         actorId:
@@ -556,7 +1367,7 @@ router.post(
 
       /*
        * =====================================================
-       * RESPOSTA
+       * 9. RESPOSTA
        * =====================================================
        */
 
@@ -568,6 +1379,9 @@ router.post(
 
         clientId:
           client._id,
+
+        next:
+          "facial_preflight",
 
         passport: {
           ready:
@@ -590,6 +1404,35 @@ router.post(
 
           documentId:
             stored.document._id
+        },
+
+        client: {
+          id:
+            client._id,
+
+          fullName:
+            client.fullName,
+
+          dateOfBirth:
+            client.dateOfBirth,
+
+          nationality:
+            client.nationality,
+
+          gender:
+            client.gender,
+
+          passportNumber:
+            client.passportNumber,
+
+          passportExpiryDate:
+            client.passportExpiryDate,
+
+          passportCountry:
+            client.passportCountry,
+
+          passportType:
+            client.passportType
         }
       });
     } catch (
@@ -644,11 +1487,52 @@ router.get(
       return res.json({
         success: true,
 
+        clientId:
+          client._id,
+
+        client: {
+          id:
+            client._id,
+
+          fullName:
+            client.fullName,
+
+          email:
+            client.email,
+
+          dateOfBirth:
+            client.dateOfBirth,
+
+          nationality:
+            client.nationality,
+
+          gender:
+            client.gender,
+
+          passportNumber:
+            client.passportNumber,
+
+          passportExpiryDate:
+            client.passportExpiryDate,
+
+          passportCountry:
+            client.passportCountry,
+
+          passportType:
+            client.passportType
+        },
+
         passportValidation:
           client.passportValidation,
 
         passportType:
-          client.passportType
+          client.passportType,
+
+        facialPreflight:
+          client.facialPreflight,
+
+        facialProfile:
+          client.facialProfile
       });
     } catch (
       error
