@@ -4432,10 +4432,10 @@
   function setupEvents() {
 
     $("loginButton")
-      ?.addEventListener(
-        "click",
-        login
-      );
+  ?.addEventListener(
+    "click",
+    loadCurrentUser
+  );
 
 
     $("refreshButton")
