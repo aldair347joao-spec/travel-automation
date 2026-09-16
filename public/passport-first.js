@@ -18,17 +18,18 @@
  *    ↓
  * candidatura
  *
- * Não substitui o motor facial existente.
- * Não altera os IDs existentes.
- * Intercepta apenas o fluxo antigo de seleção manual.
+ * IMPORTANTE:
+ * - O utilizador pode fotografar ou anexar uma imagem.
+ * - Não força a abertura da câmera.
+ * - Não altera os IDs existentes.
+ * - Intercepta o fluxo antigo de seleção manual.
  * ============================================================
  */
 
 (() => {
   "use strict";
 
-  const $ = (id) =>
-    document.getElementById(id);
+  const $ = (id) => document.getElementById(id);
 
   const state = {
     file: null,
@@ -41,28 +42,17 @@
   ========================================================= */
 
   function getCookie(name) {
-
-    const cookies =
-      document.cookie.split(";");
+    const cookies = document.cookie.split(";");
 
     for (const cookie of cookies) {
-
-      const [
-        key,
-        ...parts
-      ] =
-        cookie
-          .trim()
-          .split("=");
+      const [key, ...parts] =
+        cookie.trim().split("=");
 
       if (key === name) {
-
         return decodeURIComponent(
           parts.join("=")
         );
-
       }
-
     }
 
     return null;
@@ -70,35 +60,26 @@
 
 
   function csrfToken() {
-
     return (
       getCookie("csrf_token") ||
       getCookie("csrfToken") ||
       null
     );
-
   }
 
 
   function escapeHtml(value) {
-
     return String(value ?? "")
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
-
   }
 
 
-  function toast(
-    message,
-    type = "info"
-  ) {
-
-    const container =
-      $("toastContainer");
+  function toast(message, type = "info") {
+    const container = $("toastContainer");
 
     if (!container) {
       console[type === "error" ? "error" : "log"](
@@ -108,98 +89,64 @@
       return;
     }
 
-    const element =
-      document.createElement("div");
+    const element = document.createElement("div");
 
-    element.className =
-      `toast ${type}`;
+    element.className = `toast ${type}`;
+    element.textContent = message;
 
-    element.textContent =
-      message;
-
-    container.appendChild(
-      element
-    );
+    container.appendChild(element);
 
     setTimeout(() => {
-
-      element.style.opacity =
-        "0";
-
-      element.style.transform =
-        "translateY(8px)";
+      element.style.opacity = "0";
+      element.style.transform = "translateY(8px)";
 
       setTimeout(
         () => element.remove(),
         250
       );
-
     }, 4000);
-
   }
 
 
-  function setStatus(
-    text,
-    type = "blue"
-  ) {
-
-    const element =
-      $("passportPanelStatus");
+  function setStatus(text, type = "blue") {
+    const element = $("passportPanelStatus");
 
     if (!element) {
       return;
     }
 
-    element.textContent =
-      text;
-
-    element.className =
-      `panel-status ${type}`;
-
+    element.textContent = text;
+    element.className = `panel-status ${type}`;
   }
 
 
-  function setFileStatus(
-    text
-  ) {
-
-    const element =
-      $("passportFileStatus");
+  function setFileStatus(text) {
+    const element = $("passportFileStatus");
 
     if (element) {
-      element.textContent =
-        text;
+      element.textContent = text;
     }
-
   }
 
 
-  function setButtonLoading(
-    loading
-  ) {
-
-    const button =
-      $("passportUploadButton");
+  function setButtonLoading(loading) {
+    const button = $("passportUploadButton");
 
     if (!button) {
       return;
     }
 
-    button.disabled =
-      loading;
+    button.disabled = loading;
 
-    button.innerHTML =
-      loading
-        ? `
-          <span class="button-spinner"></span>
-          A analisar passaporte...
-        `
-        : `
-          Continuar
-          <span>→</span>
-        `;
-
+    button.innerHTML = loading
+      ? `
+        <span class="button-spinner"></span>
+        A analisar passaporte...
+      `
+      : `
+        Analisar passaporte
+        <span>→</span>
+      `;
   }
 
 
@@ -207,88 +154,58 @@
      CLIENT SELECTORS
   ========================================================= */
 
-  function getClientId(
-    client
-  ) {
-
+  function getClientId(client) {
     return (
       client?._id ||
       client?.id ||
       null
     );
-
   }
 
 
-  function getClientName(
-    client
-  ) {
-
+  function getClientName(client) {
     return (
       client?.fullName ||
       client?.name ||
       "Viajante"
     );
-
   }
 
 
-  function addClientToSelector(
-    selector,
-    client
-  ) {
-
+  function addClientToSelector(selector, client) {
     if (!selector || !client) {
       return;
     }
 
-    const clientId =
-      getClientId(client);
+    const clientId = getClientId(client);
 
     if (!clientId) {
       return;
     }
 
     const existing =
-      Array.from(
-        selector.options
-      ).find(
+      Array.from(selector.options).find(
         option =>
           String(option.value) ===
           String(clientId)
       );
 
     if (!existing) {
-
       const option =
-        document.createElement(
-          "option"
-        );
+        document.createElement("option");
 
-      option.value =
-        clientId;
+      option.value = clientId;
+      option.textContent = getClientName(client);
 
-      option.textContent =
-        getClientName(client);
-
-      selector.appendChild(
-        option
-      );
-
+      selector.appendChild(option);
     }
 
-    selector.value =
-      clientId;
-
+    selector.value = clientId;
   }
 
 
-  function selectCreatedClient(
-    client
-  ) {
-
-    const clientId =
-      getClientId(client);
+  function selectCreatedClient(client) {
+    const clientId = getClientId(client);
 
     if (!clientId) {
       return false;
@@ -300,41 +217,25 @@
       $("passportClientSelect")
     ];
 
-    selectors.forEach(
-      selector => {
-        addClientToSelector(
-          selector,
-          client
-        );
-      }
-    );
+    selectors.forEach(selector => {
+      addClientToSelector(
+        selector,
+        client
+      );
+    });
 
-
-    /*
-     * O app.js já possui os listeners
-     * de applicationClient e identityClient.
-     *
-     * Disparamos o evento para que o
-     * estado interno do app seja atualizado.
-     */
 
     const application =
       $("applicationClient");
 
     if (application) {
-
-      application.value =
-        clientId;
+      application.value = clientId;
 
       application.dispatchEvent(
-        new Event(
-          "change",
-          {
-            bubbles: true
-          }
-        )
+        new Event("change", {
+          bubbles: true
+        })
       );
-
     }
 
 
@@ -342,24 +243,16 @@
       $("identityClient");
 
     if (identity) {
-
-      identity.value =
-        clientId;
+      identity.value = clientId;
 
       identity.dispatchEvent(
-        new Event(
-          "change",
-          {
-            bubbles: true
-          }
-        )
+        new Event("change", {
+          bubbles: true
+        })
       );
-
     }
 
-
     return true;
-
   }
 
 
@@ -367,66 +260,41 @@
      CLIENT CARD
   ========================================================= */
 
-  function renderCreatedClient(
-    client
-  ) {
-
-    const card =
-      $("selectedClientCard");
-
-    const name =
-      $("selectedClientName");
-
-    const passport =
-      $("selectedClientPassport");
-
-    const avatar =
-      $("selectedClientAvatar");
-
+  function renderCreatedClient(client) {
+    const card = $("selectedClientCard");
+    const name = $("selectedClientName");
+    const passport = $("selectedClientPassport");
+    const avatar = $("selectedClientAvatar");
 
     if (card) {
-      card.classList.remove(
-        "empty"
-      );
+      card.classList.remove("empty");
     }
 
-
-    const fullName =
-      getClientName(client);
-
+    const fullName = getClientName(client);
 
     if (name) {
-      name.textContent =
-        fullName;
+      name.textContent = fullName;
     }
 
-
     if (passport) {
-
       passport.textContent =
         client.passportNumber
           ? `Passaporte ${client.passportNumber}`
           : "Passaporte validado";
-
     }
 
-
     if (avatar) {
-
       avatar.textContent =
         fullName
           .split(/\s+/)
           .slice(0, 2)
-          .map(
-            part =>
-              part
-                .charAt(0)
-                .toUpperCase()
+          .map(part =>
+            part
+              .charAt(0)
+              .toUpperCase()
           )
           .join("");
-
     }
-
   }
 
 
@@ -434,10 +302,7 @@
      PASSPORT RESULT
   ========================================================= */
 
-  function renderSuccess(
-    response
-  ) {
-
+  function renderSuccess(response) {
     const validation =
       response?.passportValidation ||
       response?.passport ||
@@ -449,9 +314,7 @@
     const title =
       $("passportResultTitle");
 
-
     if (result) {
-
       result.className =
         "passport-result-state success";
 
@@ -461,7 +324,6 @@
         </div>
 
         <div>
-
           <strong>
             Passaporte validado
           </strong>
@@ -470,20 +332,14 @@
             O perfil foi criado automaticamente.
             A próxima etapa é a verificação de identidade.
           </span>
-
         </div>
       `;
-
     }
-
 
     if (title) {
-
       title.textContent =
         "Perfil criado automaticamente";
-
     }
-
 
     const type =
       $("passportExtractedType");
@@ -497,83 +353,60 @@
     const expiry =
       $("passportExtractedExpiry");
 
-
     if (type) {
-
       type.textContent =
         validation.passportType ||
         validation.type ||
         response?.passport?.passportType ||
         "—";
-
     }
 
-
     if (mrz) {
-
       mrz.textContent =
         validation.mrzValid === true
           ? "Válida"
           : "Validada";
-
     }
 
-
     if (match) {
-
       match.textContent =
         validation.clientMatch === true
           ? "Confirmada"
           : "Perfil criado";
-
     }
 
-
     if (expiry) {
-
       expiry.textContent =
         validation.expired === true
           ? "Expirado"
           : "Válido";
-
     }
-
 
     const extracted =
       $("passportExtractedData");
 
     if (extracted) {
-      extracted.hidden =
-        false;
+      extracted.hidden = false;
     }
-
 
     setStatus(
       "PERFIL CRIADO",
       "success"
     );
-
   }
 
 
-  function renderError(
-    error
-  ) {
-
+  function renderError(error) {
     const data =
       error?.data || {};
 
     const validation =
-      data?.passportValidation ||
-      {};
-
+      data?.passportValidation || {};
 
     const result =
       $("passportResultState");
 
-
     if (result) {
-
       result.className =
         "passport-result-state error";
 
@@ -583,7 +416,6 @@
         </div>
 
         <div>
-
           <strong>
             Não foi possível validar
           </strong>
@@ -592,37 +424,27 @@
             Verifique a fotografia do passaporte
             e tente novamente.
           </span>
-
         </div>
       `;
-
     }
-
 
     const title =
       $("passportResultTitle");
 
     if (title) {
-
       title.textContent =
         "Correção necessária";
-
     }
-
 
     const issues =
       $("passportIssues");
 
     if (
       issues &&
-      Array.isArray(
-        validation.issues
-      ) &&
+      Array.isArray(validation.issues) &&
       validation.issues.length
     ) {
-
-      issues.hidden =
-        false;
+      issues.hidden = false;
 
       issues.innerHTML = `
         <strong>
@@ -639,15 +461,12 @@
             .join("")}
         </ul>
       `;
-
     }
-
 
     setStatus(
       "CORRIGIR",
       "error"
     );
-
   }
 
 
@@ -656,32 +475,21 @@
   ========================================================= */
 
   async function importPassport() {
-
-    if (
-      state.processing
-    ) {
+    if (state.processing) {
       return;
     }
 
-
     if (!state.file) {
-
       toast(
         "Fotografe ou selecione uma imagem do passaporte.",
         "error"
       );
-
       return;
-
     }
 
+    state.processing = true;
 
-    state.processing =
-      true;
-
-    setButtonLoading(
-      true
-    );
+    setButtonLoading(true);
 
     setStatus(
       "A ANALISAR",
@@ -692,9 +500,7 @@
       "A analisar o passaporte automaticamente..."
     );
 
-
     try {
-
       const formData =
         new FormData();
 
@@ -703,45 +509,31 @@
         state.file
       );
 
-
       const headers = {};
 
       const csrf =
         csrfToken();
 
       if (csrf) {
-
-        headers[
-          "x-csrf-token"
-        ] =
+        headers["x-csrf-token"] =
           csrf;
-
       }
-
 
       const response =
         await fetch(
           "/api/passports/import",
           {
-            method:
-              "POST",
-
-            credentials:
-              "include",
-
+            method: "POST",
+            credentials: "include",
             headers,
-
-            body:
-              formData
+            body: formData
           }
         );
-
 
       const contentType =
         response.headers.get(
           "content-type"
         ) || "";
-
 
       const data =
         contentType.includes(
@@ -753,9 +545,7 @@
                 await response.text()
             };
 
-
       if (!response.ok) {
-
         const error =
           new Error(
             data?.message ||
@@ -770,146 +560,75 @@
           data;
 
         throw error;
-
       }
-
 
       if (
         data?.success !== true ||
         !data?.client
       ) {
-
         throw new Error(
           "O servidor não devolveu o perfil criado."
         );
-
       }
 
+      renderSuccess(data);
 
-      /*
-       * 1. Mostra o resultado
-       */
-      renderSuccess(
-        data
-      );
-
-
-      /*
-       * 2. Guarda o cliente no frontend
-       * através dos selectors existentes.
-       */
       const client =
         data.client;
 
+      renderCreatedClient(client);
 
-      renderCreatedClient(
-        client
-      );
+      selectCreatedClient(client);
 
-
-      /*
-       * 3. Seleciona automaticamente
-       * o viajante recém-criado.
-       */
-      selectCreatedClient(
-        client
-      );
-
-
-      /*
-       * 4. Atualiza o texto do ficheiro.
-       */
       setFileStatus(
         `Passaporte validado — ${getClientName(client)}`
       );
 
+      setTimeout(() => {
+        const identity =
+          $("identityClient");
 
-      /*
-       * 5. Pequeno atraso para permitir
-       * ao app.js atualizar o estado.
-       */
-      setTimeout(
-        () => {
+        if (identity) {
+          identity.value =
+            getClientId(client);
 
-          const identity =
-            $("identityClient");
+          identity.dispatchEvent(
+            new Event("change", {
+              bubbles: true
+            })
+          );
+        }
 
-          if (identity) {
+        const continueButton =
+          $("identityContinueButton");
 
-            identity.value =
-              getClientId(client);
-
-            identity.dispatchEvent(
-              new Event(
-                "change",
-                {
-                  bubbles: true
-                }
-              )
-            );
-
-          }
-
-
-          /*
-           * O painel facial existente
-           * é aberto pelo próprio módulo.
-           *
-           * Se existir o botão de continuação,
-           * clicamos nele.
-           */
-          const continueButton =
-            $("identityContinueButton");
-
-          if (
-            continueButton &&
-            typeof continueButton.click ===
-              "function"
-          ) {
-
-            continueButton.click();
-
-          } else {
-
-            /*
-             * Caso o módulo facial ainda
-             * não tenha criado o botão,
-             * mostramos a etapa.
-             */
-            document
-              .getElementById(
-                "verificationSection"
-              )
-              ?.scrollIntoView({
-                behavior:
-                  "smooth",
-                block:
-                  "start"
-              });
-
-          }
-
-        },
-        500
-      );
-
+        if (
+          continueButton &&
+          typeof continueButton.click ===
+            "function"
+        ) {
+          continueButton.click();
+        } else {
+          $("verificationSection")
+            ?.scrollIntoView({
+              behavior: "smooth",
+              block: "start"
+            });
+        }
+      }, 500);
 
       toast(
         "Passaporte validado. Perfil criado automaticamente.",
         "success"
       );
 
-
     } catch (error) {
-
       console.error(
         "[PASSPORT FIRST]",
         error
       );
 
-      renderError(
-        error
-      );
+      renderError(error);
 
       toast(
         error.message ||
@@ -918,16 +637,9 @@
       );
 
     } finally {
-
-      state.processing =
-        false;
-
-      setButtonLoading(
-        false
-      );
-
+      state.processing = false;
+      setButtonLoading(false);
     }
-
   }
 
 
@@ -935,53 +647,42 @@
      FILE HANDLING
   ========================================================= */
 
-  function acceptFile(
-    file
-  ) {
-
+  function acceptFile(file) {
     if (!file) {
       return;
     }
 
-
+    /*
+     * O backend atual trabalha com JPEG e PNG.
+     * Não aceitamos WebP aqui para evitar
+     * selecionar um formato que depois seria
+     * recusado pelo servidor.
+     */
     if (
       ![
         "image/jpeg",
-        "image/png",
-        "image/webp"
-      ].includes(
-        file.type
-      )
+        "image/png"
+      ].includes(file.type)
     ) {
-
       toast(
-        "Use uma fotografia JPEG, PNG ou WebP.",
+        "Use uma fotografia JPEG ou PNG.",
         "error"
       );
-
       return;
-
     }
-
 
     if (
       file.size >
       6 * 1024 * 1024
     ) {
-
       toast(
         "A fotografia não pode ultrapassar 6 MB.",
         "error"
       );
-
       return;
-
     }
 
-
-    state.file =
-      file;
-
+    state.file = file;
 
     const preview =
       $("passportPreview");
@@ -989,121 +690,97 @@
     const image =
       $("passportPreviewImage");
 
-
-    if (
-      preview &&
-      image
-    ) {
-
+    if (preview && image) {
       const reader =
         new FileReader();
 
       reader.onload =
         event => {
-
           image.src =
             event.target.result;
 
           preview.hidden =
             false;
-
         };
 
-      reader.readAsDataURL(
-        file
-      );
-
+      reader.readAsDataURL(file);
     }
-
 
     setFileStatus(
       `${file.name} selecionado — pronto para análise.`
     );
 
-
     const button =
       $("passportUploadButton");
 
     if (button) {
-
-      button.disabled =
-        false;
+      button.disabled = false;
 
       button.innerHTML = `
         Analisar passaporte
         <span>→</span>
       `;
-
     }
-
 
     setStatus(
       "DOCUMENTO PRONTO",
       "blue"
     );
-
   }
 
 
   function clearFile() {
-
-    state.file =
-      null;
-
+    state.file = null;
 
     const input =
       $("passportFile");
 
     if (input) {
-      input.value =
-        "";
+      input.value = "";
     }
-
 
     const preview =
       $("passportPreview");
 
     if (preview) {
-      preview.hidden =
-        true;
+      preview.hidden = true;
     }
 
+    const image =
+      $("passportPreviewImage");
+
+    if (image) {
+      image.removeAttribute("src");
+    }
 
     const button =
       $("passportUploadButton");
 
     if (button) {
-
-      button.disabled =
-        true;
+      button.disabled = true;
 
       button.innerHTML = `
         Analisar passaporte
         <span>→</span>
       `;
-
     }
-
 
     setFileStatus(
       "Fotografe ou selecione o passaporte."
     );
 
-
     setStatus(
       "AGUARDANDO",
       "blue"
     );
-
   }
 
 
   /* =========================================================
-     UI
+     INPUT CONFIGURATION
   ========================================================= */
 
   function configureInput() {
-
     const input =
       $("passportFile");
 
@@ -1112,23 +789,39 @@
     }
 
     /*
-     * Permite câmera no telemóvel.
+     * CORREÇÃO PRINCIPAL:
+     *
+     * Não usamos:
+     *
+     * capture="environment"
+     *
+     * porque esse atributo pode fazer o
+     * Android abrir diretamente a câmera.
+     *
+     * Sem capture, o sistema apresenta o
+     * seletor normal de ficheiros/imagens,
+     * permitindo:
+     *
+     * - Galeria
+     * - Ficheiros
+     * - Câmera
+     *
+     * dependendo do dispositivo/navegador.
      */
     input.setAttribute(
       "accept",
-      "image/jpeg,image/png,image/webp"
+      "image/jpeg,image/png,.jpg,.jpeg,.png"
     );
 
-    input.setAttribute(
-      "capture",
-      "environment"
-    );
-
+    input.removeAttribute("capture");
   }
 
 
-  function configurePassportTexts() {
+  /* =========================================================
+     PASSPORT TEXTS
+  ========================================================= */
 
+  function configurePassportTexts() {
     const section =
       $("documentsSection");
 
@@ -1136,19 +829,13 @@
       return;
     }
 
-
     const heading =
-      section.querySelector(
-        "h2"
-      );
+      section.querySelector("h2");
 
     if (heading) {
-
       heading.textContent =
         "Comece pelo passaporte";
-
     }
-
 
     const description =
       section.querySelector(
@@ -1156,12 +843,9 @@
       );
 
     if (description) {
-
       description.textContent =
         "Fotografe ou anexe o passaporte. O sistema irá analisar o documento e criar automaticamente o perfil do viajante.";
-
     }
-
 
     const clientBar =
       section.querySelector(
@@ -1169,38 +853,30 @@
       );
 
     if (clientBar) {
-
       clientBar.classList.add(
         "passport-first-mode"
       );
-
     }
-
 
     const select =
       $("passportClientSelect");
 
     if (select) {
-
       const field =
-        select.closest(
-          ".field"
-        );
+        select.closest(".field");
 
       if (field) {
-
-        field.style.display =
-          "none";
-
+        field.style.display = "none";
       }
-
     }
-
   }
 
 
-  function movePassportSection() {
+  /* =========================================================
+     MOVE PASSPORT TO FIRST POSITION
+  ========================================================= */
 
+  function movePassportSection() {
     const documents =
       $("documentsSection");
 
@@ -1220,30 +896,25 @@
       return;
     }
 
-
-    /*
-     * O passaporte passa a ser
-     * a primeira ação.
-     */
     if (
       client.compareDocumentPosition(
         documents
       ) &
       Node.DOCUMENT_POSITION_FOLLOWING
     ) {
-
       dashboard.insertBefore(
         documents,
         client
       );
-
     }
-
   }
 
 
-  function hideManualProfile() {
+  /* =========================================================
+     HIDE MANUAL PROFILE
+  ========================================================= */
 
+  function hideManualProfile() {
     const section =
       $("clientSection");
 
@@ -1251,19 +922,71 @@
       return;
     }
 
-
-    /*
-     * Mantemos o formulário no DOM
-     * para não quebrar IDs nem
-     * código existente.
-     *
-     * Apenas deixamos de o apresentar
-     * como primeiro passo.
-     */
     section.classList.add(
       "passport-first-hidden"
     );
+  }
 
+
+  /* =========================================================
+     UPDATE VISIBLE LOGIN / SUMMARY NUMBERS
+  ========================================================= */
+
+  function updateVisibleStepNumbers() {
+    const features =
+      document.querySelectorAll(
+        ".login-feature"
+      );
+
+    if (!features.length) {
+      return;
+    }
+
+    const items = [
+      {
+        number: "01",
+        label: "Passaporte"
+      },
+      {
+        number: "02",
+        label: "Identidade"
+      },
+      {
+        number: "03",
+        label: "Candidatura"
+      }
+    ];
+
+    features.forEach(
+      (feature, index) => {
+        const item =
+          items[index];
+
+        if (!item) {
+          return;
+        }
+
+        const number =
+          feature.querySelector(
+            "strong"
+          );
+
+        const label =
+          feature.querySelector(
+            "span"
+          );
+
+        if (number) {
+          number.textContent =
+            item.number;
+        }
+
+        if (label) {
+          label.textContent =
+            item.label;
+        }
+      }
+    );
   }
 
 
@@ -1272,7 +995,6 @@
   ========================================================= */
 
   function bindEvents() {
-
     const input =
       $("passportFile");
 
@@ -1287,25 +1009,22 @@
 
 
     /*
-     * CAPTURE
+     * Capture phase:
      *
-     * Impede que o handler antigo
-     * do app.js tente exigir
-     * selectedClientId.
+     * Impede o app.js antigo de tentar
+     * exigir selectedClientId antes do
+     * passaporte ser analisado.
      */
+
     input?.addEventListener(
       "change",
       event => {
-
         event.stopImmediatePropagation();
 
         const file =
           event.target.files?.[0];
 
-        acceptFile(
-          file
-        );
-
+        acceptFile(file);
       },
       true
     );
@@ -1314,13 +1033,10 @@
     uploadButton?.addEventListener(
       "click",
       event => {
-
         event.stopImmediatePropagation();
-
         event.preventDefault();
 
         importPassport();
-
       },
       true
     );
@@ -1329,13 +1045,10 @@
     clearButton?.addEventListener(
       "click",
       event => {
-
         event.stopImmediatePropagation();
-
         event.preventDefault();
 
         clearFile();
-
       },
       true
     );
@@ -1344,13 +1057,11 @@
     dropzone?.addEventListener(
       "dragover",
       event => {
-
         event.preventDefault();
 
         dropzone.classList.add(
           "dragover"
         );
-
       }
     );
 
@@ -1358,11 +1069,9 @@
     dropzone?.addEventListener(
       "dragleave",
       () => {
-
         dropzone.classList.remove(
           "dragover"
         );
-
       }
     );
 
@@ -1370,9 +1079,7 @@
     dropzone?.addEventListener(
       "drop",
       event => {
-
         event.preventDefault();
-
         event.stopImmediatePropagation();
 
         dropzone.classList.remove(
@@ -1383,14 +1090,10 @@
           event.dataTransfer
             ?.files?.[0];
 
-        acceptFile(
-          file
-        );
-
+        acceptFile(file);
       },
       true
     );
-
   }
 
 
@@ -1399,7 +1102,6 @@
   ========================================================= */
 
   function init() {
-
     configureInput();
 
     configurePassportTexts();
@@ -1408,19 +1110,15 @@
 
     hideManualProfile();
 
+    updateVisibleStepNumbers();
+
     bindEvents();
 
-    setTimeout(
-      () => {
-
-        configureInput();
-
-        configurePassportTexts();
-
-      },
-      1000
-    );
-
+    setTimeout(() => {
+      configureInput();
+      configurePassportTexts();
+      updateVisibleStepNumbers();
+    }, 1000);
   }
 
 
@@ -1428,7 +1126,6 @@
     document.readyState ===
     "loading"
   ) {
-
     document.addEventListener(
       "DOMContentLoaded",
       init,
@@ -1436,11 +1133,8 @@
         once: true
       }
     );
-
   } else {
-
     init();
-
   }
 
 })();
