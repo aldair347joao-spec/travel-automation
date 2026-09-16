@@ -4,6 +4,8 @@ function normalize(value) {
   return String(value || "")
     .trim()
     .toUpperCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ");
 }
 
@@ -21,7 +23,19 @@ function normalizeMrzLine(line) {
     .replace(/[^A-Z0-9<]/g, "");
 }
 
-function parseDate(value) {
+/**
+ * Parses an MRZ date according to its semantic purpose.
+ *
+ * MRZ dates contain YYMMDD.
+ *
+ * Expiry dates:
+ *   Passport expiry dates are treated as 2000-2099.
+ *
+ * Date of birth:
+ *   Uses a plausible-age window so both 19xx and 20xx
+ *   birth years can be represented correctly.
+ */
+function parseMrzDate(value, kind = "generic") {
   if (!value) {
     return null;
   }
@@ -38,6 +52,8 @@ function parseDate(value) {
 
   if (
     !Number.isInteger(yy) ||
+    !Number.isInteger(mm) ||
+    !Number.isInteger(dd) ||
     mm < 1 ||
     mm > 12 ||
     dd < 1 ||
@@ -47,11 +63,48 @@ function parseDate(value) {
   }
 
   const currentYear = new Date().getUTCFullYear();
-  const currentYY = currentYear % 100;
 
-  const century = yy <= currentYY ? 2000 : 1900;
+  let year;
 
-  const year = century + yy;
+  if (kind === "expiry") {
+    year = 2000 + yy;
+  } else if (kind === "birth") {
+    const year2000 = 2000 + yy;
+    const year1900 = 1900 + yy;
+
+    const age2000 = currentYear - year2000;
+    const age1900 = currentYear - year1900;
+
+    /*
+     * A passport holder's birth year should normally produce
+     * an age between 0 and 120.
+     *
+     * Prefer the 2000s interpretation when both are possible
+     * only for the genuinely younger person.
+     */
+    if (age2000 >= 0 && age2000 <= 120) {
+      year = year2000;
+    } else if (age1900 >= 0 && age1900 <= 120) {
+      year = year1900;
+    } else {
+      return null;
+    }
+  } else {
+    /*
+     * Generic fallback compatible with the historical behavior,
+     * but constrained to plausible dates.
+     */
+    const year2000 = 2000 + yy;
+    const year1900 = 1900 + yy;
+
+    const age2000 = currentYear - year2000;
+
+    if (age2000 >= 0 && age2000 <= 120) {
+      year = year2000;
+    } else {
+      year = year1900;
+    }
+  }
 
   const date = new Date(
     Date.UTC(year, mm - 1, dd)
@@ -66,6 +119,85 @@ function parseDate(value) {
   }
 
   return `${year}-${String(mm).padStart(2, "0")}-${String(dd).padStart(2, "0")}`;
+}
+
+/**
+ * Kept for compatibility with existing callers.
+ *
+ * Generic six-digit MRZ dates are interpreted using the
+ * birth-date rules because they are the safest interpretation
+ * for historical data.
+ */
+function parseDate(value) {
+  return parseMrzDate(value, "generic");
+}
+
+function normalizeDateForComparison(value) {
+  if (!value) {
+    return null;
+  }
+
+  const text = String(value).trim();
+
+  /*
+   * MRZ YYMMDD
+   */
+  if (/^\d{6}$/.test(text)) {
+    return parseMrzDate(text, "generic");
+  }
+
+  /*
+   * ISO date.
+   */
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    const parsed = new Date(`${text}T00:00:00.000Z`);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return null;
+    }
+
+    return text;
+  }
+
+  /*
+   * Common DD/MM/YYYY and DD-MM-YYYY formats.
+   */
+  const europeanMatch = text.match(
+    /^(\d{2})[\/-](\d{2})[\/-](\d{4})$/
+  );
+
+  if (europeanMatch) {
+    const day = Number(europeanMatch[1]);
+    const month = Number(europeanMatch[2]);
+    const year = Number(europeanMatch[3]);
+
+    const parsed = new Date(
+      Date.UTC(year, month - 1, day)
+    );
+
+    if (
+      parsed.getUTCFullYear() !== year ||
+      parsed.getUTCMonth() !== month - 1 ||
+      parsed.getUTCDate() !== day
+    ) {
+      return null;
+    }
+
+    return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  return null;
+}
+
+function compareDate(expected, actual) {
+  const left = normalizeDateForComparison(expected);
+  const right = normalizeDateForComparison(actual);
+
+  return {
+    expected: expected || null,
+    actual: actual || null,
+    match: Boolean(left && right && left === right)
+  };
 }
 
 function mrzCharacterValue(char) {
@@ -119,40 +251,168 @@ function isValidTd3Line(line) {
   return /^[A-Z0-9<]{44}$/.test(line);
 }
 
+function normalizeNameTokens(value) {
+  return normalize(value)
+    .replace(/[^A-Z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
 function normalizeName(value) {
-  return normalizeCompact(value)
-    .replace(/[^A-Z]/g, "");
+  return normalizeNameTokens(value).join("");
 }
 
-function normalizeDateForComparison(value) {
-  if (!value) {
-    return null;
+function compareNames(expected, actual) {
+  const expectedTokens = normalizeNameTokens(expected);
+  const actualTokens = normalizeNameTokens(actual);
+
+  if (
+    expectedTokens.length === 0 ||
+    actualTokens.length === 0
+  ) {
+    return false;
   }
 
-  const parsed = parseDate(value);
+  const expectedSet = new Set(expectedTokens);
+  const actualSet = new Set(actualTokens);
 
-  if (parsed) {
-    return parsed;
+  if (expectedSet.size !== actualSet.size) {
+    return false;
   }
 
-  const text = String(value).trim();
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return text;
+  if (expectedSet.size !== expectedTokens.length) {
+    /*
+     * Duplicate tokens make token-set comparison unsafe.
+     * Fall back to the compact normalized representation.
+     */
+    return normalizeName(expected) === normalizeName(actual);
   }
 
-  return null;
+  for (const token of expectedSet) {
+    if (!actualSet.has(token)) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
-function compareDate(expected, actual) {
-  const left = normalizeDateForComparison(expected);
-  const right = normalizeDateForComparison(actual);
+/**
+ * ISO nationality/country normalization.
+ *
+ * MRZ normally contains ISO alpha-3 codes.
+ * Existing client records may contain:
+ *
+ * AGO
+ * AO
+ * Angola
+ * Angolano
+ * Angolana
+ * República de Angola
+ *
+ * The same approach is used for common values from
+ * other countries without weakening unknown values.
+ */
+const COUNTRY_ALIASES = {
+  AGO: "AGO",
+  AO: "AGO",
+  ANGOLA: "AGO",
+  ANGOLANO: "AGO",
+  ANGOLANA: "AGO",
+  REPUBLICADEANGOLA: "AGO",
+  REPUBLICAANGOLA: "AGO",
 
-  return {
-    expected: expected || null,
-    actual: actual || null,
-    match: Boolean(left && right && left === right)
-  };
+  PRT: "PRT",
+  PT: "PRT",
+  PORTUGAL: "PRT",
+  PORTUGUES: "PRT",
+  PORTUGUESA: "PRT",
+
+  BRA: "BRA",
+  BR: "BRA",
+  BRASIL: "BRA",
+  BRASILEIRO: "BRA",
+  BRASILEIRA: "BRA",
+
+  MOZ: "MOZ",
+  MZ: "MOZ",
+  MOCAMBIQUE: "MOZ",
+  MOCAMBICANO: "MOZ",
+  MOCAMBICANA: "MOZ",
+
+  CPV: "CPV",
+  CV: "CPV",
+  CABOVERDE: "CPV",
+  CABOVERDIANO: "CPV",
+  CABOVERDIANA: "CPV",
+
+  STP: "STP",
+  SAOTOME: "STP",
+  SAOTOMEEPRINCIPE: "STP",
+
+  GNB: "GNB",
+  GUINEBISSAU: "GNB",
+
+  FRA: "FRA",
+  FR: "FRA",
+  FRANCA: "FRA",
+  FRANCES: "FRA",
+  FRANCESA: "FRA",
+
+  DEU: "DEU",
+  DE: "DEU",
+  ALEMANHA: "DEU",
+  ALEMAO: "DEU",
+  ALEMA: "DEU",
+
+  ESP: "ESP",
+  ES: "ESP",
+  ESPANHA: "ESP",
+  ESPANHOL: "ESP",
+  ESPANHOLA: "ESP",
+
+  ITA: "ITA",
+  IT: "ITA",
+  ITALIA: "ITA",
+  ITALIANO: "ITA",
+  ITALIANA: "ITA",
+
+  GBR: "GBR",
+  GB: "GBR",
+  UK: "GBR",
+  REINOUNIDO: "GBR",
+
+  USA: "USA",
+  US: "USA",
+  ESTADOSUNIDOS: "USA",
+  AMERICANO: "USA",
+  AMERICANA: "USA",
+
+  CAN: "CAN",
+  CA: "CAN",
+  CANADA: "CAN",
+
+  ZAF: "ZAF",
+  ZA: "ZAF",
+  AFRICADOSUL: "ZAF",
+
+  CHN: "CHN",
+  CN: "CHN",
+  CHINA: "CHN",
+
+  IND: "IND",
+  IN: "IND",
+  INDIA: "IND"
+};
+
+function normalizeCountry(value) {
+  const compact = normalizeCompact(value);
+
+  if (!compact) {
+    return "";
+  }
+
+  return COUNTRY_ALIASES[compact] || compact;
 }
 
 function parsePassportMrz(line1, line2) {
@@ -233,9 +493,15 @@ function parsePassportMrz(line1, line2) {
     second.slice(21, 28) +
     second.slice(28, 43);
 
-  const dateOfBirth = parseDate(dateOfBirthRaw);
+  const dateOfBirth = parseMrzDate(
+    dateOfBirthRaw,
+    "birth"
+  );
 
-  const passportExpiryDate = parseDate(expiryRaw);
+  const passportExpiryDate = parseMrzDate(
+    expiryRaw,
+    "expiry"
+  );
 
   if (!dateOfBirth) {
     throw new Error(
@@ -278,27 +544,16 @@ function parsePassportMrz(line1, line2) {
 
   return {
     documentType,
-
     issuingCountry,
-
     surname,
-
     givenNames,
-
     fullName,
-
     passportNumber,
-
     nationality,
-
     dateOfBirth,
-
     sex,
-
     passportExpiryDate,
-
     personalNumber,
-
     checks
   };
 }
@@ -309,16 +564,16 @@ function parsePassportMrz(line1, line2) {
  *
  * Therefore:
  *
- * legacy    = old model explicitly identified
+ * legacy     = old model explicitly identified
  * electronic = new electronic model explicitly identified
- * unknown   = insufficient evidence
+ * unknown    = insufficient evidence
  */
 function normalizePassportType(value) {
   const type = normalizeCompact(value);
 
   if (
     type === "ELECTRONIC" ||
-    type === "E-PASSPORT" ||
+    type === "EPASSPORT" ||
     type === "EPASSPORT" ||
     type === "BIOMETRIC"
   ) {
@@ -366,7 +621,7 @@ function detectPassportType({
   /*
    * These signals are intentionally conservative.
    *
-   * We do NOT claim NFC/chip verification from OCR.
+   * OCR cannot prove NFC/chip functionality.
    */
   const electronicSignals = [
     "ELECTRONIC",
@@ -393,9 +648,8 @@ function detectPassportType({
   }
 
   /*
-   * If the document is clearly a passport but
-   * no reliable model signal is available,
-   * leave it unknown instead of guessing.
+   * A valid passport without a reliable model
+   * signal remains unknown instead of being guessed.
    */
   if (
     documentType &&
@@ -459,6 +713,39 @@ function compareField(
 
     actual:
       actual || null,
+
+    match:
+      Boolean(left) &&
+      Boolean(right) &&
+      left === right
+  };
+}
+
+function compareCountryField(
+  name,
+  expected,
+  actual
+) {
+  const left =
+    normalizeCountry(expected);
+
+  const right =
+    normalizeCountry(actual);
+
+  return {
+    field: name,
+
+    expected:
+      expected || null,
+
+    actual:
+      actual || null,
+
+    normalizedExpected:
+      left || null,
+
+    normalizedActual:
+      right || null,
 
     match:
       Boolean(left) &&
@@ -552,7 +839,7 @@ class PassportValidationService {
     );
 
     comparisons.push(
-      compareField(
+      compareCountryField(
         "nationality",
         client.nationality,
         mrzData.nationality
@@ -583,7 +870,7 @@ class PassportValidationService {
       "passportExpiryDate";
 
     comparisons.push(
-      compareField(
+      compareCountryField(
         "passportCountry",
         client.passportCountry,
         mrzData.issuingCountry
@@ -591,21 +878,18 @@ class PassportValidationService {
     );
 
     /*
-     * Name is useful but should be normalized
-     * separately because MRZ names contain
-     * separators and may have ordering differences.
+     * MRZ names are commonly represented as:
+     *
+     * SURNAME<<GIVEN<NAMES
+     *
+     * while the client may contain:
+     *
+     * GIVEN NAMES SURNAME
+     *
+     * Compare normalized tokens instead of requiring
+     * the exact order.
      */
     if (client.fullName) {
-      const clientName =
-        normalizeName(
-          client.fullName
-        );
-
-      const mrzName =
-        normalizeName(
-          mrzData.fullName
-        );
-
       comparisons.push({
         field: "fullName",
 
@@ -616,14 +900,9 @@ class PassportValidationService {
           mrzData.fullName,
 
         match:
-          Boolean(
-            clientName &&
-            mrzName
-          ) &&
-          (
-            clientName === mrzName ||
-            mrzName.includes(clientName) ||
-            clientName.includes(mrzName)
+          compareNames(
+            client.fullName,
+            mrzData.fullName
           )
       });
     }
@@ -717,7 +996,7 @@ class PassportValidationService {
 
     if (ocr.nationality) {
       comparisons.push(
-        compareField(
+        compareCountryField(
           "nationality",
           ocr.nationality,
           mrzData.nationality
@@ -769,16 +1048,6 @@ class PassportValidationService {
     }
 
     if (ocr.fullName) {
-      const ocrName =
-        normalizeName(
-          ocr.fullName
-        );
-
-      const mrzName =
-        normalizeName(
-          mrzData.fullName
-        );
-
       comparisons.push({
         field: "fullName",
 
@@ -789,14 +1058,9 @@ class PassportValidationService {
           mrzData.fullName,
 
         match:
-          Boolean(
-            ocrName &&
-            mrzName
-          ) &&
-          (
-            ocrName === mrzName ||
-            ocrName.includes(mrzName) ||
-            mrzName.includes(ocrName)
+          compareNames(
+            ocr.fullName,
+            mrzData.fullName
           )
       });
     }
@@ -930,11 +1194,8 @@ class PassportValidationService {
     }
 
     /*
-     * We don't require passportType to be known
-     * to validate the MRZ itself.
-     *
-     * Unknown model becomes a review signal,
-     * not an automatic rejection.
+     * Unknown passport model is a review signal,
+     * not a documentary rejection.
      */
     if (
       detectedType.type === "unknown"
@@ -953,11 +1214,6 @@ class PassportValidationService {
         ocrComparison.passed
       );
 
-    /*
-     * If everything documentary is correct but
-     * the model is unknown, require review rather
-     * than rejecting a potentially valid passport.
-     */
     const finalStatus =
       hardValidationPassed
         ? (
