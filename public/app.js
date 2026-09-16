@@ -4473,12 +4473,19 @@
       );
 
 
-    $("clientForm")
-      ?.addEventListener(
-        "submit",
-        handleClientSubmit
-      );
+    const clientForm = $("clientForm");
 
+if (
+  clientForm &&
+  !clientForm.dataset.eventsBound
+) {
+  clientForm.addEventListener(
+    "submit",
+    handleClientSubmit
+  );
+
+  clientForm.dataset.eventsBound = "true";
+}
 
     $("applicationForm")
       ?.addEventListener(
@@ -4579,26 +4586,60 @@
      INIT
   ========================================================= */
 
-  async function init() {
+  let initialized = false;
 
+async function init() {
+  if (initialized) {
+    return;
+  }
+
+  initialized = true;
+
+  try {
     setupEvents();
-
     resetPassportInterface();
-
     updateIdentityGate();
-
     updateReadiness();
 
     await loadCurrentUser();
+  } catch (error) {
+    console.error(
+      "[APP] Erro durante a inicialização:",
+      error
+    );
 
+    setConnection(
+      false,
+      "Erro ao iniciar a aplicação"
+    );
+
+    showToast(
+      error?.message ||
+      "Não foi possível iniciar a aplicação.",
+      "error"
+    );
   }
+}
 
-
+if (document.readyState === "loading") {
   document.addEventListener(
     "DOMContentLoaded",
-    init
+    init,
+    { once: true }
   );
+} else {
+  init();
+}
 
+window.addEventListener(
+  "load",
+  () => {
+    if (!initialized) {
+      init();
+    }
+  },
+  { once: true }
+);
   /* =========================================================
      TRAVEL WORKFLOW
      Fluxo:
