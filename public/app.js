@@ -497,6 +497,51 @@
 
   function renderClientSelectors() {
 
+    const passportSelect =
+  $("passportClientSelect");
+
+if (passportSelect) {
+
+  const current =
+    passportSelect.value;
+
+  passportSelect.innerHTML = `
+    <option value="">
+      Selecionar viajante
+    </option>
+
+    ${state.clients
+      .map(client => {
+
+        const id =
+          client._id ||
+          client.id;
+
+        const name =
+          client.fullName ||
+          client.name ||
+          "Cliente sem nome";
+
+        return `
+          <option value="${escapeHtml(id)}">
+            ${escapeHtml(name)}
+          </option>
+        `;
+
+      })
+      .join("")}
+  `;
+
+  if (current) {
+    passportSelect.value =
+      current;
+  }
+
+  if (state.selectedClientId) {
+    passportSelect.value =
+      state.selectedClientId;
+  }
+}
     const ids = [
       "applicationClient",
       "identityClient"
@@ -992,7 +1037,43 @@
     const clearButton =
       $("passportClearButton");
 
+const chooseButton =
+  $("passportChooseButton");
 
+chooseButton?.addEventListener(
+  "click",
+  () => {
+    fileInput?.click();
+  }
+);
+    $("passportClientSelect")
+  ?.addEventListener(
+    "change",
+    async event => {
+
+      await selectClient(
+        event.target.value,
+        "passport"
+      );
+
+      const select =
+        $("applicationClient");
+
+      if (select) {
+        select.value =
+          event.target.value;
+      }
+
+      const identity =
+        $("identityClient");
+
+      if (identity) {
+        identity.value =
+          event.target.value;
+      }
+
+    }
+  );
     fileInput?.addEventListener(
       "change",
       event => {
@@ -4531,7 +4612,10 @@ if (
      * produzido pelo módulo facial.
      */
 
-  
+  setInterval(
+  monitorFacialResult,
+  500
+);
 
     /*
      * Navegação suave.
