@@ -5,39 +5,34 @@
    * ==========================================================
    * TRAVEL AUTOMATION
    * Guided Travel Workflow
+   *
+   * FLUXO OFICIAL:
+   *
+   * 01 — PASSAPORTE
+   * 02 — IDENTIDADE
+   * 03 — CANDIDATURA
+   * 04 — ACOMPANHAMENTO
    * ==========================================================
    */
 
   const STEPS = [
     {
-      id: "client",
-      number: "01",
-      icon: "person",
-      eyebrow: "PRIMEIRA ETAPA",
-      title: "Os seus dados",
-      description:
-        "Comece pelos dados do viajante. Vamos preparar a informação necessária para as próximas etapas.",
-      section: "clientSection",
-      readyLabel: "Dados preparados"
-    },
-
-    {
       id: "passport",
-      number: "02",
+      number: "01",
       icon: "document",
-      eyebrow: "SEGUNDA ETAPA",
-      title: "Documento de viagem",
+      eyebrow: "PRIMEIRA ETAPA",
+      title: "Passaporte",
       description:
-        "Confirme os dados do passaporte antes de avançarmos para a verificação de identidade.",
+        "Fotografe ou anexe o seu passaporte. O sistema irá analisar o documento e criar automaticamente o seu perfil.",
       section: "clientSection",
-      readyLabel: "Documento confirmado"
+      readyLabel: "Passaporte validado"
     },
 
     {
       id: "identity",
-      number: "03",
+      number: "02",
       icon: "face",
-      eyebrow: "TERCEIRA ETAPA",
+      eyebrow: "SEGUNDA ETAPA",
       title: "Confirmação de identidade",
       description:
         "Faça a verificação facial seguindo as instruções apresentadas no ecrã.",
@@ -47,28 +42,32 @@
 
     {
       id: "application",
-      number: "04",
+      number: "03",
       icon: "application",
-      eyebrow: "QUARTA ETAPA",
+      eyebrow: "TERCEIRA ETAPA",
       title: "Preparação da candidatura",
       description:
-        "Com as informações confirmadas, prepare o período em que pretende acompanhar o processo.",
+        "Com a sua identidade confirmada, escolha o tipo de visto e prepare os dados da candidatura.",
       section: "applicationSection",
       readyLabel: "Candidatura preparada"
     },
 
     {
       id: "operations",
-      number: "05",
+      number: "04",
       icon: "radar",
-      eyebrow: "QUINTA ETAPA",
+      eyebrow: "QUARTA ETAPA",
       title: "Acompanhamento",
       description:
-        "Acompanhe o estado do processo depois de concluir a preparação.",
+        "Acompanhe o estado do seu processo depois de concluir a preparação.",
       section: "verificationSection",
       readyLabel: "Acompanhamento disponível"
     }
   ];
+
+
+  const TOTAL_STEPS =
+    String(STEPS.length).padStart(2, "0");
 
 
   const state = {
@@ -89,26 +88,39 @@
   }
 
 
+  /* =========================================================
+     WORKFLOW
+  ========================================================= */
+
   function createWorkflow() {
     if ($("travelWorkflow")) {
       return $("travelWorkflow");
     }
 
-    const workflow = document.createElement("section");
+    const workflow =
+      document.createElement("section");
 
-    workflow.id = "travelWorkflow";
-    workflow.className = "travel-workflow";
+    workflow.id =
+      "travelWorkflow";
+
+    workflow.className =
+      "travel-workflow";
+
     workflow.setAttribute(
       "aria-label",
       "Preparação da viagem"
     );
 
     workflow.innerHTML = `
-      <div class="workflow-atmosphere" aria-hidden="true">
+      <div
+        class="workflow-atmosphere"
+        aria-hidden="true"
+      >
         <div class="workflow-glow"></div>
         <div class="workflow-horizon"></div>
         <div class="workflow-route-orbit"></div>
       </div>
+
 
       <aside class="workflow-sidebar">
 
@@ -119,8 +131,13 @@
           </div>
 
           <div>
-            <strong>TRAVEL AUTOMATION</strong>
-            <span>Preparação de viagem</span>
+            <strong>
+              TRAVEL AUTOMATION
+            </strong>
+
+            <span>
+              Preparação de viagem
+            </span>
           </div>
 
         </div>
@@ -133,7 +150,7 @@
           </span>
 
           <strong id="workflowProgressText">
-            01 de 05
+            01 de ${TOTAL_STEPS}
           </strong>
 
         </div>
@@ -153,10 +170,16 @@
           </span>
 
           <div>
-            <strong>Processo protegido</strong>
+
+            <strong>
+              Processo protegido
+            </strong>
+
             <span>
-              Avançamos apenas quando a etapa anterior estiver pronta.
+              Avançamos apenas quando
+              a etapa anterior estiver pronta.
             </span>
+
           </div>
 
         </div>
@@ -169,16 +192,26 @@
         <div class="workflow-topline">
 
           <div class="workflow-breadcrumb">
-            <span>Travel Automation</span>
+
+            <span>
+              Travel Automation
+            </span>
+
             <i></i>
+
             <strong id="workflowEyebrow">
               PRIMEIRA ETAPA
             </strong>
+
           </div>
 
+
           <div class="workflow-live">
+
             <span></span>
+
             Preparação ativa
+
           </div>
 
         </div>
@@ -193,8 +226,9 @@
               class="workflow-stage-icon"
               aria-hidden="true"
             >
-              <span class="person-icon"></span>
+              <span class="document-icon"></span>
             </div>
+
 
             <div>
 
@@ -205,12 +239,14 @@
                 PRIMEIRA ETAPA
               </span>
 
+
               <h1 id="workflowTitle">
-                Os seus dados
+                Passaporte
               </h1>
 
+
               <p id="workflowDescription">
-                Comece pelos dados do viajante.
+                Fotografe ou anexe o seu passaporte.
               </p>
 
             </div>
@@ -220,14 +256,16 @@
 
           <div class="workflow-counter">
 
-            <span>ETAPA</span>
+            <span>
+              ETAPA
+            </span>
 
             <strong id="workflowCounter">
               01
             </strong>
 
-            <small>
-              / 05
+            <small id="workflowTotal">
+              / ${TOTAL_STEPS}
             </small>
 
           </div>
@@ -253,29 +291,11 @@
 
           </div>
 
-          <div class="workflow-route-labels">
 
-            <span>
-              Preparar
-            </span>
-
-            <span>
-              Confirmar
-            </span>
-
-            <span>
-              Verificar
-            </span>
-
-            <span>
-              Candidatar
-            </span>
-
-            <span>
-              Acompanhar
-            </span>
-
-          </div>
+          <div
+            id="workflowRouteLabels"
+            class="workflow-route-labels"
+          ></div>
 
         </div>
 
@@ -312,13 +332,16 @@
               ORIENTAÇÃO
             </span>
 
+
             <strong id="workflowAssistTitle">
-              Vamos começar pelos seus dados
+              Comece pelo seu passaporte
             </strong>
 
+
             <p id="workflowAssistText">
-              Preencha as informações apresentadas.
-              Quando estiver tudo pronto, poderá avançar.
+              Fotografe ou anexe o passaporte.
+              O sistema tratará dos seus dados
+              automaticamente.
             </p>
 
           </div>
@@ -335,11 +358,13 @@
             <span></span>
           </div>
 
+
           <div>
 
             <strong id="workflowStatusTitle">
               Etapa atual
             </strong>
+
 
             <span id="workflowStatusText">
               Complete esta etapa para continuar.
@@ -389,8 +414,13 @@
   }
 
 
+  /* =========================================================
+     PROGRESS
+  ========================================================= */
+
   function buildProgress() {
-    const container = $("workflowProgress");
+    const container =
+      $("workflowProgress");
 
     if (!container) {
       return;
@@ -398,58 +428,107 @@
 
     container.innerHTML = "";
 
-    STEPS.forEach((step, index) => {
+    STEPS.forEach(
+      (step, index) => {
 
-      const button = document.createElement("button");
+        const button =
+          document.createElement("button");
 
-      button.type = "button";
-      button.className = "workflow-progress-item";
-      button.dataset.index = String(index);
+        button.type = "button";
 
-      button.innerHTML = `
-        <span class="workflow-progress-number">
-          ${step.number}
-        </span>
+        button.className =
+          "workflow-progress-item";
 
-        <span class="workflow-progress-icon">
-          <span class="${step.icon}-icon"></span>
-        </span>
+        button.dataset.index =
+          String(index);
 
-        <span class="workflow-progress-copy">
+        button.innerHTML = `
+          <span class="workflow-progress-number">
+            ${step.number}
+          </span>
 
-          <strong>${step.title}</strong>
+          <span class="workflow-progress-icon">
+            <span class="${step.icon}-icon"></span>
+          </span>
 
-          <small>${getProgressDescription(step.id)}</small>
+          <span class="workflow-progress-copy">
 
-        </span>
+            <strong>
+              ${step.title}
+            </strong>
 
-        <span class="workflow-progress-state"></span>
-      `;
+            <small>
+              ${getProgressDescription(step.id)}
+            </small>
 
-      button.addEventListener("click", () => {
+          </span>
 
-        if (index > state.currentIndex) {
-          return;
-        }
+          <span class="workflow-progress-state"></span>
+        `;
 
-        goTo(index);
+        button.addEventListener(
+          "click",
+          () => {
 
-      });
+            if (
+              index >
+              state.currentIndex
+            ) {
+              return;
+            }
 
-      container.appendChild(button);
+            goTo(index);
+          }
+        );
 
+        container.appendChild(button);
+      }
+    );
+  }
+
+
+  function buildRouteLabels() {
+    const container =
+      $("workflowRouteLabels");
+
+    if (!container) {
+      return;
+    }
+
+    container.innerHTML = "";
+
+    const labels = [
+      "Passaporte",
+      "Identidade",
+      "Candidatura",
+      "Acompanhar"
+    ];
+
+    labels.forEach(label => {
+      const element =
+        document.createElement("span");
+
+      element.textContent =
+        label;
+
+      container.appendChild(element);
     });
   }
 
 
   function getProgressDescription(id) {
-
     const descriptions = {
-      client: "Informação pessoal",
-      passport: "Documento de viagem",
-      identity: "Verificação facial",
-      application: "Período pretendido",
-      operations: "Estado do processo"
+      passport:
+        "Documento de viagem",
+
+      identity:
+        "Verificação facial",
+
+      application:
+        "Dados da candidatura",
+
+      operations:
+        "Estado do processo"
     };
 
     return descriptions[id] || "";
@@ -457,109 +536,164 @@
 
 
   function updateProgress() {
-
     document
-      .querySelectorAll(".workflow-progress-item")
-      .forEach((item, index) => {
+      .querySelectorAll(
+        ".workflow-progress-item"
+      )
+      .forEach(
+        (item, index) => {
 
-        const completed = state.completed.has(
-          STEPS[index].id
-        );
+          const completed =
+            state.completed.has(
+              STEPS[index].id
+            );
 
-        const active =
-          index === state.currentIndex;
+          const active =
+            index ===
+            state.currentIndex;
 
-        const locked =
-          index > state.currentIndex &&
-          !state.completed.has(STEPS[index - 1]?.id);
+          const locked =
+            index >
+              state.currentIndex &&
+            !state.completed.has(
+              STEPS[index - 1]?.id
+            );
 
-        item.classList.toggle("active", active);
-        item.classList.toggle("completed", completed);
-        item.classList.toggle("locked", locked);
-
-        item.disabled = locked;
-
-        const stateElement =
-          item.querySelector(
-            ".workflow-progress-state"
+          item.classList.toggle(
+            "active",
+            active
           );
 
-        if (stateElement) {
+          item.classList.toggle(
+            "completed",
+            completed
+          );
 
-          if (completed) {
-            stateElement.textContent = "Concluído";
-          } else if (active) {
-            stateElement.textContent = "Atual";
-          } else {
-            stateElement.textContent = "A seguir";
+          item.classList.toggle(
+            "locked",
+            locked
+          );
+
+          item.disabled =
+            locked;
+
+          const stateElement =
+            item.querySelector(
+              ".workflow-progress-state"
+            );
+
+          if (stateElement) {
+
+            if (completed) {
+              stateElement.textContent =
+                "Concluído";
+            } else if (active) {
+              stateElement.textContent =
+                "Atual";
+            } else {
+              stateElement.textContent =
+                "A seguir";
+            }
           }
-
         }
-
-      });
+      );
 
 
     const progressText =
       $("workflowProgressText");
 
     if (progressText) {
-
       progressText.textContent =
-        `${String(state.currentIndex + 1).padStart(2, "0")} de 05`;
-
+        `${String(
+          state.currentIndex + 1
+        ).padStart(2, "0")} de ${TOTAL_STEPS}`;
     }
-
   }
 
 
-  function getIconMarkup(icon) {
+  /* =========================================================
+     HEADER
+  ========================================================= */
 
+  function getIconMarkup(icon) {
     const map = {
-      person: "person-icon",
-      document: "document-icon",
-      face: "face-icon",
-      application: "application-icon",
-      radar: "radar-icon"
+      person:
+        "person-icon",
+
+      document:
+        "document-icon",
+
+      face:
+        "face-icon",
+
+      application:
+        "application-icon",
+
+      radar:
+        "radar-icon"
     };
 
-    return `<span class="${map[icon] || "person-icon"}"></span>`;
+    return `
+      <span
+        class="${map[icon] || "person-icon"}"
+      ></span>
+    `;
   }
 
 
   function updateHeader() {
+    const step =
+      getCurrentStep();
 
-    const step = getCurrentStep();
+    const eyebrow =
+      $("workflowEyebrow");
 
-    const eyebrow = $("workflowEyebrow");
-    const eyebrowCopy = $("workflowEyebrowCopy");
-    const title = $("workflowTitle");
-    const description = $("workflowDescription");
-    const counter = $("workflowCounter");
-    const icon = $("workflowStageIcon");
+    const eyebrowCopy =
+      $("workflowEyebrowCopy");
+
+    const title =
+      $("workflowTitle");
+
+    const description =
+      $("workflowDescription");
+
+    const counter =
+      $("workflowCounter");
+
+    const icon =
+      $("workflowStageIcon");
 
     if (eyebrow) {
-      eyebrow.textContent = step.eyebrow;
+      eyebrow.textContent =
+        step.eyebrow;
     }
 
     if (eyebrowCopy) {
-      eyebrowCopy.textContent = step.eyebrow;
+      eyebrowCopy.textContent =
+        step.eyebrow;
     }
 
     if (title) {
-      title.textContent = step.title;
+      title.textContent =
+        step.title;
     }
 
     if (description) {
-      description.textContent = step.description;
+      description.textContent =
+        step.description;
     }
 
     if (counter) {
-      counter.textContent = step.number;
+      counter.textContent =
+        step.number;
     }
 
     if (icon) {
-      icon.innerHTML = getIconMarkup(step.icon);
-      icon.dataset.stage = step.id;
+      icon.innerHTML =
+        getIconMarkup(step.icon);
+
+      icon.dataset.stage =
+        step.id;
     }
 
 
@@ -572,14 +706,13 @@
     const assistGraphic =
       $("workflowAssistGraphic");
 
+
     if (assistTitle) {
 
       const titles = {
-        client:
-          "Comece pelos seus dados",
 
         passport:
-          "Confirme o seu documento",
+          "Comece pelo seu passaporte",
 
         identity:
           "Vamos confirmar a sua identidade",
@@ -592,46 +725,46 @@
       };
 
       assistTitle.textContent =
-        titles[step.id];
+        titles[step.id] ||
+        "Vamos continuar";
     }
 
 
     if (assistText) {
 
       const texts = {
-        client:
-          "Preencha os dados apresentados. Eles serão usados para preparar as próximas etapas.",
 
         passport:
-          "Verifique cuidadosamente os dados do passaporte antes de continuar.",
+          "Fotografe ou anexe o passaporte. Os dados serão analisados automaticamente e o seu perfil será criado.",
 
         identity:
           "Siga as instruções da verificação facial e mantenha o rosto dentro da área indicada.",
 
         application:
-          "Escolha o período pretendido para que o processo possa ser preparado.",
+          "Escolha o tipo de visto e informe o período pretendido para preparar a candidatura.",
 
         operations:
           "O processo está preparado. A partir daqui poderá acompanhar o seu estado."
       };
 
       assistText.textContent =
-        texts[step.id];
+        texts[step.id] ||
+        "Complete a etapa atual para continuar.";
     }
 
 
     if (assistGraphic) {
-
       assistGraphic.className =
         `workflow-assist-graphic stage-${step.id}`;
-
     }
-
   }
 
 
-  function updateRoute() {
+  /* =========================================================
+     ROUTE
+  ========================================================= */
 
+  function updateRoute() {
     const progress =
       $("workflowFlightProgress");
 
@@ -642,22 +775,40 @@
       return;
     }
 
+    const divisor =
+      Math.max(
+        1,
+        STEPS.length - 1
+      );
+
     const percentage =
-      (state.currentIndex /
-        (STEPS.length - 1)) *
-      100;
+      (
+        state.currentIndex /
+        divisor
+      ) * 100;
 
     progress.style.width =
-      `${Math.max(8, percentage)}%`;
+      `${Math.max(
+        8,
+        percentage
+      )}%`;
 
     plane.style.left =
-      `${Math.min(96, Math.max(4, percentage))}%`;
-
+      `${Math.min(
+        96,
+        Math.max(
+          4,
+          percentage
+        )
+      )}%`;
   }
 
 
-  function updateStatus() {
+  /* =========================================================
+     STATUS
+  ========================================================= */
 
+  function updateStatus() {
     const step =
       getCurrentStep();
 
@@ -678,37 +829,30 @@
 
 
     if (statusTitle) {
-
       statusTitle.textContent =
         ready
           ? step.readyLabel
           : getWaitingTitle(step.id);
-
     }
 
 
     if (statusText) {
-
       statusText.textContent =
         ready
           ? getReadyDescription(step.id)
           : getWaitingDescription(step.id);
-
     }
 
 
     if (bottomHint) {
-
       bottomHint.textContent =
         ready
           ? "Tudo pronto para continuar."
           : getWaitingDescription(step.id);
-
     }
 
 
     if (next) {
-
       next.disabled =
         !ready;
 
@@ -720,23 +864,19 @@
       next.innerHTML =
         state.currentIndex ===
         STEPS.length - 1
+
           ? `Concluir <span>✓</span>`
+
           : `Continuar <span>→</span>`;
-
     }
-
   }
 
 
   function getWaitingTitle(id) {
-
     const map = {
 
-      client:
-        "Preencha os dados do viajante",
-
       passport:
-        "Confirme os dados do passaporte",
+        "Envie o seu passaporte",
 
       identity:
         "Conclua a verificação de identidade",
@@ -746,23 +886,20 @@
 
       operations:
         "Acompanhamento ainda bloqueado"
-
     };
 
-    return map[id] || "Complete a etapa atual";
-
+    return (
+      map[id] ||
+      "Complete a etapa atual"
+    );
   }
 
 
   function getWaitingDescription(id) {
-
     const map = {
 
-      client:
-        "Complete os campos obrigatórios para poder continuar.",
-
       passport:
-        "Confirme o documento antes de avançar.",
+        "Fotografe ou anexe o passaporte para iniciar o processo.",
 
       identity:
         "A verificação facial precisa de ser concluída antes da candidatura.",
@@ -772,24 +909,20 @@
 
       operations:
         "Conclua as etapas anteriores para desbloquear o acompanhamento."
-
     };
 
-    return map[id] ||
-      "Complete a etapa atual para continuar.";
-
+    return (
+      map[id] ||
+      "Complete a etapa atual para continuar."
+    );
   }
 
 
   function getReadyDescription(id) {
-
     const map = {
 
-      client:
-        "Os dados essenciais estão preparados.",
-
       passport:
-        "Os dados do documento estão prontos para a próxima etapa.",
+        "O passaporte foi validado e o perfil foi criado automaticamente.",
 
       identity:
         "A sua identidade foi confirmada.",
@@ -799,39 +932,20 @@
 
       operations:
         "O processo está disponível para acompanhamento."
-
     };
 
-    return map[id] || "Etapa concluída.";
-
-  }
-
-
-  function isClientReady() {
-
-    const form =
-      $("clientForm");
-
-    const name =
-      $("clientFullName");
-
-    if (!form || !name) {
-      return false;
-    }
-
-    return Boolean(
-      name.value.trim() &&
-      (
-        typeof form.checkValidity !== "function" ||
-        form.checkValidity()
-      )
+    return (
+      map[id] ||
+      "Etapa concluída."
     );
-
   }
 
+
+  /* =========================================================
+     PASSPORT
+  ========================================================= */
 
   function isPassportReady() {
-
     const explicit =
       $("passportResultState");
 
@@ -851,8 +965,8 @@
       ) {
         return true;
       }
-
     }
+
 
     const ready =
       $("passportCheckReady");
@@ -861,65 +975,89 @@
 
       const text =
         String(
-          ready.textContent || ""
+          ready.textContent ||
+          ""
         ).toLowerCase();
 
       if (
         text.includes("pronto") ||
         text.includes("confirmado") ||
-        ready.classList.contains("complete") ||
-        ready.classList.contains("success")
+        ready.classList.contains(
+          "complete"
+        ) ||
+        ready.classList.contains(
+          "success"
+        )
       ) {
         return true;
       }
-
     }
 
-    const number =
-      $("clientPassportNumber");
 
-    const expiry =
-      $("clientPassportExpiryDate");
+    /*
+     * O novo fluxo cria o perfil
+     * automaticamente. A existência
+     * de um cliente selecionado é um
+     * indicador adicional.
+     */
 
-    return Boolean(
-      number?.value?.trim() &&
-      expiry?.value
+    const selectors = [
+      $("applicationClient"),
+      $("identityClient")
+    ];
+
+    return selectors.some(
+      selector =>
+        Boolean(
+          selector?.value
+        )
     );
-
   }
 
 
-  function getFacialState() {
+  /* =========================================================
+     FACIAL
+  ========================================================= */
 
+  function getFacialState() {
     try {
 
       if (
         window.TravelFacialPreflight &&
-        typeof window.TravelFacialPreflight.getState === "function"
+        typeof
+          window.TravelFacialPreflight
+            .getState ===
+            "function"
       ) {
 
         const stateResult =
-          window.TravelFacialPreflight.getState();
+          window.TravelFacialPreflight
+            .getState();
 
         return normalizeFacialState(
           stateResult
         );
-
       }
+
 
       if (
         window.TravelFacialPreflight &&
-        typeof window.TravelFacialPreflight.isReady === "function"
+        typeof
+          window.TravelFacialPreflight
+            .isReady ===
+            "function"
       ) {
 
         return {
           ready:
             Boolean(
-              window.TravelFacialPreflight.isReady()
+              window.TravelFacialPreflight
+                .isReady()
             ),
-          failed: false
-        };
 
+          failed:
+            false
+        };
       }
 
     } catch (error) {
@@ -928,7 +1066,6 @@
         "[TravelWorkflow] Facial state error:",
         error
       );
-
     }
 
 
@@ -950,13 +1087,12 @@
         text.includes("falhou") ||
         text.includes("reprov")
       ) {
-
         return {
           ready: false,
           failed: true
         };
-
       }
+
 
       if (
         text.includes("success") ||
@@ -964,14 +1100,11 @@
         text.includes("aprov") ||
         text.includes("confirm")
       ) {
-
         return {
           ready: true,
           failed: false
         };
-
       }
-
     }
 
 
@@ -979,29 +1112,28 @@
       ready: false,
       failed: false
     };
-
   }
 
 
   function normalizeFacialState(value) {
-
     if (!value) {
-
       return {
         ready: false,
         failed: false
       };
-
     }
 
-    if (typeof value === "boolean") {
 
+    if (
+      typeof value ===
+      "boolean"
+    ) {
       return {
         ready: value,
         failed: false
       };
-
     }
+
 
     const status =
       String(
@@ -1011,6 +1143,7 @@
         ""
       ).toLowerCase();
 
+
     const failed =
       Boolean(
         value.failed ||
@@ -1018,6 +1151,7 @@
         status.includes("reject") ||
         status.includes("reprov")
       );
+
 
     const ready =
       Boolean(
@@ -1030,23 +1164,27 @@
         status.includes("confirm")
       );
 
+
     return {
-      ready: ready && !failed,
+      ready:
+        ready &&
+        !failed,
+
       failed
     };
-
   }
 
 
   function isIdentityReady() {
-
     return getFacialState().ready;
-
   }
 
 
-  function isApplicationReady() {
+  /* =========================================================
+     APPLICATION
+  ========================================================= */
 
+  function isApplicationReady() {
     const list =
       $("applicationsList");
 
@@ -1060,8 +1198,8 @@
       if (cards.length > 0) {
         return true;
       }
-
     }
+
 
     const explicit =
       document.querySelector(
@@ -1069,23 +1207,27 @@
       );
 
     return Boolean(explicit);
-
   }
 
 
-  function isCurrentReady() {
+  /* =========================================================
+     CURRENT READY
+  ========================================================= */
 
+  function isCurrentReady() {
     const step =
       getCurrentStep();
 
-    if (state.completed.has(step.id)) {
+    if (
+      state.completed.has(
+        step.id
+      )
+    ) {
       return true;
     }
 
-    switch (step.id) {
 
-      case "client":
-        return isClientReady();
+    switch (step.id) {
 
       case "passport":
         return isPassportReady();
@@ -1101,25 +1243,24 @@
 
       default:
         return false;
-
     }
-
   }
 
 
-  function getSection(step) {
+  /* =========================================================
+     SECTION
+  ========================================================= */
 
+  function getSection(step) {
     if (!step) {
       return null;
     }
 
     return $(step.section);
-
   }
 
 
   function mountCurrentSection() {
-
     const stage =
       $("workflowStage");
 
@@ -1144,10 +1285,14 @@
       "workflow-mounted-section"
     );
 
+
     stage.appendChild(section);
 
 
-    if (step.id === "passport") {
+    if (
+      step.id ===
+      "passport"
+    ) {
 
       const passportTitle =
         section.querySelector(
@@ -1155,16 +1300,19 @@
         );
 
       if (passportTitle) {
+
         passportTitle.scrollIntoView({
           behavior: "smooth",
           block: "center"
         });
       }
-
     }
 
 
-    if (step.id === "identity") {
+    if (
+      step.id ===
+      "identity"
+    ) {
 
       const mount =
         $("facialPreflightMount");
@@ -1178,20 +1326,21 @@
               prefersReducedMotion()
                 ? "auto"
                 : "smooth",
+
             block: "center"
           });
 
         }, 100);
-
       }
-
     }
-
   }
 
 
-  function hideLegacyLayout() {
+  /* =========================================================
+     LEGACY LAYOUT
+  ========================================================= */
 
+  function hideLegacyLayout() {
     const main =
       document.querySelector(
         ".main-container"
@@ -1206,27 +1355,28 @@
     );
 
 
-    Array.from(main.children)
-      .forEach(child => {
+    Array.from(
+      main.children
+    ).forEach(child => {
 
-        if (
-          child.id !==
-          "travelWorkflow"
-        ) {
+      if (
+        child.id !==
+        "travelWorkflow"
+      ) {
 
-          child.classList.add(
-            "workflow-legacy-hidden"
-          );
-
-        }
-
-      });
-
+        child.classList.add(
+          "workflow-legacy-hidden"
+        );
+      }
+    });
   }
 
 
-  function installWorkflow() {
+  /* =========================================================
+     INSTALL
+  ========================================================= */
 
+  function installWorkflow() {
     const main =
       document.querySelector(
         ".main-container"
@@ -1244,15 +1394,21 @@
 
     buildProgress();
 
-    $("workflowBack")?.addEventListener(
-      "click",
-      back
-    );
+    buildRouteLabels();
 
-    $("workflowNext")?.addEventListener(
-      "click",
-      next
-    );
+
+    $("workflowBack")
+      ?.addEventListener(
+        "click",
+        back
+      );
+
+
+    $("workflowNext")
+      ?.addEventListener(
+        "click",
+        next
+      );
 
 
     mountCurrentSection();
@@ -1264,23 +1420,27 @@
 
     bindReadinessObservers();
 
-    state.initialized = true;
-
+    state.initialized =
+      true;
   }
 
 
-  function bindReadinessObservers() {
+  /* =========================================================
+     READINESS OBSERVERS
+  ========================================================= */
 
+  function bindReadinessObservers() {
     const refresh =
       () => {
 
-        if (!state.initialized) {
+        if (
+          !state.initialized
+        ) {
           return;
         }
 
         updateProgress();
         updateStatus();
-
       };
 
 
@@ -1289,6 +1449,7 @@
       refresh,
       true
     );
+
 
     document.addEventListener(
       "change",
@@ -1311,12 +1472,14 @@
         attributes: true
       }
     );
-
   }
 
 
-  function completeCurrent() {
+  /* =========================================================
+     COMPLETE
+  ========================================================= */
 
+  function completeCurrent() {
     const step =
       getCurrentStep();
 
@@ -1330,18 +1493,21 @@
 
     updateProgress();
     updateStatus();
-
   }
 
 
-  function next() {
+  /* =========================================================
+     NEXT
+  ========================================================= */
 
+  function next() {
     if (state.transitioning) {
       return false;
     }
 
     const step =
       getCurrentStep();
+
 
     if (!isCurrentReady()) {
 
@@ -1350,7 +1516,6 @@
       );
 
       return false;
-
     }
 
 
@@ -1365,7 +1530,6 @@
       showFinalState();
 
       return true;
-
     }
 
 
@@ -1374,17 +1538,22 @@
     transitionToCurrent();
 
     return true;
-
   }
 
 
-  function back() {
+  /* =========================================================
+     BACK
+  ========================================================= */
 
+  function back() {
     if (state.transitioning) {
       return false;
     }
 
-    if (state.currentIndex <= 0) {
+    if (
+      state.currentIndex <=
+      0
+    ) {
       return false;
     }
 
@@ -1393,12 +1562,14 @@
     transitionToCurrent();
 
     return true;
-
   }
 
 
-  function goTo(index) {
+  /* =========================================================
+     GO TO
+  ========================================================= */
 
+  function goTo(index) {
     const target =
       Number(index);
 
@@ -1412,7 +1583,8 @@
 
 
     if (
-      target > state.currentIndex
+      target >
+      state.currentIndex
     ) {
       return false;
     }
@@ -1424,12 +1596,14 @@
     transitionToCurrent();
 
     return true;
-
   }
 
 
-  function transitionToCurrent() {
+  /* =========================================================
+     TRANSITION
+  ========================================================= */
 
+  function transitionToCurrent() {
     if (state.transitioning) {
       return;
     }
@@ -1466,11 +1640,14 @@
       updateRoute();
       updateStatus();
 
+
       workflow.classList.remove(
         "is-transitioning"
       );
 
-      state.transitioning = false;
+
+      state.transitioning =
+        false;
 
 
       const content =
@@ -1478,20 +1655,23 @@
           ".workflow-content"
         );
 
+
       if (content) {
 
         content.scrollTo({
           top: 0,
+
           behavior:
             prefersReducedMotion()
               ? "auto"
               : "smooth"
         });
-
       }
+
 
       window.scrollTo({
         top: 0,
+
         behavior:
           prefersReducedMotion()
             ? "auto"
@@ -1499,12 +1679,14 @@
       });
 
     }, delay);
-
   }
 
 
-  function showIncompleteMessage(id) {
+  /* =========================================================
+     INCOMPLETE
+  ========================================================= */
 
+  function showIncompleteMessage(id) {
     const status =
       $("workflowStatus");
 
@@ -1521,7 +1703,6 @@
         );
 
       }, 1000);
-
     }
 
 
@@ -1532,7 +1713,10 @@
       $("workflowStatusText");
 
 
-    if (id === "identity") {
+    if (
+      id ===
+      "identity"
+    ) {
 
       const facial =
         getFacialState();
@@ -1550,9 +1734,7 @@
         }
 
         return;
-
       }
-
     }
 
 
@@ -1561,16 +1743,19 @@
         getWaitingTitle(id);
     }
 
+
     if (text) {
       text.textContent =
         getWaitingDescription(id);
     }
-
   }
 
 
-  function showFinalState() {
+  /* =========================================================
+     FINAL
+  ========================================================= */
 
+  function showFinalState() {
     const title =
       $("workflowStatusTitle");
 
@@ -1580,21 +1765,26 @@
     const next =
       $("workflowNext");
 
+
     if (title) {
       title.textContent =
         "Preparação concluída";
     }
+
 
     if (text) {
       text.textContent =
         "Todas as etapas disponíveis foram concluídas. O processo pode agora ser acompanhado.";
     }
 
+
     if (next) {
       next.disabled = true;
+
       next.innerHTML =
         `Preparação concluída <span>✓</span>`;
     }
+
 
     const workflow =
       $("travelWorkflow");
@@ -1602,25 +1792,29 @@
     workflow?.classList.add(
       "workflow-complete"
     );
-
   }
 
 
-  function prefersReducedMotion() {
+  /* =========================================================
+     UTILITIES
+  ========================================================= */
 
-    return window.matchMedia &&
+  function prefersReducedMotion() {
+    return (
+      window.matchMedia &&
       window.matchMedia(
         "(prefers-reduced-motion: reduce)"
-      ).matches;
-
+      ).matches
+    );
   }
 
 
   function markComplete(stepId) {
-
     if (
       !STEPS.some(
-        step => step.id === stepId
+        step =>
+          step.id ===
+          stepId
       )
     ) {
       return false;
@@ -1634,21 +1828,21 @@
     updateStatus();
 
     return true;
-
   }
 
 
-  function init() {
+  /* =========================================================
+     INIT
+  ========================================================= */
 
+  function init() {
     if (state.initialized) {
       return;
     }
 
     const start =
       () => {
-
         installWorkflow();
-
       };
 
 
@@ -1666,13 +1860,14 @@
       );
 
     } else {
-
       start();
-
     }
-
   }
 
+
+  /* =========================================================
+     PUBLIC API
+  ========================================================= */
 
   window.TravelWorkflow = {
 
@@ -1701,11 +1896,8 @@
           Array.from(
             state.completed
           )
-
       };
-
     }
-
   };
 
 
