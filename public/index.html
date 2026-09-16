@@ -1118,61 +1118,421 @@
           <!-- =============================================
                MOUNT DA ETAPA 03 — DOCUMENTOS
           ============================================== -->
+                 
+          <!-- =============================================
+     03 — DOCUMENTOS / PASSAPORTE
+============================================= -->
 
-          <section
-            id="documentsSection"
-            class="panel workflow-placeholder"
-            aria-hidden="true"
+<section
+  id="documentsSection"
+  class="panel documents-panel"
+>
+
+  <div class="panel-header">
+
+    <div class="panel-heading">
+
+      <span class="section-number">
+        03
+      </span>
+
+      <div>
+
+        <span class="panel-eyebrow">
+          TERCEIRA ETAPA
+        </span>
+
+        <h2>
+          Documentos
+        </h2>
+
+        <p>
+          Envie o passaporte do viajante para validação
+          automática antes da verificação de identidade.
+        </p>
+
+      </div>
+
+    </div>
+
+    <span
+      id="passportPanelStatus"
+      class="panel-status blue"
+    >
+      AGUARDANDO
+    </span>
+
+  </div>
+
+
+  <!-- CLIENTE SELECIONADO -->
+
+  <div class="passport-client-bar">
+
+    <div class="selected-client-card empty" id="selectedClientCard">
+
+      <div
+        class="selected-client-avatar"
+        id="selectedClientAvatar"
+      >
+        —
+      </div>
+
+      <div>
+
+        <span>
+          VIAJANTE
+        </span>
+
+        <strong id="selectedClientName">
+          Nenhum cliente
+        </strong>
+
+        <small id="selectedClientPassport">
+          Selecione um cliente
+        </small>
+
+      </div>
+
+    </div>
+
+
+    <label class="field">
+
+      <span>
+        Viajante
+      </span>
+
+      <select id="passportClientSelect">
+
+        <option value="">
+          Selecionar viajante
+        </option>
+
+      </select>
+
+    </label>
+
+  </div>
+
+
+  <!-- UPLOAD -->
+
+  <div class="passport-upload-layout">
+
+    <div class="passport-upload-card">
+
+      <div class="passport-upload-header">
+
+        <div>
+
+          <span class="panel-eyebrow">
+            DOCUMENTO DE VIAGEM
+          </span>
+
+          <h3>
+            Fotografia do passaporte
+          </h3>
+
+          <p>
+            Envie uma imagem nítida da página principal
+            do passaporte. Formatos aceites: JPEG e PNG.
+          </p>
+
+        </div>
+
+        <span class="passport-upload-limit">
+          MÁX. 6 MB
+        </span>
+
+      </div>
+
+
+      <div
+        id="passportDropzone"
+        class="passport-dropzone"
+      >
+
+        <input
+          id="passportFile"
+          type="file"
+          accept="image/jpeg,image/png"
+          hidden
+        >
+
+        <div class="passport-dropzone-icon">
+          <span class="document-icon"></span>
+        </div>
+
+        <strong>
+          Arraste o passaporte para aqui
+        </strong>
+
+        <span>
+          ou selecione uma imagem do dispositivo
+        </span>
+
+        <button
+          id="passportChooseButton"
+          class="secondary-button"
+          type="button"
+        >
+          Selecionar imagem
+        </button>
+
+        <small id="passportFileStatus">
+          Selecione primeiro o viajante.
+        </small>
+
+      </div>
+
+
+      <!-- PREVIEW -->
+
+      <div
+        id="passportPreview"
+        class="passport-preview"
+        hidden
+      >
+
+        <div class="passport-preview-header">
+
+          <strong>
+            Pré-visualização
+          </strong>
+
+          <button
+            id="passportClearButton"
+            class="icon-button"
+            type="button"
+            aria-label="Remover documento"
+          >
+            ×
+          </button>
+
+        </div>
+
+        <div class="passport-preview-image-wrap">
+
+          <img
+            id="passportPreviewImage"
+            src=""
+            alt="Pré-visualização do passaporte"
           >
 
-            <div class="panel-header">
+        </div>
 
-              <div class="panel-heading">
+      </div>
 
-                <span class="section-number">
-                  03
-                </span>
 
-                <div>
+      <button
+        id="passportUploadButton"
+        class="primary-button"
+        type="button"
+        disabled
+      >
+        Validar documento
+        <span>→</span>
+      </button>
 
-                  <span class="panel-eyebrow">
-                    TERCEIRA ETAPA
-                  </span>
+    </div>
 
-                  <h2>
-                    Documentos
-                  </h2>
 
-                  <p>
-                    Confirme o passaporte e os documentos
-                    necessários para continuar.
-                  </p>
+    <!-- RESULTADO DA VALIDAÇÃO -->
 
-                </div>
+    <div class="passport-validation-card">
 
-              </div>
+      <div class="passport-validation-header">
 
-            </div>
+        <div>
 
-            <div class="workflow-placeholder-content">
+          <span>
+            VALIDAÇÃO AUTOMÁTICA
+          </span>
 
-              <div class="empty-icon">
-                <span class="document-icon"></span>
-              </div>
+          <h3 id="passportResultTitle">
+            Aguardando documento
+          </h3>
 
-              <strong>
-                Documentos preparados através do perfil
-              </strong>
+        </div>
 
-              <p>
-                A validação do passaporte será ativada
-                depois de concluir as etapas anteriores.
-              </p>
+        <span
+          id="passportValidationBadge"
+          class="panel-status blue"
+        >
+          PENDENTE
+        </span>
 
-            </div>
+      </div>
 
-          </section>
 
+      <div
+        id="passportResultState"
+        class="passport-result-state pending"
+      >
+
+        <div class="result-state-icon">
+          ID
+        </div>
+
+        <div>
+
+          <strong>
+            Nenhuma validação executada
+          </strong>
+
+          <span>
+            O resultado aparecerá aqui depois
+            do envio do documento.
+          </span>
+
+        </div>
+
+      </div>
+
+
+      <div
+        id="passportIssues"
+        class="passport-issues"
+        hidden
+      ></div>
+
+
+      <div
+        id="passportExtractedData"
+        class="passport-extracted-data"
+        hidden
+      >
+
+        <div>
+
+          <span>
+            TIPO
+          </span>
+
+          <strong id="passportExtractedType">
+            —
+          </strong>
+
+        </div>
+
+        <div>
+
+          <span>
+            MRZ
+          </span>
+
+          <strong id="passportExtractedMrz">
+            —
+          </strong>
+
+        </div>
+
+        <div>
+
+          <span>
+            CORRESPONDÊNCIA
+          </span>
+
+          <strong id="passportExtractedMatch">
+            —
+          </strong>
+
+        </div>
+
+        <div>
+
+          <span>
+            VALIDADE
+          </span>
+
+          <strong id="passportExtractedExpiry">
+            —
+          </strong>
+
+        </div>
+
+      </div>
+
+
+      <div class="passport-check-list">
+
+        <div id="passportCheckFile">
+
+          <i>○</i>
+
+          <span>
+            Documento preparado
+          </span>
+
+        </div>
+
+        <div id="passportCheckMrz">
+
+          <i>○</i>
+
+          <span>
+            MRZ validada
+          </span>
+
+        </div>
+
+        <div id="passportCheckMatch">
+
+          <i>○</i>
+
+          <span>
+            Dados correspondentes
+          </span>
+
+        </div>
+
+        <div id="passportCheckExpiry">
+
+          <i>○</i>
+
+          <span>
+            Passaporte dentro da validade
+          </span>
+
+        </div>
+
+        <div id="passportCheckStorage">
+
+          <i>○</i>
+
+          <span>
+            Documento armazenado
+          </span>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+
+  <!-- GATE DE IDENTIDADE -->
+
+  <div
+    id="identityGateMessage"
+    class="identity-gate-message"
+  >
+
+    <div>
+      !
+    </div>
+
+    <span>
+      Valide primeiro o passaporte deste viajante.
+    </span>
+
+  </div>
+
+</section>
+        
 
           <!-- =============================================
                04 — CANDIDATURA / IDENTIDADE
