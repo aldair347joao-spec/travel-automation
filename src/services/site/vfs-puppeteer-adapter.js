@@ -3,7 +3,10 @@
 const fs = require("fs");
 const path = require("path");
 const puppeteer = require("puppeteer");
-
+const {
+  getCredentialsForAutomation,
+  markAutomationActive
+} = require("../admin/admin-control-service");
 const SiteAdapter = require("./site-adapter");
 const VfsDomInspector = require("./vfs-dom-inspector");
 const logger = require("../../utils/logger");
@@ -233,75 +236,254 @@ class VfsPuppeteerAdapter extends SiteAdapter {
    */
 
   async login(application = null) {
-    const page =
-      await this.ensurePage();
+  const page =
+    await this.ensurePage();
 
-    const currentUrl =
-      page.url();
+  const applicationId =
+    application?._id?.toString() ||
+    this.applicationId;
 
-    /*
-     * Se já estamos numa área autenticada,
-     * não precisamos forçar nova navegação.
-     */
-    if (
-      this.isAuthenticatedState()
-    ) {
-      await this.detectCheckpoint();
+  if (!applicationId) {
+    return {
+      success: false,
+      authenticated: false,
+      requiresUser: true,
+      reason:
+        "Application ID is required for VFS authentication."
+    };
+  }
 
-      if (
-        this.lastCheckpoint?.type ===
-        "CAPTCHA_REQUIRED"
-      ) {
-        return this.checkpointResult(
-          "CAPTCHA_REQUIRED",
-          "Official VFS CAPTCHA/security verification is required."
-        );
-      }
+  /*
+   * ============================================================
+   * ADMIN RELEASE
+   * ============================================================
+   *
+   * As credenciais VFS são obtidas exclusivamente através
+   * do controlo administrativo.
+   *
+   * O adapter nunca procura:
+   *
+   * VFS_EMAIL
+   * VFS_PASSWORD
+   *
+   * em variáveis globais.
+   *
+   * Cada aplicação possui as suas próprias credenciais.
+   */
+  let credentials;
 
-      if (
-        this.lastCheckpoint?.type ===
-        "OTP_REQUIRED"
-      ) {
-        return this.checkpointResult(
-          "OTP_REQUIRED",
-          "VFS OTP checkpoint detected."
-        );
-      }
-
-      return {
-        success: true,
-        authenticated: true,
-        requiresUser: false,
-        state:
-          this.state,
-        applicationId:
-          application?._id?.toString() ||
-          this.applicationId,
-        checkpoint:
-          this.lastCheckpoint,
-        dom:
-          this.getDomSummary()
-      };
-    }
-
-    /*
-     * Se ainda não estamos autenticados,
-     * vamos para o dashboard oficial.
-     */
-    if (
-      !currentUrl.includes("/login") &&
-      !currentUrl.includes("/dashboard") &&
-      !currentUrl.includes("/application-detail")
-    ) {
-      await this.navigate(
-        `${VFS_BASE_URL}/dashboard`
+  try {
+    credentials =
+      await getCredentialsForAutomation(
+        applicationId
       );
-    } else {
-      await this.detectState();
-      await this.inspectCurrentDom()
-        .catch(() => {});
-      await this.detectCheckpoint();
+  } catch (error) {
+    logger.warn(
+      "VFS automation blocked by administrative control",
+      {
+        applicationId,
+        code:
+          error.code || null,
+        message:
+          error.message
+      }
+    );
+
+    return {
+      success: false,
+      authenticated: false,
+      requiresUser: true,
+      blocked: true,
+      code:
+        error.code ||
+        "ADMIN_RELEASE_REQUIRED",
+      reason:
+        error.message ||
+        "Application is not released for automation."
+    };
+  }
+
+  if (
+    !credentials?.email ||
+    !credentials?.password
+  ) {
+    return {
+      success: false,
+      authenticated: false,
+      requiresUser: true,
+      blocked: true,
+      code:
+        "VFS_CREDENTIALS_REQUIRED",
+      reason:
+        "VFS credentials are not available."
+    };
+  }
+
+  const currentUrl =
+    page.url();
+
+  /*
+   * Se já estamos autenticados, não fazemos
+   * novamente o login.
+   */
+  if (
+    this.isAuthenticatedState()
+  ) {
+    await this.detectCheckpoint();
+
+    if (
+      this.lastCheckpoint?.type ===
+      "CAPTCHA_REQUIRED"
+    ) {
+      return this.checkpointResult(
+        "CAPTCHA_REQUIRED",
+        "Official VFS CAPTCHA/security verification is required."
+      );
     }
+
+    if (
+      this.lastCheckpoint?.type ===
+      "OTP_REQUIRED"
+    ) {
+      return this.checkpointResult(
+        "OTP_REQUIRED",
+        "VFS OTP checkpoint detected."
+      );
+    }
+
+    await markAutomationActive(
+      applicationId
+    ).catch(() => {});
+
+    return {
+      success: true,
+      authenticated: true,
+      requiresUser: false,
+      state:
+        this.state,
+      applicationId,
+      checkpoint:
+        this.lastCheckpoint,
+      dom:
+        this.getDomSummary()
+    };
+  }
+
+  /*
+   * ============================================================
+   * ABRIR LOGIN
+   * ============================================================
+   */
+
+  if (
+    !currentUrl.includes("/login") &&
+    !currentUrl.includes("/dashboard") &&
+    !currentUrl.includes("/application-detail")
+  ) {
+    await this.navigate(
+      `${VFS_BASE_URL}/dashboard`
+    );
+  } else {
+    await this.detectState();
+
+    await this.inspectCurrentDom()
+      .catch(() => {});
+
+    await this.detectCheckpoint();
+  }
+
+  /*
+   * Se a navegação já nos colocou numa página
+   * autenticada, terminamos aqui.
+   */
+  if (
+    this.isAuthenticatedState()
+  ) {
+    await this.detectCheckpoint();
+
+    if (
+      this.lastCheckpoint?.type ===
+      "CAPTCHA_REQUIRED"
+    ) {
+      return this.checkpointResult(
+        "CAPTCHA_REQUIRED",
+        "Official VFS CAPTCHA/security verification is required."
+      );
+    }
+
+    if (
+      this.lastCheckpoint?.type ===
+      "OTP_REQUIRED"
+    ) {
+      return this.checkpointResult(
+        "OTP_REQUIRED",
+        "VFS OTP checkpoint detected."
+      );
+    }
+
+    await markAutomationActive(
+      applicationId
+    ).catch(() => {});
+
+    return {
+      success: true,
+      authenticated: true,
+      requiresUser: false,
+      state:
+        this.state,
+      applicationId,
+      checkpoint:
+        this.lastCheckpoint,
+      dom:
+        this.getDomSummary()
+    };
+  }
+
+  /*
+   * ============================================================
+   * CAPTCHA
+   * ============================================================
+   */
+
+  if (
+    this.lastCheckpoint?.type ===
+    "CAPTCHA_REQUIRED"
+  ) {
+    return {
+      success: false,
+      requiresUser: true,
+      captchaRequired: true,
+      authenticated: false,
+      code:
+        "CAPTCHA_REQUIRED",
+      reason:
+        "Official VFS CAPTCHA/security checkpoint is required.",
+      state:
+        this.state,
+      checkpoint:
+        this.lastCheckpoint,
+      dom:
+        this.getDomSummary()
+    };
+  }
+
+  /*
+   * ============================================================
+   * PROCURAR FORMULÁRIO DE LOGIN
+   * ============================================================
+   */
+
+  const loginForm =
+    await this.findVfsLoginFields();
+
+  if (
+    !loginForm?.email ||
+    !loginForm?.password
+  ) {
+    await this.inspectCurrentDom()
+      .catch(() => {});
+
+    await this.detectCheckpoint();
 
     if (
       this.lastCheckpoint?.type ===
@@ -312,6 +494,8 @@ class VfsPuppeteerAdapter extends SiteAdapter {
         requiresUser: true,
         captchaRequired: true,
         authenticated: false,
+        code:
+          "CAPTCHA_REQUIRED",
         reason:
           "Official VFS CAPTCHA/security checkpoint is required.",
         state:
@@ -323,58 +507,216 @@ class VfsPuppeteerAdapter extends SiteAdapter {
       };
     }
 
-    if (
-      this.lastCheckpoint?.type ===
-      "OTP_REQUIRED"
-    ) {
-      return {
-        success: false,
-        requiresUser: true,
-        otpRequired: true,
-        authenticated: false,
-        reason:
-          "VFS OTP checkpoint detected.",
-        state:
-          this.state,
-        checkpoint:
-          this.lastCheckpoint,
-        dom:
-          this.getDomSummary()
-      };
-    }
-
-    const authenticated =
-      this.isAuthenticatedState();
-
     return {
-      success:
-        authenticated,
-
-      authenticated,
-
-      requiresUser:
-        !authenticated,
-
+      success: false,
+      requiresUser: true,
+      authenticated: false,
+      code:
+        "VFS_LOGIN_FORM_NOT_FOUND",
       reason:
-        authenticated
-          ? null
-          : "VFS authentication has not been completed.",
-
+        "Could not find an unambiguous VFS email/password login form.",
       state:
         this.state,
-
-      applicationId:
-        application?._id?.toString() ||
-        this.applicationId,
-
-      checkpoint:
-        this.lastCheckpoint,
-
       dom:
         this.getDomSummary()
     };
   }
 
+  /*
+   * ============================================================
+   * PREENCHER EMAIL
+   * ============================================================
+   */
+
+  await page.click(
+    loginForm.email
+  );
+
+  await page.$eval(
+    loginForm.email,
+    element => {
+      element.focus();
+      element.value = "";
+    }
+  );
+
+  await page.type(
+    loginForm.email,
+    credentials.email,
+    {
+      delay: 15
+    }
+  );
+
+  /*
+   * ============================================================
+   * PREENCHER PASSWORD
+   * ============================================================
+   */
+
+  await page.click(
+    loginForm.password
+  );
+
+  await page.$eval(
+    loginForm.password,
+    element => {
+      element.focus();
+      element.value = "";
+    }
+  );
+
+  await page.type(
+    loginForm.password,
+    credentials.password,
+    {
+      delay: 15
+    }
+  );
+
+  /*
+   * IMPORTANTE:
+   * não registamos email/password nos logs.
+   */
+
+  /*
+   * ============================================================
+   * SUBMETER LOGIN
+   * ============================================================
+   */
+
+  if (!loginForm.submit) {
+    return {
+      success: false,
+      requiresUser: true,
+      authenticated: false,
+      code:
+        "VFS_LOGIN_SUBMIT_NOT_FOUND",
+      reason:
+        "Could not find an unambiguous VFS login submit control.",
+      state:
+        this.state
+    };
+  }
+
+  await page.click(
+    loginForm.submit
+  );
+
+  await page
+    .waitForNavigation({
+      waitUntil:
+        "domcontentloaded",
+      timeout:
+        DEFAULT_TIMEOUT
+    })
+    .catch(() => {});
+
+  await page
+    .waitForNetworkIdle({
+      idleTime: 500,
+      timeout: 10000
+    })
+    .catch(() => {});
+
+  await this.detectState();
+
+  await this.inspectCurrentDom()
+    .catch(() => {});
+
+  await this.detectCheckpoint();
+
+  /*
+   * ============================================================
+   * CHECKPOINTS PÓS-LOGIN
+   * ============================================================
+   */
+
+  if (
+    this.lastCheckpoint?.type ===
+    "CAPTCHA_REQUIRED"
+  ) {
+    return {
+      success: false,
+      requiresUser: true,
+      captchaRequired: true,
+      authenticated: false,
+      code:
+        "CAPTCHA_REQUIRED",
+      reason:
+        "Official VFS CAPTCHA/security checkpoint is required.",
+      state:
+        this.state,
+      checkpoint:
+        this.lastCheckpoint,
+      dom:
+        this.getDomSummary()
+    };
+  }
+
+  if (
+    this.lastCheckpoint?.type ===
+    "OTP_REQUIRED"
+  ) {
+    return {
+      success: false,
+      requiresUser: true,
+      otpRequired: true,
+      authenticated: false,
+      code:
+        "OTP_REQUIRED",
+      reason:
+        "VFS OTP checkpoint detected.",
+      state:
+        this.state,
+      checkpoint:
+        this.lastCheckpoint,
+      dom:
+        this.getDomSummary()
+    };
+  }
+
+  /*
+   * ============================================================
+   * RESULTADO
+   * ============================================================
+   */
+
+  const authenticated =
+    this.isAuthenticatedState();
+
+  if (authenticated) {
+    await markAutomationActive(
+      applicationId
+    ).catch(() => {});
+  }
+
+  return {
+    success:
+      authenticated,
+
+    authenticated,
+
+    requiresUser:
+      !authenticated,
+
+    reason:
+      authenticated
+        ? null
+        : "VFS authentication was not completed.",
+
+    state:
+      this.state,
+
+    applicationId,
+
+    checkpoint:
+      this.lastCheckpoint,
+
+    dom:
+      this.getDomSummary()
+  };
+}
   async ensureAuthenticated(
     application
   ) {
@@ -382,7 +724,311 @@ class VfsPuppeteerAdapter extends SiteAdapter {
       application
     );
   }
+async findVfsLoginFields() {
+  const page =
+    await this.ensurePage();
 
+  return page.evaluate(() => {
+    const normalize = value =>
+      String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, " ");
+
+    const visible = element => {
+      if (!element) {
+        return false;
+      }
+
+      const style =
+        window.getComputedStyle(
+          element
+        );
+
+      return (
+        !element.disabled &&
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        style.opacity !== "0"
+      );
+    };
+
+    const descriptor = element => ({
+      tag:
+        element.tagName
+          .toLowerCase(),
+
+      id:
+        element.id || null,
+
+      name:
+        element.getAttribute(
+          "name"
+        ) || null,
+
+      type:
+        element.getAttribute(
+          "type"
+        ) || null,
+
+      placeholder:
+        element.getAttribute(
+          "placeholder"
+        ) || null,
+
+      aria:
+        element.getAttribute(
+          "aria-label"
+        ) || null
+    });
+
+    const selectorFor =
+      element => {
+        if (element.id) {
+          return `#${CSS.escape(
+            element.id
+          )}`;
+        }
+
+        if (
+          element.getAttribute(
+            "name"
+          )
+        ) {
+          return `${element.tagName.toLowerCase()}[name="${CSS.escape(
+            element.getAttribute(
+              "name"
+            )
+          )}"]`;
+        }
+
+        return null;
+      };
+
+    const inputs =
+      Array.from(
+        document.querySelectorAll(
+          "input"
+        )
+      ).filter(visible);
+
+    const emailCandidates =
+      inputs.filter(element => {
+        const type =
+          normalize(
+            element.getAttribute(
+              "type"
+            )
+          );
+
+        const haystack =
+          normalize(
+            [
+              element.getAttribute(
+                "name"
+              ),
+              element.id,
+              element.getAttribute(
+                "placeholder"
+              ),
+              element.getAttribute(
+                "aria-label"
+              ),
+              element.getAttribute(
+                "autocomplete"
+              ),
+              element.parentElement
+                ?.innerText
+            ].join(" ")
+          );
+
+        return (
+          type === "email" ||
+          type === "text" &&
+          (
+            haystack.includes(
+              "email"
+            ) ||
+            haystack.includes(
+              "e-mail"
+            ) ||
+            haystack.includes(
+              "username"
+            ) ||
+            haystack.includes(
+              "user name"
+            )
+          )
+        );
+      });
+
+    const passwordCandidates =
+      inputs.filter(element => {
+        const type =
+          normalize(
+            element.getAttribute(
+              "type"
+            )
+          );
+
+        const haystack =
+          normalize(
+            [
+              element.getAttribute(
+                "name"
+              ),
+              element.id,
+              element.getAttribute(
+                "placeholder"
+              ),
+              element.getAttribute(
+                "aria-label"
+              ),
+              element.getAttribute(
+                "autocomplete"
+              ),
+              element.parentElement
+                ?.innerText
+            ].join(" ")
+          );
+
+        return (
+          type === "password" ||
+          haystack.includes(
+            "password"
+          ) ||
+          haystack.includes(
+            "pass word"
+          )
+        );
+      });
+
+    if (
+      emailCandidates.length !== 1 ||
+      passwordCandidates.length !== 1
+    ) {
+      return {
+        email: null,
+        password: null,
+        submit: null,
+
+        emailCandidates:
+          emailCandidates.length,
+
+        passwordCandidates:
+          passwordCandidates.length
+      };
+    }
+
+    const email =
+      selectorFor(
+        emailCandidates[0]
+      );
+
+    const password =
+      selectorFor(
+        passwordCandidates[0]
+      );
+
+    if (
+      !email ||
+      !password
+    ) {
+      return {
+        email: null,
+        password: null,
+        submit: null
+      };
+    }
+
+    /*
+     * Procurar o botão apenas dentro do
+     * formulário que contém os campos.
+     */
+    const form =
+      emailCandidates[0]
+        .closest("form") ||
+      passwordCandidates[0]
+        .closest("form");
+
+    if (!form) {
+      return {
+        email,
+        password,
+        submit: null
+      };
+    }
+
+    const submitCandidates =
+      Array.from(
+        form.querySelectorAll(
+          "button, input[type='submit']"
+        )
+      ).filter(visible)
+       .filter(element => {
+          const type =
+            normalize(
+              element.getAttribute(
+                "type"
+              )
+            );
+
+          const text =
+            normalize(
+              [
+                element.innerText,
+                element.value,
+                element.getAttribute(
+                  "aria-label"
+                ),
+                element.getAttribute(
+                  "title"
+                )
+              ].join(" ")
+            );
+
+          return (
+            type === "submit" ||
+            text.includes(
+              "login"
+            ) ||
+            text.includes(
+              "log in"
+            ) ||
+            text.includes(
+              "sign in"
+            ) ||
+            text.includes(
+              "entrar"
+            ) ||
+            text.includes(
+              "continue"
+            )
+          );
+        });
+
+    /*
+     * Só usamos o botão se existir
+     * exatamente um candidato.
+     */
+    let submit = null;
+
+    if (
+      submitCandidates.length === 1
+    ) {
+      submit =
+        selectorFor(
+          submitCandidates[0]
+        );
+    }
+
+    return {
+      email,
+      password,
+      submit
+    };
+  });
+}
   isAuthenticatedState() {
     if (
       [
