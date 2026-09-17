@@ -8,6 +8,11 @@ const Application =
 
 const eventBus =
   require("../utils/event-bus");
+const {
+  requireAutomationRelease
+} = require(
+  "../services/admin/automation-guard"
+);
 
 const logger =
   require("../utils/logger");
@@ -1008,7 +1013,21 @@ class Bot2 {
     };
   }
 
+  /*
+   * =======================================================
+   * ADMIN AUTOMATION GATE
+   * =======================================================
+   */
 
+  async assertAdminRelease(
+    applicationId
+  ) {
+    await requireAutomationRelease(
+      applicationId
+    );
+
+    return true;
+  }
   /*
    * ==========================================================
    * PREPARE APPLICATION FOR RADAR
