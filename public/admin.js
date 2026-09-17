@@ -141,14 +141,15 @@ const AdminApp = (() => {
     }
 
     function getApplicationStatus(application) {
-        return (
-            application?.adminControl?.status ||
-            application?.adminStatus ||
-            application?.workflowState ||
-            application?.status ||
-            "UNKNOWN"
-        );
-    }
+    return (
+        application?.admin?.status ||
+        application?.adminControl?.status ||
+        application?.adminStatus ||
+        application?.workflowState ||
+        application?.status ||
+        "UNKNOWN"
+    );
+}
 
     function getWorkflowState(application) {
         return (
@@ -480,35 +481,37 @@ const AdminApp = (() => {
     ========================= */
 
     async function loadStats() {
+    const data = await api(
+        "/api/admin/stats"
+    );
 
-        const data = await api("/api/admin/stats");
+    const stats =
+        data?.stats ||
+        data?.data ||
+        data ||
+        {};
 
-        const stats =
-            data?.stats ||
-            data?.data ||
-            data ||
-            {};
+    $("#statTotal").textContent =
+        stats.total ??
+        stats.totalApplications ??
+        0;
 
-        $("#statTotal").textContent =
-            stats.total ??
-            stats.totalApplications ??
-            0;
+    $("#statPending").textContent =
+        stats.pendingAdmin ??
+        stats.pendingReview ??
+        stats.pending ??
+        0;
 
-        $("#statPending").textContent =
-            stats.pendingReview ??
-            stats.pending ??
-            0;
+    $("#statActive").textContent =
+        stats.automationActive ??
+        stats.active ??
+        0;
 
-        $("#statActive").textContent =
-            stats.automationActive ??
-            stats.active ??
-            0;
-
-        $("#statPayment").textContent =
-            stats.paymentPending ??
-            stats.pendingPayment ??
-            0;
-    }
+    $("#statPayment").textContent =
+        stats.paymentPending ??
+        stats.pendingPayment ??
+        0;
+}
 
     /* =========================
        APPLICATIONS
