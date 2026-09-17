@@ -5,7 +5,11 @@ const crypto = require("crypto");
 const Application = require("../models/application");
 const OtpService = require("../services/otp/otp-service");
 const FacialService = require("../services/facial/facial-service");
-
+const {
+  requireAutomationRelease
+} = require(
+  "../services/admin/automation-guard"
+);
 const { decryptJson } = require("../utils/crypto");
 const logger = require("../utils/logger");
 
@@ -351,7 +355,21 @@ class Bot1 {
       new FacialService();
   }
 
+  /*
+   * =======================================================
+   * ADMIN AUTOMATION GATE
+   * =======================================================
+   */
 
+  async assertAdminRelease(
+    applicationId
+  ) {
+    await requireAutomationRelease(
+      applicationId
+    );
+
+    return true;
+  }
   /*
    * -------------------------------------------------------
    * HEARTBEAT
@@ -396,7 +414,9 @@ class Bot1 {
     applicationId,
     allowedStatuses = []
   ) {
-
+         await this.assertAdminRelease(
+      applicationId
+    );
     const now =
       new Date();
 
@@ -548,7 +568,9 @@ class Bot1 {
   async claimSlot(
     applicationId
   ) {
-
+         await this.assertAdminRelease(
+      applicationId
+    );
     const now =
       new Date();
 
@@ -792,7 +814,9 @@ class Bot1 {
   async prepare(
     applicationId
   ) {
-
+        await this.assertAdminRelease(
+      applicationId
+    );
     const startedAt =
       Date.now();
 
