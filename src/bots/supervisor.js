@@ -1,3 +1,5 @@
+"use strict";
+
 const Application =
   require("../models/application");
 
@@ -95,11 +97,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * ADAPTER
-   * =======================================================
-   */
+   * ======================================================= */
 
   async getAdapter(
     applicationId
@@ -132,11 +132,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * BOT 1
-   * =======================================================
-   */
+   * ======================================================= */
 
   async getBot1(
     applicationId
@@ -219,17 +217,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * WORKFLOW HELPERS
-   * =======================================================
-   *
-   * Durante a migração ainda existem documentos antigos
-   * que possuem somente "status".
-   *
-   * Estas funções permitem trabalhar com os dois sistemas
-   * sem destruir o fluxo existente.
-   */
+   * ======================================================= */
 
   getWorkflowState(
     application
@@ -284,11 +274,6 @@ class Supervisor {
         application
       );
 
-    /*
-     * Se já estamos no estado desejado,
-     * não executamos uma transição desnecessária.
-     */
-
     if (
       currentState ===
       nextState
@@ -309,16 +294,6 @@ class Supervisor {
       return application;
 
     } catch (error) {
-
-      /*
-       * Durante a migração podemos encontrar
-       * documentos antigos cujo status e workflowState
-       * ainda não estão perfeitamente sincronizados.
-       *
-       * Não alteramos diretamente o estado neste caso.
-       * O erro é registado para não esconder uma
-       * transição inválida real.
-       */
 
       logger.warn(
         "APPLICATION workflow transition rejected",
@@ -348,10 +323,6 @@ class Supervisor {
     }
   }
 
-
-  /*
-   * Sincronização segura de documentos antigos.
-   */
 
   async ensureWorkflowState(
     application
@@ -397,23 +368,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * PAYMENT RESUME
-   * =======================================================
-   *
-   * O endpoint antigo usava:
-   *
-   * requires_user
-   *
-   * para representar pagamento pendente.
-   *
-   * Agora:
-   *
-   * PAYMENT_PENDING
-   *
-   * é o estado oficial.
-   */
+   * ======================================================= */
 
   async resumeApplication(
     applicationId
@@ -480,15 +437,8 @@ class Supervisor {
     try {
 
       /*
-       * Garantimos que a aplicação entra
-       * explicitamente em PAYMENT_PENDING.
-       *
-       * Para documentos antigos que estavam
-       * em requires_user, a transição pode ser:
-       *
-       * APPOINTMENT_BOOKED -> PAYMENT_PENDING
-       *
-       * ou o documento já poderá ter
+       * Se a aplicação ainda estiver em
+       * APPOINTMENT_BOOKED, avançamos para
        * PAYMENT_PENDING.
        */
 
@@ -514,8 +464,17 @@ class Supervisor {
 
 
       /*
-       * Lock exclusivo para impedir duas
-       * confirmações simultâneas.
+       * LOCK EXCLUSIVO
+       *
+       * O erro antigo estava aqui:
+       *
+       * $or
+       * $or
+       *
+       * O segundo sobrescrevia o primeiro.
+       *
+       * Agora as duas condições são combinadas
+       * dentro de $and.
        */
 
       const locked =
@@ -524,30 +483,45 @@ class Supervisor {
             _id:
               applicationId,
 
-            $or: [
+            $and: [
+
               {
-                "workflowState":
-                  STATES.PAYMENT_PENDING
+                $or: [
+                  {
+                    workflowState:
+                      STATES.PAYMENT_PENDING
+                  },
+
+                  {
+                    status:
+                      "requires_user"
+                  }
+                ]
               },
 
               {
-                status:
-                  "requires_user"
-              }
-            ],
+                $or: [
+                  {
+                    "lock.owner":
+                      null
+                  },
 
-            $or: [
-              {
-                "lock.owner":
-                  null
-              },
+                  {
+                    "lock.owner": {
+                      $exists:
+                        false
+                    }
+                  },
 
-              {
-                "lock.expiresAt": {
-                  $lt:
-                    new Date()
-                }
+                  {
+                    "lock.expiresAt": {
+                      $lt:
+                        new Date()
+                    }
+                  }
+                ]
               }
+
             ]
           },
           {
@@ -672,6 +646,7 @@ class Supervisor {
 
 
         this.stats.paymentPending++;
+
 
         logger.info(
           "ORCHESTRATOR payment still pending",
@@ -830,7 +805,7 @@ class Supervisor {
        * ---------------------------------------------------
        */
 
-      let confirmed =
+      const confirmed =
         await Application.findOneAndUpdate(
           {
             _id:
@@ -889,9 +864,8 @@ class Supervisor {
 
 
       /*
-       * A confirmação retornada pelo serviço
-       * só passa a COMPLETED depois de termos
-       * a confirmação independente.
+       * Só marcamos COMPLETED depois da
+       * confirmação independente do pagamento.
        */
 
       const completed =
@@ -1058,13 +1032,6 @@ class Supervisor {
       error
     ) {
 
-      /*
-       * Só libertamos o lock.
-       *
-       * Não transformamos automaticamente
-       * um erro técnico em requires_user.
-       */
-
       await Application.updateOne(
         {
           _id:
@@ -1116,11 +1083,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * SLOT FOUND
-   * =======================================================
-   */
+   * ======================================================= */
 
   async onSlotFound(
     payload
@@ -1165,14 +1130,6 @@ class Supervisor {
       );
 
 
-      /*
-       * O Bot 2 atual ainda grava:
-       *
-       * status = slot_received
-       *
-       * Portanto sincronizamos o novo workflow.
-       */
-
       const currentState =
         this.getWorkflowState(
           application
@@ -1204,13 +1161,6 @@ class Supervisor {
         currentState !==
         STATES.SLOT_REVALIDATED
       ) {
-
-        /*
-         * Compatibilidade com documentos antigos.
-         *
-         * Se o status antigo indica slot_received,
-         * sincronizamos diretamente o novo estado.
-         */
 
         if (
           application.status ===
@@ -1255,14 +1205,6 @@ class Supervisor {
       }
 
 
-      /*
-       * O Bot 1 é responsável pela validação
-       * efetiva da vaga antes da marcação.
-       *
-       * O Supervisor não assume que uma vaga
-       * encontrada pelo radar continua disponível.
-       */
-
       const bot =
         await this.getBot1(
           applicationId
@@ -1270,11 +1212,7 @@ class Supervisor {
 
 
       /*
-       * Marcamos SLOT_LOCKED antes de entregar
-       * a execução ao Bot 1.
-       *
-       * O lock MongoDB abaixo impede concorrência
-       * entre workers.
+       * O Bot 1 assume o lock do slot.
        */
 
       const locked =
@@ -1286,13 +1224,17 @@ class Supervisor {
             workflowState:
               STATES.SLOT_FOUND,
 
-            status:
-              "slot_received",
-
             $or: [
               {
                 "lock.owner":
                   null
+              },
+
+              {
+                "lock.owner": {
+                  $exists:
+                    false
+                }
               },
 
               {
@@ -1426,10 +1368,6 @@ class Supervisor {
       }
 
 
-      /*
-       * Bot 1 pode retornar sem completar.
-       */
-
       if (
         !result ||
         !result.success
@@ -1439,7 +1377,6 @@ class Supervisor {
           await Application.findById(
             applicationId
           );
-
 
         logger.info(
           "ORCHESTRATOR slot processing did not complete",
@@ -1463,11 +1400,6 @@ class Supervisor {
         return;
       }
 
-
-      /*
-       * Usamos a aplicação retornada pelo Bot 1
-       * quando possível.
-       */
 
       let updatedApplication =
         result.application ||
@@ -1521,12 +1453,6 @@ class Supervisor {
       if (
         isPaymentPending
       ) {
-
-        /*
-         * Caso o Bot 1 ainda esteja a devolver
-         * requires_user por compatibilidade,
-         * convertemos para o novo estado.
-         */
 
         if (
           state !==
@@ -1594,15 +1520,6 @@ class Supervisor {
           }
         );
 
-
-        /*
-         * IMPORTANTE:
-         *
-         * Não usamos telegram.error para pagamento.
-         *
-         * O estado PAYMENT_PENDING é legítimo,
-         * não é erro.
-         */
 
         try {
 
@@ -1716,12 +1633,6 @@ class Supervisor {
       }
 
 
-      /*
-       * ---------------------------------------------------
-       * ESTADOS INTERMÉDIOS
-       * ---------------------------------------------------
-       */
-
       logger.info(
         "ORCHESTRATOR slot processing returned intermediate state",
         {
@@ -1777,9 +1688,8 @@ class Supervisor {
         }
 
       } catch {
-
         /*
-         * Falha de notificação nunca deve
+         * Falha de notificação não deve
          * derrubar o supervisor.
          */
       }
@@ -1787,11 +1697,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * RECOVERY DE SLOTS
-   * =======================================================
-   */
+   * ======================================================= */
 
   async recoverSlots() {
 
@@ -1814,11 +1722,6 @@ class Supervisor {
 
       this.stats.recovered++;
 
-
-      /*
-       * Sincroniza o novo workflowState
-       * antes de reemitir o evento.
-       */
 
       if (
         this.getWorkflowState(
@@ -1884,11 +1787,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * RECOVERY DE LOCKS
-   * =======================================================
-   */
+   * ======================================================= */
 
   async recoverStaleLocks() {
 
@@ -1899,33 +1800,29 @@ class Supervisor {
     const result =
       await Application.updateMany(
         {
-          "lock.owner":
-            {
-              $ne:
-                null
-            },
+          "lock.owner": {
+            $ne:
+              null
+          },
 
-          "lock.expiresAt":
-            {
-              $lt:
-                staleBefore
-            },
+          "lock.expiresAt": {
+            $lt:
+              staleBefore
+          },
 
-          workflowState:
-            {
-              $nin: [
-                STATES.COMPLETED,
-                STATES.CANCELLED
-              ]
-            },
+          workflowState: {
+            $nin: [
+              STATES.COMPLETED,
+              STATES.CANCELLED
+            ]
+          },
 
-          status:
-            {
-              $nin: [
-                "completed",
-                "cancelled"
-              ]
-            }
+          status: {
+            $nin: [
+              "completed",
+              "cancelled"
+            ]
+          }
         },
         {
           $set: {
@@ -1954,20 +1851,11 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
-   * RECOVERY DE APLICAÇÕES A ESPERA DE SLOT
-   * =======================================================
-   */
+  /* =======================================================
+   * RECOVERY DE APLICAÇÕES À ESPERA DE SLOT
+   * ======================================================= */
 
   async recoverWaitingApplications() {
-
-    /*
-     * Compatibilidade com o Bot 2 atual.
-     *
-     * O próximo bloco migrará o Bot 2
-     * para workflowState = RADAR_ACTIVE.
-     */
 
     const result =
       await Application.updateMany(
@@ -1975,11 +1863,10 @@ class Supervisor {
           status:
             "waiting_for_slot",
 
-          "bot2.monitoring":
-            {
-              $ne:
-                true
-            }
+          "bot2.monitoring": {
+            $ne:
+              true
+          }
         },
         {
           $set: {
@@ -2018,11 +1905,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * RECOVERY GERAL
-   * =======================================================
-   */
+   * ======================================================= */
 
   async recover() {
 
@@ -2034,11 +1919,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * FECHAR ADAPTER
-   * =======================================================
-   */
+   * ======================================================= */
 
   async closeAdapter(
     applicationId
@@ -2088,11 +1971,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * START
-   * =======================================================
-   */
+   * ======================================================= */
 
   start() {
 
@@ -2119,11 +2000,6 @@ class Supervisor {
 
     this.bot2.start();
 
-
-    /*
-     * Recovery imediatamente após
-     * o processo iniciar.
-     */
 
     this.recover()
       .catch(
@@ -2153,11 +2029,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * STOP
-   * =======================================================
-   */
+   * ======================================================= */
 
   stop() {
 
@@ -2195,11 +2069,9 @@ class Supervisor {
   }
 
 
-  /*
-   * =======================================================
+  /* =======================================================
    * STATUS
-   * =======================================================
-   */
+   * ======================================================= */
 
   status() {
 
