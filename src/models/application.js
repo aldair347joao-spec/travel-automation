@@ -1,5 +1,62 @@
 const mongoose = require("mongoose");
 
+const {
+  STATES,
+  canTransition,
+  transition
+} = require("../services/application/application-state-machine");
+
+/*
+ * =========================================================
+ * LEGACY STATUS -> WORKFLOW STATE
+ * =========================================================
+ *
+ * Mantemos o campo "status" antigo durante a migração.
+ * O novo "workflowState" passa a representar o estado
+ * oficial do processo.
+ *
+ * Isto permite atualizar Bot 1, Bot 2 e Supervisor
+ * progressivamente sem quebrar documentos existentes.
+ */
+
+const LEGACY_STATUS_TO_WORKFLOW_STATE = Object.freeze({
+  created: STATES.CREATED,
+
+  preparing: STATES.IDENTITY_PREPARATION,
+
+  otp_required: STATES.OTP_REQUIRED,
+
+  otp_verified: STATES.OTP_VERIFIED,
+
+  identity_verification: STATES.FACIAL_POSITIONS,
+
+  calendar: STATES.RADAR_ACTIVE,
+
+  waiting_for_slot: STATES.RADAR_ACTIVE,
+
+  slot_received: STATES.SLOT_FOUND,
+
+  continuing: STATES.BOOKING,
+
+  review_pay: STATES.REVIEW,
+
+  book_appointment: STATES.BOOKING,
+
+  completed: STATES.COMPLETED,
+
+  requires_user: STATES.ERROR,
+
+  error: STATES.ERROR,
+
+  cancelled: STATES.CANCELLED
+});
+
+/*
+ * =========================================================
+ * APPLICANT
+ * =========================================================
+ */
+
 const applicantSchema = new mongoose.Schema(
   {
     client: {
@@ -102,8 +159,20 @@ const applicantSchema = new mongoose.Schema(
   }
 );
 
+/*
+ * =========================================================
+ * APPLICATION
+ * =========================================================
+ */
+
 const applicationSchema = new mongoose.Schema(
   {
+    /*
+     * =====================================================
+     * ACCOUNT / OWNERSHIP
+     * =====================================================
+     */
+
     accountId: {
       type: String,
       required: true,
@@ -153,9 +222,9 @@ const applicationSchema = new mongoose.Schema(
     },
 
     /*
-     * =========================================================
-     * TRAVEL / VISA PREFERENCES
-     * =========================================================
+     * =====================================================
+     * TRAVEL / VISA
+     * =====================================================
      */
 
     visaType: {
@@ -180,10 +249,53 @@ const applicationSchema = new mongoose.Schema(
       trim: true
     },
 
+    /*
+     * Serviço solicitado no VFS.
+     *
+     * Mantemos como string para permitir que diferentes
+     * categorias de visto tenham serviços diferentes sem
+     * bloquear a aplicação com um enum demasiado rígido.
+     */
+    serviceType: {
+      type: String,
+      default: null,
+      trim: true
+    },
+
+    /*
+     * Alguns tipos de visto não seguem o fluxo normal
+     * de marcação pelo VFS.
+     *
+     * Exemplos futuros:
+     * - VFS_APPOINTMENT
+     * - CONSULATE_ASSIGNED
+     * - MANUAL
+     */
+    appointmentMode: {
+      type: String,
+      enum: [
+        "VFS_APPOINTMENT",
+        "CONSULATE_ASSIGNED",
+        "MANUAL"
+      ],
+      default: "VFS_APPOINTMENT"
+    },
+
     idempotencyKey: {
       type: String,
       default: null
     },
+
+    /*
+     * =====================================================
+     * LEGACY STATUS
+     * =====================================================
+     *
+     * NÃO remover ainda.
+     *
+     * Código existente do projeto ainda pode consultar
+     * este campo. A nova arquitetura usa workflowState.
+     */
 
     status: {
       type: String,
@@ -208,6 +320,66 @@ const applicationSchema = new mongoose.Schema(
       index: true
     },
 
+    /*
+     * =====================================================
+     * NOVO WORKFLOW STATE
+     * =====================================================
+     *
+     * Este passa a ser o estado oficial da aplicação.
+     */
+
+    workflowState: {
+      type: String,
+      enum: Object.values(STATES),
+      default: STATES.CREATED,
+      index: true
+    },
+
+    /*
+     * Histórico mínimo necessário para recuperação,
+     * auditoria operacional e debugging.
+     */
+
+    workflow: {
+      previousState: {
+        type: String,
+        enum: [
+          ...Object.values(STATES),
+          null
+        ],
+        default: null
+      },
+
+      stateChangedAt: {
+        type: Date,
+        default: null
+      },
+
+      lastEvent: {
+        type: String,
+        default: null,
+        trim: true
+      },
+
+      lastReason: {
+        type: String,
+        default: null,
+        trim: true
+      },
+
+      transitionCount: {
+        type: Number,
+        default: 0,
+        min: 0
+      }
+    },
+
+    /*
+     * =====================================================
+     * PREFERÊNCIAS DO CLIENTE
+     * =====================================================
+     */
+
     preferredDates: {
       start: {
         type: String,
@@ -229,6 +401,12 @@ const applicationSchema = new mongoose.Schema(
       type: [Number],
       default: []
     },
+
+    /*
+     * =====================================================
+     * SLOT
+     * =====================================================
+     */
 
     slot: {
       date: {
@@ -256,6 +434,12 @@ const applicationSchema = new mongoose.Schema(
         default: []
       }
     },
+
+    /*
+     * =====================================================
+     * RADAR / BOT 2
+     * =====================================================
+     */
 
     radar: {
       enabled: {
@@ -310,6 +494,12 @@ const applicationSchema = new mongoose.Schema(
       }
     },
 
+    /*
+     * =====================================================
+     * RESULTADO DA MARCAÇÃO
+     * =====================================================
+     */
+
     result: {
       reference: {
         type: String,
@@ -352,6 +542,12 @@ const applicationSchema = new mongoose.Schema(
       }
     },
 
+    /*
+     * =====================================================
+     * DADOS PREPARADOS
+     * =====================================================
+     */
+
     preparedDataEncrypted: {
       type: String,
       default: null,
@@ -362,6 +558,12 @@ const applicationSchema = new mongoose.Schema(
       type: Date,
       default: null
     },
+
+    /*
+     * =====================================================
+     * BOT 1
+     * =====================================================
+     */
 
     bot1: {
       status: {
@@ -415,6 +617,12 @@ const applicationSchema = new mongoose.Schema(
       }
     },
 
+    /*
+     * =====================================================
+     * BOT 2
+     * =====================================================
+     */
+
     bot2: {
       status: {
         type: String,
@@ -466,6 +674,12 @@ const applicationSchema = new mongoose.Schema(
       }
     },
 
+    /*
+     * =====================================================
+     * OTP
+     * =====================================================
+     */
+
     otp: {
       requestId: {
         type: String,
@@ -500,6 +714,12 @@ const applicationSchema = new mongoose.Schema(
       }
     },
 
+    /*
+     * =====================================================
+     * MÉTRICAS
+     * =====================================================
+     */
+
     metrics: {
       slotDetectionMs: {
         type: Number,
@@ -532,6 +752,12 @@ const applicationSchema = new mongoose.Schema(
       }
     },
 
+    /*
+     * =====================================================
+     * LOCK DE BOOKING
+     * =====================================================
+     */
+
     lock: {
       owner: {
         type: String,
@@ -543,6 +769,12 @@ const applicationSchema = new mongoose.Schema(
         default: null
       }
     },
+
+    /*
+     * =====================================================
+     * ERRO
+     * =====================================================
+     */
 
     error: {
       code: {
@@ -571,9 +803,157 @@ const applicationSchema = new mongoose.Schema(
   }
 );
 
+/*
+ * =========================================================
+ * LEGACY COMPATIBILITY HELPERS
+ * =========================================================
+ */
+
+/**
+ * Retorna o workflowState real.
+ *
+ * Para documentos antigos que ainda não possuem
+ * workflowState, convertemos temporariamente o status legado.
+ */
+applicationSchema.methods.getWorkflowState = function () {
+  if (this.workflowState) {
+    return this.workflowState;
+  }
+
+  return (
+    LEGACY_STATUS_TO_WORKFLOW_STATE[this.status] ||
+    STATES.CREATED
+  );
+};
+
+/**
+ * Verifica se uma transição é permitida.
+ */
+applicationSchema.methods.canTransitionTo = function (
+  nextState
+) {
+  const currentState = this.getWorkflowState();
+
+  return canTransition(
+    currentState,
+    nextState
+  );
+};
+
+/**
+ * Transiciona a aplicação para um novo estado.
+ *
+ * Não altera automaticamente o status legado.
+ * A sincronização temporária será feita pelos serviços
+ * durante a migração do sistema.
+ */
+applicationSchema.methods.transitionTo = function (
+  nextState,
+  metadata = {}
+) {
+  const currentState = this.getWorkflowState();
+
+  const result = transition(
+    this,
+    nextState,
+    metadata
+  );
+
+  /*
+   * Mantemos uma pequena camada de sincronização para
+   * estados antigos que possuem equivalente claro.
+   */
+
+  const workflowToLegacyStatus = {
+    [STATES.CREATED]: "created",
+    [STATES.IDENTITY_PREPARATION]: "preparing",
+    [STATES.OTP_REQUIRED]: "otp_required",
+    [STATES.OTP_VERIFIED]: "otp_verified",
+    [STATES.FACIAL_POSITIONS]: "identity_verification",
+    [STATES.RADAR_ACTIVE]: "waiting_for_slot",
+    [STATES.SLOT_FOUND]: "slot_received",
+    [STATES.BOOKING]: "book_appointment",
+    [STATES.REVIEW]: "review_pay",
+    [STATES.COMPLETED]: "completed",
+    [STATES.CANCELLED]: "cancelled",
+    [STATES.ERROR]: "error"
+  };
+
+  if (workflowToLegacyStatus[nextState]) {
+    this.status = workflowToLegacyStatus[nextState];
+  }
+
+  /*
+   * Guardamos o estado anterior explicitamente.
+   */
+  if (!this.workflow) {
+    this.workflow = {};
+  }
+
+  this.workflow.previousState =
+    currentState;
+
+  this.workflow.stateChangedAt =
+    new Date();
+
+  if (metadata.event) {
+    this.workflow.lastEvent =
+      String(metadata.event);
+  }
+
+  if (metadata.reason) {
+    this.workflow.lastReason =
+      String(metadata.reason);
+  }
+
+  this.workflow.transitionCount =
+    Number(this.workflow.transitionCount || 0) + 1;
+
+  return result;
+};
+
+/**
+ * Sincroniza um documento legado para o novo
+ * workflowState sem executar uma transição.
+ */
+applicationSchema.methods.syncWorkflowStateFromLegacy =
+  function () {
+    if (this.workflowState) {
+      return this.workflowState;
+    }
+
+    const mapped =
+      LEGACY_STATUS_TO_WORKFLOW_STATE[
+        this.status
+      ] || STATES.CREATED;
+
+    this.workflowState = mapped;
+
+    if (!this.workflow) {
+      this.workflow = {};
+    }
+
+    this.workflow.stateChangedAt =
+      this.workflow.stateChangedAt ||
+      new Date();
+
+    return mapped;
+  };
+
+/*
+ * =========================================================
+ * INDEXES
+ * =========================================================
+ */
+
 applicationSchema.index({
   accountId: 1,
   status: 1
+});
+
+applicationSchema.index({
+  accountId: 1,
+  workflowState: 1
 });
 
 applicationSchema.index({
@@ -588,12 +968,28 @@ applicationSchema.index({
 });
 
 applicationSchema.index({
+  accountId: 1,
+  visaType: 1,
+  workflowState: 1
+});
+
+applicationSchema.index({
   status: 1,
   "bot2.monitoring": 1
 });
 
 applicationSchema.index({
+  workflowState: 1,
+  "bot2.monitoring": 1
+});
+
+applicationSchema.index({
   status: 1,
+  "lock.expiresAt": 1
+});
+
+applicationSchema.index({
+  workflowState: 1,
   "lock.expiresAt": 1
 });
 
@@ -607,6 +1003,12 @@ applicationSchema.index(
     sparse: true
   }
 );
+
+/*
+ * =========================================================
+ * MODEL
+ * =========================================================
+ */
 
 module.exports = mongoose.model(
   "Application",
