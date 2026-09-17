@@ -41,6 +41,8 @@ const passportsRouter =
 
 const createApplicationsRouter =
   require("./applications");
+const createAdminRouter =
+  require("./admin");
 
 const createSystemRouter =
   require("./system");
@@ -255,7 +257,16 @@ function createApp({
       supervisor
     })
   );
+  /*
+   * =========================================================
+   * ADMINISTRATION
+   * =========================================================
+   */
 
+  app.use(
+    "/api/admin",
+    createAdminRouter()
+  );
   /*
    * =========================================================
    * STATIC FRONTEND
