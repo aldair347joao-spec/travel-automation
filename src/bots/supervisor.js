@@ -11,6 +11,11 @@ const Bot2 =
 
 const eventBus =
   require("../utils/event-bus");
+const {
+  requireAutomationRelease
+} = require(
+  "../services/admin/automation-guard"
+);
 
 const TelegramService =
   require("../services/telegram/telegram-service");
@@ -95,7 +100,21 @@ class Supervisor {
         this
       );
   }
+  /*
+   * =======================================================
+   * ADMIN AUTOMATION GATE
+   * =======================================================
+   */
 
+  async assertAdminRelease(
+    applicationId
+  ) {
+    await requireAutomationRelease(
+      applicationId
+    );
+
+    return true;
+  }
 
   /* =======================================================
    * ADAPTER
@@ -139,7 +158,9 @@ class Supervisor {
   async getBot1(
     applicationId
   ) {
-
+      await this.assertAdminRelease(
+  applicationId
+);
     if (
       this.bot1.has(
         applicationId
@@ -173,7 +194,9 @@ class Supervisor {
   async prepare(
     applicationId
   ) {
-
+     await this.assertAdminRelease(
+  applicationId
+);
     const bot =
       await this.getBot1(
         applicationId
