@@ -1,38 +1,43 @@
 (() => {
 "use strict";
 
-/*
+/* =========================================================
+TRAVEL AUTOMATION
+APP CONTROLLER
+=========================================================
 
-* =========================================================
-* TRAVEL AUTOMATION
-* APP CONTROLLER
-* =========================================================
-* 
-* FLUXO:
-* 
-* 01 PASSAPORTE
-*  ↓
-* OCR + MRZ + validação
-*  ↓
-* PERFIL CRIADO AUTOMATICAMENTE
-*  ↓
-* 02 IDENTIDADE
-*  ↓
-* RECONHECIMENTO FACIAL
-*  ↓
-* 03 CANDIDATURA
-*  ↓
-* OTP → VFS → RADAR → VAGA
-*  ↓
-* 04 ACOMPANHAMENTO
-* 
-* IMPORTANTE:
-* - Não existe login na interface.
-* - passport-first.js controla a importação do passaporte.
-* - facial-preflight-ui.js controla o Identity Center.
-* - Este ficheiro controla o estado geral da aplicação.
-* - Não existe mais o antigo travelWorkflow.
-    */
+ FLUXO PRINCIPAL
+
+   01 PASSAPORTE
+        ↓
+   OCR + MRZ + validação
+        ↓
+   PERFIL CRIADO AUTOMATICAMENTE
+        ↓
+   02 IDENTIDADE
+        ↓
+   RECONHECIMENTO FACIAL
+        ↓
+   03 CANDIDATURA
+        ↓
+   OTP → VFS → RADAR → VAGA
+        ↓
+   04 ACOMPANHAMENTO
+
+ IMPORTANTE:
+ - Não existe login nesta interface.
+ - O passaporte é a porta de entrada.
+ - Não existe criação manual de perfil como etapa inicial.
+ - O backend continua responsável pela autenticação técnica
+   quando AUTH_ENABLED estiver ativo.
+ - Não duplica a lógica de passport-first.js.
+ - Não duplica a lógica da facial-preflight-ui.js.
+
+========================================================= */
+
+/* =========================================================
+STATE
+========================================================= */
 
 const state = {
 clients: [],
@@ -42,19 +47,26 @@ selectedClientId: null,
 selectedClient: null,
 
 passportValidation: null,
+
 facialReady: false,
 
 currentStage: "passport",
 
 csrfToken: null,
+
 loading: false
 
 };
 
-const $ = (id) => document.getElementById(id);
+/* =========================================================
+DOM
+========================================================= */
+
+const $ = (id) =>
+document.getElementById(id);
 
 /* =========================================================
-HELPERS
+GLOBAL HELPERS
 ========================================================= */
 
 function escapeHtml(value) {
@@ -67,7 +79,9 @@ return String(value ?? "")
 }
 
 function formatDate(value) {
-if (!value) return "—";
+if (!value) {
+return "—";
+}
 
 const date = new Date(value);
 
@@ -75,76 +89,70 @@ if (Number.isNaN(date.getTime())) {
   return String(value);
 }
 
-return new Intl.DateTimeFormat("pt-PT", {
-  day: "2-digit",
-  month: "2-digit",
-  year: "numeric"
-}).format(date);
+return new Intl.DateTimeFormat(
+  "pt-PT",
+  {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }
+).format(date);
 
 }
 
 function getClientId(client) {
-return client?._id || client?.id || null;
+return (
+client?._id ||
+client?.id ||
+null
+);
 }
 
 function getClientName(client) {
 return (
 client?.fullName ||
 client?.name ||
-client?.passportData?.fullName ||
 "Viajante"
 );
 }
 
 function getClientById(clientId) {
 return state.clients.find(
-(client) =>
-String(getClientId(client)) === String(clientId)
+client =>
+String(
+getClientId(client)
+) === String(clientId)
 );
 }
 
-function setText(id, value) {
-const element = $(id);
-
-if (element) {
-  element.textContent = value ?? "";
-}
-
-}
-
-function setHidden(id, hidden) {
-const element = $(id);
-
-if (element) {
-  element.hidden = Boolean(hidden);
-}
-
-}
-
-function setDisabled(id, disabled) {
-const element = $(id);
-
-if (element) {
-  element.disabled = Boolean(disabled);
-}
-
-}
-
-function showToast(message, type = "info") {
-const container = $("toastContainer");
+function showToast(
+message,
+type = "info"
+) {
+const container =
+$("toastContainer");
 
 if (!container) {
-  console[type === "error" ? "error" : "log"](
+  console[
+    type === "error"
+      ? "error"
+      : "log"
+  ](
     "[TRAVEL AUTOMATION]",
     message
   );
+
   return;
 }
 
-const toast = document.createElement("div");
+const toast =
+  document.createElement("div");
 
-toast.className = `toast ${type}`;
-toast.textContent = message;
+toast.className =
+  `toast ${type}`;
+
+toast.textContent =
+  message;
 
 container.appendChild(toast);
 
@@ -152,41 +160,53 @@ requestAnimationFrame(() => {
   toast.classList.add("show");
 });
 
-window.setTimeout(() => {
+setTimeout(() => {
   toast.style.opacity = "0";
-  toast.style.transform = "translateY(8px)";
+  toast.style.transform =
+    "translateY(8px)";
 
-  window.setTimeout(() => {
+  setTimeout(() => {
     toast.remove();
   }, 250);
 }, 4000);
 
 }
 
-function addActivity(title, description, type = "blue") {
-const feed = $("activityFeed");
+function setText(
+id,
+value
+) {
+const element = $(id);
 
-if (!feed) return;
+if (element) {
+  element.textContent =
+    value;
+}
 
-const item = document.createElement("div");
+}
 
-item.className = `activity-item ${type}`;
+function setHidden(
+id,
+hidden
+) {
+const element = $(id);
 
-item.innerHTML = `
-  <div class="activity-dot"></div>
+if (element) {
+  element.hidden =
+    Boolean(hidden);
+}
 
-  <div class="activity-content">
-    <strong>${escapeHtml(title)}</strong>
-    <span>${escapeHtml(description)}</span>
-  </div>
+}
 
-  <time>${formatDate(new Date())}</time>
-`;
+function setDisabled(
+id,
+disabled
+) {
+const element = $(id);
 
-feed.prepend(item);
-
-while (feed.children.length > 8) {
-  feed.lastElementChild?.remove();
+if (element) {
+  element.disabled =
+    Boolean(disabled);
 }
 
 }
@@ -195,39 +215,34 @@ while (feed.children.length > 8) {
 CONNECTION
 ========================================================= */
 
-function setConnection(online, text) {
-const element = $("connectionText");
+function setConnection(
+online,
+text
+) {
+const element =
+$("connectionText");
 
-if (!element) return;
+if (!element) {
+  return;
+}
 
 element.textContent =
   text ||
-  (online
-    ? "Sistema operacional"
-    : "Sistema indisponível");
+  (
+    online
+      ? "Sistema operacional"
+      : "Sistema indisponível"
+  );
 
-element.classList.toggle("online", Boolean(online));
-element.classList.toggle("offline", !online);
+element.classList.toggle(
+  "online",
+  Boolean(online)
+);
 
-}
-
-async function checkHealth() {
-try {
-const response = await fetch("/api/health", {
-credentials: "include"
-});
-
-  if (!response.ok) {
-    throw new Error("API indisponível");
-  }
-
-  setConnection(true, "Sistema operacional");
-  return true;
-} catch (error) {
-  console.error("[HEALTH]", error);
-  setConnection(false, "Sistema indisponível");
-  return false;
-}
+element.classList.toggle(
+  "offline",
+  !online
+);
 
 }
 
@@ -236,13 +251,24 @@ CSRF
 ========================================================= */
 
 function getCookie(name) {
-const cookies = document.cookie.split(";");
+const cookies =
+document.cookie.split(";");
 
-for (const cookie of cookies) {
-  const [key, ...parts] = cookie.trim().split("=");
+for (
+  const cookie of cookies
+) {
+  const [
+    key,
+    ...parts
+  ] =
+    cookie
+      .trim()
+      .split("=");
 
   if (key === name) {
-    return decodeURIComponent(parts.join("="));
+    return decodeURIComponent(
+      parts.join("=")
+    );
   }
 }
 
@@ -263,62 +289,98 @@ null
 API
 ========================================================= */
 
-async function api(url, options = {}) {
-const method = String(
-options.method || "GET"
+async function api(
+url,
+options = {}
+) {
+const method =
+String(
+options.method ||
+"GET"
 ).toUpperCase();
 
 const isFormData =
   options.body instanceof FormData;
 
-const headers = {
-  ...(isFormData
-    ? {}
-    : {
-        "Content-Type": "application/json"
-      }),
-  ...(options.headers || {})
+const config = {
+  credentials: "include",
+  ...options,
+
+  headers: {
+    ...(isFormData
+      ? {}
+      : {
+          "Content-Type":
+            "application/json"
+        }),
+
+    ...(options.headers || {})
+  }
 };
 
-const csrf = getCsrfToken();
+const csrf =
+  getCsrfToken();
 
 if (
   csrf &&
-  ["POST", "PUT", "PATCH", "DELETE"].includes(method)
+  [
+    "POST",
+    "PUT",
+    "PATCH",
+    "DELETE"
+  ].includes(method)
 ) {
-  headers["x-csrf-token"] = csrf;
+  config.headers[
+    "x-csrf-token"
+  ] = csrf;
 }
 
-const response = await fetch(url, {
-  ...options,
-  credentials: "include",
-  headers
-});
+const response =
+  await fetch(
+    url,
+    config
+  );
 
 const contentType =
-  response.headers.get("content-type") || "";
+  response.headers.get(
+    "content-type"
+  ) || "";
 
 let data;
 
-if (contentType.includes("application/json")) {
-  data = await response.json();
+if (
+  contentType.includes(
+    "application/json"
+  )
+) {
+  data =
+    await response.json();
 } else {
-  data = await response.text();
+  data =
+    await response.text();
 }
 
 if (!response.ok) {
   const message =
     typeof data === "object"
-      ? data?.message ||
-        data?.error ||
-        "Erro na operação."
-      : data ||
-        "Erro na operação.";
+      ? (
+          data?.message ||
+          data?.error ||
+          "Erro na operação."
+        )
+      : (
+          data ||
+          "Erro na operação."
+        );
 
-  const error = new Error(message);
+  const error =
+    new Error(message);
 
-  error.status = response.status;
-  error.data = data;
+  error.status =
+    response.status;
+
+  error.data =
+    data;
 
   throw error;
 }
@@ -328,33 +390,128 @@ return data;
 }
 
 /* =========================================================
-CLIENTES
+APP VISIBILITY
+========================================================= */
+
+function showApp() {
+$("appView")
+?.classList
+.remove("hidden");
+}
+
+/* =========================================================
+USER INTERFACE
+=========================================================
+
+ Não existe autenticação visual.
+ Mantemos apenas compatibilidade com
+ qualquer elemento antigo que ainda esteja
+ presente no HTML.
+
+========================================================= */
+
+function updateUserInterface() {
+const userName =
+$("userName");
+
+if (userName) {
+  userName.textContent =
+    "Travel Automation";
+}
+
+}
+
+/* =========================================================
+CLIENT SELECTORS
+========================================================= */
+
+function renderClientSelectors() {
+const selectors = [
+$("passportClientSelect"),
+$("applicationClient"),
+$("identityClient")
+].filter(Boolean);
+
+selectors.forEach(
+  selector => {
+    const current =
+      selector.value;
+
+    selector.innerHTML = `
+      <option value="">
+        Selecionar viajante
+      </option>
+
+      ${state.clients
+        .map(client => {
+          const id =
+            getClientId(client);
+
+          const name =
+            getClientName(client);
+
+          return `
+            <option
+              value="${escapeHtml(id)}"
+            >
+              ${escapeHtml(name)}
+            </option>
+          `;
+        })
+        .join("")}
+    `;
+
+    if (current) {
+      selector.value =
+        current;
+    }
+
+    if (
+      state.selectedClientId
+    ) {
+      selector.value =
+        state.selectedClientId;
+    }
+  }
+);
+
+}
+
+/* =========================================================
+CLIENTS
 ========================================================= */
 
 async function loadClients() {
 try {
-const response = await api("/api/clients");
+const response =
+await api(
+"/api/clients"
+);
 
-  state.clients = Array.isArray(response)
-    ? response
-    : response?.clients ||
-      response?.data ||
-      [];
+  state.clients =
+    Array.isArray(response)
+      ? response
+      : (
+          response?.clients ||
+          response?.data ||
+          []
+        );
 
   renderClientSelectors();
 
-  setText(
-    "clientCount",
-    state.clients.length
-  );
+  updateClientCount();
 
-  if (state.selectedClientId) {
-    const client = getClientById(
-      state.selectedClientId
-    );
+  if (
+    state.selectedClientId
+  ) {
+    const client =
+      getClientById(
+        state.selectedClientId
+      );
 
     if (client) {
-      state.selectedClient = client;
+      state.selectedClient =
+        client;
 
       updateSelectedClient();
 
@@ -365,65 +522,48 @@ const response = await api("/api/clients");
   }
 
   updateReadiness();
+
 } catch (error) {
-  console.error("[CLIENTS]", error);
+  console.error(
+    "[CLIENTS]",
+    error
+  );
 
-  setText("clientCount", 0);
-
-  /*
-   * Não bloqueamos a página.
-   * O primeiro viajante pode ser criado pelo
-   * passport-first.js.
-   */
+  showToast(
+    "Não foi possível carregar os viajantes.",
+    "error"
+  );
 }
 
 }
 
-function renderClientSelectors() {
-const selectors = [
-$("passportClientSelect"),
-$("applicationClient"),
-$("identityClient")
-].filter(Boolean);
-
-selectors.forEach((selector) => {
-  const current = selector.value;
-
-  selector.innerHTML = `
-    <option value="">
-      Selecionar viajante
-    </option>
-
-    ${state.clients
-      .map((client) => {
-        const id = getClientId(client);
-        const name = getClientName(client);
-
-        return `
-          <option value="${escapeHtml(id)}">
-            ${escapeHtml(name)}
-          </option>
-        `;
-      })
-      .join("")}
-  `;
-
-  if (state.selectedClientId) {
-    selector.value =
-      state.selectedClientId;
-  } else if (current) {
-    selector.value = current;
-  }
-});
-
+function updateClientCount() {
+setText(
+"clientCount",
+state.clients.length
+);
 }
 
-async function selectClient(clientId) {
+/* =========================================================
+SELECT CLIENT
+========================================================= */
+
+async function selectClient(
+clientId,
+source = "application"
+) {
 if (!clientId) {
-state.selectedClientId = null;
-state.selectedClient = null;
-state.passportValidation = null;
-state.facialReady = false;
+state.selectedClientId =
+null;
+
+  state.selectedClient =
+    null;
+
+  state.passportValidation =
+    null;
+
+  state.facialReady =
+    false;
 
   updateSelectedClient();
   updateIdentityGate();
@@ -432,21 +572,26 @@ state.facialReady = false;
   return;
 }
 
-const client = getClientById(clientId);
+const client =
+  getClientById(clientId);
 
-if (!client) return;
+if (!client) {
+  return;
+}
 
 state.selectedClientId =
   String(clientId);
 
-state.selectedClient = client;
+state.selectedClient =
+  client;
 
 [
   "applicationClient",
   "identityClient",
   "passportClientSelect"
-].forEach((id) => {
-  const select = $(id);
+].forEach(id => {
+  const select =
+    $(id);
 
   if (select) {
     select.value =
@@ -465,18 +610,33 @@ updateReadiness();
 updateFacialModuleSelection();
 
 addActivity(
-  "Viajante selecionado",
-  `${getClientName(client)} está preparado para continuar.`,
+  "Viajante preparado",
+  `${getClientName(client)} está selecionado para a operação.`,
   "blue"
 );
 
 }
 
-function updateSelectedClient() {
-const card = $("selectedClientCard");
+/* =========================================================
+SELECTED CLIENT CARD
+========================================================= */
 
-if (!state.selectedClient) {
-  card?.classList.add("empty");
+function updateSelectedClient() {
+const card =
+$("selectedClientCard");
+
+const name =
+  $("selectedClientName");
+
+const passport =
+  $("selectedClientPassport");
+
+if (
+  !state.selectedClient
+) {
+  card?.classList.add(
+    "empty"
+  );
 
   setText(
     "selectedClientName",
@@ -491,17 +651,19 @@ if (!state.selectedClient) {
   return;
 }
 
-card?.classList.remove("empty");
+card?.classList.remove(
+  "empty"
+);
 
 const client =
   state.selectedClient;
 
-const name =
+const fullName =
   getClientName(client);
 
 setText(
   "selectedClientName",
-  name
+  fullName
 );
 
 setText(
@@ -518,81 +680,61 @@ const avatar =
   );
 
 if (avatar) {
-  avatar.textContent = name
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) =>
-      part.charAt(0).toUpperCase()
-    )
-    .join("");
+  avatar.textContent =
+    fullName
+      .split(/\s+/)
+      .slice(0, 2)
+      .map(
+        part =>
+          part
+            .charAt(0)
+            .toUpperCase()
+      )
+      .join("");
 }
 
 }
 
 /* =========================================================
-PASSAPORTE
-=========================================================
-A IMPORTAÇÃO NÃO É FEITA AQUI.
-É responsabilidade do passport-first.js.
+PASSPORT STATUS
 ========================================================= */
 
-async function loadPassportStatus(clientId) {
-if (!clientId) return;
+async function loadPassportStatus(
+clientId
+) {
+if (!clientId) {
+return;
+}
 
 try {
-  const response = await api(
-    `/api/passports/${encodeURIComponent(
-      clientId
-    )}/status`
-  );
+  const response =
+    await api(
+      `/api/passports/${encodeURIComponent(
+        clientId
+      )}/status`
+    );
 
   state.passportValidation =
     response?.passportValidation ||
-    response?.validation ||
-    response?.passport ||
     null;
 
   renderPassportValidation();
 
   updateIdentityGate();
   updateReadiness();
+
 } catch (error) {
   console.debug(
     "[PASSPORT STATUS]",
     error.message
   );
 
-  state.passportValidation = null;
-
-  resetPassportChecks();
+  state.passportValidation =
+    null;
 
   updateIdentityGate();
   updateReadiness();
 }
-
-}
-
-function passportIsReady() {
-const validation =
-state.passportValidation;
-
-if (!validation) return false;
-
-if (
-  validation.status === "passed" ||
-  validation.ready === true
-) {
-  return true;
-}
-
-if (
-  validation.success === true &&
-  validation.valid !== false
-) {
-  return true;
-}
-
-return false;
 
 }
 
@@ -606,45 +748,23 @@ if (!validation) {
 }
 
 const passed =
-  passportIsReady();
-
-const mrz =
-  validation.mrzValid ??
-  validation.mrz?.valid ??
-  validation.validation?.mrzValid;
-
-const match =
-  validation.clientMatch ??
-  validation.match ??
-  validation.validation?.clientMatch;
-
-const expiry =
-  validation.expired === false ||
-  validation.expiryValid === true ||
-  validation.validation?.expiryValid === true;
-
-setDocumentCheck(
-  "passportCheckFile",
-  true
-);
+  validation.status ===
+    "passed" ||
+  validation.ready === true;
 
 setDocumentCheck(
   "passportCheckMrz",
-  typeof mrz === "boolean"
-    ? mrz
-    : passed
+  validation.mrzValid === true
 );
 
 setDocumentCheck(
   "passportCheckMatch",
-  typeof match === "boolean"
-    ? match
-    : passed
+  validation.clientMatch === true
 );
 
 setDocumentCheck(
   "passportCheckExpiry",
-  expiry
+  validation.expired !== true
 );
 
 setDocumentCheck(
@@ -655,7 +775,7 @@ setDocumentCheck(
 setPassportPanelStatus(
   passed
     ? "APROVADO"
-    : "VERIFICAR",
+    : "CORRIGIR",
   passed
     ? "success"
     : "error"
@@ -663,10 +783,16 @@ setPassportPanelStatus(
 
 }
 
-function setDocumentCheck(id, status) {
-const element = $(id);
+function setDocumentCheck(
+id,
+status
+) {
+const element =
+$(id);
 
-if (!element) return;
+if (!element) {
+  return;
+}
 
 element.classList.remove(
   "pass",
@@ -675,14 +801,28 @@ element.classList.remove(
 );
 
 if (status === true) {
-  element.classList.add("pass");
-  element.textContent = "✓";
-} else if (status === false) {
-  element.classList.add("fail");
-  element.textContent = "!";
+  element.classList.add(
+    "pass"
+  );
+
+  element.textContent =
+    "✓";
+} else if (
+  status === false
+) {
+  element.classList.add(
+    "fail"
+  );
+
+  element.textContent =
+    "!";
 } else {
-  element.classList.add("pending");
-  element.textContent = "—";
+  element.classList.add(
+    "pending"
+  );
+
+  element.textContent =
+    "—";
 }
 
 }
@@ -694,8 +834,11 @@ function resetPassportChecks() {
 "passportCheckMatch",
 "passportCheckExpiry",
 "passportCheckStorage"
-].forEach((id) => {
-setDocumentCheck(id, null);
+].forEach(id => {
+setDocumentCheck(
+id,
+null
+);
 });
 
 setPassportPanelStatus(
@@ -712,9 +855,12 @@ type = "blue"
 const element =
 $("passportPanelStatus");
 
-if (!element) return;
+if (!element) {
+  return;
+}
 
-element.textContent = text;
+element.textContent =
+  text;
 
 element.className =
   `panel-status ${type}`;
@@ -722,313 +868,1142 @@ element.className =
 }
 
 /* =========================================================
-PASSAPORT-FIRST EVENTS
+PASSPORT RESULT
 ========================================================= */
 
-function setupPassportIntegration() {
-/*
-* passport-first.js cria automaticamente o cliente
-* depois de validar o passaporte e dispara change
-* nos selectors applicationClient / identityClient.
-*/
+function renderPassportResult(
+passed,
+passport
+) {
+const result =
+$("passportResultState");
 
-[
-  "applicationClient",
-  "identityClient",
-  "passportClientSelect"
-].forEach((id) => {
-  const element = $(id);
+const title =
+  $("passportResultTitle");
 
-  if (!element) return;
+if (!result) {
+  return;
+}
 
-  element.addEventListener(
-    "change",
-    async () => {
-      await selectClient(
-        element.value
-      );
-    }
-  );
-});
+if (passed) {
+  result.className =
+    "passport-result-state success";
 
-/*
- * Quando passport-first.js termina a importação,
- * atualizamos o estado sem interceptar o upload.
- */
+  result.innerHTML = `
+    <div class="result-state-icon">
+      ✓
+    </div>
 
-document.addEventListener(
-  "passport:first-success",
-  async (event) => {
-    const clientId =
-      event.detail?.clientId ||
-      event.detail?.client?._id ||
-      event.detail?.client?.id;
+    <div>
+      <strong>
+        Passaporte validado
+      </strong>
 
-    if (!clientId) {
-      await loadClients();
-      return;
-    }
+      <span>
+        O perfil do viajante foi criado automaticamente.
+        A próxima etapa é a verificação de identidade.
+      </span>
+    </div>
+  `;
 
-    await loadClients();
+  if (title) {
+    title.textContent =
+      "Perfil criado automaticamente";
+  }
+} else {
+  result.className =
+    "passport-result-state error";
 
-    /*
-     * O passport-first.js pode ter acabado
-     * de criar o cliente.
-     */
-    const client =
-      getClientById(clientId);
+  result.innerHTML = `
+    <div class="result-state-icon">
+      !
+    </div>
 
-    if (client) {
-      await selectClient(
-        clientId
-      );
-    }
+    <div>
+      <strong>
+        Correção necessária
+      </strong>
+
+      <span>
+        O passaporte não pode liberar a operação
+        enquanto a validação não estiver concluída.
+      </span>
+    </div>
+  `;
+
+  if (title) {
+    title.textContent =
+      "Correção necessária";
+  }
+}
+
+if (!passport) {
+  return;
+}
+
+const extracted =
+  $("passportExtractedData");
+
+if (extracted) {
+  extracted.hidden =
+    false;
+}
+
+setText(
+  "passportExtractedType",
+  passport.passportType ||
+  passport.type ||
+  "—"
+);
+
+setText(
+  "passportExtractedMrz",
+  passport.mrzValid === true
+    ? "Válida"
+    : "Não validada"
+);
+
+setText(
+  "passportExtractedMatch",
+  passport.clientMatch === true
+    ? "Confirmada"
+    : "Perfil criado"
+);
+
+setText(
+  "passportExtractedExpiry",
+  passport.expired === true
+    ? "Expirado"
+    : "Válido"
+);
+
+const issuesBox =
+  $("passportIssues");
+
+const issues =
+  Array.isArray(
+    passport.issues
+  )
+    ? passport.issues
+    : [];
+
+if (
+  issuesBox &&
+  issues.length
+) {
+  issuesBox.hidden =
+    false;
+
+  issuesBox.innerHTML = `
+    <strong>
+      O que precisa de atenção
+    </strong>
+
+    <ul>
+      ${issues
+        .slice(0, 8)
+        .map(
+          issue =>
+            `<li>${escapeHtml(issue)}</li>`
+        )
+        .join("")}
+    </ul>
+  `;
+} else if (issuesBox) {
+  issuesBox.hidden =
+    true;
+}
+
+}
+
+/* =========================================================
+IDENTITY
+========================================================= */
+
+function setupIdentityEvents() {
+const identitySelect =
+$("identityClient");
+
+identitySelect?.addEventListener(
+  "change",
+  async event => {
+    await selectClient(
+      event.target.value,
+      "identity"
+    );
+
+    updateFacialModuleSelection();
   }
 );
 
-document.addEventListener(
-  "passport:imported",
-  async (event) => {
-    const clientId =
-      event.detail?.clientId;
+const applicationSelect =
+  $("applicationClient");
 
-    await loadClients();
+applicationSelect?.addEventListener(
+  "change",
+  async event => {
+    await selectClient(
+      event.target.value,
+      "application"
+    );
 
-    if (clientId) {
-      await selectClient(
-        clientId
-      );
-    }
+    updateFacialModuleSelection();
   }
+);
+
+/*
+ * O facial-preflight-ui.js cria o
+ * Identity Center dinamicamente.
+ */
+setTimeout(
+  moveFacialPanel,
+  500
+);
+
+setInterval(
+  monitorFacialResult,
+  1000
+);
+
+}
+
+function moveFacialPanel() {
+const panel =
+$("facialPreflightPanel");
+
+const mount =
+  $("facialMount") ||
+  $("facialPreflightMount");
+
+if (
+  panel &&
+  mount &&
+  panel.parentElement !==
+    mount
+) {
+  mount.appendChild(
+    panel
+  );
+}
+
+updateFacialModuleSelection();
+
+}
+
+function updateFacialModuleSelection() {
+if (!state.selectedClientId) {
+return;
+}
+
+const identity =
+  $("identityClient");
+
+const application =
+  $("applicationClient");
+
+if (identity) {
+  identity.value =
+    state.selectedClientId;
+}
+
+if (application) {
+  application.value =
+    state.selectedClientId;
+}
+
+}
+
+function updateIdentityGate() {
+const selected =
+Boolean(
+state.selectedClient
+);
+
+const passportPassed =
+  state.passportValidation?.status ===
+    "passed" ||
+  state.passportValidation?.ready ===
+    true;
+
+const facePassed =
+  state.facialReady === true;
+
+const message =
+  $("identityGateMessage");
+
+const summary =
+  $("identityClientSummary");
+
+if (summary) {
+  const strong =
+    summary.querySelector(
+      "strong"
+    );
+
+  if (strong) {
+    strong.textContent =
+      selected
+        ? getClientName(
+            state.selectedClient
+          )
+        : "Nenhum viajante selecionado";
+  }
+}
+
+if (!message) {
+  return;
+}
+
+message.classList.remove(
+  "ready",
+  "bad"
+);
+
+if (!selected) {
+  message.innerHTML = `
+    <div>!</div>
+
+    <span>
+      O viajante será criado automaticamente
+      a partir do passaporte.
+    </span>
+  `;
+
+  return;
+}
+
+if (!passportPassed) {
+  message.classList.add(
+    "bad"
+  );
+
+  message.innerHTML = `
+    <div>!</div>
+
+    <span>
+      O passaporte ainda não foi aprovado.
+      A identidade só pode avançar depois da
+      validação documental.
+    </span>
+  `;
+
+  return;
+}
+
+if (facePassed) {
+  message.classList.add(
+    "ready"
+  );
+
+  message.innerHTML = `
+    <div>✓</div>
+
+    <span>
+      Identidade preparada.
+      O viajante está apto para a candidatura.
+    </span>
+  `;
+
+  return;
+}
+
+message.innerHTML = `
+  <div>!</div>
+
+  <span>
+    Passaporte aprovado.
+    Execute agora a verificação facial.
+  </span>
+`;
+
+}
+
+/* =========================================================
+FACIAL RESULT MONITOR
+========================================================= */
+
+function monitorFacialResult() {
+const result =
+$("identityResult");
+
+const applicationForm =
+  $("applicationForm");
+
+if (!result) {
+  return;
+}
+
+const resultPassed =
+  result.classList.contains(
+    "passed"
+  );
+
+const backendPassed =
+  applicationForm
+    ?.dataset
+    ?.facialPreflight ===
+    "passed";
+
+/*
+ * O módulo facial pode atualizar
+ * apenas o DOM ou também o dataset.
+ *
+ * Quando o backend marcar o preflight
+ * como aprovado, consideramos a etapa
+ * preparada.
+ */
+if (
+  resultPassed &&
+  (
+    backendPassed ||
+    applicationForm?.dataset
+      ?.facialPreflight
+      === undefined
+  )
+) {
+  state.facialReady =
+    true;
+}
+
+if (
+  result.classList.contains(
+    "failed"
+  )
+) {
+  state.facialReady =
+    false;
+}
+
+const status =
+  $("facialPanelStatus");
+
+if (status) {
+  if (state.facialReady) {
+    status.textContent =
+      "APROVADA";
+
+    status.className =
+      "panel-status";
+  } else if (
+    result.classList.contains(
+      "failed"
+    )
+  ) {
+    status.textContent =
+      "CORRIGIR";
+
+    status.className =
+      "panel-status blue";
+  } else {
+    status.textContent =
+      "AGUARDANDO";
+
+    status.className =
+      "panel-status blue";
+  }
+}
+
+updateIdentityGate();
+updateReadiness();
+
+}
+
+/* =========================================================
+APPLICATIONS
+========================================================= */
+
+async function loadApplications() {
+try {
+const response =
+await api(
+"/api/applications"
+);
+
+  state.applications =
+    Array.isArray(response)
+      ? response
+      : (
+          response?.applications ||
+          response?.data ||
+          []
+        );
+
+  renderApplications();
+  updateApplicationStats();
+  updateReadiness();
+
+} catch (error) {
+  console.error(
+    "[APPLICATIONS]",
+    error
+  );
+
+  state.applications =
+    [];
+
+  renderApplications();
+  updateApplicationStats();
+}
+
+}
+
+function getStatusLabel(
+status
+) {
+const labels = {
+created:
+"Criada",
+
+  preparing:
+    "Preparando",
+
+  otp_required:
+    "OTP necessário",
+
+  otp_verified:
+    "OTP verificado",
+
+  identity_verification:
+    "Verificação de identidade",
+
+  calendar:
+    "Calendário",
+
+  waiting_for_slot:
+    "No radar",
+
+  slot_received:
+    "Vaga encontrada",
+
+  continuing:
+    "A continuar",
+
+  completed:
+    "Concluída",
+
+  error:
+    "Erro",
+
+  cancelled:
+    "Cancelada"
+};
+
+return (
+  labels[status] ||
+  status ||
+  "Desconhecido"
+);
+
+}
+
+function getApplicationClientName(
+application
+) {
+const client =
+application?.client ||
+application?.clientData ||
+null;
+
+if (
+  typeof client ===
+  "string"
+) {
+  const found =
+    getClientById(client);
+
+  return (
+    getClientName(found)
+  );
+}
+
+return (
+  client?.fullName ||
+  client?.name ||
+  "Viajante"
+);
+
+}
+
+function renderApplications() {
+const container =
+$("applicationsList");
+
+if (!container) {
+  return;
+}
+
+if (
+  !state.applications.length
+) {
+  container.innerHTML = `
+    <div class="empty-state">
+      <div class="empty-icon">
+        ○
+      </div>
+
+      <strong>
+        Nenhuma candidatura
+      </strong>
+
+      <span>
+        A candidatura aparecerá aqui
+        depois de o passaporte e a identidade
+        estarem preparados.
+      </span>
+    </div>
+  `;
+
+  return;
+}
+
+container.innerHTML =
+  state.applications
+    .map(application => {
+      const id =
+        application._id ||
+        application.id;
+
+      const status =
+        application.status ||
+        "created";
+
+      return `
+        <article
+          class="application-item"
+          data-application-id="${escapeHtml(id)}"
+        >
+          <div>
+            <strong>
+              ${escapeHtml(
+                getApplicationClientName(
+                  application
+                )
+              )}
+            </strong>
+
+            <span>
+              ${
+                escapeHtml(
+                  application.visaType ||
+                  "Candidatura"
+                )
+              }
+            </span>
+          </div>
+
+          <div>
+            <span class="application-status">
+              ${escapeHtml(
+                getStatusLabel(
+                  status
+                )
+              )}
+            </span>
+
+            <small>
+              ${escapeHtml(
+                formatDate(
+                  application.createdAt
+                )
+              )}
+            </small>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+
+}
+
+function updateApplicationStats() {
+const count =
+state.applications.length;
+
+setText(
+  "applicationCount",
+  count
+);
+
+const prepared =
+  state.applications.filter(
+    application =>
+      [
+        "preparing",
+        "otp_required",
+        "otp_verified",
+        "identity_verification",
+        "calendar",
+        "waiting_for_slot",
+        "slot_received",
+        "continuing"
+      ].includes(
+        application.status
+      )
+  ).length;
+
+setText(
+  "preparedCount",
+  prepared
+);
+
+const monitoring =
+  state.applications.filter(
+    application =>
+      [
+        "waiting_for_slot",
+        "slot_received"
+      ].includes(
+        application.status
+      )
+  ).length;
+
+setText(
+  "monitoringCount",
+  monitoring
 );
 
 }
 
 /* =========================================================
-IDENTITY / FACIAL
+CREATE APPLICATION
 ========================================================= */
 
-function updateFacialModuleSelection() {
-const clientId =
-state.selectedClientId;
+function setupApplicationEvents() {
+const form =
+$("applicationForm");
 
-if (!clientId) return;
+if (!form) {
+  return;
+}
 
-const selectors = [
-  $("identityClient"),
-  $("applicationClient")
-];
+form.addEventListener(
+  "submit",
+  handleApplicationSubmit
+);
 
-selectors.forEach((element) => {
-  if (element) {
-    element.value = clientId;
+const select =
+  $("applicationClient");
+
+select?.addEventListener(
+  "change",
+  async event => {
+    await selectClient(
+      event.target.value,
+      "application"
+    );
   }
-});
-
-/*
- * O facial-preflight-ui.js lê o cliente selecionado
- * a partir do applicationClient.
- */
+);
 
 }
 
-function updateIdentityGate() {
-const ready =
-Boolean(
-state.selectedClientId &&
-passportIsReady()
-);
+async function handleApplicationSubmit(
+event
+) {
+event.preventDefault();
 
-setDisabled(
-  "facialPreflightStart",
-  !ready
-);
-
-const mount =
-  $("facialPreflightMount");
-
-if (mount) {
-  mount.classList.toggle(
-    "locked",
-    !ready
-  );
+if (state.loading) {
+  return;
 }
 
-if (!ready) {
-  setText(
-    "facialPanelStatus",
-    state.selectedClientId
-      ? "Valide o passaporte primeiro."
-      : "Aguardando passaporte."
+if (
+  !state.selectedClientId
+) {
+  showToast(
+    "O viajante ainda não foi preparado.",
+    "error"
   );
 
   return;
 }
 
-setText(
-  "facialPanelStatus",
-  state.facialReady
-    ? "IDENTIDADE VALIDADA"
-    : "Pronto para reconhecimento facial"
+const passportPassed =
+  state.passportValidation?.status ===
+    "passed" ||
+  state.passportValidation?.ready ===
+    true;
+
+if (!passportPassed) {
+  showToast(
+    "Valide primeiro o passaporte.",
+    "error"
+  );
+
+  return;
+}
+
+if (
+  !state.facialReady
+) {
+  showToast(
+    "Conclua primeiro a preparação da identidade.",
+    "error"
+  );
+
+  return;
+}
+
+const visaType =
+  String(
+    $("applicationVisaType")
+      ?.value ||
+    ""
+  )
+    .trim()
+    .toUpperCase();
+
+const visaCenter =
+  String(
+    $("applicationVisaCenter")
+      ?.value ||
+    ""
+  )
+    .trim();
+
+const travelPurpose =
+  String(
+    $("applicationTravelPurpose")
+      ?.value ||
+    ""
+  )
+    .trim();
+
+const start =
+  $("preferredStartDate")
+    ?.value ||
+  null;
+
+const end =
+  $("preferredEndDate")
+    ?.value ||
+  null;
+
+const preferredTime =
+  $("preferredTime")
+    ?.value ||
+  null;
+
+if (
+  ![
+    "SCHENGEN",
+    "NACIONAL"
+  ].includes(
+    visaType
+  )
+) {
+  showToast(
+    "Selecione SCHENGEN ou NACIONAL.",
+    "error"
+  );
+
+  return;
+}
+
+state.loading =
+  true;
+
+setDisabled(
+  "applicationSubmitButton",
+  true
 );
+
+setApplicationPanelStatus(
+  "A CRIAR",
+  "blue"
+);
+
+try {
+  const idempotencyKey =
+    (
+      window.crypto &&
+      typeof window.crypto.randomUUID ===
+        "function"
+    )
+      ? window.crypto.randomUUID()
+      : `travel-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2)}`;
+
+  const payload = {
+    clientId:
+      state.selectedClientId,
+
+    clientIds: [
+      state.selectedClientId
+    ],
+
+    bookingMode:
+      "SINGLE",
+
+    visaType,
+
+    visaCenter:
+      visaCenter || null,
+
+    travelPurpose:
+      travelPurpose || null,
+
+    preferredDates: {
+      start,
+      end
+    },
+
+    preferredTime:
+      preferredTime || null,
+
+    preferredWeekdays:
+      [],
+
+    idempotencyKey
+  };
+
+  const response =
+    await api(
+      "/api/applications",
+      {
+        method: "POST",
+
+        headers: {
+          "Idempotency-Key":
+            idempotencyKey
+        },
+
+        body:
+          JSON.stringify(
+            payload
+          )
+      }
+    );
+
+  const application =
+    response?.application ||
+    response?.data ||
+    response;
+
+  if (
+    !application
+  ) {
+    throw new Error(
+      "O servidor não devolveu a candidatura criada."
+    );
+  }
+
+  state.applications.unshift(
+    application
+  );
+
+  renderApplications();
+  updateApplicationStats();
+
+  setApplicationPanelStatus(
+    "CRIADA",
+    "success"
+  );
+
+  updatePipeline(
+    true,
+    true,
+    true,
+    true
+  );
+
+  updateReadiness();
+
+  addActivity(
+    "Candidatura criada",
+    `Candidatura de ${getClientName(
+      state.selectedClient
+    )} criada com sucesso.`,
+    "green"
+  );
+
+  showToast(
+    "Candidatura criada com sucesso.",
+    "success"
+  );
+
+  setTimeout(
+    () => {
+      $("verificationSection")
+        ?.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
+    },
+    300
+  );
+
+} catch (error) {
+  console.error(
+    "[APPLICATION CREATE]",
+    error
+  );
+
+  setApplicationPanelStatus(
+    "CORRIGIR",
+    "error"
+  );
+
+  showToast(
+    error.message ||
+    "Não foi possível criar a candidatura.",
+    "error"
+  );
+
+} finally {
+  state.loading =
+    false;
+
+  setDisabled(
+    "applicationSubmitButton",
+    false
+  );
+}
 
 }
 
-function setupFacialIntegration() {
-/*
-* Eventos genéricos emitidos pelo Identity Center.
-* Não iniciamos câmera nem reconhecimento aqui.
-*/
+function setApplicationPanelStatus(
+text,
+type = "blue"
+) {
+const element =
+$("applicationPanelStatus");
 
-document.addEventListener(
-  "facial:success",
-  (event) => {
-    const result =
-      event.detail || {};
+if (!element) {
+  return;
+}
 
-    if (
-      result.clientId &&
-      String(result.clientId) !==
-        String(state.selectedClientId)
-    ) {
-      return;
-    }
+element.textContent =
+  text;
 
-    state.facialReady = true;
-
-    updateIdentityGate();
-    updateReadiness();
-    updateVfsGate();
-
-    addActivity(
-      "Identidade confirmada",
-      "O reconhecimento facial foi concluído com sucesso.",
-      "success"
-    );
-
-    setText(
-      "heroGateMessage",
-      "Identidade validada. A candidatura pode ser preparada."
-    );
-  }
-);
-
-document.addEventListener(
-  "facial:failed",
-  (event) => {
-    state.facialReady = false;
-
-    updateIdentityGate();
-    updateReadiness();
-    updateVfsGate();
-
-    const reason =
-      event.detail?.message ||
-      "O reconhecimento facial precisa ser repetido.";
-
-    showToast(
-      reason,
-      "error"
-    );
-  }
-);
-
-document.addEventListener(
-  "facial:result",
-  (event) => {
-    const result =
-      event.detail || {};
-
-    const passed =
-      result.passed === true ||
-      result.success === true;
-
-    state.facialReady =
-      passed;
-
-    updateIdentityGate();
-    updateReadiness();
-    updateVfsGate();
-  }
-);
+element.className =
+  `panel-status ${type}`;
 
 }
 
 /* =========================================================
-APPLICATION READINESS
+READINESS
 ========================================================= */
-
-function applicationIsReady() {
-return Boolean(
-state.selectedClientId &&
-passportIsReady() &&
-state.facialReady
-);
-}
 
 function updateReadiness() {
 const clientReady =
-Boolean(state.selectedClientId);
+Boolean(
+state.selectedClient
+);
 
 const passportReady =
-  passportIsReady();
+  state.passportValidation?.status ===
+    "passed" ||
+  state.passportValidation?.ready ===
+    true;
 
 const identityReady =
-  Boolean(state.facialReady);
+  state.facialReady ===
+  true;
 
 const applicationReady =
-  Boolean(
-    clientReady &&
-    passportReady &&
-    identityReady
+  state.applications.some(
+    application =>
+      application?.client &&
+      String(
+        typeof application.client ===
+          "object"
+          ? application.client._id
+          : application.client
+      ) ===
+      String(
+        state.selectedClientId
+      )
   );
 
 const operationReady =
-  applicationReady;
+  state.applications.some(
+    application =>
+      [
+        "preparing",
+        "otp_required",
+        "otp_verified",
+        "identity_verification",
+        "calendar",
+        "waiting_for_slot",
+        "slot_received",
+        "continuing",
+        "completed"
+      ].includes(
+        application?.status
+      )
+  );
 
-let score = 0;
+const values = [
+  [
+    "readinessClient",
+    clientReady
+  ],
+  [
+    "readinessPassport",
+    passportReady
+  ],
+  [
+    "readinessIdentity",
+    identityReady
+  ],
+  [
+    "readinessApplication",
+    applicationReady
+  ],
+  [
+    "readinessOperation",
+    operationReady
+  ]
+];
 
-if (clientReady) score += 25;
-if (passportReady) score += 25;
-if (identityReady) score += 25;
-if (applicationReady) score += 25;
+values.forEach(
+  ([id, ready]) => {
+    const element =
+      $(id);
+
+    if (!element) {
+      return;
+    }
+
+    element.textContent =
+      ready
+        ? "Pronto"
+        : "Pendente";
+
+    element.classList.toggle(
+      "ready",
+      ready
+    );
+
+    element.classList.toggle(
+      "pending",
+      !ready
+    );
+  }
+);
+
+const scoreParts =
+  [
+    clientReady,
+    passportReady,
+    identityReady,
+    applicationReady
+  ];
+
+const score =
+  Math.round(
+    (
+      scoreParts.filter(
+        Boolean
+      ).length /
+      scoreParts.length
+    ) * 100
+  );
 
 setText(
   "readinessScore",
   `${score}%`
 );
-
-setReadinessRow(
-  "readinessClient",
-  clientReady
-);
-
-setReadinessRow(
-  "readinessPassport",
-  passportReady
-);
-
-setReadinessRow(
-  "readinessIdentity",
-  identityReady
-);
-
-setReadinessRow(
-  "readinessApplication",
-  applicationReady
-);
-
-setReadinessRow(
-  "readinessOperation",
-  operationReady
-);
-
-setDisabled(
-  "applicationSubmitButton",
-  !applicationReady
-);
-
-updateVfsGate();
 
 updatePipeline(
   clientReady,
@@ -1037,185 +2012,12 @@ updatePipeline(
   applicationReady
 );
 
-}
-
-function setReadinessRow(
-id,
-ready
-) {
-const element = $(id);
-
-if (!element) return;
-
-element.classList.toggle(
-  "ready",
-  Boolean(ready)
+updateVfsGate(
+  clientReady,
+  passportReady,
+  identityReady,
+  applicationReady
 );
-
-element.classList.toggle(
-  "pending",
-  !ready
-);
-
-const indicator =
-  element.querySelector(
-    "[data-readiness-indicator]"
-  );
-
-if (indicator) {
-  indicator.textContent =
-    ready ? "✓" : "—";
-}
-
-const text =
-  element.querySelector(
-    "[data-readiness-text]"
-  );
-
-if (text) {
-  text.textContent =
-    ready
-      ? "Concluído"
-      : "Aguardando";
-}
-
-}
-
-/* =========================================================
-VFS GATE
-========================================================= */
-
-function updateVfsGate() {
-const clientReady =
-Boolean(state.selectedClientId);
-
-const passportReady =
-  passportIsReady();
-
-const faceReady =
-  Boolean(state.facialReady);
-
-const operationReady =
-  Boolean(
-    clientReady &&
-    passportReady &&
-    faceReady
-  );
-
-setGateCheck(
-  "gateClientCheck",
-  clientReady
-);
-
-setGateCheck(
-  "gatePassportCheck",
-  passportReady
-);
-
-setGateCheck(
-  "gateFaceCheck",
-  faceReady
-);
-
-setGateCheck(
-  "gateOperationCheck",
-  operationReady
-);
-
-const icon =
-  $("vfsGateIcon");
-
-if (icon) {
-  icon.textContent =
-    operationReady
-      ? "✓"
-      : "•";
-}
-
-setText(
-  "vfsGateTitle",
-  operationReady
-    ? "Operação pronta"
-    : "Operação bloqueada"
-);
-
-setText(
-  "vfsGateDescription",
-  operationReady
-    ? "Todos os requisitos anteriores foram concluídos."
-    : "Conclua passaporte e identidade para avançar."
-);
-
-setText(
-  "heroGateStatus",
-  operationReady
-    ? "PRONTO"
-    : "EM PREPARAÇÃO"
-);
-
-setText(
-  "heroGateMessage",
-  operationReady
-    ? "A candidatura está desbloqueada."
-    : "O sistema desbloqueia cada etapa progressivamente."
-);
-
-setText(
-  "heroRouteProgress",
-  `${operationReady ? 100 : faceReady ? 75 : passportReady ? 50 : clientReady ? 25 : 0}%`
-);
-
-const security =
-  $("applicationSecurityNotice");
-
-if (security) {
-  security.classList.toggle(
-    "ready",
-    operationReady
-  );
-}
-
-setText(
-  "applicationPanelStatus",
-  operationReady
-    ? "PRONTO PARA ENVIAR"
-    : "AGUARDANDO REQUISITOS"
-);
-
-setDisabled(
-  "applicationSubmitButton",
-  !operationReady
-);
-
-}
-
-function setGateCheck(
-id,
-ready
-) {
-const element = $(id);
-
-if (!element) return;
-
-element.classList.toggle(
-  "ready",
-  Boolean(ready)
-);
-
-element.classList.toggle(
-  "pending",
-  !ready
-);
-
-const icon =
-  element.querySelector(
-    "[data-gate-icon]"
-  );
-
-if (icon) {
-  icon.textContent =
-    ready ? "✓" : "—";
-}
 
 }
 
@@ -1229,43 +2031,63 @@ passportReady,
 identityReady,
 applicationReady
 ) {
-setPipelineState(
+const stages = [
+[
 "bot1State",
-passportReady
-? "Concluído"
-: clientReady
-? "Em preparação"
-: "Aguardando"
+passportReady,
+"Passaporte"
+],
+
+  [
+    "bot2State",
+    identityReady,
+    "Identidade"
+  ],
+
+  [
+    "supervisorState",
+    applicationReady,
+    "Candidatura"
+  ]
+];
+
+stages.forEach(
+  ([id, ready, label]) => {
+    const element =
+      $(id);
+
+    if (!element) {
+      return;
+    }
+
+    element.textContent =
+      ready
+        ? "PRONTO"
+        : "AGUARDANDO";
+
+    element.classList.toggle(
+      "ready",
+      ready
+    );
+
+    element.classList.toggle(
+      "pending",
+      !ready
+    );
+  }
 );
 
-setPipelineState(
-  "bot2State",
-  identityReady
-    ? "Concluído"
-    : passportReady
-      ? "Pronto"
-      : "Bloqueado"
-);
-
-setPipelineState(
-  "supervisorState",
-  applicationReady
-    ? "Operação pronta"
-    : "Aguardando etapas"
-);
-
-const vfs =
+const pipelineVfs =
   $("pipelineVfs");
 
-if (vfs) {
-  vfs.textContent =
+if (pipelineVfs) {
+  pipelineVfs.textContent =
     applicationReady
-      ? "Pronto"
-      : "Aguardando";
+      ? "CANDIDATURA"
+      : "BLOQUEADO";
 }
 
 updateBotCenter(
-  clientReady,
   passportReady,
   identityReady,
   applicationReady
@@ -1273,80 +2095,53 @@ updateBotCenter(
 
 }
 
-function setPipelineState(
-id,
-text
-) {
-const element = $(id);
-
-if (element) {
-  element.textContent = text;
-}
-
-}
-
 function updateBotCenter(
-clientReady,
 passportReady,
 identityReady,
 applicationReady
 ) {
-setBot(
+updateBot(
 "bot1Indicator",
 "bot1Progress",
 "bot1LastAction",
 passportReady,
 passportReady
 ? 100
-: clientReady
-? 50
 : 0,
 passportReady
 ? "Passaporte validado"
-: clientReady
-? "Aguardando validação"
-: "Aguardando viajante"
+: "Aguardando passaporte"
 );
 
-setBot(
+updateBot(
   "bot2Indicator",
   "bot2Progress",
   "bot2LastAction",
   identityReady,
   identityReady
     ? 100
-    : passportReady
-      ? 50
-      : 0,
+    : 0,
   identityReady
-    ? "Identidade confirmada"
-    : passportReady
-      ? "Pronto para reconhecimento"
-      : "Bloqueado"
+    ? "Identidade preparada"
+    : "Aguardando identidade"
 );
 
-setBot(
+updateBot(
   "supervisorIndicator",
   "supervisorProgress",
   "supervisorLastAction",
   applicationReady,
   applicationReady
     ? 100
-    : identityReady
-      ? 75
-      : passportReady
-        ? 50
-        : clientReady
-          ? 25
-          : 0,
+    : 0,
   applicationReady
-    ? "Operação desbloqueada"
-    : "Aguardando requisitos"
+    ? "Candidatura criada"
+    : "Aguardando candidatura"
 );
 
 }
 
-function setBot(
+function updateBot(
 indicatorId,
 progressId,
 actionId,
@@ -1359,8 +2154,8 @@ $(indicatorId);
 
 if (indicator) {
   indicator.classList.toggle(
-    "ready",
-    Boolean(ready)
+    "active",
+    ready
   );
 
   indicator.classList.toggle(
@@ -1374,7 +2169,13 @@ const progressElement =
 
 if (progressElement) {
   progressElement.style.width =
-    `${progress}%`;
+    `${Math.max(
+      0,
+      Math.min(
+        100,
+        progress
+      )
+    )}%`;
 }
 
 setText(
@@ -1385,383 +2186,240 @@ setText(
 }
 
 /* =========================================================
-APPLICATIONS
+VFS GATE
 ========================================================= */
 
-async function loadApplications() {
-try {
-const response =
-await api("/api/applications");
-
-  state.applications =
-    Array.isArray(response)
-      ? response
-      : response?.applications ||
-        response?.data ||
-        [];
-
-  setText(
-    "applicationCount",
-    state.applications.length
-  );
-
-  setText(
-    "preparedCount",
-    state.applications.filter(
-      (application) =>
-        application.status === "prepared" ||
-        application.status === "pending"
-    ).length
-  );
-
-  setText(
-    "monitoringCount",
-    state.applications.filter(
-      (application) =>
-        [
-          "monitoring",
-          "radar",
-          "vfs",
-          "slot"
-        ].includes(
-          application.status
-        )
-    ).length
-  );
-
-  renderApplications();
-} catch (error) {
-  console.debug(
-    "[APPLICATIONS]",
-    error.message
-  );
-
-  state.applications = [];
-
-  setText(
-    "applicationCount",
-    0
-  );
-
-  renderApplications();
-}
-
-}
-
-function renderApplications() {
-const container =
-$("applicationsList");
-
-if (!container) return;
-
-if (!state.applications.length) {
-  container.innerHTML = `
-    <div class="empty-state">
-      <strong>Nenhuma candidatura</strong>
-      <span>
-        A candidatura aparecerá aqui depois de ser preparada.
-      </span>
-    </div>
-  `;
-
-  return;
-}
-
-container.innerHTML =
-  state.applications
-    .map((application) => {
-      const client =
-        getClientById(
-          application.clientId ||
-          application.client?._id ||
-          application.client?.id
-        );
-
-      const name =
-        client
-          ? getClientName(client)
-          : application.clientName ||
-            "Viajante";
-
-      const status =
-        application.status ||
-        "pending";
-
-      return `
-        <article class="application-item">
-          <div>
-            <strong>
-              ${escapeHtml(name)}
-            </strong>
-
-            <span>
-              ${escapeHtml(
-                application.visaType ||
-                "Tipo de visto pendente"
-              )}
-            </span>
-          </div>
-
-          <div class="application-status ${escapeHtml(
-            status
-          )}">
-            ${escapeHtml(
-              translateStatus(status)
-            )}
-          </div>
-        </article>
-      `;
-    })
-    .join("");
-
-}
-
-function translateStatus(status) {
-const map = {
-pending: "Pendente",
-prepared: "Preparada",
-processing: "Em processamento",
-submitted: "Enviada",
-monitoring: "Em acompanhamento",
-vfs: "VFS",
-radar: "Radar",
-slot: "Vaga",
-completed: "Concluída",
-failed: "Falhou"
-};
-
-return (
-  map[status] ||
-  status ||
-  "Pendente"
-);
-
-}
-
-async function submitApplication(
-event
+function updateVfsGate(
+clientReady,
+passportReady,
+identityReady,
+applicationReady
 ) {
-event.preventDefault();
-
-if (!applicationIsReady()) {
-  showToast(
-    "Conclua o passaporte e o reconhecimento facial antes de iniciar a candidatura.",
-    "error"
-  );
-
-  updateVfsGate();
-  return;
-}
-
-const form =
-  event.currentTarget;
-
-const visaType =
-  $("applicationVisaType")?.value ||
-  "";
-
-const visaCenter =
-  $("applicationVisaCenter")?.value ||
-  "";
-
-const travelPurpose =
-  $("applicationTravelPurpose")?.value ||
-  "";
-
-const start =
-  $("preferredStartDate")?.value ||
-  "";
-
-const end =
-  $("preferredEndDate")?.value ||
-  "";
-
-const preferredTime =
-  $("preferredTime")?.value ||
-  "";
-
-if (!visaType) {
-  showToast(
-    "Selecione o tipo de visto.",
-    "error"
-  );
-  return;
-}
-
-if (!visaCenter) {
-  showToast(
-    "Selecione o centro de atendimento.",
-    "error"
-  );
-  return;
-}
-
-setDisabled(
-  "applicationSubmitButton",
-  true
+setGateCheck(
+"gateClientCheck",
+clientReady
 );
 
-try {
-  const idempotencyKey =
-    `travel-${state.selectedClientId}-${Date.now()}`;
+setGateCheck(
+  "gatePassportCheck",
+  passportReady
+);
 
-  const response =
-    await api(
-      "/api/applications",
-      {
-        method: "POST",
+setGateCheck(
+  "gateFaceCheck",
+  identityReady
+);
 
-        headers: {
-          "Idempotency-Key":
-            idempotencyKey
-        },
+setGateCheck(
+  "gateOperationCheck",
+  applicationReady
+);
 
-        body: JSON.stringify({
-          clientId:
-            state.selectedClientId,
+const gateReady =
+  clientReady &&
+  passportReady &&
+  identityReady &&
+  applicationReady;
 
-          clientIds: [
-            state.selectedClientId
-          ],
+const icon =
+  $("vfsGateIcon");
 
-          bookingMode:
-            "SINGLE",
+const title =
+  $("vfsGateTitle");
 
-          visaType,
+const description =
+  $("vfsGateDescription");
 
-          visaCenter:
-            visaCenter || null,
+const heroStatus =
+  $("heroGateStatus");
 
-          travelPurpose:
-            travelPurpose || null,
+const heroMessage =
+  $("heroGateMessage");
 
-          preferredDates: {
-            start:
-              start || null,
+const heroProgress =
+  $("heroRouteProgress");
 
-            end:
-              end || null
-          },
+const notice =
+  $("applicationSecurityNotice");
 
-          preferredTime:
-            preferredTime || null,
+if (icon) {
+  icon.textContent =
+    gateReady
+      ? "✓"
+      : "!";
+}
 
-          preferredWeekdays: [],
+if (title) {
+  title.textContent =
+    gateReady
+      ? "Operação preparada"
+      : "Operação bloqueada";
+}
 
-          idempotencyKey
-        })
-      }
+if (description) {
+  description.textContent =
+    gateReady
+      ? "Passaporte, identidade e candidatura estão preparados para a próxima fase."
+      : "Complete as etapas anteriores para liberar a próxima fase.";
+}
+
+if (heroStatus) {
+  heroStatus.textContent =
+    gateReady
+      ? "PREPARADO"
+      : "EM PREPARAÇÃO";
+}
+
+if (heroMessage) {
+  heroMessage.textContent =
+    gateReady
+      ? "O processo pode seguir para a operação."
+      : "A plataforma está a preparar o processo automaticamente.";
+}
+
+if (heroProgress) {
+  const completed =
+    [
+      passportReady,
+      identityReady,
+      applicationReady
+    ].filter(Boolean)
+      .length;
+
+  heroProgress.style.width =
+    `${Math.round(
+      (completed / 3) * 100
+    )}%`;
+}
+
+if (notice) {
+  notice.textContent =
+    gateReady
+      ? "Todos os requisitos internos desta etapa estão preparados."
+      : "A candidatura só pode avançar depois da validação documental e de identidade.";
+}
+
+const submit =
+  $("applicationSubmitButton");
+
+if (submit) {
+  submit.disabled =
+    !(
+      clientReady &&
+      passportReady &&
+      identityReady
     );
+}
 
-  showToast(
-    "Candidatura preparada com sucesso.",
-    "success"
+const panelStatus =
+  $("applicationPanelStatus");
+
+if (
+  panelStatus &&
+  !gateReady
+) {
+  panelStatus.textContent =
+    identityReady
+      ? "PRONTO PARA CANDIDATURA"
+      : "AGUARDANDO IDENTIDADE";
+}
+
+}
+
+function setGateCheck(
+id,
+ready
+) {
+const element =
+$(id);
+
+if (!element) {
+  return;
+}
+
+element.classList.remove(
+  "ready",
+  "pending",
+  "pass",
+  "fail"
+);
+
+element.classList.add(
+  ready
+    ? "ready"
+    : "pending"
+);
+
+const text =
+  element.querySelector(
+    "span"
   );
 
-  addActivity(
-    "Candidatura preparada",
-    "O processo foi entregue ao fluxo operacional.",
-    "success"
-  );
-
-  state.currentStage =
-    "tracking";
-
-  await loadApplications();
-
-  updateReadiness();
-  updateVfsGate();
-
-  form.reset();
-
-} catch (error) {
-  console.error(
-    "[APPLICATION]",
-    error
-  );
-
-  showToast(
-    error.message ||
-      "Não foi possível iniciar a candidatura.",
-    "error"
-  );
-} finally {
-  updateReadiness();
-  updateVfsGate();
+if (text) {
+  text.textContent =
+    ready
+      ? "Concluído"
+      : "Pendente";
 }
 
 }
 
 /* =========================================================
-EVENTS
+ACTIVITY FEED
 ========================================================= */
 
-function setupEvents() {
-$("refreshButton")
-?.addEventListener(
-"click",
-async () => {
-await refreshAll();
+function addActivity(
+title,
+description,
+type = "blue"
+) {
+const feed =
+$("activityFeed");
+
+if (!feed) {
+  return;
 }
-);
 
-$("applicationForm")
-  ?.addEventListener(
-    "submit",
-    submitApplication
+const item =
+  document.createElement(
+    "div"
   );
 
-/*
- * Compatibilidade com selects antigos.
- */
-[
-  "applicationClient",
-  "identityClient",
-  "passportClientSelect"
-].forEach((id) => {
-  const element = $(id);
+item.className =
+  `activity-item ${type}`;
 
-  if (!element) return;
+item.innerHTML = `
+  <div class="activity-dot"></div>
 
-  element.addEventListener(
-    "change",
-    async () => {
-      await selectClient(
-        element.value
-      );
-    }
-  );
-});
+  <div>
+    <strong>
+      ${escapeHtml(title)}
+    </strong>
 
-/*
- * Campos da candidatura.
- */
-[
-  "applicationVisaType",
-  "applicationVisaCenter",
-  "applicationTravelPurpose",
-  "preferredStartDate",
-  "preferredEndDate",
-  "preferredTime"
-].forEach((id) => {
-  const element = $(id);
+    <span>
+      ${escapeHtml(description)}
+    </span>
 
-  if (!element) return;
+    <small>
+      ${new Intl.DateTimeFormat(
+        "pt-PT",
+        {
+          hour: "2-digit",
+          minute: "2-digit"
+        }
+      ).format(new Date())}
+    </small>
+  </div>
+`;
 
-  element.addEventListener(
-    "input",
-    () => {
-      updateVfsGate();
-    }
-  );
+feed.prepend(item);
 
-  element.addEventListener(
-    "change",
-    () => {
-      updateVfsGate();
-    }
-  );
-});
+while (
+  feed.children.length >
+  12
+) {
+  feed.lastElementChild.remove();
+}
 
 }
 
@@ -1770,23 +2428,40 @@ NAVIGATION
 ========================================================= */
 
 function setupNavigation() {
-const navigationItems =
+const links =
 document.querySelectorAll(
-"[data-stage], [data-section]"
+"[data-section], [data-target]"
 );
 
-navigationItems.forEach(
-  (item) => {
-    item.addEventListener(
+links.forEach(
+  link => {
+    link.addEventListener(
       "click",
-      () => {
-        const stage =
-          item.dataset.stage ||
-          item.dataset.section;
+      event => {
+        const target =
+          link.dataset.section ||
+          link.dataset.target;
 
-        if (!stage) return;
+        if (!target) {
+          return;
+        }
 
-        navigateToStage(stage);
+        const section =
+          $(target) ||
+          document.querySelector(
+            `#${CSS.escape(target)}`
+          );
+
+        if (!section) {
+          return;
+        }
+
+        event.preventDefault();
+
+        section.scrollIntoView({
+          behavior: "smooth",
+          block: "start"
+        });
       }
     );
   }
@@ -1794,175 +2469,407 @@ navigationItems.forEach(
 
 }
 
-function navigateToStage(stage) {
-const normalized =
-String(stage)
-.toLowerCase();
-
-const sections = {
-  passport:
-    $("documentsSection"),
-
-  documents:
-    $("documentsSection"),
-
-  identity:
-    $("applicationSection"),
-
-  application:
-    $("applicationSection"),
-
-  tracking:
-    $("verificationSection"),
-
-  verification:
-    $("verificationSection")
-};
-
-const target =
-  sections[normalized];
-
-if (target) {
-  target.scrollIntoView({
-    behavior: "smooth",
-    block: "start"
-  });
-}
-
-state.currentStage =
-  normalized;
-
-}
-
 /* =========================================================
 REFRESH
 ========================================================= */
 
-async function refreshAll() {
-if (state.loading) return;
-
-state.loading = true;
+async function refreshDashboard() {
+setConnection(
+true,
+"A sincronizar sistema..."
+);
 
 try {
-  await checkHealth();
-
-  await loadClients();
-
-  await loadApplications();
-
-  if (state.selectedClientId) {
-    await loadPassportStatus(
-      state.selectedClientId
-    );
-  }
-
-  updateSelectedClient();
-  updateIdentityGate();
-  updateReadiness();
-  updateVfsGate();
-} finally {
-  state.loading = false;
-}
-
-}
-
-/* =========================================================
-INITIALIZATION
-========================================================= */
-
-async function init() {
-try {
-/*
-* Não chamamos /api/auth/me.
-* Não existe login neste frontend.
-*/
-
-  document.body.classList.add(
-    "travel-app-ready"
-  );
-
-  $("appView")
-    ?.classList
-    .remove("hidden");
+  await Promise.all([
+    loadClients(),
+    loadApplications()
+  ]);
 
   setConnection(
-    false,
-    "A ligar ao sistema..."
-  );
-
-  setupEvents();
-  setupNavigation();
-
-  /*
-   * Integrações externas:
-   * passport-first.js
-   * facial-preflight-ui.js
-   */
-  setupPassportIntegration();
-  setupFacialIntegration();
-
-  updateUserInterface();
-
-  resetPassportChecks();
-
-  updateIdentityGate();
-  updateReadiness();
-  updateVfsGate();
-
-  await refreshAll();
-
-  addActivity(
-    "Sistema iniciado",
-    "Travel Automation está pronto para receber um passaporte.",
-    "blue"
+    true,
+    "Sistema operacional"
   );
 
 } catch (error) {
   console.error(
-    "[INIT]",
+    "[REFRESH]",
     error
   );
 
-  showToast(
-    "O sistema foi carregado, mas algumas informações ainda não estão disponíveis.",
-    "error"
+  setConnection(
+    false,
+    "Backend indisponível"
   );
 }
 
 }
 
 /* =========================================================
-PUBLIC DEBUG API
+REFRESH BUTTON
 ========================================================= */
 
-window.TravelAutomation = {
-state,
-
-refresh: refreshAll,
-
-selectClient,
-
-loadClients,
-
-loadApplications,
-
-updateReadiness,
-
-updateVfsGate,
-
-getSelectedClient() {
-  return state.selectedClient;
-},
-
-isPassportReady() {
-  return passportIsReady();
-},
-
-isFacialReady() {
-  return state.facialReady;
+function setupRefreshButton() {
+$("refreshButton")
+?.addEventListener(
+"click",
+async () => {
+if (state.loading) {
+return;
 }
 
+      await refreshDashboard();
+
+      showToast(
+        "Sistema atualizado.",
+        "success"
+      );
+    }
+  );
+
+}
+
+/* =========================================================
+PASSPORT-FIRST COMPATIBILITY
+=========================================================
+
+ NÃO adicionamos aqui outro listener ao
+ passportFile.
+
+ A responsabilidade de:
+
+   ficheiro
+   ↓
+   /api/passports/import
+   ↓
+   OCR
+   ↓
+   MRZ
+   ↓
+   criação automática do cliente
+
+ pertence ao passport-first.js atual.
+
+ Depois que ele cria o cliente, ele altera
+ applicationClient / identityClient.
+ Os listeners deste arquivo capturam essa
+ mudança e sincronizam o estado.
+
+========================================================= */
+
+function observePassportFirstSelection() {
+const selectors = [
+$("applicationClient"),
+$("identityClient"),
+$("passportClientSelect")
+].filter(Boolean);
+
+selectors.forEach(
+  selector => {
+    selector.addEventListener(
+      "change",
+      async event => {
+        const id =
+          event.target.value;
+
+        if (!id) {
+          return;
+        }
+
+        /*
+         * passport-first.js pode criar o
+         * cliente e alterar o selector
+         * antes de o /api/clients ter sido
+         * atualizado localmente.
+         *
+         * Tentamos sincronizar primeiro
+         * pela lista atual e, se necessário,
+         * fazemos nova leitura.
+         */
+        let client =
+          getClientById(id);
+
+        if (!client) {
+          await loadClients();
+
+          client =
+            getClientById(id);
+        }
+
+        if (client) {
+          await selectClient(
+            id,
+            "passport-first"
+          );
+        }
+      }
+    );
+  }
+);
+
+}
+
+/* =========================================================
+FORM COMPATIBILITY
+========================================================= */
+
+function disableManualClientCreation() {
+const form =
+$("clientForm");
+
+if (!form) {
+  return;
+}
+
+/*
+ * O perfil agora nasce do passaporte.
+ *
+ * Não apagamos o formulário do DOM para
+ * preservar IDs/classes do HTML.
+ *
+ * Apenas o retiramos do fluxo inicial.
+ */
+form.dataset.mode =
+  "automatic-passport";
+
+form.classList.add(
+  "automatic-profile-only"
+);
+
+}
+
+/* =========================================================
+STAGE MANAGEMENT
+========================================================= */
+
+function calculateCurrentStage() {
+const passportReady =
+state.passportValidation?.status ===
+"passed" ||
+state.passportValidation?.ready ===
+true;
+
+const identityReady =
+  state.facialReady === true;
+
+const applicationReady =
+  state.applications.some(
+    application => {
+      const client =
+        application?.client;
+
+      const id =
+        typeof client ===
+          "object"
+          ? client?._id
+          : client;
+
+      return (
+        String(id) ===
+        String(
+          state.selectedClientId
+        )
+      );
+    }
+  );
+
+if (!state.selectedClient) {
+  return "passport";
+}
+
+if (!passportReady) {
+  return "passport";
+}
+
+if (!identityReady) {
+  return "identity";
+}
+
+if (!applicationReady) {
+  return "application";
+}
+
+return "monitoring";
+
+}
+
+function updateCurrentStage() {
+state.currentStage =
+calculateCurrentStage();
+
+document.body.dataset.stage =
+  state.currentStage;
+
+const stageMap = {
+  passport: 0,
+  identity: 1,
+  application: 2,
+  monitoring: 3
 };
+
+const current =
+  stageMap[
+    state.currentStage
+  ];
+
+if (
+  current === undefined
+) {
+  return;
+}
+
+const pipeline =
+  document.querySelectorAll(
+    "[data-stage]"
+  );
+
+pipeline.forEach(
+  element => {
+    const value =
+      Number(
+        element.dataset.stage
+      );
+
+    element.classList.toggle(
+      "active",
+      value === current
+    );
+
+    element.classList.toggle(
+      "completed",
+      value < current
+    );
+  }
+);
+
+}
+
+/* =========================================================
+OBSERVERS
+========================================================= */
+
+function setupObservers() {
+const observer =
+new MutationObserver(
+() => {
+moveFacialPanel();
+monitorFacialResult();
+updateCurrentStage();
+}
+);
+
+observer.observe(
+  document.body,
+  {
+    childList: true,
+    subtree: true
+  }
+);
+
+}
+
+/* =========================================================
+GLOBAL API
+========================================================= */
+
+/*
+
+* passport-first.js e outros módulos podem
+* usar window.showToast.
+  */
+  window.showToast =
+  showToast;
+
+window.TravelAutomation =
+{
+state,
+
+  refresh:
+    refreshDashboard,
+
+  selectClient,
+
+  loadClients,
+
+  loadApplications,
+
+  updateReadiness,
+
+  updateIdentityGate,
+
+  addActivity,
+
+  showToast
+};
+
+/* =========================================================
+EVENTS
+========================================================= */
+
+function setupEvents() {
+setupRefreshButton();
+setupIdentityEvents();
+setupApplicationEvents();
+setupNavigation();
+
+observePassportFirstSelection();
+
+disableManualClientCreation();
+
+}
+
+/* =========================================================
+INIT
+========================================================= */
+
+async function init() {
+console.log(
+"[TRAVEL AUTOMATION] Inicializando aplicação..."
+);
+
+/*
+ * Sem login.
+ */
+showApp();
+
+updateUserInterface();
+
+setConnection(
+  true,
+  "A ligar ao sistema..."
+);
+
+setupEvents();
+
+setupObservers();
+
+updateReadiness();
+updateIdentityGate();
+updateCurrentStage();
+
+/*
+ * O passport-first.js pode ainda não
+ * ter criado nenhum cliente.
+ *
+ * Carregamos o estado existente.
+ */
+await refreshDashboard();
+
+/*
+ * Depois da sincronização, tentamos
+ * detectar novamente o painel facial.
+ */
+moveFacialPanel();
+updateFacialModuleSelection();
+
+updateReadiness();
+updateIdentityGate();
+updateCurrentStage();
+
+console.log(
+  "[TRAVEL AUTOMATION] Aplicação pronta."
+);
+
+}
 
 /* =========================================================
 START
@@ -1982,4 +2889,5 @@ once: true
 } else {
 init();
 }
+
 })();
