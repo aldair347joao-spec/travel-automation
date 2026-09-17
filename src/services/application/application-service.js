@@ -69,7 +69,7 @@ if (!normalized) {
 return null;
 }
 
-const date = new Date("${normalized}T00:00:00.000Z");
+const date = new Date(`${normalized}T00:00:00.000Z`);
 
 if (Number.isNaN(date.getTime())) {
 return null;
@@ -315,7 +315,7 @@ preferences.preferredDates.start &&
 preferences.preferredDates.end
 ) {
 const start = new Date(
-"${preferences.preferredDates.start}T00:00:00.000Z"
+  `${preferences.preferredDates.start}T00:00:00.000Z`
 );
 
 const end = new Date(
@@ -419,7 +419,7 @@ nextState
 )
 ) {
 const error = new Error(
-"Transição inválida: ${currentState} -> ${nextState}"
+  `Transição inválida: ${currentState} -> ${nextState}`
 );
 
 error.code =
