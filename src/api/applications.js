@@ -3,16 +3,11 @@ const express = require("express");
 const Application =
   require("../models/application");
 
-const Client =
-  require("../models/client");
-
 const AuditLog =
   require("../models/audit-log");
 
-const {
-  encryptJson
-} =
-  require("../utils/crypto");
+const ApplicationService =
+  require("../services/application/application-service");
 
 const {
   requireAuth,
@@ -25,53 +20,6 @@ const VISA_TYPES = [
   "SCHENGEN",
   "NACIONAL"
 ];
-
-
-function buildApplicant(client) {
-  return {
-    client: client._id,
-
-    passport: {
-      number:
-        client.passportNumber || null,
-
-      nationality:
-        client.nationality || null,
-
-      expiryDate:
-        client.passportExpiryDate || null,
-
-      validationStatus:
-        "not_started"
-    },
-
-    personalData: {
-      fullName:
-        client.fullName || null,
-
-      dateOfBirth:
-        client.dateOfBirth || null,
-
-      gender:
-        client.gender || null,
-
-      nationality:
-        client.nationality || null,
-
-      email:
-        client.email || null,
-
-      phone:
-        client.phone || null
-    },
-
-    identityStatus:
-      "not_started",
-
-    vfsStatus:
-      "not_started"
-  };
-}
 
 
 function buildPreparedData(
@@ -88,6 +36,14 @@ function buildPreparedData(
     travelPurpose:
       travelPreferences.travelPurpose,
 
+    serviceType:
+      travelPreferences.serviceType ||
+      null,
+
+    appointmentMode:
+      travelPreferences.appointmentMode ||
+      "VFS_APPOINTMENT",
+
     preferredDates:
       travelPreferences.preferredDates,
 
@@ -98,41 +54,139 @@ function buildPreparedData(
       travelPreferences.preferredWeekdays,
 
     applicants:
-      clients.map(client => ({
-        clientId:
-          client._id.toString(),
+      clients.map(
+        client => ({
+          clientId:
+            client._id.toString(),
 
-        fullName:
-          client.fullName,
+          fullName:
+            client.fullName,
 
-        email:
-          client.email,
+          email:
+            client.email,
 
-        phone:
-          client.phone,
+          phone:
+            client.phone,
 
-        dateOfBirth:
-          client.dateOfBirth,
+          dateOfBirth:
+            client.dateOfBirth,
 
-        nationality:
-          client.nationality,
+          nationality:
+            client.nationality,
 
-        gender:
-          client.gender,
+          gender:
+            client.gender,
 
-        passportNumber:
-          client.passportNumber,
+          passportNumber:
+            client.passportNumber,
 
-        passportIssueDate:
-          client.passportIssueDate,
+          passportIssueDate:
+            client.passportIssueDate,
 
-        passportExpiryDate:
-          client.passportExpiryDate,
+          passportExpiryDate:
+            client.passportExpiryDate,
 
-        passportCountry:
-          client.passportCountry
-      }))
+          passportCountry:
+            client.passportCountry
+        })
+      )
   };
+}
+
+
+function getErrorStatus(error) {
+  if (
+    !error
+  ) {
+    return 500;
+  }
+
+  if (
+    error.code ===
+    "APPLICATION_NOT_FOUND"
+  ) {
+    return 404;
+  }
+
+  if (
+    error.code ===
+      "INVALID_PREFERENCES" ||
+    error.code ===
+      "INVALID_WORKFLOW_TRANSITION" ||
+    error.code ===
+      "RADAR_NOT_READY" ||
+    error.code ===
+      "BOOKING_NOT_READY" ||
+    error.code ===
+      "APPLICATION_NOT_PREPARABLE"
+  ) {
+    return 409;
+  }
+
+  if (
+    error.code ===
+      "PASSPORT_NOT_READY" ||
+    error.code ===
+      "IDENTITY_NOT_READY" ||
+    error.code ===
+      "PREFERENCES_NOT_READY"
+  ) {
+    return 409;
+  }
+
+  if (
+    error.code ===
+    "NO_APPLICANTS"
+  ) {
+    return 400;
+  }
+
+  if (
+    error.name ===
+    "ValidationError"
+  ) {
+    return 400;
+  }
+
+  if (
+    error.code ===
+      11000 ||
+    error.code ===
+      "DUPLICATE_KEY"
+  ) {
+    return 409;
+  }
+
+  return 500;
+}
+
+
+function sendError(
+  res,
+  error
+) {
+  const status =
+    getErrorStatus(
+      error
+    );
+
+  return res.status(
+    status
+  ).json({
+    success: false,
+
+    error:
+      error.message ||
+      "Internal server error",
+
+    code:
+      error.code ||
+      "INTERNAL_ERROR",
+
+    details:
+      error.details ||
+      undefined
+  });
 }
 
 
@@ -169,12 +223,6 @@ function createApplicationRouter({
 
       try {
 
-        /*
-         * -----------------------------------------------------
-         * VISA TYPE
-         * -----------------------------------------------------
-         */
-
         const visaType =
           String(
             req.body.visaType ||
@@ -189,20 +237,23 @@ function createApplicationRouter({
             visaType
           )
         ) {
-
-          return res.status(400).json({
+          return res.status(
+            400
+          ).json({
             success: false,
 
             error:
-              "Selecione um tipo de visto válido: SCHENGEN ou NACIONAL"
-          });
+              "Selecione um tipo de visto válido: SCHENGEN ou NACIONAL",
 
+            code:
+              "INVALID_VISA_TYPE"
+          });
         }
 
 
         /*
          * -----------------------------------------------------
-         * CLIENTS
+         * CLIENT IDS
          * -----------------------------------------------------
          */
 
@@ -210,16 +261,12 @@ function createApplicationRouter({
 
 
         if (
-          req.body.clientIds
+          Array.isArray(
+            req.body.clientIds
+          )
         ) {
-
           clientIds =
-            Array.isArray(
-              req.body.clientIds
-            )
-              ? req.body.clientIds
-              : [];
-
+            req.body.clientIds;
         }
 
 
@@ -229,25 +276,26 @@ function createApplicationRouter({
             req.body.clientId
           )
         ) {
-
           clientIds.push(
             req.body.clientId
           );
-
         }
 
 
         if (
           !clientIds.length
         ) {
-
-          return res.status(400).json({
+          return res.status(
+            400
+          ).json({
             success: false,
 
             error:
-              "clientId or clientIds is required"
-          });
+              "clientId or clientIds is required",
 
+            code:
+              "CLIENT_REQUIRED"
+          });
         }
 
 
@@ -265,44 +313,17 @@ function createApplicationRouter({
           uniqueClientIds.length >
           20
         ) {
-
-          return res.status(400).json({
+          return res.status(
+            400
+          ).json({
             success: false,
 
             error:
-              "Maximum of 20 applicants per application"
+              "Maximum of 20 applicants per application",
+
+            code:
+              "MAX_APPLICANTS_EXCEEDED"
           });
-
-        }
-
-
-        const clients =
-          await Client.find({
-            _id: {
-              $in:
-                uniqueClientIds
-            },
-
-            accountId:
-              req.user.accountId,
-
-            active:
-              true
-          });
-
-
-        if (
-          clients.length !==
-          uniqueClientIds.length
-        ) {
-
-          return res.status(404).json({
-            success: false,
-
-            error:
-              "One or more clients were not found"
-          });
-
         }
 
 
@@ -312,15 +333,17 @@ function createApplicationRouter({
          * -----------------------------------------------------
          */
 
-        const requestedMode =
+        const bookingMode =
           String(
             req.body.bookingMode ||
             (
-              clients.length > 1
+              uniqueClientIds.length > 1
                 ? "GROUP_REQUIRED"
                 : "SINGLE"
             )
-          ).toUpperCase();
+          )
+            .trim()
+            .toUpperCase();
 
 
         const allowedModes = [
@@ -332,39 +355,45 @@ function createApplicationRouter({
 
         if (
           !allowedModes.includes(
-            requestedMode
+            bookingMode
           )
         ) {
-
-          return res.status(400).json({
+          return res.status(
+            400
+          ).json({
             success: false,
 
             error:
-              "Invalid bookingMode"
-          });
+              "Invalid bookingMode",
 
+            code:
+              "INVALID_BOOKING_MODE"
+          });
         }
 
 
         if (
-          requestedMode ===
+          bookingMode ===
             "SINGLE" &&
-          clients.length > 1
+          uniqueClientIds.length > 1
         ) {
-
-          return res.status(400).json({
+          return res.status(
+            400
+          ).json({
             success: false,
 
             error:
-              "SINGLE mode accepts only one applicant"
-          });
+              "SINGLE mode accepts only one applicant",
 
+            code:
+              "INVALID_BOOKING_MODE"
+          });
         }
 
 
         /*
          * -----------------------------------------------------
-         * TRAVEL PREFERENCES
+         * PREFERÊNCIAS
          * -----------------------------------------------------
          */
 
@@ -389,7 +418,7 @@ function createApplicationRouter({
 
         const preferredTime =
           req.body.preferredTime ||
-          null;
+          "ANY";
 
 
         const preferredWeekdays =
@@ -412,6 +441,20 @@ function createApplicationRouter({
             "string"
             ? req.body.travelPurpose.trim()
             : null;
+
+
+        const serviceType =
+          typeof req.body.serviceType ===
+            "string"
+            ? req.body.serviceType.trim()
+            : null;
+
+
+        const appointmentMode =
+          typeof req.body.appointmentMode ===
+            "string"
+            ? req.body.appointmentMode.trim()
+            : "VFS_APPOINTMENT";
 
 
         /*
@@ -441,9 +484,12 @@ function createApplicationRouter({
             });
 
 
-          if (existing) {
-
-            return res.status(200).json({
+          if (
+            existing
+          ) {
+            return res.status(
+              200
+            ).json({
               success: true,
 
               existing: true,
@@ -451,17 +497,50 @@ function createApplicationRouter({
               application:
                 existing
             });
-
           }
-
         }
 
 
         /*
          * -----------------------------------------------------
-         * GROUP
+         * CLIENTS PARA PREPARED DATA / GROUP
          * -----------------------------------------------------
          */
+
+        const clients =
+          await require(
+            "../models/client"
+          ).find({
+            _id: {
+              $in:
+                uniqueClientIds
+            },
+
+            accountId:
+              req.user.accountId,
+
+            active:
+              true
+          });
+
+
+        if (
+          clients.length !==
+          uniqueClientIds.length
+        ) {
+          return res.status(
+            404
+          ).json({
+            success: false,
+
+            error:
+              "One or more clients were not found",
+
+            code:
+              "CLIENT_NOT_FOUND"
+          });
+        }
+
 
         const groupId =
           clients.length > 1
@@ -472,12 +551,6 @@ function createApplicationRouter({
             : null;
 
 
-        /*
-         * -----------------------------------------------------
-         * PREPARED DATA
-         * -----------------------------------------------------
-         */
-
         const travelPreferences = {
           visaType,
 
@@ -485,12 +558,63 @@ function createApplicationRouter({
 
           travelPurpose,
 
+          serviceType,
+
+          appointmentMode,
+
           preferredDates,
 
           preferredTime,
 
           preferredWeekdays
         };
+
+
+        /*
+         * -----------------------------------------------------
+         * APPLICATION SERVICE
+         * -----------------------------------------------------
+         */
+
+        const application =
+          await ApplicationService.create({
+            accountId:
+              req.user.accountId,
+
+            createdBy:
+              req.user._id,
+
+            clientIds:
+              uniqueClientIds,
+
+            bookingMode,
+
+            ...travelPreferences
+          });
+
+
+        /*
+         * -----------------------------------------------------
+         * COMPATIBILIDADE COM DADOS LEGADOS
+         * -----------------------------------------------------
+         *
+         * O ApplicationService é responsável
+         * pela criação principal.
+         *
+         * Aqui preservamos:
+         * - groupId
+         * - idempotencyKey
+         * - preparedDataEncrypted
+         *
+         * para não quebrar documentos/fluxos
+         * existentes.
+         */
+
+        application.groupId =
+          groupId;
+
+        application.idempotencyKey =
+          idempotencyKey;
 
 
         const preparedData =
@@ -501,58 +625,26 @@ function createApplicationRouter({
 
 
         /*
-         * -----------------------------------------------------
-         * CREATE
-         * -----------------------------------------------------
+         * A função encryptJson permanece
+         * no model layer legado. Carregamos
+         * somente aqui para compatibilidade.
          */
 
-        const application =
-          await Application.create({
+        const {
+          encryptJson
+        } =
+          require(
+            "../utils/crypto"
+          );
 
-            accountId:
-              req.user.accountId,
 
-            createdBy:
-              req.user._id,
+        application.preparedDataEncrypted =
+          encryptJson(
+            preparedData
+          );
 
-            client:
-              clients[0]._id,
 
-            groupId,
-
-            bookingMode:
-              requestedMode,
-
-            applicantsCount:
-              clients.length,
-
-            applicants:
-              clients.map(
-                buildApplicant
-              ),
-
-            visaType,
-
-            visaCenter,
-
-            travelPurpose,
-
-            idempotencyKey,
-
-            preferredDates,
-
-            preferredTime,
-
-            preferredWeekdays,
-
-            preparedDataEncrypted:
-              encryptJson(
-                preparedData
-              ),
-
-            status:
-              "created"
-          });
+        await application.save();
 
 
         /*
@@ -577,23 +669,47 @@ function createApplicationRouter({
 
           ip:
             req.ip
-
         });
 
 
-        return res.status(201).json({
+        return res.status(
+          201
+        ).json({
           success: true,
 
           application
         });
 
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
-        next(error);
+        if (
+          error.code ===
+            11000 ||
+          error.code ===
+            "DUPLICATE_KEY"
+        ) {
+          return res.status(
+            409
+          ).json({
+            success: false,
 
+            error:
+              "Já existe uma aplicação com os mesmos dados de idempotência.",
+
+            code:
+              "DUPLICATE_APPLICATION"
+          });
+        }
+
+
+        return sendError(
+          res,
+          error
+        );
       }
-
     }
   );
 
@@ -640,12 +756,12 @@ function createApplicationRouter({
         });
 
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
         next(error);
-
       }
-
     }
   );
 
@@ -667,33 +783,24 @@ function createApplicationRouter({
       try {
 
         const application =
-          await Application.findOne({
-
-            _id:
-              req.params.id,
-
-            accountId:
-              req.user.accountId
-
-          })
-            .populate(
-              "client"
-            )
-            .populate(
-              "applicants.client"
-            );
+          await ApplicationService.getById(
+            req.params.id,
+            req.user.accountId
+          );
 
 
-        if (!application) {
-
-          return res.status(404).json({
-            success: false,
-
-            error:
-              "Application not found"
-          });
-
-        }
+        await application.populate(
+          [
+            {
+              path:
+                "client"
+            },
+            {
+              path:
+                "applicants.client"
+            }
+          ]
+        );
 
 
         return res.json({
@@ -703,12 +810,15 @@ function createApplicationRouter({
         });
 
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
-        next(error);
-
+        return sendError(
+          res,
+          error
+        );
       }
-
     }
   );
 
@@ -736,50 +846,67 @@ function createApplicationRouter({
 
       try {
 
-        const application =
-          await Application.findOne({
-
-            _id:
-              req.params.id,
-
-            accountId:
-              req.user.accountId
-
-          });
-
-
-        if (!application) {
-
-          return res.status(404).json({
-            success: false,
-
-            error:
-              "Application not found"
-          });
-
-        }
-
+        /*
+         * A preparação agora significa:
+         *
+         * passport
+         * +
+         * 10 posições faciais
+         * +
+         * preferências
+         *
+         * e termina em READY_FOR_AUTOMATION.
+         *
+         * Não inicia login VFS neste endpoint.
+         */
 
         const result =
-          await supervisor.prepare(
-            application._id.toString()
+          await ApplicationService.prepare(
+            req.params.id,
+            req.user.accountId
           );
 
 
         return res.json({
           success: true,
 
+          ready:
+            result.ready === true,
+
           application:
-            result
+            result.application,
+
+          code:
+            result.code ||
+            null,
+
+          message:
+            result.message ||
+            null,
+
+          passportErrors:
+            result.passportErrors ||
+            [],
+
+          facialErrors:
+            result.facialErrors ||
+            [],
+
+          preferenceErrors:
+            result.preferenceErrors ||
+            []
         });
 
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
-        next(error);
-
+        return sendError(
+          res,
+          error
+        );
       }
-
     }
   );
 
@@ -808,26 +935,34 @@ function createApplicationRouter({
       try {
 
         const application =
-          await Application.findOne({
-
-            _id:
-              req.params.id,
-
-            accountId:
-              req.user.accountId
-
-          });
+          await ApplicationService.getById(
+            req.params.id,
+            req.user.accountId
+          );
 
 
-        if (!application) {
+        /*
+         * Continue é reservado para
+         * checkpoints oficiais do fluxo.
+         *
+         * O Supervisor continua sendo
+         * responsável pelo Bot 1/VFS.
+         */
 
-          return res.status(404).json({
+        if (
+          !supervisor
+        ) {
+          return res.status(
+            503
+          ).json({
             success: false,
 
             error:
-              "Application not found"
-          });
+              "Supervisor de automação não está disponível.",
 
+            code:
+              "SUPERVISOR_UNAVAILABLE"
+          });
         }
 
 
@@ -845,19 +980,22 @@ function createApplicationRouter({
         });
 
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
-        next(error);
-
+        return sendError(
+          res,
+          error
+        );
       }
-
     }
   );
 
 
   /*
    * =========================================================
-   * OTP
+   * OTP VERIFY
    * =========================================================
    */
 
@@ -878,30 +1016,6 @@ function createApplicationRouter({
 
       try {
 
-        const application =
-          await Application.findOne({
-
-            _id:
-              req.params.id,
-
-            accountId:
-              req.user.accountId
-
-          });
-
-
-        if (!application) {
-
-          return res.status(404).json({
-            success: false,
-
-            error:
-              "Application not found"
-          });
-
-        }
-
-
         const code =
           typeof req.body.code ===
             "string"
@@ -914,14 +1028,41 @@ function createApplicationRouter({
             code
           )
         ) {
-
-          return res.status(400).json({
+          return res.status(
+            400
+          ).json({
             success: false,
 
             error:
-              "Invalid OTP format"
-          });
+              "Invalid OTP format",
 
+            code:
+              "INVALID_OTP_FORMAT"
+          });
+        }
+
+
+        const application =
+          await ApplicationService.getById(
+            req.params.id,
+            req.user.accountId
+          );
+
+
+        if (
+          !supervisor
+        ) {
+          return res.status(
+            503
+          ).json({
+            success: false,
+
+            error:
+              "Supervisor de automação não está disponível.",
+
+            code:
+              "SUPERVISOR_UNAVAILABLE"
+          });
         }
 
 
@@ -933,33 +1074,32 @@ function createApplicationRouter({
 
 
         return res.json({
-
           success: true,
 
           application:
             result,
 
           otp: {
-
             status:
-              result.otp?.status ||
+              result?.otp?.status ||
               null,
 
             verifiedAt:
-              result.otp?.verifiedAt ||
+              result?.otp?.verifiedAt ||
               null
-
           }
-
         });
 
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
-        next(error);
-
+        return sendError(
+          res,
+          error
+        );
       }
-
     }
   );
 
@@ -988,43 +1128,60 @@ function createApplicationRouter({
       try {
 
         const application =
-          await Application.findOne({
-
-            _id:
-              req.params.id,
-
-            accountId:
-              req.user.accountId
-
-          });
+          await ApplicationService.getById(
+            req.params.id,
+            req.user.accountId
+          );
 
 
-        if (!application) {
+        const workflowState =
+          application.getWorkflowState();
 
-          return res.status(404).json({
+
+        const paymentPending =
+          workflowState ===
+            "PAYMENT_PENDING" ||
+          (
+            application.status ===
+              "requires_user" &&
+            application.result?.paymentStatus ===
+              "pending"
+          );
+
+
+        if (
+          !paymentPending
+        ) {
+          return res.status(
+            409
+          ).json({
             success: false,
 
             error:
-              "Application not found"
-          });
+              `Application cannot be resumed from workflow state ${workflowState}`,
 
+            code:
+              "PAYMENT_NOT_PENDING",
+
+            workflowState
+          });
         }
 
 
         if (
-          application.status !==
-          "requires_user"
+          !supervisor
         ) {
-
-          return res.status(409).json({
-
+          return res.status(
+            503
+          ).json({
             success: false,
 
             error:
-              `Application cannot be resumed from status ${application.status}`
+              "Supervisor de automação não está disponível.",
 
+            code:
+              "SUPERVISOR_UNAVAILABLE"
           });
-
         }
 
 
@@ -1035,17 +1192,22 @@ function createApplicationRouter({
 
 
         return res.json({
-
           success: true,
 
           application:
             result.application,
 
           completed:
-            result.completed === true,
+            result.completed ===
+            true,
 
           requiresUser:
-            result.requiresUser === true,
+            result.requiresUser ===
+            true,
+
+          paymentPending:
+            result.paymentPending ===
+            true,
 
           payment:
             result.payment ||
@@ -1058,16 +1220,18 @@ function createApplicationRouter({
           reason:
             result.reason ||
             null
-
         });
 
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
-        next(error);
-
+        return sendError(
+          res,
+          error
+        );
       }
-
     }
   );
 
@@ -1096,55 +1260,12 @@ function createApplicationRouter({
       try {
 
         const application =
-          await Application.findOneAndUpdate(
-
-            {
-              _id:
-                req.params.id,
-
-              accountId:
-                req.user.accountId,
-
-              status: {
-                $nin: [
-                  "completed",
-                  "cancelled"
-                ]
-              }
-            },
-
-            {
-              $set: {
-
-                status:
-                  "cancelled",
-
-                "bot2.monitoring":
-                  false,
-
-                "radar.enabled":
-                  false
-
-              }
-            },
-
-            {
-              new: true
-            }
-
+          await ApplicationService.cancel(
+            req.params.id,
+            req.user.accountId,
+            req.body.reason ||
+              "Application cancelled by operator"
           );
-
-
-        if (!application) {
-
-          return res.status(404).json({
-            success: false,
-
-            error:
-              "Application not found or cannot be cancelled"
-          });
-
-        }
 
 
         return res.json({
@@ -1154,12 +1275,15 @@ function createApplicationRouter({
         });
 
 
-      } catch (error) {
+      } catch (
+        error
+      ) {
 
-        next(error);
-
+        return sendError(
+          res,
+          error
+        );
       }
-
     }
   );
 
