@@ -9,123 +9,32 @@ const FacialService = require("../services/facial/facial-service");
 const { decryptJson } = require("../utils/crypto");
 const logger = require("../utils/logger");
 
-/*
-
-* O state machine será usado quando estiver disponível.
-* 
-* Mantemos fallback local para que o Bot 1 não quebre
-* durante a migração caso o arquivo ainda não tenha sido
-* colocado no repositório.
-  */
-  let STATES;
-  let transitionState;
-
-try {
 const stateMachine = require(
 "../services/application/application-state-machine"
 );
 
-STATES = stateMachine.STATES;
-
-transitionState =
-stateMachine.transition;
-} catch {
-STATES = {
-CREATED: "CREATED",
-PASSPORT_PENDING: "PASSPORT_PENDING",
-PASSPORT_VERIFIED: "PASSPORT_VERIFIED",
-IDENTITY_PREPARATION: "IDENTITY_PREPARATION",
-IDENTITY_READY: "IDENTITY_READY",
-PREFERENCES_PENDING: "PREFERENCES_PENDING",
-READY_FOR_AUTOMATION: "READY_FOR_AUTOMATION",
-
-VFS_SESSION: "VFS_SESSION",
-VFS_AUTHENTICATING: "VFS_AUTHENTICATING",
-CAPTCHA_REQUIRED: "CAPTCHA_REQUIRED",
-VFS_AUTHENTICATED: "VFS_AUTHENTICATED",
-
-RADAR_ACTIVE: "RADAR_ACTIVE",
-SLOT_FOUND: "SLOT_FOUND",
-SLOT_LOCKED: "SLOT_LOCKED",
-SLOT_REVALIDATED: "SLOT_REVALIDATED",
-SLOT_LOST: "SLOT_LOST",
-
-BOOKING: "BOOKING",
-DOCUMENT_UPLOAD: "DOCUMENT_UPLOAD",
-FACIAL_POSITIONS: "FACIAL_POSITIONS",
-FACIAL_POSITION_UNRESOLVED:
-  "FACIAL_POSITION_UNRESOLVED",
-FACIAL_POSITION_FAILED:
-  "FACIAL_POSITION_FAILED",
-
-OTP_REQUIRED: "OTP_REQUIRED",
-OTP_SUBMITTING: "OTP_SUBMITTING",
-OTP_VERIFIED: "OTP_VERIFIED",
-
-REVIEW: "REVIEW",
-APPOINTMENT_BOOKED: "APPOINTMENT_BOOKED",
-
-PAYMENT_PENDING: "PAYMENT_PENDING",
-PAYMENT_CONFIRMED: "PAYMENT_CONFIRMED",
-PAYMENT_EXPIRED: "PAYMENT_EXPIRED",
-
-VFS_SESSION_EXPIRED: "VFS_SESSION_EXPIRED",
-VFS_ACCOUNT_RESTRICTED:
-  "VFS_ACCOUNT_RESTRICTED",
-
-BOOKING_FAILED: "BOOKING_FAILED",
-ERROR: "ERROR",
-CANCELLED: "CANCELLED",
-COMPLETED: "COMPLETED"
-
-};
-
-transitionState = async (
-application,
-nextState,
-metadata = {}
-) => {
-application.workflowState =
-nextState;
-
-application.workflow =
-  application.workflow || {};
-
-application.workflow.previousState =
-  application.workflowState;
-
-application.workflow.stateChangedAt =
-  new Date();
-
-application.workflow.lastEvent =
-  metadata.event || null;
-
-application.workflow.lastReason =
-  metadata.reason || null;
-
-application.workflow.transitionCount =
-  Number(
-    application.workflow.transitionCount
-  ) + 1;
-
-return application;
-
-};
-}
+const {
+STATES,
+transition: transitionState
+} = stateMachine;
 
 const config = {
 lockMs:
-Number(process.env.BOT1_LOCK_MS) ||
-60000,
+Number(process.env.BOT1_LOCK_MS) || 60000,
 
 maxAttempts:
-Number(process.env.BOT1_MAX_ATTEMPTS) ||
-3,
+Number(process.env.BOT1_MAX_ATTEMPTS) || 3,
 
 timeoutMs:
-Number(process.env.BOT1_TIMEOUT_MS) ||
-30000
+Number(process.env.BOT1_TIMEOUT_MS) || 30000
 };
+
+/*
+
+* =========================================================
+* TIMEOUT
+* =========================================================
+  */
 
 async function withTimeout(
 promise,
@@ -156,6 +65,13 @@ clearTimeout(timer);
 }
 }
 
+/*
+
+* =========================================================
+* PAYMENT HELPERS
+* =========================================================
+  */
+
 function normalizePaymentDetails(
 details = {}
 ) {
@@ -168,8 +84,7 @@ null,
 
 entity:
   details.entity ??
-  details.transactionId ??
-  details.TransactionId ??
+  details.Entity ??
   null,
 
 transactionId:
@@ -180,21 +95,25 @@ transactionId:
 paymentStatus:
   details.paymentStatus ??
   details.PaymentStatus ??
+  details.status ??
   null,
 
 amount:
   details.amount ??
   details.paymentAmount ??
+  details.Amount ??
   null,
 
 currency:
   details.currency ??
   details.paymentCurrency ??
+  details.Currency ??
   null,
 
 deadline:
   details.deadline ??
   details.paymentDeadline ??
+  details.Deadline ??
   null,
 
 confirmationUrl:
@@ -230,9 +149,7 @@ String(status)
 );
 }
 
-function isPendingPayment(
-payment
-) {
+function isPendingPayment(payment) {
 if (
 payment?.requiresUser === true
 ) {
@@ -240,10 +157,8 @@ return true;
 }
 
 if (
-payment?.paymentStatus ===
-null ||
-payment?.paymentStatus ===
-undefined
+payment?.paymentStatus === null ||
+payment?.paymentStatus === undefined
 ) {
 return false;
 }
@@ -253,9 +168,14 @@ payment.paymentStatus
 );
 }
 
-function getWorkflowState(
-application
-) {
+/*
+
+* =========================================================
+* WORKFLOW
+* =========================================================
+  */
+
+function getWorkflowState(application) {
 if (
 application?.workflowState
 ) {
@@ -300,8 +220,7 @@ book_appointment:
   STATES.BOOKING,
 
 requires_user:
-  application?.result
-    ?.paymentStatus
+  application?.result?.paymentStatus
     ? STATES.PAYMENT_PENDING
     : STATES.ERROR,
 
@@ -330,16 +249,11 @@ metadata = {}
 const current =
 getWorkflowState(application);
 
-/*
-
-* Se já estiver no estado pretendido,
-* apenas atualizamos o evento.
-  */
-  if (
-  current === nextState
-  ) {
-  application.workflow =
-  application.workflow || {};
+if (
+current === nextState
+) {
+application.workflow =
+application.workflow || {};
 
 application.workflow.lastEvent =
   metadata.event || null;
@@ -350,63 +264,23 @@ application.workflow.lastReason =
 application.workflow.stateChangedAt =
   new Date();
 
+application.workflow.transitionCount =
+  Number(
+    application.workflow.transitionCount || 0
+  ) + 1;
+
 return application;
 
 }
 
-/*
-
-* O state machine oficial valida
-
-* transições quando o arquivo estiver
-
-* disponível.
-  */
-  if (
-  transitionState
-  ) {
-  try {
-  await transitionState(
-  application,
-  nextState,
-  metadata
-  );
-  
-  return application;
-  } catch (error) {
-  /*
-  
-  * Durante a migração aceitamos
-  * estados legados conhecidos.
-  * 
-  * O erro será lançado para estados
-  * incompatíveis reais.
-    */
-    if (
-    application.workflowState
-    ) {
-    throw error;
-    }
-    }
-    }
-
-application.workflowState =
-nextState;
+transitionState(
+application,
+nextState,
+metadata
+);
 
 application.workflow =
 application.workflow || {};
-
-application.workflow.previousState =
-current;
-
-application.workflow.stateChangedAt =
-new Date();
-
-application.workflow.lastEvent =
-metadata.event || null;
-
-application.workflow.lastReason =
-metadata.reason || null;
 
 application.workflow.transitionCount =
 Number(
@@ -415,6 +289,13 @@ application.workflow.transitionCount || 0
 
 return application;
 }
+
+/*
+
+* =========================================================
+* BOT 1
+* =========================================================
+  */
 
 class Bot1 {
 constructor(site) {
@@ -430,6 +311,14 @@ this.facial =
   new FacialService();
 
 }
+
+/*
+
+* ---
+* HEARTBEAT
+* ---
+
+*/
 
 async heartbeat(
 applicationId,
@@ -455,6 +344,14 @@ _id: applicationId,
 
 }
 
+/*
+
+* ---
+* LOCK APPLICATION
+* ---
+
+*/
+
 async claimApplication(
 applicationId,
 allowedStatuses = []
@@ -468,38 +365,40 @@ const lockExpires =
       config.lockMs
   );
 
+const workflowMap = {
+  created:
+    STATES.CREATED,
+
+  error:
+    STATES.ERROR,
+
+  otp_required:
+    STATES.OTP_REQUIRED,
+
+  otp_verified:
+    STATES.OTP_VERIFIED,
+
+  slot_received:
+    STATES.SLOT_FOUND,
+
+  waiting_for_slot:
+    STATES.RADAR_ACTIVE
+};
+
 const workflowCandidates =
-  allowedStatuses
-    .map(status => {
-      const map = {
-        created:
-          STATES.CREATED,
+  allowedStatuses.map(
+    status =>
+      workflowMap[status] ||
+      status
+  );
 
-        otp_required:
-          STATES.OTP_REQUIRED,
+const query = {
+  _id:
+    applicationId,
 
-        otp_verified:
-          STATES.OTP_VERIFIED,
-
-        slot_received:
-          STATES.SLOT_FOUND,
-
-        waiting_for_slot:
-          STATES.RADAR_ACTIVE
-      };
-
-      return (
-        map[status] ||
-        status
-      );
-    });
-
-const legacyCandidates =
-  allowedStatuses;
-
-const orState =
-  workflowCandidates.length
-    ? [
+  $and: [
+    {
+      $or: [
         {
           workflowState: {
             $in:
@@ -509,50 +408,24 @@ const orState =
         {
           status: {
             $in:
-              legacyCandidates
+              allowedStatuses
           }
         }
       ]
-    : [];
+    },
 
-return Application
-  .findOneAndUpdate(
     {
-      _id:
-        applicationId,
-
-      ...(orState.length
-        ? {
-            $or: [
-              ...orState,
-
-              {
-                $and: [
-                  {
-                    $or: [
-                      {
-                        "lock.owner":
-                          null
-                      },
-                      {
-                        "lock.expiresAt":
-                          {
-                            $lt:
-                              now
-                          }
-                      }
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-        : {}),
-
       $or: [
         {
           "lock.owner":
             null
+        },
+        {
+          "lock.owner":
+            {
+              $exists:
+                false
+            }
         },
         {
           "lock.expiresAt": {
@@ -560,7 +433,13 @@ return Application
           }
         }
       ]
-    },
+    }
+  ]
+};
+
+return Application
+  .findOneAndUpdate(
+    query,
     {
       $set: {
         "lock.owner":
@@ -595,6 +474,20 @@ return Application
 
 }
 
+/*
+
+* ---
+* CLAIM SLOT
+* ---
+* 
+* Corrige o antigo problema de dois $or
+* no mesmo objeto MongoDB.
+* 
+* Também permite que o Bot 1 assuma um
+* lock que já tenha sido reservado para
+* ele pelo fluxo supervisor.
+  */
+
 async claimSlot(
 applicationId
 ) {
@@ -608,82 +501,126 @@ const lockExpires =
   );
 
 const application =
-  await Application
-    .findOneAndUpdate(
-      {
-        _id:
-          applicationId,
+  await Application.findOne(
+    {
+      _id:
+        applicationId,
 
-        $or: [
-          {
-            workflowState:
-              STATES.SLOT_FOUND
-          },
-          {
-            status:
-              "slot_received"
-          }
-        ],
-
-        $or: [
-          {
-            "lock.owner":
-              null
-          },
-          {
-            "lock.expiresAt": {
-              $lt: now
-            }
-          }
-        ]
-      },
-      {
-        $set: {
-          "lock.owner":
-            this.workerId,
-
-          "lock.expiresAt":
-            lockExpires,
-
-          "bot1.workerId":
-            this.workerId,
-
-          "bot1.status":
-            "continuing",
-
-          "bot1.startedAt":
-            now,
-
-          "bot1.heartbeatAt":
-            now,
-
-          "bot1.lastAction":
-            "claiming_slot",
-
-          "bot2.monitoring":
-            false,
-
-          "bot2.status":
-            "slot_found"
+      $or: [
+        {
+          workflowState:
+            STATES.SLOT_FOUND
         },
-
-        $inc: {
-          "bot1.attempts":
-            1
+        {
+          status:
+            "slot_received"
         }
-      },
-      {
-        new: true
-      }
-    )
-    .populate("client")
-    .select(
-      "+preparedDataEncrypted"
-    );
+      ]
+    }
+  )
+  .populate("client")
+  .select(
+    "+preparedDataEncrypted"
+  );
+
+if (!application) {
+  return null;
+}
+
+const currentOwner =
+  application.lock?.owner;
+
+const lockExpiresAt =
+  application.lock?.expiresAt;
+
+const lockIsExpired =
+  !lockExpiresAt ||
+  new Date(
+    lockExpiresAt
+  ).getTime() <= now.getTime();
+
+/*
+ * Se o supervisor reservou a vaga
+ * com outro worker, não roubamos o lock.
+ *
+ * O supervisor pode transferi-lo explicitamente
+ * colocando o owner como null/expirado.
+ */
+
+if (
+  currentOwner &&
+  currentOwner !== this.workerId &&
+  !lockIsExpired
+) {
+  /*
+   * Compatibilidade:
+   * se já existe um worker de Bot 1,
+   * podemos continuar somente quando
+   * o lock foi explicitamente entregue.
+   */
+
+  if (
+    application.bot1?.workerId !==
+    this.workerId
+  ) {
+    return null;
+  }
+}
+
+application.lock = {
+  owner:
+    this.workerId,
+
+  expiresAt:
+    lockExpires
+};
+
+application.bot1 =
+  application.bot1 || {};
+
+application.bot1.workerId =
+  this.workerId;
+
+application.bot1.status =
+  "continuing";
+
+application.bot1.startedAt =
+  application.bot1.startedAt ||
+  now;
+
+application.bot1.heartbeatAt =
+  now;
+
+application.bot1.lastAction =
+  "claiming_slot";
+
+application.bot2 =
+  application.bot2 || {};
+
+application.bot2.monitoring =
+  false;
+
+application.bot2.status =
+  "slot_found";
+
+application.bot1.attempts =
+  Number(
+    application.bot1.attempts || 0
+  ) + 1;
+
+await application.save();
 
 return application;
 
 }
+
+/*
+
+* ---
+* LOCK
+* ---
+
+*/
 
 async refreshLock(
 applicationId
@@ -741,12 +678,18 @@ application
 ) {
 return (
 Number(
-application.bot1
-?.attempts
+application?.bot1?.attempts || 0
 ) >
 config.maxAttempts
 );
 }
+
+/*
+
+* =======================================================
+* PREPARE
+* =======================================================
+  */
 
 async prepare(
 applicationId
@@ -767,7 +710,11 @@ if (!application) {
   const existing =
     await Application.findById(
       applicationId
-    ).populate("client");
+    )
+      .populate("client")
+      .select(
+        "+preparedDataEncrypted"
+      );
 
   if (!existing) {
     throw new Error(
@@ -803,8 +750,9 @@ try {
     {
       event:
         "BOT1_PREPARATION_STARTED",
+
       reason:
-        "Bot 1 iniciou preparação da candidatura."
+        "Bot 1 iniciou a preparação da candidatura."
     }
   );
 
@@ -821,10 +769,17 @@ try {
     "initializing";
 
   application.error = {
-    code: null,
-    message: null,
-    at: null,
-    attempts: 0
+    code:
+      null,
+
+    message:
+      null,
+
+    at:
+      null,
+
+    attempts:
+      0
   };
 
   await application.save();
@@ -856,21 +811,75 @@ try {
 
   const loginResult =
     await withTimeout(
-      this.site.login(),
+      this.site.login(
+        application
+      ),
       config.timeoutMs,
       "Site login"
     );
 
-  /*
-   * O adapter atual devolve requiresUser
-   * porque o login/captcha oficial ainda
-   * precisa do DOM real.
-   *
-   * Não fazemos bypass.
-   */
+  if (
+    loginResult?.state ===
+    "CAPTCHA_REQUIRED"
+  ) {
+    await moveState(
+      application,
+      STATES.CAPTCHA_REQUIRED,
+      {
+        event:
+          "VFS_CAPTCHA_REQUIRED",
+
+        reason:
+          loginResult.reason ||
+          "VFS requires its official CAPTCHA checkpoint."
+      }
+    );
+
+    application.bot1.status =
+      "waiting";
+
+    application.bot1.lastAction =
+      "captcha_required";
+
+    await application.save();
+
+    await this.releaseLock(
+      applicationId
+    );
+
+    return application;
+  }
+
   if (
     loginResult?.success === false
   ) {
+    if (
+      loginResult?.restricted === true
+    ) {
+      await moveState(
+        application,
+        STATES.VFS_ACCOUNT_RESTRICTED,
+        {
+          event:
+            "VFS_ACCOUNT_RESTRICTED",
+
+          reason:
+            loginResult.reason
+        }
+      );
+
+      application.bot1.status =
+        "error";
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+      return application;
+    }
+
     throw new Error(
       loginResult.reason ||
       "VFS login failed"
@@ -886,8 +895,10 @@ try {
       {
         event:
           "VFS_AUTHENTICATION_CHECKPOINT",
+
         reason:
-          loginResult.reason
+          loginResult.reason ||
+          "Official VFS authentication checkpoint."
       }
     );
 
@@ -916,11 +927,9 @@ try {
   );
 
   const preparedData =
-    application
-      .preparedDataEncrypted
+    application.preparedDataEncrypted
       ? decryptJson(
-          application
-            .preparedDataEncrypted
+          application.preparedDataEncrypted
         )
       : null;
 
@@ -935,24 +944,49 @@ try {
     "filling_application"
   );
 
-  await withTimeout(
-    this.site.fillApplication(
-      application,
-      application.client,
-      preparedData
-    ),
-    config.timeoutMs,
-    "Application preparation"
-  );
+  const filled =
+    await withTimeout(
+      this.site.fillApplication(
+        application,
+        application.client,
+        preparedData
+      ),
+      config.timeoutMs,
+      "Application preparation"
+    );
 
-  /*
-   * Preparação local/VFS inicial concluída.
-   *
-   * OTP não deve ser confundido com o
-   * estado de disponibilidade de vaga.
-   */
+  if (
+    filled?.success === false
+  ) {
+    if (
+      filled.requiresUser === true
+    ) {
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "application_checkpoint";
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+      return application;
+    }
+
+    throw new Error(
+      filled.reason ||
+      "Application preparation failed"
+    );
+  }
+
   application.preparedAt =
     new Date();
+
+  application.metrics =
+    application.metrics || {};
 
   application.metrics.preparationMs =
     Date.now() -
@@ -964,8 +998,9 @@ try {
     {
       event:
         "APPLICATION_READY_FOR_AUTOMATION",
+
       reason:
-        "Dados preparados e candidatura pronta para radar."
+        "Dados preparados e candidatura pronta para o radar."
     }
   );
 
@@ -978,6 +1013,9 @@ try {
   application.bot1.lastAction =
     "ready_for_automation";
 
+  application.bot2 =
+    application.bot2 || {};
+
   application.bot2.status =
     "monitoring";
 
@@ -986,6 +1024,9 @@ try {
 
   application.bot2.workerId =
     null;
+
+  application.radar =
+    application.radar || {};
 
   application.radar.enabled =
     true;
@@ -1008,6 +1049,13 @@ try {
 }
 
 }
+
+/*
+
+* =======================================================
+* OTP VERIFICATION
+* =======================================================
+  */
 
 async verifyOtp(
 applicationId,
@@ -1045,33 +1093,29 @@ if (
 }
 
 if (
-  application.otp.status !==
+  application.otp?.status !==
   "waiting"
 ) {
   throw new Error(
-    `OTP is not waiting: ${application.otp.status}`
+    `OTP is not waiting: ${application.otp?.status}`
   );
 }
 
 const request = {
   requestId:
-    application.otp
-      .requestId,
+    application.otp.requestId,
 
   applicationId:
-    application._id
-      .toString(),
+    application._id.toString(),
 
   expiresAt:
-    application.otp
-      .expiresAt
+    application.otp.expiresAt
 };
 
 const attempts =
   Number(
-    application.otp
-      .attempts
-  ) || 0;
+    application.otp.attempts || 0
+  );
 
 const result =
   await this.otp.verifyCode({
@@ -1101,7 +1145,9 @@ if (
   return application;
 }
 
-if (!result.verified) {
+if (
+  !result.verified
+) {
   if (
     application.otp.attempts >=
     this.otp.maxAttempts
@@ -1109,13 +1155,33 @@ if (!result.verified) {
     application.otp.status =
       "failed";
 
-    await this.markError(
-      application,
-      "OTP_MAX_ATTEMPTS",
-      new Error(
-        "Maximum OTP attempts exceeded"
-      )
-    );
+    try {
+      await moveState(
+        application,
+        STATES.OTP_FAILED,
+        {
+          event:
+            "OTP_MAX_ATTEMPTS"
+        }
+      );
+    } catch {
+      application.workflowState =
+        STATES.OTP_FAILED;
+    }
+
+    application.error = {
+      code:
+        "OTP_MAX_ATTEMPTS",
+
+      message:
+        "Maximum OTP attempts exceeded",
+
+      at:
+        new Date(),
+
+      attempts:
+        application.otp.attempts
+    };
   } else {
     application.error = {
       code:
@@ -1133,9 +1199,9 @@ if (!result.verified) {
 
     application.bot1.lastAction =
       "otp_invalid";
-
-    await application.save();
   }
+
+  await application.save();
 
   return application;
 }
@@ -1169,6 +1235,13 @@ await application.save();
 return application;
 
 }
+
+/*
+
+* =======================================================
+* CONTINUE AFTER OTP
+* =======================================================
+  */
 
 async continueAfterVerification(
 applicationId
@@ -1224,8 +1297,7 @@ try {
   );
 
   if (
-    application.client
-      ?.facialProfile
+    application.client?.facialProfile
       ?.verificationStatus ===
     "pending"
   ) {
@@ -1263,18 +1335,13 @@ try {
     }
   );
 
-  /*
-   * A partir daqui o Bot 1 NÃO abre
-   * calendário para ficar esperando.
-   *
-   * O Bot 2 será responsável pelo radar.
-   */
   await moveState(
     application,
     STATES.READY_FOR_AUTOMATION,
     {
       event:
         "AUTOMATION_READY",
+
       reason:
         "Identidade verificada e candidatura pronta para radar."
     }
@@ -1289,6 +1356,9 @@ try {
   application.bot1.lastAction =
     "ready_for_automation";
 
+  application.bot2 =
+    application.bot2 || {};
+
   application.bot2.status =
     "monitoring";
 
@@ -1297,6 +1367,9 @@ try {
 
   application.bot2.workerId =
     null;
+
+  application.radar =
+    application.radar || {};
 
   application.radar.enabled =
     true;
@@ -1320,6 +1393,13 @@ try {
 
 }
 
+/*
+
+* =======================================================
+* HANDLE SLOT
+* =======================================================
+  */
+
 async handleSlot(
 applicationId,
 slotReceivedAt = null
@@ -1334,7 +1414,8 @@ const application =
 
 if (!application) {
   return {
-    success: false,
+    success:
+      false,
 
     reason:
       "Slot already claimed or application unavailable"
@@ -1361,6 +1442,9 @@ if (
 
 try {
   if (slotReceivedAt) {
+    application.metrics =
+      application.metrics || {};
+
     application.metrics.resumeMs =
       Math.max(
         0,
@@ -1386,18 +1470,13 @@ try {
   );
 
   /*
-   * Revalidação:
-   *
-   * O adapter atual ainda não possui
-   * revalidateSlot(). Portanto não
-   * inventamos uma implementação.
-   *
-   * Se existir no futuro, ela será
-   * chamada antes da seleção.
+   * ---------------------------------------------------
+   * REVALIDAÇÃO
+   * ---------------------------------------------------
    */
+
   if (
-    typeof this.site
-      .revalidateSlot ===
+    typeof this.site.revalidateSlot ===
     "function"
   ) {
     const revalidated =
@@ -1411,7 +1490,8 @@ try {
       );
 
     if (
-      revalidated?.success === false
+      revalidated?.success ===
+      false
     ) {
       await moveState(
         application,
@@ -1419,6 +1499,7 @@ try {
         {
           event:
             "SLOT_REVALIDATION_FAILED",
+
           reason:
             revalidated.reason ||
             "Slot no longer available"
@@ -1430,6 +1511,9 @@ try {
 
       application.bot1.status =
         "waiting";
+
+      application.bot1.lastAction =
+        "slot_lost";
 
       application.bot2.status =
         "monitoring";
@@ -1447,9 +1531,11 @@ try {
       );
 
       return {
-        success: false,
+        success:
+          false,
 
-        slotLost: true,
+        slotLost:
+          true,
 
         reason:
           revalidated.reason ||
@@ -1473,10 +1559,11 @@ try {
     applicationId
   );
 
-  await this.heartbeat(
-    applicationId,
-    "booking"
-  );
+  /*
+   * ---------------------------------------------------
+   * BOOKING
+   * ---------------------------------------------------
+   */
 
   await moveState(
     application,
@@ -1509,16 +1596,37 @@ try {
     );
 
   if (
-    selected?.success === false
+    selected?.success ===
+    false
   ) {
     if (
       selected.requiresUser ===
       true
     ) {
-      throw new Error(
-        selected.reason ||
-        "VFS slot selection requires the official DOM flow"
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "official_slot_checkpoint";
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
       );
+
+      return {
+        success:
+          true,
+
+        requiresUser:
+          true,
+
+        officialCheckpoint:
+          true,
+
+        application
+      };
     }
 
     throw new Error(
@@ -1531,10 +1639,11 @@ try {
     applicationId
   );
 
-  await this.heartbeat(
-    applicationId,
-    "continuing_application"
-  );
+  /*
+   * ---------------------------------------------------
+   * CONTINUE VFS
+   * ---------------------------------------------------
+   */
 
   const continued =
     await withTimeout(
@@ -1547,8 +1656,39 @@ try {
     );
 
   if (
-    continued?.success === false
+    continued?.success ===
+    false
   ) {
+    if (
+      continued.requiresUser ===
+      true
+    ) {
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "official_vfs_checkpoint";
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+      return {
+        success:
+          true,
+
+        requiresUser:
+          true,
+
+        officialCheckpoint:
+          true,
+
+        application
+      };
+    }
+
     throw new Error(
       continued.reason ||
       "Application continuation failed"
@@ -1560,15 +1700,11 @@ try {
   );
 
   /*
-   * ======================================================
+   * ---------------------------------------------------
    * DOCUMENT UPLOAD
-   * ======================================================
-   *
-   * O método só será chamado quando
-   * existir no adapter. Não inventamos
-   * selectors nem enviamos documento
-   * para um endpoint desconhecido.
+   * ---------------------------------------------------
    */
+
   await moveState(
     application,
     STATES.DOCUMENT_UPLOAD,
@@ -1584,8 +1720,7 @@ try {
   await application.save();
 
   if (
-    typeof this.site
-      .uploadPassport ===
+    typeof this.site.uploadPassport ===
     "function"
   ) {
     const passport =
@@ -1609,23 +1744,47 @@ try {
         "Passport upload failed"
       );
     }
+
+    if (
+      passport?.requiresUser ===
+      true
+    ) {
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "passport_checkpoint";
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+      return {
+        success:
+          true,
+
+        requiresUser:
+          true,
+
+        officialCheckpoint:
+          true,
+
+        application
+      };
+    }
   }
 
   /*
-   * ======================================================
+   * ---------------------------------------------------
    * FACIAL POSITIONS
-   * ======================================================
+   * ---------------------------------------------------
    *
-   * O projeto já possui exatamente
-   * as 10 posições do cliente.
-   *
-   * Não criamos novas posições.
-   *
-   * O adapter deverá futuramente
-   * interpretar semanticamente a
-   * solicitação do VFS e selecionar
-   * a captura correspondente.
+   * As 10 posições já existentes no
+   * Client continuam sendo a fonte oficial.
    */
+
   await moveState(
     application,
     STATES.FACIAL_POSITIONS,
@@ -1641,8 +1800,7 @@ try {
   await application.save();
 
   if (
-    typeof this.site
-      .handleFacialPositionRequest ===
+    typeof this.site.handleFacialPositionRequest ===
     "function"
   ) {
     const facialResult =
@@ -1655,6 +1813,12 @@ try {
         "Facial position handling"
       );
 
+    /*
+     * -------------------------------------------------
+     * POSIÇÃO NÃO RESOLVIDA
+     * -------------------------------------------------
+     */
+
     if (
       facialResult?.state ===
       "FACIAL_POSITION_UNRESOLVED"
@@ -1665,8 +1829,10 @@ try {
         {
           event:
             "FACIAL_POSITION_UNRESOLVED",
+
           reason:
-            facialResult.reason
+            facialResult.reason ||
+            "VFS facial request could not be mapped unambiguously."
         }
       );
 
@@ -1676,6 +1842,11 @@ try {
       application.bot1.lastAction =
         "facial_position_unresolved";
 
+      /*
+       * Não enviamos uma posição
+       * escolhida por aproximação.
+       */
+
       await application.save();
 
       await this.releaseLock(
@@ -1683,18 +1854,74 @@ try {
       );
 
       return {
-        success: false,
+        success:
+          false,
 
         requiresUser:
-          facialResult.requiresUser ===
           true,
 
         facialPositionUnresolved:
           true,
 
+        candidates:
+          facialResult.candidates ||
+          [],
+
         application
       };
     }
+
+    /*
+     * -------------------------------------------------
+     * POSIÇÃO RESOLVIDA
+     * -------------------------------------------------
+     */
+
+    if (
+      facialResult?.state ===
+      "FACIAL_POSITION_RESOLVED"
+    ) {
+      /*
+       * Guardamos o checkpoint de forma
+       * tolerante mesmo antes de haver
+       * um campo específico no schema.
+       */
+
+      application.facialCheckpoint =
+        application.facialCheckpoint ||
+        {};
+
+      application.facialCheckpoint.position =
+        facialResult.position;
+
+      application.facialCheckpoint.label =
+        facialResult.label ||
+        null;
+
+      application.facialCheckpoint.storageReference =
+        facialResult.storageReference ||
+        null;
+
+      application.facialCheckpoint.score =
+        facialResult.score ||
+        null;
+
+      application.facialCheckpoint.request =
+        facialResult.request ||
+        null;
+
+      application.facialCheckpoint.resolvedAt =
+        new Date();
+
+      application.bot1.lastAction =
+        "facial_position_resolved";
+
+      await application.save();
+    }
+
+    /*
+     * Falha real.
+     */
 
     if (
       facialResult?.success ===
@@ -1707,76 +1934,198 @@ try {
         "Facial position handling failed"
       );
     }
+
+    /*
+     * Se o adapter indicar um checkpoint
+     * oficial que exige ação externa,
+     * paramos sem tentar contornar.
+     */
+
+    if (
+      facialResult?.requiresUser ===
+        true &&
+      facialResult?.state !==
+        "FACIAL_POSITION_RESOLVED"
+    ) {
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "facial_official_checkpoint";
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+      return {
+        success:
+          true,
+
+        requiresUser:
+          true,
+
+        officialCheckpoint:
+          true,
+
+        application
+      };
+    }
   }
 
   /*
-   * ======================================================
-   * OTP
-   * ======================================================
+   * ---------------------------------------------------
+   * DETECTAR OTP REAL
+   * ---------------------------------------------------
    *
-   * Só criamos a solicitação quando
-   * a etapa oficial exigir OTP.
+   * IMPORTANTE:
+   * não criamos OTP simplesmente porque
+   * chegamos ao final da etapa facial.
+   *
+   * O adapter precisa confirmar que o VFS
+   * apresentou o checkpoint OTP.
    */
-  await moveState(
-    application,
-    STATES.OTP_REQUIRED,
-    {
-      event:
-        "OTP_REQUIRED"
-    }
-  );
 
-  const otp =
-    this.otp.createRequest(
+  let checkpoint = null;
+
+  if (
+    typeof this.site.detectCheckpoint ===
+    "function"
+  ) {
+    checkpoint =
+      await withTimeout(
+        this.site.detectCheckpoint(),
+        config.timeoutMs,
+        "VFS checkpoint detection"
+      );
+  }
+
+  const otpRequired =
+    checkpoint?.type ===
+      "otp" ||
+    checkpoint?.type ===
+      "OTP_REQUIRED" ||
+    checkpoint?.otpRequired ===
+      true ||
+    checkpoint?.state ===
+      "OTP_REQUIRED";
+
+  /*
+   * ---------------------------------------------------
+   * OTP REQUIRED
+   * ---------------------------------------------------
+   */
+
+  if (otpRequired) {
+    await moveState(
+      application,
+      STATES.OTP_REQUIRED,
+      {
+        event:
+          "OTP_REQUIRED",
+
+        reason:
+          checkpoint.reason ||
+          "VFS presented an OTP checkpoint."
+      }
+    );
+
+    const otp =
+      this.otp.createRequest(
+        applicationId
+      );
+
+    application.otp =
+      application.otp || {};
+
+    application.otp.requestId =
+      otp.requestId;
+
+    application.otp.status =
+      "waiting";
+
+    application.otp.expiresAt =
+      otp.expiresAt;
+
+    application.otp.attempts =
+      0;
+
+    await this.otp.requestCode(
+      otp,
+      application.client?.phone ||
+      application.client?.email ||
+      null
+    );
+
+    application.status =
+      "otp_required";
+
+    application.bot1.status =
+      "waiting";
+
+    application.bot1.lastAction =
+      "waiting_for_otp";
+
+    await application.save();
+
+    await this.releaseLock(
       applicationId
     );
 
-  application.otp.requestId =
-    otp.requestId;
+    return {
+      success:
+        true,
 
-  application.otp.status =
-    "waiting";
+      otpRequired:
+        true,
 
-  application.otp.expiresAt =
-    otp.expiresAt;
-
-  application.otp.attempts =
-    0;
+      application
+    };
+  }
 
   /*
-   * O provider existente é responsável
-   * por encaminhar a solicitação pelo
-   * canal autorizado/configurado.
+   * ---------------------------------------------------
+   * NO OTP
+   * ---------------------------------------------------
+   *
+   * O fluxo segue diretamente para
+   * REVIEW, caso o VFS já tenha chegado
+   * a esse checkpoint.
    */
-  await this.otp.requestCode(
-    otp,
-    application.client?.phone ||
-    application.client?.email ||
-    null
+
+  await moveState(
+    application,
+    STATES.REVIEW,
+    {
+      event:
+        "REVIEW_STARTED",
+
+      reason:
+        "VFS não apresentou checkpoint OTP nesta etapa."
+    }
   );
 
   application.status =
-    "otp_required";
+    "review_pay";
 
   application.bot1.status =
-    "waiting";
+    "running";
 
   application.bot1.lastAction =
-    "waiting_for_otp";
+    "review_pay";
 
   await application.save();
 
-  await this.releaseLock(
-    applicationId
-  );
+  /*
+   * Se o VFS já fornece os dados de
+   * pagamento nesta etapa, finalizamos
+   * diretamente.
+   */
 
-  return {
-    success: true,
-
-    otpRequired: true,
-
+  return await this.processPaymentStage(
     application
-  };
+  );
 } catch (error) {
   await this.markError(
     application,
@@ -1792,6 +2141,295 @@ try {
 }
 
 }
+
+/*
+
+* =======================================================
+* PROCESS PAYMENT STAGE
+* =======================================================
+  */
+
+async processPaymentStage(
+application
+) {
+const applicationId =
+application._id.toString();
+
+await this.refreshLock(
+  applicationId
+);
+
+await this.heartbeat(
+  applicationId,
+  "extracting_payment_details"
+);
+
+const rawPaymentDetails =
+  await withTimeout(
+    this.site.getPaymentDetails(
+      application,
+      application.client
+    ),
+    config.timeoutMs,
+    "Payment details retrieval"
+  );
+
+const payment =
+  normalizePaymentDetails(
+    rawPaymentDetails
+  );
+
+if (
+  !payment.reference &&
+  typeof this.site.getReference ===
+    "function"
+) {
+  payment.reference =
+    await withTimeout(
+      this.site.getReference(
+        application
+      ),
+      config.timeoutMs,
+      "Reference retrieval"
+    ).catch(
+      () => null
+    );
+}
+
+if (
+  !payment.entity &&
+  typeof this.site.getEntity ===
+    "function"
+) {
+  payment.entity =
+    await withTimeout(
+      this.site.getEntity(
+        application
+      ),
+      config.timeoutMs,
+      "Entity retrieval"
+    ).catch(
+      () => null
+    );
+}
+
+application.result =
+  application.result || {};
+
+application.result.reference =
+  payment.reference;
+
+application.result.entity =
+  payment.entity;
+
+application.result.transactionId =
+  payment.transactionId;
+
+application.result.paymentStatus =
+  payment.paymentStatus;
+
+application.result.paymentAmount =
+  payment.amount;
+
+application.result.paymentCurrency =
+  payment.currency;
+
+application.result.paymentDeadline =
+  payment.deadline;
+
+application.result.confirmationUrl =
+  payment.confirmationUrl;
+
+await application.save();
+
+/*
+ * ---------------------------------------------------
+ * PAYMENT PENDING
+ * ---------------------------------------------------
+ */
+
+if (
+  isPendingPayment(payment)
+) {
+  await moveState(
+    application,
+    STATES.APPOINTMENT_BOOKED,
+    {
+      event:
+        "APPOINTMENT_BOOKED_PAYMENT_PENDING"
+    }
+  );
+
+  await moveState(
+    application,
+    STATES.PAYMENT_PENDING,
+    {
+      event:
+        "PAYMENT_PENDING",
+
+      reason:
+        "VFS returned appointment/payment data but payment is not confirmed."
+    }
+  );
+
+  application.bot1.status =
+    "waiting";
+
+  application.bot1.lastAction =
+    "payment_pending";
+
+  application.bot2 =
+    application.bot2 || {};
+
+  application.bot2.monitoring =
+    false;
+
+  application.radar =
+    application.radar || {};
+
+  application.radar.enabled =
+    false;
+
+  application.lock = {
+    owner:
+      null,
+
+    expiresAt:
+      null
+  };
+
+  await application.save();
+
+  return {
+    success:
+      true,
+
+    paymentPending:
+      true,
+
+    requiresUser:
+      false,
+
+    payment: {
+      reference:
+        application.result.reference,
+
+      entity:
+        application.result.entity,
+
+      amount:
+        application.result.paymentAmount,
+
+      currency:
+        application.result.paymentCurrency,
+
+      deadline:
+        application.result.paymentDeadline,
+
+      status:
+        application.result.paymentStatus,
+
+      confirmationUrl:
+        application.result.confirmationUrl
+    },
+
+    application
+  };
+}
+
+/*
+ * ---------------------------------------------------
+ * APPOINTMENT BOOKED
+ * ---------------------------------------------------
+ */
+
+await moveState(
+  application,
+  STATES.APPOINTMENT_BOOKED,
+  {
+    event:
+      "APPOINTMENT_BOOKED"
+  }
+);
+
+await this.refreshLock(
+  applicationId
+);
+
+const finalization =
+  await withTimeout(
+    this.site.finalizeBooking(
+      application,
+      payment
+    ),
+    config.timeoutMs,
+    "Booking finalization"
+  );
+
+if (
+  finalization?.success ===
+  false
+) {
+  if (
+    finalization.requiresUser ===
+    true
+  ) {
+    application.bot1.status =
+      "waiting";
+
+    application.bot1.lastAction =
+      "official_vfs_checkpoint";
+
+    await application.save();
+
+    await this.releaseLock(
+      applicationId
+    );
+
+    return {
+      success:
+        true,
+
+      requiresUser:
+        true,
+
+      officialCheckpoint:
+        true,
+
+      application
+    };
+  }
+
+  throw new Error(
+    finalization.reason ||
+    "Booking finalization failed"
+  );
+}
+
+const confirmation =
+  await withTimeout(
+    this.site.getConfirmation(
+      application,
+      payment,
+      finalization
+    ),
+    config.timeoutMs,
+    "Confirmation verification"
+  );
+
+return await this.completeFromConfirmation(
+  application,
+  confirmation
+);
+
+}
+
+/*
+
+* =======================================================
+* FINALIZE AFTER OTP
+* =======================================================
+  */
 
 async finalizeAfterOtp(
 applicationId
@@ -1838,17 +2476,25 @@ try {
 
   await application.save();
 
+  /*
+   * O código deve existir apenas se
+   * o serviço OTP tiver sido configurado
+   * para armazená-lo de forma autorizada.
+   */
+
+  const otpCode =
+    application.otp?.code ||
+    application.otp?.value ||
+    null;
+
   if (
-    typeof this.site
-      .submitOtp ===
+    typeof this.site.submitOtp ===
     "function"
   ) {
     const otpResult =
       await withTimeout(
         this.site.submitOtp(
-          application.otp.code ||
-          application.otp.value ||
-          null
+          otpCode
         ),
         config.timeoutMs,
         "VFS OTP submission"
@@ -1864,6 +2510,36 @@ try {
         otpResult.reason ||
         "VFS OTP submission failed"
       );
+    }
+
+    if (
+      otpResult?.requiresUser ===
+      true
+    ) {
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "otp_official_checkpoint";
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+      return {
+        success:
+          true,
+
+        requiresUser:
+          true,
+
+        officialCheckpoint:
+          true,
+
+        application
+      };
     }
   }
 
@@ -1893,409 +2569,9 @@ try {
 
   await application.save();
 
-  await this.heartbeat(
-    applicationId,
-    "extracting_payment_details"
+  return await this.processPaymentStage(
+    application
   );
-
-  const rawPaymentDetails =
-    await withTimeout(
-      this.site.getPaymentDetails(
-        application,
-        application.client
-      ),
-      config.timeoutMs,
-      "Payment details retrieval"
-    );
-
-  const payment =
-    normalizePaymentDetails(
-      rawPaymentDetails
-    );
-
-  if (!payment.reference) {
-    payment.reference =
-      await withTimeout(
-        this.site.getReference(
-          application
-        ),
-        config.timeoutMs,
-        "Reference retrieval"
-      ).catch(
-        () => null
-      );
-  }
-
-  if (!payment.entity) {
-    payment.entity =
-      await withTimeout(
-        this.site.getEntity(
-          application
-        ),
-        config.timeoutMs,
-        "Entity retrieval"
-      ).catch(
-        () => null
-      );
-  }
-
-  application.result.reference =
-    payment.reference;
-
-  application.result.entity =
-    payment.entity;
-
-  application.result.transactionId =
-    payment.transactionId;
-
-  application.result.paymentStatus =
-    payment.paymentStatus;
-
-  application.result.paymentAmount =
-    payment.amount;
-
-  application.result.paymentCurrency =
-    payment.currency;
-
-  application.result.paymentDeadline =
-    payment.deadline;
-
-  application.result.confirmationUrl =
-    payment.confirmationUrl;
-
-  await application.save();
-
-  /*
-   * ======================================================
-   * APPOINTMENT BOOKED / PAYMENT PENDING
-   * ======================================================
-   */
-  if (
-    isPendingPayment(payment)
-  ) {
-    await moveState(
-      application,
-      STATES.APPOINTMENT_BOOKED,
-      {
-        event:
-          "APPOINTMENT_BOOKED_PAYMENT_PENDING",
-        reason:
-          "VFS returned appointment/payment data but payment is not confirmed."
-      }
-    );
-
-    await moveState(
-      application,
-      STATES.PAYMENT_PENDING,
-      {
-        event:
-          "PAYMENT_PENDING",
-        reason:
-          "Payment must be completed through the official payment flow."
-      }
-    );
-
-    application.bot1.status =
-      "waiting";
-
-    application.bot1.lastAction =
-      "payment_pending";
-
-    application.bot2.monitoring =
-      false;
-
-    application.radar.enabled =
-      false;
-
-    application.lock = {
-      owner: null,
-      expiresAt: null
-    };
-
-    await application.save();
-
-    return {
-      success: true,
-
-      paymentPending: true,
-
-      requiresUser: false,
-
-      payment: {
-        reference:
-          application.result
-            .reference,
-
-        entity:
-          application.result
-            .entity,
-
-        amount:
-          application.result
-            .paymentAmount,
-
-        currency:
-          application.result
-            .paymentCurrency,
-
-        deadline:
-          application.result
-            .paymentDeadline,
-
-        status:
-          application.result
-            .paymentStatus,
-
-        confirmationUrl:
-          application.result
-            .confirmationUrl
-      },
-
-      application
-    };
-  }
-
-  await moveState(
-    application,
-    STATES.APPOINTMENT_BOOKED,
-    {
-      event:
-        "APPOINTMENT_BOOKED"
-    }
-  );
-
-  await this.refreshLock(
-    applicationId
-  );
-
-  await this.heartbeat(
-    applicationId,
-    "finalizing_booking"
-  );
-
-  const finalization =
-    await withTimeout(
-      this.site.finalizeBooking(
-        application,
-        payment
-      ),
-      config.timeoutMs,
-      "Booking finalization"
-    );
-
-  if (
-    finalization?.success === false
-  ) {
-    if (
-      finalization.requiresUser ===
-      true
-    ) {
-      application.bot1.status =
-        "waiting";
-
-      application.bot1.lastAction =
-        "official_vfs_checkpoint";
-
-      await application.save();
-
-      await this.releaseLock(
-        applicationId
-      );
-
-      return {
-        success: true,
-
-        requiresUser: true,
-
-        officialCheckpoint: true,
-
-        application
-      };
-    }
-
-    throw new Error(
-      finalization.reason ||
-      "Booking finalization failed"
-    );
-  }
-
-  await this.refreshLock(
-    applicationId
-  );
-
-  await this.heartbeat(
-    applicationId,
-    "checking_confirmation"
-  );
-
-  const confirmation =
-    await withTimeout(
-      this.site.getConfirmation(
-        application,
-        payment,
-        finalization
-      ),
-      config.timeoutMs,
-      "Confirmation verification"
-    );
-
-  const normalized =
-    normalizePaymentDetails(
-      confirmation || {}
-    );
-
-  if (
-    normalized.reference
-  ) {
-    application.result.reference =
-      normalized.reference;
-  }
-
-  if (
-    normalized.entity
-  ) {
-    application.result.entity =
-      normalized.entity;
-  }
-
-  if (
-    normalized.transactionId
-  ) {
-    application.result.transactionId =
-      normalized.transactionId;
-  }
-
-  if (
-    normalized.paymentStatus
-  ) {
-    application.result.paymentStatus =
-      normalized.paymentStatus;
-  }
-
-  if (
-    normalized.confirmationUrl
-  ) {
-    application.result.confirmationUrl =
-      normalized.confirmationUrl;
-  }
-
-  const confirmed =
-    confirmation?.confirmed ===
-      true ||
-    confirmation?.success ===
-      true ||
-    isPaidStatus(
-      confirmation?.paymentStatus
-    );
-
-  if (!confirmed) {
-    await moveState(
-      application,
-      STATES.PAYMENT_PENDING,
-      {
-        event:
-          "PAYMENT_CONFIRMATION_PENDING",
-        reason:
-          "VFS did not independently confirm payment."
-      }
-    );
-
-    application.bot1.status =
-      "waiting";
-
-    application.bot1.lastAction =
-      "payment_pending";
-
-    application.lock = {
-      owner: null,
-      expiresAt: null
-    };
-
-    await application.save();
-
-    return {
-      success: true,
-
-      paymentPending: true,
-
-      requiresUser: false,
-
-      application
-    };
-  }
-
-  await moveState(
-    application,
-    STATES.PAYMENT_CONFIRMED,
-    {
-      event:
-        "PAYMENT_CONFIRMED"
-    }
-  );
-
-  const completionMs =
-    Date.now() -
-    Number(
-      application
-        .bot1
-        ?.lastAttemptAt
-        ? new Date(
-            application.bot1
-              .lastAttemptAt
-          ).getTime()
-        : Date.now()
-    );
-
-  await moveState(
-    application,
-    STATES.COMPLETED,
-    {
-      event:
-        "APPLICATION_COMPLETED"
-    }
-  );
-
-  application.status =
-    "completed";
-
-  application.bot1.status =
-    "completed";
-
-  application.bot1.lastAction =
-    "completed";
-
-  application.bot1.completedAt =
-    new Date();
-
-  application.bot1.heartbeatAt =
-    new Date();
-
-  application.bot2.monitoring =
-    false;
-
-  application.radar.enabled =
-    false;
-
-  application.metrics.completionMs =
-    completionMs;
-
-  application.lock = {
-    owner: null,
-    expiresAt: null
-  };
-
-  await application.save();
-
-  return {
-    success: true,
-
-    completed: true,
-
-    application,
-
-    elapsedMs:
-      completionMs
-  };
 } catch (error) {
   await this.markError(
     application,
@@ -2312,25 +2588,212 @@ try {
 
 }
 
+/*
+
+* =======================================================
+* COMPLETE FROM CONFIRMATION
+* =======================================================
+  */
+
+async completeFromConfirmation(
+application,
+confirmation
+) {
+const normalized =
+normalizePaymentDetails(
+confirmation || {}
+);
+
+if (
+  normalized.reference
+) {
+  application.result.reference =
+    normalized.reference;
+}
+
+if (
+  normalized.entity
+) {
+  application.result.entity =
+    normalized.entity;
+}
+
+if (
+  normalized.transactionId
+) {
+  application.result.transactionId =
+    normalized.transactionId;
+}
+
+if (
+  normalized.paymentStatus
+) {
+  application.result.paymentStatus =
+    normalized.paymentStatus;
+}
+
+if (
+  normalized.confirmationUrl
+) {
+  application.result.confirmationUrl =
+    normalized.confirmationUrl;
+}
+
+const confirmed =
+  confirmation?.confirmed ===
+    true ||
+  confirmation?.success ===
+    true ||
+  isPaidStatus(
+    confirmation?.paymentStatus
+  );
+
+if (!confirmed) {
+  await moveState(
+    application,
+    STATES.PAYMENT_PENDING,
+    {
+      event:
+        "PAYMENT_CONFIRMATION_PENDING",
+
+      reason:
+        "Payment was not independently confirmed."
+    }
+  );
+
+  application.bot1.status =
+    "waiting";
+
+  application.bot1.lastAction =
+    "payment_pending";
+
+  application.lock = {
+    owner:
+      null,
+
+    expiresAt:
+      null
+  };
+
+  await application.save();
+
+  return {
+    success:
+      true,
+
+    paymentPending:
+      true,
+
+    requiresUser:
+      false,
+
+    application
+  };
+}
+
+await moveState(
+  application,
+  STATES.PAYMENT_CONFIRMED,
+  {
+    event:
+      "PAYMENT_CONFIRMED"
+  }
+);
+
+await moveState(
+  application,
+  STATES.COMPLETED,
+  {
+    event:
+      "APPLICATION_COMPLETED"
+  }
+);
+
+application.status =
+  "completed";
+
+application.bot1.status =
+  "completed";
+
+application.bot1.lastAction =
+  "completed";
+
+application.bot1.completedAt =
+  new Date();
+
+application.bot1.heartbeatAt =
+  new Date();
+
+application.bot2 =
+  application.bot2 || {};
+
+application.bot2.monitoring =
+  false;
+
+application.radar =
+  application.radar || {};
+
+application.radar.enabled =
+  false;
+
+application.lock = {
+  owner:
+    null,
+
+  expiresAt:
+    null
+};
+
+application.metrics =
+  application.metrics || {};
+
+application.metrics.completionMs =
+  Date.now() -
+  Number(
+    application.bot1.lastAttemptAt
+      ? new Date(
+          application.bot1.lastAttemptAt
+        ).getTime()
+      : Date.now()
+  );
+
+await application.save();
+
+return {
+  success:
+    true,
+
+  completed:
+    true,
+
+  application
+};
+
+}
+
+/*
+
+* =======================================================
+* ERROR
+* =======================================================
+  */
+
 async markError(
 application,
 code,
 error
 ) {
-const attempts =
-Number(
-application.error
-?.attempts
-) || 0;
+const current =
+getWorkflowState(
+application
+);
 
 /*
- * Não convertemos PAYMENT_PENDING
- * em erro.
+ * PAYMENT_PENDING não é erro.
  */
+
 if (
-  getWorkflowState(
-    application
-  ) ===
+  current ===
   STATES.PAYMENT_PENDING
 ) {
   application.bot1.status =
@@ -2340,8 +2803,11 @@ if (
     "payment_pending";
 
   application.lock = {
-    owner: null,
-    expiresAt: null
+    owner:
+      null,
+
+    expiresAt:
+      null
   };
 
   await application.save();
@@ -2358,44 +2824,64 @@ application.bot1.status =
 application.bot1.lastAction =
   code;
 
-application.error = {
-  code,
+application.error =
+  application.error || {};
 
-  message:
-    error?.message ||
-    "Unknown Bot 1 error",
+application.error.code =
+  code;
 
-  at:
-    new Date(),
+application.error.message =
+  error?.message ||
+  "Unknown Bot 1 error";
 
-  attempts:
-    attempts + 1
-};
+application.error.at =
+  new Date();
+
+application.error.attempts =
+  Number(
+    application.error.attempts || 0
+  ) + 1;
 
 try {
-  await moveState(
-    application,
-    STATES.ERROR,
-    {
-      event:
-        "BOT1_ERROR",
-      reason:
-        error?.message ||
-        code
-    }
-  );
+  if (
+    getWorkflowState(
+      application
+    ) !== STATES.ERROR
+  ) {
+    await moveState(
+      application,
+      STATES.ERROR,
+      {
+        event:
+          "BOT1_ERROR",
+
+        reason:
+          error?.message ||
+          code
+      }
+    );
+  }
 } catch {
   application.workflowState =
     STATES.ERROR;
 }
 
 application.lock = {
-  owner: null,
-  expiresAt: null
+  owner:
+    null,
+
+  expiresAt:
+    null
 };
+
+application.bot2 =
+  application.bot2 || {};
 
 application.bot2.monitoring =
   false;
+
+application.radar =
+  application.radar || {};
 
 application.radar.enabled =
   false;
@@ -2414,7 +2900,7 @@ logger.error(
     code,
 
     attempt:
-      attempts + 1,
+      application.error.attempts,
 
     error:
       error?.message
