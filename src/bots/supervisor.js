@@ -1,1189 +1,2231 @@
 const Application =
-require("../models/application");
+  require("../models/application");
 
 const Bot1 =
-require("./bot1");
+  require("./bot1");
 
 const Bot2 =
-require("./bot2");
+  require("./bot2");
 
 const eventBus =
-require("../utils/event-bus");
+  require("../utils/event-bus");
 
 const TelegramService =
-require("../services/telegram/telegram-service");
+  require("../services/telegram/telegram-service");
 
 const logger =
-require("../utils/logger");
+  require("../utils/logger");
 
 const PaymentResumeService =
   require("../services/payment/payment-resume-service");
+
+const {
+  STATES,
+  isKnownState
+} =
+  require("../services/application/application-state-machine");
+
 const crypto =
-require("crypto");
+  require("crypto");
+
 
 class Supervisor {
-constructor({
-siteFactory,
-intervalMs = 2000
-}) {
-this.siteFactory =
-siteFactory;
 
-this.telegram =
-  new TelegramService();
+  constructor({
+    siteFactory,
+    intervalMs = 2000
+  }) {
 
-this.adapters =
-  new Map();
+    this.siteFactory =
+      siteFactory;
 
-this.bot1 =
-  new Map();
+    this.telegram =
+      new TelegramService();
 
-this.bot2 =
-  new Bot2({
-    getAdapter:
-      applicationId =>
-        this.getAdapter(
-          applicationId
-        ),
+    this.adapters =
+      new Map();
 
-    intervalMs
-  });
+    this.bot1 =
+      new Map();
 
-this.started =
-  false;
+    this.bot2 =
+      new Bot2({
+        getAdapter:
+          applicationId =>
+            this.getAdapter(
+              applicationId
+            ),
 
-this.workerId =
-  crypto.randomUUID();
+        intervalMs
+      });
 
-this.stats = {
-  slotEvents:
-    0,
+    this.started =
+      false;
 
-  completed:
-    0,
+    this.workerId =
+      crypto.randomUUID();
 
-  paymentPending:
-    0,
+    this.stats = {
+      slotEvents:
+        0,
 
-  requiresUser:
-    0,
+      completed:
+        0,
 
-  recovered:
-    0,
+      paymentPending:
+        0,
 
-  errors:
-    0,
+      requiresUser:
+        0,
 
-  startedAt:
-    null
-};
+      recovered:
+        0,
 
-this.onSlotFound =
-  this.onSlotFound.bind(
-    this
-  );
+      errors:
+        0,
 
-}
+      startedAt:
+        null
+    };
 
-async getAdapter(
-applicationId
-) {
-if (
-this.adapters.has(
-applicationId
-)
-) {
-return this.adapters.get(
-applicationId
-);
-}
+    this.onSlotFound =
+      this.onSlotFound.bind(
+        this
+      );
+  }
 
-const adapter =
-  this.siteFactory(
+
+  /*
+   * =======================================================
+   * ADAPTER
+   * =======================================================
+   */
+
+  async getAdapter(
     applicationId
-  );
+  ) {
 
-await adapter.initialize();
+    if (
+      this.adapters.has(
+        applicationId
+      )
+    ) {
 
-this.adapters.set(
-  applicationId,
-  adapter
-);
+      return this.adapters.get(
+        applicationId
+      );
+    }
 
-return adapter;
+    const adapter =
+      this.siteFactory(
+        applicationId
+      );
 
-}
+    await adapter.initialize();
 
-async getBot1(
-applicationId
-) {
-if (
-this.bot1.has(
-applicationId
-)
-) {
-return this.bot1.get(
-applicationId
-);
-}
-
-const adapter =
-  await this.getAdapter(
-    applicationId
-  );
-
-const bot =
-  new Bot1(
-    adapter
-  );
-
-this.bot1.set(
-  applicationId,
-  bot
-);
-
-return bot;
-
-}
-
-async prepare(
-applicationId
-) {
-const bot =
-await this.getBot1(
-applicationId
-);
-
-return bot.prepare(
-  applicationId
-);
-
-}
-async verifyOtp(
-applicationId,
-code
-) {
-  const bot =
-    await this.getBot1(
-      applicationId
+    this.adapters.set(
+      applicationId,
+      adapter
     );
 
-  return bot.verifyOtp(
-    applicationId,
-    code
-  );
-}
-async continueAfterVerification(
-applicationId
-) {
-const bot =
-await this.getBot1(
-applicationId
-);
+    return adapter;
+  }
 
-return bot.continueAfterVerification(
-  applicationId
-);
 
-}
-async resumeApplication(
-  applicationId
-) {
-  const application =
-    await Application.findOne({
-      _id:
-        applicationId,
+  /*
+   * =======================================================
+   * BOT 1
+   * =======================================================
+   */
 
-      status:
-        "requires_user"
-    });
+  async getBot1(
+    applicationId
+  ) {
 
-  if (!application) {
-    throw new Error(
-      "Application is not waiting for user resume"
+    if (
+      this.bot1.has(
+        applicationId
+      )
+    ) {
+
+      return this.bot1.get(
+        applicationId
+      );
+    }
+
+    const adapter =
+      await this.getAdapter(
+        applicationId
+      );
+
+    const bot =
+      new Bot1(
+        adapter
+      );
+
+    this.bot1.set(
+      applicationId,
+      bot
+    );
+
+    return bot;
+  }
+
+
+  async prepare(
+    applicationId
+  ) {
+
+    const bot =
+      await this.getBot1(
+        applicationId
+      );
+
+    return bot.prepare(
+      applicationId
     );
   }
 
-  const adapter =
-    await this.getAdapter(
+
+  async verifyOtp(
+    applicationId,
+    code
+  ) {
+
+    const bot =
+      await this.getBot1(
+        applicationId
+      );
+
+    return bot.verifyOtp(
+      applicationId,
+      code
+    );
+  }
+
+
+  async continueAfterVerification(
+    applicationId
+  ) {
+
+    const bot =
+      await this.getBot1(
+        applicationId
+      );
+
+    return bot.continueAfterVerification(
       applicationId
     );
+  }
 
-  const service =
-    new PaymentResumeService({
-      adapter,
 
-      timeoutMs:
-        Number(
-          process.env.BOT1_TIMEOUT_MS
-        ) || 30000
-    });
+  /*
+   * =======================================================
+   * WORKFLOW HELPERS
+   * =======================================================
+   *
+   * Durante a migração ainda existem documentos antigos
+   * que possuem somente "status".
+   *
+   * Estas funções permitem trabalhar com os dois sistemas
+   * sem destruir o fluxo existente.
+   */
 
-  try {
+  getWorkflowState(
+    application
+  ) {
+
+    if (
+      !application
+    ) {
+
+      return STATES.ERROR;
+    }
+
+    if (
+      application.workflowState &&
+      isKnownState(
+        application.workflowState
+      )
+    ) {
+
+      return application.workflowState;
+    }
+
+    if (
+      typeof application.getWorkflowState ===
+      "function"
+    ) {
+
+      return application.getWorkflowState();
+    }
+
+    return STATES.CREATED;
+  }
+
+
+  async transitionApplication(
+    application,
+    nextState,
+    metadata = {}
+  ) {
+
+    if (
+      !application
+    ) {
+
+      throw new Error(
+        "Application is required for workflow transition"
+      );
+    }
+
+    const currentState =
+      this.getWorkflowState(
+        application
+      );
+
     /*
-     * O lock impede que dois pedidos
-     * de resume processem o mesmo
-     * pagamento simultaneamente.
+     * Se já estamos no estado desejado,
+     * não executamos uma transição desnecessária.
      */
-    const locked =
-      await Application.findOneAndUpdate(
+
+    if (
+      currentState ===
+      nextState
+    ) {
+
+      return application;
+    }
+
+    try {
+
+      application.transitionTo(
+        nextState,
+        metadata
+      );
+
+      await application.save();
+
+      return application;
+
+    } catch (error) {
+
+      /*
+       * Durante a migração podemos encontrar
+       * documentos antigos cujo status e workflowState
+       * ainda não estão perfeitamente sincronizados.
+       *
+       * Não alteramos diretamente o estado neste caso.
+       * O erro é registado para não esconder uma
+       * transição inválida real.
+       */
+
+      logger.warn(
+        "APPLICATION workflow transition rejected",
         {
-          _id:
-            applicationId,
+          applicationId:
+            application._id?.toString?.() ||
+            null,
 
-          status:
-            "requires_user",
+          currentState,
 
-          $or: [
-            {
-              "lock.owner":
-                null
-            },
+          nextState,
 
-            {
-              "lock.expiresAt": {
-                $lt:
-                  new Date()
+          event:
+            metadata.event ||
+            null,
+
+          reason:
+            metadata.reason ||
+            null,
+
+          error:
+            error.message
+        }
+      );
+
+      throw error;
+    }
+  }
+
+
+  /*
+   * Sincronização segura de documentos antigos.
+   */
+
+  async ensureWorkflowState(
+    application
+  ) {
+
+    if (
+      !application
+    ) {
+
+      return null;
+    }
+
+    const current =
+      this.getWorkflowState(
+        application
+      );
+
+    if (
+      application.workflowState ===
+      current
+    ) {
+
+      return current;
+    }
+
+    application.workflowState =
+      current;
+
+    if (
+      !application.workflow
+    ) {
+
+      application.workflow = {};
+    }
+
+    application.workflow.stateChangedAt =
+      application.workflow.stateChangedAt ||
+      new Date();
+
+    await application.save();
+
+    return current;
+  }
+
+
+  /*
+   * =======================================================
+   * PAYMENT RESUME
+   * =======================================================
+   *
+   * O endpoint antigo usava:
+   *
+   * requires_user
+   *
+   * para representar pagamento pendente.
+   *
+   * Agora:
+   *
+   * PAYMENT_PENDING
+   *
+   * é o estado oficial.
+   */
+
+  async resumeApplication(
+    applicationId
+  ) {
+
+    let application =
+      await Application.findById(
+        applicationId
+      );
+
+    if (
+      !application
+    ) {
+
+      throw new Error(
+        "Application not found"
+      );
+    }
+
+    await this.ensureWorkflowState(
+      application
+    );
+
+    const workflowState =
+      this.getWorkflowState(
+        application
+      );
+
+    const paymentPending =
+      workflowState ===
+        STATES.PAYMENT_PENDING ||
+      (
+        application.status ===
+          "requires_user" &&
+        application.result?.paymentStatus ===
+          "pending"
+      );
+
+    if (
+      !paymentPending
+    ) {
+
+      throw new Error(
+        "Application is not waiting for payment confirmation"
+      );
+    }
+
+    const adapter =
+      await this.getAdapter(
+        applicationId
+      );
+
+    const service =
+      new PaymentResumeService({
+        adapter,
+
+        timeoutMs:
+          Number(
+            process.env.BOT1_TIMEOUT_MS
+          ) || 30000
+      });
+
+
+    try {
+
+      /*
+       * Garantimos que a aplicação entra
+       * explicitamente em PAYMENT_PENDING.
+       *
+       * Para documentos antigos que estavam
+       * em requires_user, a transição pode ser:
+       *
+       * APPOINTMENT_BOOKED -> PAYMENT_PENDING
+       *
+       * ou o documento já poderá ter
+       * PAYMENT_PENDING.
+       */
+
+      if (
+        this.getWorkflowState(
+          application
+        ) ===
+        STATES.APPOINTMENT_BOOKED
+      ) {
+
+        await this.transitionApplication(
+          application,
+          STATES.PAYMENT_PENDING,
+          {
+            event:
+              "payment_resume_requested",
+
+            reason:
+              "Appointment booked and payment confirmation is pending"
+          }
+        );
+      }
+
+
+      /*
+       * Lock exclusivo para impedir duas
+       * confirmações simultâneas.
+       */
+
+      const locked =
+        await Application.findOneAndUpdate(
+          {
+            _id:
+              applicationId,
+
+            $or: [
+              {
+                "workflowState":
+                  STATES.PAYMENT_PENDING
+              },
+
+              {
+                status:
+                  "requires_user"
               }
-            }
-          ]
-        },
-        {
-          $set: {
-            status:
-              "book_appointment",
+            ],
 
-            "bot1.status":
-              "resuming",
+            $or: [
+              {
+                "lock.owner":
+                  null
+              },
 
-            "bot1.workerId":
-              this.workerId,
+              {
+                "lock.expiresAt": {
+                  $lt:
+                    new Date()
+                }
+              }
+            ]
+          },
+          {
+            $set: {
+              workflowState:
+                STATES.PAYMENT_PENDING,
 
-            "bot1.heartbeatAt":
-              new Date(),
+              status:
+                "review_pay",
 
-            "bot1.lastAction":
-              "resuming_payment",
+              "bot1.status":
+                "running",
 
-            "lock.owner":
-              this.workerId,
+              "bot1.workerId":
+                this.workerId,
 
-            "lock.expiresAt":
-              new Date(
-                Date.now() +
+              "bot1.heartbeatAt":
+                new Date(),
+
+              "bot1.lastAction":
+                "resuming_payment",
+
+              "lock.owner":
+                this.workerId,
+
+              "lock.expiresAt":
+                new Date(
+                  Date.now() +
                   (
                     Number(
                       process.env.BOT1_LOCK_MS
                     ) || 60000
                   )
-              ),
+                ),
 
-            "bot2.monitoring":
-              false,
+              "bot2.monitoring":
+                false,
 
-            "radar.enabled":
-              false
+              "radar.enabled":
+                false
+            }
+          },
+          {
+            new:
+              true
           }
-        },
-        {
-          new:
-            true
-        }
-      );
-
-    if (!locked) {
-      throw new Error(
-        "Application is already being resumed"
-      );
-    }
-
-    const result =
-      await service.resume(
-        locked
-      );
-
-    if (
-      result.requiresUser === true
-    ) {
-      await Application.updateOne(
-        {
-          _id:
-            applicationId,
-
-          "lock.owner":
-            this.workerId
-        },
-        {
-          $set: {
-            status:
-              "requires_user",
-
-            "bot1.status":
-              "requires_user",
-
-            "bot1.lastAction":
-              "payment_required",
-
-            "lock.owner":
-              null,
-
-            "lock.expiresAt":
-              null
-          }
-        }
-      );
-
-      const updated =
-        await Application.findById(
-          applicationId
         );
 
-      return {
-        success:
-          true,
 
-        requiresUser:
-          true,
+      if (
+        !locked
+      ) {
 
-        completed:
-          false,
+        throw new Error(
+          "Application is already being resumed or its payment state changed"
+        );
+      }
 
-        reason:
-          result.reason ||
-          "Payment still requires user action.",
 
-        application:
-          updated,
-
-        payment:
-          result.payment ||
-          null
-      };
-    }
-
-    if (
-      result.completed !== true
-    ) {
-      await Application.updateOne(
-        {
-          _id:
-            applicationId,
-
-          "lock.owner":
-            this.workerId
-        },
-        {
-          $set: {
-            status:
-              "requires_user",
-
-            "bot1.status":
-              "requires_user",
-
-            "bot1.lastAction":
-              "confirmation_not_verified",
-
-            "lock.owner":
-              null,
-
-            "lock.expiresAt":
-              null
-          }
-        }
-      );
-
-      const updated =
-        await Application.findById(
-          applicationId
+      const result =
+        await service.resume(
+          locked
         );
 
-      return {
-        success:
-          true,
 
-        requiresUser:
-          true,
+      /*
+       * ---------------------------------------------------
+       * PAGAMENTO AINDA PENDENTE
+       * ---------------------------------------------------
+       */
 
-        completed:
-          false,
+      if (
+        result.requiresUser ===
+        true
+      ) {
 
-        reason:
-          "Booking confirmation could not be independently verified.",
+        const updated =
+          await Application.findOneAndUpdate(
+            {
+              _id:
+                applicationId,
 
-        application:
-          updated,
+              "lock.owner":
+                this.workerId
+            },
+            {
+              $set: {
 
-        payment:
-          result.payment ||
-          null
-      };
-    }
+                workflowState:
+                  STATES.PAYMENT_PENDING,
 
-    /*
-     * Só aqui podemos declarar
-     * COMPLETED.
-     */
-    const completed =
-      await Application.findOneAndUpdate(
-        {
-          _id:
+                status:
+                  "review_pay",
+
+                "bot1.status":
+                  "waiting",
+
+                "bot1.lastAction":
+                  "payment_pending",
+
+                "bot1.heartbeatAt":
+                  new Date(),
+
+                "lock.owner":
+                  null,
+
+                "lock.expiresAt":
+                  null,
+
+                "bot2.monitoring":
+                  false,
+
+                "radar.enabled":
+                  false
+              }
+            },
+            {
+              new:
+                true
+            }
+          );
+
+
+        this.stats.paymentPending++;
+
+        logger.info(
+          "ORCHESTRATOR payment still pending",
+          {
             applicationId,
 
-          "lock.owner":
-            this.workerId
-        },
-        {
-          $set: {
-            status:
-              "completed",
-
-            "bot1.status":
-              "completed",
-
-            "bot1.lastAction":
-              "completed",
-
-            "bot1.completedAt":
-              new Date(),
-
-            "bot1.heartbeatAt":
-              new Date(),
-
-            "bot2.monitoring":
-              false,
-
-            "radar.enabled":
-              false,
-
-            "lock.owner":
+            reference:
+              updated?.result
+                ?.reference ||
+              result.payment
+                ?.reference ||
               null,
 
-            "lock.expiresAt":
+            entity:
+              updated?.result
+                ?.entity ||
+              result.payment
+                ?.entity ||
+              null,
+
+            amount:
+              updated?.result
+                ?.paymentAmount ||
+              result.payment
+                ?.amount ||
+              null,
+
+            currency:
+              updated?.result
+                ?.paymentCurrency ||
+              result.payment
+                ?.currency ||
+              null,
+
+            deadline:
+              updated?.result
+                ?.paymentDeadline ||
+              result.payment
+                ?.deadline ||
               null
           }
-        },
-        {
-          new:
-            true
-        }
-      );
+        );
 
-    if (!completed) {
-      throw new Error(
-        "Application completion lock was lost"
-      );
-    }
 
-    this.stats.completed++;
+        return {
+          success:
+            true,
 
-    try {
-      await this.telegram.completed(
-        completed,
-        completed.client
-      );
-    } catch (
-      telegramError
-    ) {
-      logger.error(
-        "Telegram completion notification failed after resume",
-        {
-          applicationId,
+          completed:
+            false,
 
-          error:
-            telegramError.message
-        }
-      );
-    }
+          requiresUser:
+            false,
 
-    await this.closeAdapter(
-      applicationId
-    );
+          paymentPending:
+            true,
 
-    return {
-      success:
-        true,
+          reason:
+            result.reason ||
+            "Payment is still pending.",
 
-      completed:
-        true,
+          application:
+            updated,
 
-      requiresUser:
-        false,
-
-      application:
-        completed,
-
-      payment:
-        result.payment ||
-        null,
-
-      confirmation:
-        result.confirmation ||
-        null
-    };
-  } catch (error) {
-    await Application.updateOne(
-      {
-        _id:
-          applicationId,
-
-        "lock.owner":
-          this.workerId
-      },
-      {
-        $set: {
-          status:
-            "requires_user",
-
-          "bot1.status":
-            "requires_user",
-
-          "bot1.lastAction":
-            "resume_error",
-
-          "lock.owner":
-            null,
-
-          "lock.expiresAt":
+          payment:
+            result.payment ||
             null
-        }
+        };
       }
-    );
 
-    logger.error(
-      "ORCHESTRATOR payment resume failed",
-      {
-        applicationId,
 
-        error:
-          error.message
+      /*
+       * ---------------------------------------------------
+       * PAGAMENTO NÃO CONFIRMADO
+       * ---------------------------------------------------
+       */
+
+      if (
+        result.completed !==
+        true
+      ) {
+
+        const updated =
+          await Application.findOneAndUpdate(
+            {
+              _id:
+                applicationId,
+
+              "lock.owner":
+                this.workerId
+            },
+            {
+              $set: {
+
+                workflowState:
+                  STATES.PAYMENT_PENDING,
+
+                status:
+                  "review_pay",
+
+                "bot1.status":
+                  "waiting",
+
+                "bot1.lastAction":
+                  "payment_not_confirmed",
+
+                "bot1.heartbeatAt":
+                  new Date(),
+
+                "lock.owner":
+                  null,
+
+                "lock.expiresAt":
+                  null
+              }
+            },
+            {
+              new:
+                true
+            }
+          );
+
+
+        this.stats.paymentPending++;
+
+
+        return {
+          success:
+            true,
+
+          completed:
+            false,
+
+          requiresUser:
+            false,
+
+          paymentPending:
+            true,
+
+          reason:
+            "Payment confirmation could not be independently verified.",
+
+          application:
+            updated,
+
+          payment:
+            result.payment ||
+            null
+        };
       }
-    );
 
-    throw error;
-  }
-}
-async onSlotFound(
-payload
-) {
-const {
-applicationId,
-detectedAt
-} = payload;
 
-this.stats.slotEvents++;
+      /*
+       * ---------------------------------------------------
+       * PAGAMENTO CONFIRMADO
+       * ---------------------------------------------------
+       */
 
-try {
-  /*
-   * Fetch the current application state
-   * before allowing Bot 1 to continue.
-   */
+      let confirmed =
+        await Application.findOneAndUpdate(
+          {
+            _id:
+              applicationId,
 
-  const application =
-    await Application.findById(
-      applicationId
-    ).populate(
-      "client"
-    );
+            "lock.owner":
+              this.workerId
+          },
+          {
+            $set: {
 
-  if (!application) {
-    logger.warn(
-      "ORCHESTRATOR received slot for missing application",
-      {
-        applicationId
+              workflowState:
+                STATES.PAYMENT_CONFIRMED,
+
+              status:
+                "book_appointment",
+
+              "bot1.status":
+                "continuing",
+
+              "bot1.lastAction":
+                "payment_confirmed",
+
+              "bot1.heartbeatAt":
+                new Date(),
+
+              "lock.owner":
+                this.workerId,
+
+              "lock.expiresAt":
+                new Date(
+                  Date.now() +
+                  (
+                    Number(
+                      process.env.BOT1_LOCK_MS
+                    ) || 60000
+                  )
+                )
+            }
+          },
+          {
+            new:
+              true
+          }
+        );
+
+
+      if (
+        !confirmed
+      ) {
+
+        throw new Error(
+          "Application payment confirmation lock was lost"
+        );
       }
-    );
 
-    return;
-  }
 
-  /*
-   * A slot event is only valid while the
-   * application is waiting for the slot
-   * to be processed.
-   */
+      /*
+       * A confirmação retornada pelo serviço
+       * só passa a COMPLETED depois de termos
+       * a confirmação independente.
+       */
 
-  if (
-    application.status !==
-    "slot_received"
-  ) {
-    logger.info(
-      "ORCHESTRATOR ignored duplicate slot event",
-      {
-        applicationId,
+      const completed =
+        await Application.findOneAndUpdate(
+          {
+            _id:
+              applicationId,
 
-        status:
-          application.status
+            workflowState:
+              STATES.PAYMENT_CONFIRMED,
+
+            "lock.owner":
+              this.workerId
+          },
+          {
+            $set: {
+
+              workflowState:
+                STATES.COMPLETED,
+
+              status:
+                "completed",
+
+              "bot1.status":
+                "completed",
+
+              "bot1.lastAction":
+                "completed",
+
+              "bot1.completedAt":
+                new Date(),
+
+              "bot1.heartbeatAt":
+                new Date(),
+
+              "bot2.monitoring":
+                false,
+
+              "radar.enabled":
+                false,
+
+              "lock.owner":
+                null,
+
+              "lock.expiresAt":
+                null,
+
+              "result.paymentStatus":
+                result.payment
+                  ?.paymentStatus ||
+                "confirmed",
+
+              "result.reference":
+                result.payment
+                  ?.reference ||
+                null,
+
+              "result.entity":
+                result.payment
+                  ?.entity ||
+                null,
+
+              "result.transactionId":
+                result.payment
+                  ?.transactionId ||
+                null,
+
+              "result.paymentAmount":
+                result.payment
+                  ?.amount ||
+                null,
+
+              "result.paymentCurrency":
+                result.payment
+                  ?.currency ||
+                null,
+
+              "result.paymentDeadline":
+                result.payment
+                  ?.deadline ||
+                null,
+
+              "result.confirmationUrl":
+                result.payment
+                  ?.confirmationUrl ||
+                null
+            }
+          },
+          {
+            new:
+              true
+          }
+        );
+
+
+      if (
+        !completed
+      ) {
+
+        throw new Error(
+          "Application completion lock was lost"
+        );
       }
-    );
 
-    return;
-  }
 
-  const bot =
-    await this.getBot1(
-      applicationId
-    );
+      this.stats.completed++;
 
-  const result =
-    await bot.handleSlot(
-      applicationId,
-      detectedAt
-    );
 
-  /*
-   * Bot 1 may legitimately return without
-   * completing the appointment.
-   */
+      try {
 
-  if (
-    !result ||
-    !result.success
-  ) {
-    logger.info(
-      "ORCHESTRATOR slot processing did not complete",
-      {
-        applicationId,
+        await this.telegram.completed(
+          completed,
+          completed.client
+        );
 
-        status:
-          result?.application?.status ||
-          "unknown",
+      } catch (
+        telegramError
+      ) {
 
-        message:
-          result?.message || null
+        logger.error(
+          "Telegram completion notification failed after payment resume",
+          {
+            applicationId,
+
+            error:
+              telegramError.message
+          }
+        );
       }
-    );
 
-    return;
-  }
 
-  /*
-   * Always use the application returned
-   * by Bot 1 when available because it
-   * contains the newest persisted state.
-   */
-
-  const updatedApplication =
-    result.application ||
-    await Application.findById(
-      applicationId
-    ).populate(
-      "client"
-    );
-
-  if (!updatedApplication) {
-    logger.warn(
-      "ORCHESTRATOR could not reload application after slot processing",
-      {
-        applicationId
-      }
-    );
-
-    return;
-  }
-
-  /*
-   * IMPORTANT:
-   *
-   * success !== completed.
-   *
-   * Bot 1 can successfully process the
-   * slot and then stop at payment.
-   */
-
-  if (
-    updatedApplication.status ===
-    "requires_user"
-  ) {
-    this.stats.requiresUser++;
-
-    const paymentPending =
-      updatedApplication.result?.paymentStatus ===
-      "pending";
-
-    if (paymentPending) {
-      this.stats.paymentPending++;
-    }
-
-    logger.info(
-      "ORCHESTRATOR paused application for user action",
-      {
-        applicationId,
-
-        paymentPending,
-
-        paymentStatus:
-          updatedApplication.result
-            ?.paymentStatus || null,
-
-        reference:
-          updatedApplication.result
-            ?.reference || null,
-
-        amount:
-          updatedApplication.result
-            ?.paymentAmount || null,
-
-        currency:
-          updatedApplication.result
-            ?.paymentCurrency || null,
-
-        deadline:
-          updatedApplication.result
-            ?.paymentDeadline || null
-      }
-    );
-
-    /*
-     * Do NOT mark the application completed.
-     *
-     * Do NOT send the completion notification.
-     *
-     * The payment/finalization stage must
-     * still be completed later.
-     */
-
-    try {
-      await this.telegram.error(
-        updatedApplication,
-        paymentPending
-          ? "Pagamento pendente. A aplicação foi pausada e aguarda a conclusão do pagamento."
-          : "A aplicação requer uma ação do utilizador antes de continuar."
-      );
-    } catch (
-      telegramError
-    ) {
-      logger.error(
-        "Telegram requires-user notification failed",
-        {
-          applicationId,
-
-          error:
-            telegramError.message
-        }
-      );
-    }
-
-    /*
-     * The browser session is intentionally
-     * closed here.
-     *
-     * Payment information is persisted in
-     * MongoDB so the application can be
-     * resumed later instead of keeping a
-     * Render browser process alive indefinitely.
-     */
-
-    await this.closeAdapter(
-      applicationId
-    );
-
-    return;
-  }
-
-  /*
-   * Only the explicit completed state
-   * counts as a completed appointment.
-   */
-
-  if (
-    updatedApplication.status ===
-    "completed"
-  ) {
-    this.stats.completed++;
-
-    logger.info(
-      "ORCHESTRATOR appointment completed",
-      {
-        applicationId,
-
-        reference:
-          updatedApplication.result
-            ?.reference || null,
-
-        entity:
-          updatedApplication.result
-            ?.entity || null,
-
-        transactionId:
-          updatedApplication.result
-            ?.transactionId || null,
-
-        paymentStatus:
-          updatedApplication.result
-            ?.paymentStatus || null
-      }
-    );
-
-    try {
-      await this.telegram.completed(
-        updatedApplication,
-        updatedApplication.client
-      );
-    } catch (
-      telegramError
-    ) {
-      logger.error(
-        "Telegram completion notification failed",
-        {
-          applicationId,
-
-          error:
-            telegramError.message
-        }
-      );
-    }
-
-    await this.closeAdapter(
-      applicationId
-    );
-
-    return;
-  }
-
-  /*
-   * Unexpected successful state.
-   *
-   * Do not falsely mark it completed.
-   */
-
-  logger.warn(
-    "ORCHESTRATOR received successful result with unexpected application status",
-    {
-      applicationId,
-
-      status:
-        updatedApplication.status
-    }
-  );
-
-} catch (error) {
-  this.stats.errors++;
-
-  logger.error(
-    "ORCHESTRATOR slot handler failed",
-    {
-      applicationId,
-
-      error:
-        error.message
-    }
-  );
-
-  try {
-    const application =
-      await Application.findById(
+      await this.closeAdapter(
         applicationId
       );
 
-    if (application) {
-      await this.telegram.error(
-        application,
-        error.message
-      );
-    }
-  } catch {
-    /*
-     * Notification failure must
-     * never kill the orchestrator.
-     */
-  }
-}
 
-}
+      return {
+        success:
+          true,
 
-async recoverSlots() {
-const applications =
-await Application.find({
-status:
-"slot_received"
-})
-.sort({
-updatedAt:
-1
-})
-.limit(100);
+        completed:
+          true,
 
-for (
-  const application
-  of applications
-) {
-  this.stats.recovered++;
+        requiresUser:
+          false,
 
-  logger.info(
-    "ORCHESTRATOR recovering slot",
-    {
-      applicationId:
-        application._id.toString(),
+        paymentPending:
+          false,
 
-      slot:
-        application.slot
-    }
-  );
+        application:
+          completed,
 
-  eventBus.emit(
-    "slot_found",
-    {
-      applicationId:
-        application._id.toString(),
-
-      slot:
-        application.slot,
-
-      detectedAt:
-        application.bot2
-          ?.slotDetectedAt ||
-        new Date()
-    }
-  );
-}
-
-}
-
-async recoverStaleLocks() {
-const staleBefore =
-new Date();
-
-const result =
-  await Application.updateMany(
-    {
-      "lock.owner":
-        {
-          $ne: null
-        },
-
-      "lock.expiresAt":
-        {
-          $lt: staleBefore
-        },
-
-      status: {
-        $nin: [
-          "completed",
-          "cancelled"
-        ]
-      }
-    },
-    {
-      $set: {
-        "lock.owner":
+        payment:
+          result.payment ||
           null,
 
-        "lock.expiresAt":
+        confirmation:
+          result.confirmation ||
           null
-      }
-    }
-  );
+      };
 
-if (
-  result.modifiedCount
-) {
-  logger.warn(
-    "ORCHESTRATOR released stale locks",
-    {
-      count:
-        result.modifiedCount
-    }
-  );
-}
 
-}
+    } catch (
+      error
+    ) {
 
-async recoverWaitingApplications() {
-/*
-* After a Render restart, an application
-* can remain in waiting_for_slot while
-* Bot 2 is no longer marked as monitoring.
-*
-* We reactivate monitoring.
-*/
+      /*
+       * Só libertamos o lock.
+       *
+       * Não transformamos automaticamente
+       * um erro técnico em requires_user.
+       */
 
-const result =
-  await Application.updateMany(
-    {
-      status:
-        "waiting_for_slot",
-
-      "bot2.monitoring":
+      await Application.updateOne(
         {
-          $ne: true
+          _id:
+            applicationId,
+
+          "lock.owner":
+            this.workerId
+        },
+        {
+          $set: {
+
+            "bot1.status":
+              "error",
+
+            "bot1.lastAction":
+              "resume_error",
+
+            "lock.owner":
+              null,
+
+            "lock.expiresAt":
+              null,
+
+            "error.code":
+              "PAYMENT_RESUME_FAILED",
+
+            "error.message":
+              error.message,
+
+            "error.at":
+              new Date()
+          }
         }
-    },
-    {
-      $set: {
-        "bot2.monitoring":
-          true,
+      );
 
-        "bot2.status":
-          "monitoring",
 
-        "bot2.workerId":
-          null
+      logger.error(
+        "ORCHESTRATOR payment resume failed",
+        {
+          applicationId,
+
+          error:
+            error.message
+        }
+      );
+
+      throw error;
+    }
+  }
+
+
+  /*
+   * =======================================================
+   * SLOT FOUND
+   * =======================================================
+   */
+
+  async onSlotFound(
+    payload
+  ) {
+
+    const {
+      applicationId,
+      detectedAt
+    } =
+      payload;
+
+    this.stats.slotEvents++;
+
+
+    try {
+
+      let application =
+        await Application.findById(
+          applicationId
+        ).populate(
+          "client"
+        );
+
+
+      if (
+        !application
+      ) {
+
+        logger.warn(
+          "ORCHESTRATOR received slot for missing application",
+          {
+            applicationId
+          }
+        );
+
+        return;
+      }
+
+
+      await this.ensureWorkflowState(
+        application
+      );
+
+
+      /*
+       * O Bot 2 atual ainda grava:
+       *
+       * status = slot_received
+       *
+       * Portanto sincronizamos o novo workflow.
+       */
+
+      const currentState =
+        this.getWorkflowState(
+          application
+        );
+
+
+      if (
+        currentState ===
+        STATES.RADAR_ACTIVE
+      ) {
+
+        await this.transitionApplication(
+          application,
+          STATES.SLOT_FOUND,
+          {
+            event:
+              "slot_found",
+
+            reason:
+              "Bot 2 found a slot matching application preferences"
+          }
+        );
+
+      } else if (
+        currentState !==
+        STATES.SLOT_FOUND &&
+        currentState !==
+        STATES.SLOT_LOCKED &&
+        currentState !==
+        STATES.SLOT_REVALIDATED
+      ) {
+
+        /*
+         * Compatibilidade com documentos antigos.
+         *
+         * Se o status antigo indica slot_received,
+         * sincronizamos diretamente o novo estado.
+         */
+
+        if (
+          application.status ===
+          "slot_received"
+        ) {
+
+          application.workflowState =
+            STATES.SLOT_FOUND;
+
+          application.workflow =
+            application.workflow ||
+            {};
+
+          application.workflow.stateChangedAt =
+            new Date();
+
+          application.workflow.lastEvent =
+            "slot_found";
+
+          application.workflow.lastReason =
+            "Recovered legacy slot_received state";
+
+          await application.save();
+
+        } else {
+
+          logger.info(
+            "ORCHESTRATOR ignored slot event with incompatible state",
+            {
+              applicationId,
+
+              status:
+                application.status,
+
+              workflowState:
+                currentState
+            }
+          );
+
+          return;
+        }
+      }
+
+
+      /*
+       * O Bot 1 é responsável pela validação
+       * efetiva da vaga antes da marcação.
+       *
+       * O Supervisor não assume que uma vaga
+       * encontrada pelo radar continua disponível.
+       */
+
+      const bot =
+        await this.getBot1(
+          applicationId
+        );
+
+
+      /*
+       * Marcamos SLOT_LOCKED antes de entregar
+       * a execução ao Bot 1.
+       *
+       * O lock MongoDB abaixo impede concorrência
+       * entre workers.
+       */
+
+      const locked =
+        await Application.findOneAndUpdate(
+          {
+            _id:
+              applicationId,
+
+            workflowState:
+              STATES.SLOT_FOUND,
+
+            status:
+              "slot_received",
+
+            $or: [
+              {
+                "lock.owner":
+                  null
+              },
+
+              {
+                "lock.expiresAt": {
+                  $lt:
+                    new Date()
+                }
+              }
+            ]
+          },
+          {
+            $set: {
+
+              workflowState:
+                STATES.SLOT_LOCKED,
+
+              "bot1.status":
+                "starting",
+
+              "bot1.workerId":
+                this.workerId,
+
+              "bot1.startedAt":
+                new Date(),
+
+              "bot1.heartbeatAt":
+                new Date(),
+
+              "bot1.lastAction":
+                "slot_locked",
+
+              "lock.owner":
+                this.workerId,
+
+              "lock.expiresAt":
+                new Date(
+                  Date.now() +
+                  (
+                    Number(
+                      process.env.BOT1_LOCK_MS
+                    ) || 60000
+                  )
+                ),
+
+              "bot2.monitoring":
+                false,
+
+              "radar.enabled":
+                false
+            }
+          },
+          {
+            new:
+              true
+          }
+        );
+
+
+      if (
+        !locked
+      ) {
+
+        logger.info(
+          "ORCHESTRATOR ignored duplicate or already claimed slot",
+          {
+            applicationId
+          }
+        );
+
+        return;
+      }
+
+
+      let result;
+
+
+      try {
+
+        result =
+          await bot.handleSlot(
+            applicationId,
+            detectedAt
+          );
+
+      } catch (
+        botError
+      ) {
+
+        await Application.updateOne(
+          {
+            _id:
+              applicationId,
+
+            "lock.owner":
+              this.workerId
+          },
+          {
+            $set: {
+
+              workflowState:
+                STATES.BOOKING_FAILED,
+
+              status:
+                "error",
+
+              "bot1.status":
+                "error",
+
+              "bot1.lastAction":
+                "slot_processing_failed",
+
+              "error.code":
+                "BOT1_SLOT_PROCESSING_FAILED",
+
+              "error.message":
+                botError.message,
+
+              "error.at":
+                new Date(),
+
+              "lock.owner":
+                null,
+
+              "lock.expiresAt":
+                null
+            }
+          }
+        );
+
+        throw botError;
+      }
+
+
+      /*
+       * Bot 1 pode retornar sem completar.
+       */
+
+      if (
+        !result ||
+        !result.success
+      ) {
+
+        const current =
+          await Application.findById(
+            applicationId
+          );
+
+
+        logger.info(
+          "ORCHESTRATOR slot processing did not complete",
+          {
+            applicationId,
+
+            status:
+              current?.status ||
+              "unknown",
+
+            workflowState:
+              current?.workflowState ||
+              null,
+
+            message:
+              result?.message ||
+              null
+          }
+        );
+
+        return;
+      }
+
+
+      /*
+       * Usamos a aplicação retornada pelo Bot 1
+       * quando possível.
+       */
+
+      let updatedApplication =
+        result.application ||
+        await Application.findById(
+          applicationId
+        ).populate(
+          "client"
+        );
+
+
+      if (
+        !updatedApplication
+      ) {
+
+        logger.warn(
+          "ORCHESTRATOR could not reload application after slot processing",
+          {
+            applicationId
+          }
+        );
+
+        return;
+      }
+
+
+      await this.ensureWorkflowState(
+        updatedApplication
+      );
+
+
+      const state =
+        this.getWorkflowState(
+          updatedApplication
+        );
+
+
+      /*
+       * ---------------------------------------------------
+       * PAGAMENTO PENDENTE
+       * ---------------------------------------------------
+       */
+
+      const isPaymentPending =
+        state ===
+          STATES.PAYMENT_PENDING ||
+        updatedApplication.result
+          ?.paymentStatus ===
+          "pending";
+
+
+      if (
+        isPaymentPending
+      ) {
+
+        /*
+         * Caso o Bot 1 ainda esteja a devolver
+         * requires_user por compatibilidade,
+         * convertemos para o novo estado.
+         */
+
+        if (
+          state !==
+          STATES.PAYMENT_PENDING
+        ) {
+
+          updatedApplication.workflowState =
+            STATES.PAYMENT_PENDING;
+
+          updatedApplication.workflow =
+            updatedApplication.workflow ||
+            {};
+
+          updatedApplication.workflow.previousState =
+            state;
+
+          updatedApplication.workflow.stateChangedAt =
+            new Date();
+
+          updatedApplication.workflow.lastEvent =
+            "payment_pending";
+
+          updatedApplication.workflow.lastReason =
+            "Appointment requires payment confirmation";
+
+          updatedApplication.status =
+            "review_pay";
+
+          await updatedApplication.save();
+        }
+
+
+        this.stats.paymentPending++;
+
+
+        logger.info(
+          "ORCHESTRATOR appointment booked; payment pending",
+          {
+            applicationId,
+
+            reference:
+              updatedApplication.result
+                ?.reference ||
+              null,
+
+            entity:
+              updatedApplication.result
+                ?.entity ||
+              null,
+
+            amount:
+              updatedApplication.result
+                ?.paymentAmount ||
+              null,
+
+            currency:
+              updatedApplication.result
+                ?.paymentCurrency ||
+              null,
+
+            deadline:
+              updatedApplication.result
+                ?.paymentDeadline ||
+              null
+          }
+        );
+
+
+        /*
+         * IMPORTANTE:
+         *
+         * Não usamos telegram.error para pagamento.
+         *
+         * O estado PAYMENT_PENDING é legítimo,
+         * não é erro.
+         */
+
+        try {
+
+          if (
+            typeof this.telegram.paymentPending ===
+            "function"
+          ) {
+
+            await this.telegram.paymentPending(
+              updatedApplication,
+              updatedApplication.client
+            );
+          }
+
+        } catch (
+          telegramError
+        ) {
+
+          logger.error(
+            "Telegram payment-pending notification failed",
+            {
+              applicationId,
+
+              error:
+                telegramError.message
+            }
+          );
+        }
+
+
+        await this.closeAdapter(
+          applicationId
+        );
+
+        return;
+      }
+
+
+      /*
+       * ---------------------------------------------------
+       * COMPLETED
+       * ---------------------------------------------------
+       */
+
+      if (
+        state ===
+          STATES.COMPLETED ||
+        updatedApplication.status ===
+          "completed"
+      ) {
+
+        this.stats.completed++;
+
+
+        logger.info(
+          "ORCHESTRATOR appointment completed",
+          {
+            applicationId,
+
+            reference:
+              updatedApplication.result
+                ?.reference ||
+              null,
+
+            entity:
+              updatedApplication.result
+                ?.entity ||
+              null,
+
+            transactionId:
+              updatedApplication.result
+                ?.transactionId ||
+              null,
+
+            paymentStatus:
+              updatedApplication.result
+                ?.paymentStatus ||
+              null
+          }
+        );
+
+
+        try {
+
+          await this.telegram.completed(
+            updatedApplication,
+            updatedApplication.client
+          );
+
+        } catch (
+          telegramError
+        ) {
+
+          logger.error(
+            "Telegram completion notification failed",
+            {
+              applicationId,
+
+              error:
+                telegramError.message
+            }
+          );
+        }
+
+
+        await this.closeAdapter(
+          applicationId
+        );
+
+        return;
+      }
+
+
+      /*
+       * ---------------------------------------------------
+       * ESTADOS INTERMÉDIOS
+       * ---------------------------------------------------
+       */
+
+      logger.info(
+        "ORCHESTRATOR slot processing returned intermediate state",
+        {
+          applicationId,
+
+          status:
+            updatedApplication.status,
+
+          workflowState:
+            updatedApplication.workflowState,
+
+          message:
+            result.message ||
+            null
+        }
+      );
+
+
+    } catch (
+      error
+    ) {
+
+      this.stats.errors++;
+
+
+      logger.error(
+        "ORCHESTRATOR slot handler failed",
+        {
+          applicationId,
+
+          error:
+            error.message
+        }
+      );
+
+
+      try {
+
+        const application =
+          await Application.findById(
+            applicationId
+          );
+
+
+        if (
+          application
+        ) {
+
+          await this.telegram.error(
+            application,
+            error.message
+          );
+        }
+
+      } catch {
+
+        /*
+         * Falha de notificação nunca deve
+         * derrubar o supervisor.
+         */
       }
     }
-  );
+  }
 
-if (
-  result.modifiedCount
-) {
-  logger.info(
-    "ORCHESTRATOR restored waiting applications",
-    {
-      count:
-        result.modifiedCount
+
+  /*
+   * =======================================================
+   * RECOVERY DE SLOTS
+   * =======================================================
+   */
+
+  async recoverSlots() {
+
+    const applications =
+      await Application.find({
+        status:
+          "slot_received"
+      })
+        .sort({
+          updatedAt:
+            1
+        })
+        .limit(100);
+
+
+    for (
+      const application
+      of applications
+    ) {
+
+      this.stats.recovered++;
+
+
+      /*
+       * Sincroniza o novo workflowState
+       * antes de reemitir o evento.
+       */
+
+      if (
+        this.getWorkflowState(
+          application
+        ) ===
+        STATES.RADAR_ACTIVE
+      ) {
+
+        application.workflowState =
+          STATES.SLOT_FOUND;
+
+        application.workflow =
+          application.workflow ||
+          {};
+
+        application.workflow.stateChangedAt =
+          new Date();
+
+        application.workflow.lastEvent =
+          "slot_recovery";
+
+        application.workflow.lastReason =
+          "Recovered slot_received application after process restart";
+
+        await application.save();
+      }
+
+
+      logger.info(
+        "ORCHESTRATOR recovering slot",
+        {
+          applicationId:
+            application._id.toString(),
+
+          slot:
+            application.slot,
+
+          workflowState:
+            application.workflowState
+        }
+      );
+
+
+      eventBus.emit(
+        "slot_found",
+        {
+          applicationId:
+            application._id.toString(),
+
+          slot:
+            application.slot,
+
+          detectedAt:
+            application.bot2
+              ?.slotDetectedAt ||
+            new Date(),
+
+          recovered:
+            true
+        }
+      );
     }
-  );
-}
+  }
 
-}
 
-async recover() {
-await this.recoverStaleLocks();
+  /*
+   * =======================================================
+   * RECOVERY DE LOCKS
+   * =======================================================
+   */
 
-await this.recoverWaitingApplications();
+  async recoverStaleLocks() {
 
-await this.recoverSlots();
+    const staleBefore =
+      new Date();
 
-}
 
-async closeAdapter(
-applicationId
-) {
-const adapter =
-this.adapters.get(
-applicationId
-);
+    const result =
+      await Application.updateMany(
+        {
+          "lock.owner":
+            {
+              $ne:
+                null
+            },
 
-if (!adapter) {
-  return;
-}
+          "lock.expiresAt":
+            {
+              $lt:
+                staleBefore
+            },
 
-try {
-  await adapter.close();
-} catch (
-  error
-) {
-  logger.warn(
-    "Site adapter close failed",
-    {
-      applicationId,
+          workflowState:
+            {
+              $nin: [
+                STATES.COMPLETED,
+                STATES.CANCELLED
+              ]
+            },
 
-      error:
-        error.message
+          status:
+            {
+              $nin: [
+                "completed",
+                "cancelled"
+              ]
+            }
+        },
+        {
+          $set: {
+            "lock.owner":
+              null,
+
+            "lock.expiresAt":
+              null
+          }
+        }
+      );
+
+
+    if (
+      result.modifiedCount
+    ) {
+
+      logger.warn(
+        "ORCHESTRATOR released stale locks",
+        {
+          count:
+            result.modifiedCount
+        }
+      );
     }
-  );
-}
+  }
 
-this.adapters.delete(
-  applicationId
-);
 
-this.bot1.delete(
-  applicationId
-);
+  /*
+   * =======================================================
+   * RECOVERY DE APLICAÇÕES A ESPERA DE SLOT
+   * =======================================================
+   */
 
-}
+  async recoverWaitingApplications() {
 
-start() {
-if (
-this.started
-) {
-return;
-}
+    /*
+     * Compatibilidade com o Bot 2 atual.
+     *
+     * O próximo bloco migrará o Bot 2
+     * para workflowState = RADAR_ACTIVE.
+     */
 
-this.started =
-  true;
+    const result =
+      await Application.updateMany(
+        {
+          status:
+            "waiting_for_slot",
 
-this.stats.startedAt =
-  new Date();
+          "bot2.monitoring":
+            {
+              $ne:
+                true
+            }
+        },
+        {
+          $set: {
 
-eventBus.on(
-  "slot_found",
-  this.onSlotFound
-);
+            workflowState:
+              STATES.RADAR_ACTIVE,
 
-this.bot2.start();
+            "bot2.monitoring":
+              true,
 
-/*
- * Recovery happens immediately
- * after startup.
- */
+            "bot2.status":
+              "monitoring",
 
-this.recover()
-  .catch(error => {
-    this.stats.errors++;
+            "bot2.workerId":
+              null,
 
-    logger.error(
-      "ORCHESTRATOR recovery failed",
+            "radar.enabled":
+              true
+          }
+        }
+      );
+
+
+    if (
+      result.modifiedCount
+    ) {
+
+      logger.info(
+        "ORCHESTRATOR restored waiting applications",
+        {
+          count:
+            result.modifiedCount
+        }
+      );
+    }
+  }
+
+
+  /*
+   * =======================================================
+   * RECOVERY GERAL
+   * =======================================================
+   */
+
+  async recover() {
+
+    await this.recoverStaleLocks();
+
+    await this.recoverWaitingApplications();
+
+    await this.recoverSlots();
+  }
+
+
+  /*
+   * =======================================================
+   * FECHAR ADAPTER
+   * =======================================================
+   */
+
+  async closeAdapter(
+    applicationId
+  ) {
+
+    const adapter =
+      this.adapters.get(
+        applicationId
+      );
+
+
+    if (
+      !adapter
+    ) {
+
+      return;
+    }
+
+
+    try {
+
+      await adapter.close();
+
+    } catch (
+      error
+    ) {
+
+      logger.warn(
+        "Site adapter close failed",
+        {
+          applicationId,
+
+          error:
+            error.message
+        }
+      );
+    }
+
+
+    this.adapters.delete(
+      applicationId
+    );
+
+    this.bot1.delete(
+      applicationId
+    );
+  }
+
+
+  /*
+   * =======================================================
+   * START
+   * =======================================================
+   */
+
+  start() {
+
+    if (
+      this.started
+    ) {
+
+      return;
+    }
+
+
+    this.started =
+      true;
+
+    this.stats.startedAt =
+      new Date();
+
+
+    eventBus.on(
+      "slot_found",
+      this.onSlotFound
+    );
+
+
+    this.bot2.start();
+
+
+    /*
+     * Recovery imediatamente após
+     * o processo iniciar.
+     */
+
+    this.recover()
+      .catch(
+        error => {
+
+          this.stats.errors++;
+
+
+          logger.error(
+            "ORCHESTRATOR recovery failed",
+            {
+              error:
+                error.message
+            }
+          );
+        }
+      );
+
+
+    logger.info(
+      "ORCHESTRATOR started",
       {
-        error:
-          error.message
+        workerId:
+          this.workerId
       }
     );
-  });
-
-logger.info(
-  "ORCHESTRATOR started",
-  {
-    workerId:
-      this.workerId
   }
-);
 
-}
 
-stop() {
-this.started =
-false;
+  /*
+   * =======================================================
+   * STOP
+   * =======================================================
+   */
 
-eventBus.off(
-  "slot_found",
-  this.onSlotFound
-);
+  stop() {
 
-this.bot2.stop();
+    this.started =
+      false;
 
-for (
-  const applicationId
-  of this.adapters.keys()
-) {
-  this.closeAdapter(
-    applicationId
-  );
-}
 
-logger.info(
-  "ORCHESTRATOR stopped",
-  {
-    workerId:
-      this.workerId
+    eventBus.off(
+      "slot_found",
+      this.onSlotFound
+    );
+
+
+    this.bot2.stop();
+
+
+    for (
+      const applicationId
+      of this.adapters.keys()
+    ) {
+
+      this.closeAdapter(
+        applicationId
+      );
+    }
+
+
+    logger.info(
+      "ORCHESTRATOR stopped",
+      {
+        workerId:
+          this.workerId
+      }
+    );
   }
-);
 
+
+  /*
+   * =======================================================
+   * STATUS
+   * =======================================================
+   */
+
+  status() {
+
+    return {
+
+      started:
+        this.started,
+
+      workerId:
+        this.workerId,
+
+      activeAdapters:
+        this.adapters.size,
+
+      activeBot1:
+        this.bot1.size,
+
+      bot2:
+        this.bot2.status(),
+
+      stats:
+        this.stats
+    };
+  }
 }
 
-status() {
-return {
-started:
-this.started,
-
-  workerId:
-    this.workerId,
-
-  activeAdapters:
-    this.adapters.size,
-
-  activeBot1:
-    this.bot1.size,
-
-  bot2:
-    this.bot2.status(),
-
-  stats:
-    this.stats
-};
-
-}
-}
 
 module.exports =
-Supervisor;
+  Supervisor;
