@@ -89,6 +89,12 @@ function serialize(
 }
 
 
+/*
+ * ============================================================
+ * OBTER / CRIAR CONTROLO ADMINISTRATIVO
+ * ============================================================
+ */
+
 async function getOrCreate(
   application
 ) {
@@ -153,7 +159,6 @@ async function configureVfsCredentials({
   password,
   actorId
 }) {
-
   const normalizedEmail =
     cleanText(
       email
@@ -261,9 +266,8 @@ async function configureVfsCredentials({
 
   if (
     control.status ===
-    "PENDING_REVIEW"
+    "PAUSED"
   ) {
-
     control.status =
       "PENDING_REVIEW";
   }
@@ -294,25 +298,12 @@ async function configureVfsCredentials({
  * ============================================================
  * LIBERAR PARA AUTOMAÇÃO
  * ============================================================
- *
- * Esta é a barreira administrativa principal.
- *
- * A aplicação só é liberada se:
- *
- * 1. existir;
- * 2. estiver pronta;
- * 3. tiver passaporte válido;
- * 4. tiver as 10 posições faciais;
- * 5. tiver preferências completas;
- * 6. tiver credenciais VFS configuradas;
- * 7. o administrador executar esta ação.
  */
 
 async function releaseForAutomation({
   applicationId,
   actorId
 }) {
-
   const application =
     await Application.findById(
       applicationId
@@ -373,14 +364,8 @@ async function releaseForAutomation({
 
   /*
    * ----------------------------------------------------------
-   * PREPARAÇÃO / READINESS
+   * READINESS
    * ----------------------------------------------------------
-   *
-   * Não basta existir o botão.
-   * O backend verifica novamente os dados.
-   *
-   * Isso impede que alguém chame diretamente
-   * a API de release ignorando o frontend.
    */
 
   const ApplicationService =
@@ -396,7 +381,6 @@ async function releaseForAutomation({
 
 
   if (!readiness.ready) {
-
     const error =
       new Error(
         readiness.message ||
@@ -432,17 +416,6 @@ async function releaseForAutomation({
    * ----------------------------------------------------------
    * PREPARAR WORKFLOW
    * ----------------------------------------------------------
-   *
-   * A aplicação pode ter sido criada em CREATED.
-   *
-   * Antes desta alteração, o AdminControl podia ficar
-   * READY_FOR_AUTOMATION enquanto a Application continuava
-   * em CREATED.
-   *
-   * Isso deixava as duas fontes de estado incompatíveis.
-   *
-   * Agora usamos o ApplicationService para levar a aplicação
-   * ao estado READY_FOR_AUTOMATION antes de liberar.
    */
 
   const prepared =
@@ -452,16 +425,10 @@ async function releaseForAutomation({
     );
 
 
-  /*
-   * prepare() pode devolver um objeto indicando que
-   * a aplicação ainda não ficou pronta.
-   */
-
   if (
     prepared &&
     prepared.ready === false
   ) {
-
     const error =
       new Error(
         prepared.message ||
@@ -493,11 +460,6 @@ async function releaseForAutomation({
   }
 
 
-  /*
-   * Recarregamos a aplicação depois da preparação
-   * para confirmar o estado persistido.
-   */
-
   const refreshedApplication =
     await Application.findById(
       applicationId
@@ -527,16 +489,10 @@ async function releaseForAutomation({
       : refreshedApplication.workflowState;
 
 
-  /*
-   * A libertação administrativa só pode ocorrer quando
-   * o workflow também estiver pronto.
-   */
-
   if (
     workflowState !==
     "READY_FOR_AUTOMATION"
   ) {
-
     const error =
       new Error(
         `Application preparation finished in state ${workflowState || "UNKNOWN"} instead of READY_FOR_AUTOMATION`
@@ -599,13 +555,28 @@ async function releaseForAutomation({
  * ============================================================
  * PAUSAR AUTOMAÇÃO
  * ============================================================
+ *
+ * IMPORTANTE:
+ *
+ * Não basta desligar release.enabled.
+ *
+ * O Bot 2 pode estar com radar.monitoring ativo.
+ * Por isso a pausa também desliga:
+ *
+ * - bot2.monitoring
+ * - bot2.status
+ * - radar.enabled
+ *
+ * O estado da aplicação NÃO é apagado.
+ *
+ * Se já existir uma vaga ou pagamento pendente,
+ * esses dados continuam preservados.
  */
 
 async function pauseAutomation({
   applicationId,
   actorId
 }) {
-
   const control =
     await getByApplicationId(
       applicationId
@@ -651,6 +622,38 @@ async function pauseAutomation({
   await control.save();
 
 
+  /*
+   * ----------------------------------------------------------
+   * PARAR RADAR / BOT 2
+   * ----------------------------------------------------------
+   *
+   * Isto é feito directamente no banco.
+   *
+   * Assim, mesmo que exista um Bot 2 já executando
+   * ou uma próxima ronda de radar esteja prestes a iniciar,
+   * a aplicação deixa de estar marcada como monitorável.
+   */
+
+  await Application.updateOne(
+    {
+      _id:
+        applicationId
+    },
+    {
+      $set: {
+        "bot2.monitoring":
+          false,
+
+        "bot2.status":
+          "stopped",
+
+        "radar.enabled":
+          false
+      }
+    }
+  );
+
+
   return serialize(
     control
   );
@@ -666,7 +669,6 @@ async function pauseAutomation({
 async function canAutomate(
   applicationId
 ) {
-
   const control =
     await getByApplicationId(
       applicationId
@@ -713,7 +715,6 @@ async function canAutomate(
 async function assertAutomationReleased(
   applicationId
 ) {
-
   const control =
     await getByApplicationId(
       applicationId
@@ -721,7 +722,6 @@ async function assertAutomationReleased(
 
 
   if (!control) {
-
     const error =
       new Error(
         "Application is awaiting administrator review"
@@ -746,7 +746,6 @@ async function assertAutomationReleased(
 
 
   if (!hasCredentials) {
-
     const error =
       new Error(
         "VFS credentials have not been configured by the administrator"
@@ -765,7 +764,6 @@ async function assertAutomationReleased(
   if (
     !control.release?.enabled
   ) {
-
     const error =
       new Error(
         "Application has not been released for automation"
@@ -789,7 +787,6 @@ async function assertAutomationReleased(
       control.status
     )
   ) {
-
     const error =
       new Error(
         `Application cannot be automated in status ${control.status}`
@@ -807,8 +804,8 @@ async function assertAutomationReleased(
 
   /*
    * Segunda barreira:
-   * a aplicação também precisa estar no estado
-   * correto do workflow.
+   * a Application também precisa estar
+   * num estado permitido.
    */
 
   const application =
@@ -818,7 +815,6 @@ async function assertAutomationReleased(
 
 
   if (!application) {
-
     const error =
       new Error(
         "Application not found"
@@ -846,18 +842,24 @@ async function assertAutomationReleased(
     "VFS_SESSION",
     "VFS_AUTHENTICATING",
     "VFS_AUTHENTICATED",
+
     "CAPTCHA_REQUIRED",
     "CAPTCHA_PROCESSING",
     "CAPTCHA_COMPLETED",
+
     "RADAR_ACTIVE",
+
     "SLOT_FOUND",
     "SLOT_LOCKED",
     "SLOT_REVALIDATED",
+
     "BOOKING",
+
     "DOCUMENT_UPLOAD",
     "PASSPORT_UPLOAD_REQUIRED",
     "PASSPORT_UPLOADING",
     "PASSPORT_UPLOADED",
+
     "FACIAL_SESSION_STARTING",
     "FACIAL_LIVENESS_REQUIRED",
     "FACIAL_LIVENESS_PROCESSING",
@@ -866,13 +868,17 @@ async function assertAutomationReleased(
     "FACIAL_POSITION_SUBMITTING",
     "FACIAL_POSITIONS",
     "FACIAL_VERIFICATION_COMPLETED",
+
     "OTP_REQUIRED",
     "OTP_RECEIVING",
     "OTP_RECEIVED",
     "OTP_SUBMITTING",
     "OTP_VERIFIED",
+
     "REVIEW",
+
     "APPOINTMENT_BOOKED",
+
     "PAYMENT_PENDING",
     "PAYMENT_CONFIRMED"
   ];
@@ -883,7 +889,6 @@ async function assertAutomationReleased(
       workflowState
     )
   ) {
-
     const error =
       new Error(
         `Application workflow state ${workflowState || "UNKNOWN"} is not allowed for automation`
@@ -917,7 +922,6 @@ async function assertAutomationReleased(
 async function getCredentialsForAutomation(
   applicationId
 ) {
-
   await assertAutomationReleased(
     applicationId
   );
@@ -930,7 +934,6 @@ async function getCredentialsForAutomation(
 
 
   if (!control) {
-
     const error =
       new Error(
         "Administrative control not found"
@@ -971,7 +974,6 @@ async function getCredentialsForAutomation(
 async function markAutomationActive(
   applicationId
 ) {
-
   const control =
     await getByApplicationId(
       applicationId
@@ -986,7 +988,6 @@ async function markAutomationActive(
   if (
     control.release?.enabled
   ) {
-
     control.status =
       "AUTOMATION_ACTIVE";
 
@@ -1022,7 +1023,6 @@ async function markAutomationActive(
 async function markCompleted(
   applicationId
 ) {
-
   const control =
     await getByApplicationId(
       applicationId
@@ -1055,6 +1055,31 @@ async function markCompleted(
 
 
   await control.save();
+
+
+  /*
+   * Garantir que o radar também fique
+   * definitivamente desligado.
+   */
+
+  await Application.updateOne(
+    {
+      _id:
+        applicationId
+    },
+    {
+      $set: {
+        "bot2.monitoring":
+          false,
+
+        "bot2.status":
+          "stopped",
+
+        "radar.enabled":
+          false
+      }
+    }
+  );
 
 
   return serialize(
