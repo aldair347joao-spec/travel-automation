@@ -41,7 +41,542 @@ function createAdminRouter() {
 
   /*
    * =========================================================
-   * ADMIN DASHBOARD
+   * HELPER — CLIENTE
+   * =========================================================
+   */
+
+  function serializeClient(
+    client
+  ) {
+    if (!client) {
+      return null;
+    }
+
+    return {
+      id:
+        client._id,
+
+      name:
+        client.name ||
+        client.fullName ||
+        "Cliente",
+
+      email:
+        client.email ||
+        null,
+
+      phone:
+        client.phone ||
+        client.mobile ||
+        null
+    };
+  }
+
+
+  /*
+   * =========================================================
+   * HELPER — PAYMENT
+   * =========================================================
+   */
+
+  function serializePayment(
+    application
+  ) {
+    return {
+      status:
+        application.paymentStatus ||
+        null,
+
+      reference:
+        application.result?.reference ||
+        null,
+
+      entity:
+        application.result?.entity ||
+        null,
+
+      amount:
+        application.result?.paymentAmount ||
+        null,
+
+      currency:
+        application.result?.paymentCurrency ||
+        null,
+
+      deadline:
+        application.result?.paymentDeadline ||
+        null,
+
+      transactionId:
+        application.result?.transactionId ||
+        null,
+
+      confirmationUrl:
+        application.result?.confirmationUrl ||
+        null
+    };
+  }
+
+
+  /*
+   * =========================================================
+   * HELPER — ADMIN CONTROL
+   * =========================================================
+   */
+
+  function serializeAdmin(
+    control
+  ) {
+    if (!control) {
+      return {
+        status:
+          "PENDING_REVIEW",
+
+        vfsCredentials: {
+          configured:
+            false
+        },
+
+        release: {
+          enabled:
+            false
+        },
+
+        notes:
+          ""
+      };
+    }
+
+    return AdminControlService.serialize(
+      control
+    );
+  }
+
+
+  /*
+   * =========================================================
+   * HELPER — CLIENT IDS
+   * =========================================================
+   */
+
+  function collectClientIds(
+    applications
+  ) {
+    const ids = [];
+
+    for (
+      const application
+      of applications
+    ) {
+      if (
+        application.client
+      ) {
+        ids.push(
+          application.client
+        );
+      }
+
+      if (
+        Array.isArray(
+          application.applicants
+        )
+      ) {
+        for (
+          const applicant
+          of application.applicants
+        ) {
+          if (
+            applicant?.client
+          ) {
+            ids.push(
+              applicant.client
+            );
+          }
+        }
+      }
+    }
+
+    return [
+      ...new Set(
+        ids.map(
+          id =>
+            String(id)
+        )
+      )
+    ]
+      .filter(
+        id =>
+          mongoose.isValidObjectId(
+            id
+          )
+      );
+  }
+
+
+  /*
+   * =========================================================
+   * HELPER — CLIENT MAP
+   * =========================================================
+   */
+
+  async function loadClientMap(
+    applications
+  ) {
+    const clientIds =
+      collectClientIds(
+        applications
+      );
+
+    if (!clientIds.length) {
+      return new Map();
+    }
+
+    const clients =
+      await Client.find({
+        _id: {
+          $in:
+            clientIds
+        }
+      }).lean();
+
+    return new Map(
+      clients.map(
+        client => [
+          String(
+            client._id
+          ),
+          client
+        ]
+      )
+    );
+  }
+
+
+  /*
+   * =========================================================
+   * HELPER — OBTER CLIENTE DE UMA APPLICATION
+   * =========================================================
+   */
+
+  function resolveApplicationClient(
+    application,
+    clientMap
+  ) {
+    if (
+      application.client
+    ) {
+      const client =
+        clientMap.get(
+          String(
+            application.client
+          )
+        );
+
+      if (client) {
+        return client;
+      }
+    }
+
+    if (
+      Array.isArray(
+        application.applicants
+      )
+    ) {
+      for (
+        const applicant
+        of application.applicants
+      ) {
+        if (
+          !applicant?.client
+        ) {
+          continue;
+        }
+
+        const client =
+          clientMap.get(
+            String(
+              applicant.client
+            )
+          );
+
+        if (client) {
+          return client;
+        }
+      }
+    }
+
+    return null;
+  }
+
+
+  /*
+   * =========================================================
+   * HELPER — SANITIZAR APPLICATION
+   * =========================================================
+   *
+   * Nunca devolvemos:
+   *
+   * preparedDataEncrypted
+   * VFS credentials
+   * password
+   * tokens
+   * dados internos desnecessários.
+   *
+   * O administrador recebe apenas os dados necessários
+   * para gerir o processo.
+   * =========================================================
+   */
+
+  function serializeApplication(
+    application,
+    clientMap
+  ) {
+    const client =
+      resolveApplicationClient(
+        application,
+        clientMap
+      );
+
+    const payment =
+      serializePayment(
+        application
+      );
+
+    const result =
+      application.result || {};
+
+    const passport =
+      application.passport ||
+      application.passportData ||
+      null;
+
+    const facial =
+      application.facial ||
+      application.identity ||
+      application.identityVerification ||
+      null;
+
+    const applicants =
+      Array.isArray(
+        application.applicants
+      )
+        ? application.applicants
+        : [];
+
+    return {
+      id:
+        application._id,
+
+      client:
+        serializeClient(
+          client
+        ),
+
+      status:
+        application.status ||
+        null,
+
+      workflowState:
+        application.workflowState ||
+        null,
+
+      workflow:
+        application.workflow
+          ? {
+              previousState:
+                application.workflow
+                  .previousState ||
+                null,
+
+              stateChangedAt:
+                application.workflow
+                  .stateChangedAt ||
+                null,
+
+              lastEvent:
+                application.workflow
+                  .lastEvent ||
+                null,
+
+              lastReason:
+                application.workflow
+                  .lastReason ||
+                null,
+
+              transitionCount:
+                application.workflow
+                  .transitionCount ||
+                0
+            }
+          : null,
+
+      visaType:
+        application.visaType ||
+        null,
+
+      visaCenter:
+        application.visaCenter ||
+        null,
+
+      travelPurpose:
+        application.travelPurpose ||
+        null,
+
+      serviceType:
+        application.serviceType ||
+        null,
+
+      appointmentMode:
+        application.appointmentMode ||
+        null,
+
+      bookingMode:
+        application.bookingMode ||
+        null,
+
+      preferredDates:
+        application.preferredDates ||
+        null,
+
+      preferredTime:
+        application.preferredTime ||
+        null,
+
+      preferredWeekdays:
+        application.preferredWeekdays ||
+        [],
+
+      applicants: applicants.map(
+        applicant => ({
+          client:
+            applicant?.client ||
+            null,
+
+          status:
+            applicant?.status ||
+            null
+        })
+      ),
+
+      passport: passport
+        ? {
+            status:
+              passport.status ||
+              passport.validationStatus ||
+              null,
+
+            verified:
+              Boolean(
+                passport.verified ||
+                passport.validated
+              ),
+
+            number:
+              passport.number ||
+              passport.passportNumber ||
+              null,
+
+            name:
+              passport.name ||
+              passport.fullName ||
+              null
+          }
+        : null,
+
+      identity: facial
+        ? {
+            status:
+              facial.status ||
+              null,
+
+            verified:
+              Boolean(
+                facial.verified ||
+                facial.completed
+              ),
+
+            positionCount:
+              Array.isArray(
+                facial.positions
+              )
+                ? facial.positions.length
+                : (
+                    facial.positionCount ||
+                    facial.positionsCount ||
+                    0
+                  )
+          }
+        : null,
+
+      bot1:
+        application.bot1 ||
+        null,
+
+      bot2:
+        application.bot2 ||
+        null,
+
+      radar:
+        application.radar
+          ? {
+              enabled:
+                Boolean(
+                  application.radar
+                    .enabled
+                ),
+
+              riskLevel:
+                application.radar
+                  .riskLevel ||
+                null,
+
+              lastCheckedAt:
+                application.radar
+                  .lastCheckedAt ||
+                null,
+
+              lastError:
+                application.radar
+                  .lastError ||
+                null
+            }
+          : null,
+
+      payment,
+
+      error:
+        application.error
+          ? {
+              code:
+                application.error.code ||
+                null,
+
+              message:
+                application.error.message ||
+                null,
+
+              at:
+                application.error.at ||
+                null,
+
+              attempts:
+                application.error.attempts ||
+                0
+            }
+          : null,
+
+      createdAt:
+        application.createdAt,
+
+      updatedAt:
+        application.updatedAt
+    };
+  }
+
+
+  /*
+   * =========================================================
+   * STATS
    * =========================================================
    */
 
@@ -67,7 +602,7 @@ function createAdminRouter() {
             accountId
           })
           .select(
-            "_id status workflowState result bot1 bot2 paymentStatus"
+            "_id status workflowState paymentStatus result bot1 bot2"
           )
           .lean();
 
@@ -124,7 +659,6 @@ function createAdminRouter() {
             0
         };
 
-
         for (
           const application
           of applications
@@ -169,7 +703,7 @@ function createAdminRouter() {
 
           if (
             application.workflowState ===
-              "APPOINTMENT_BOOKED"
+            "APPOINTMENT_BOOKED"
           ) {
             stats.appointmentBooked++;
           }
@@ -261,67 +795,16 @@ function createAdminRouter() {
           })
           .lean();
 
+        const clientMap =
+          await loadClientMap(
+            applications
+          );
+
         const controls =
           await ApplicationAdminControl.find({
             accountId
           })
           .lean();
-
-        const clientIds =
-          [];
-
-        for (
-          const application
-          of applications
-        ) {
-          if (
-            Array.isArray(
-              application.applicants
-            )
-          ) {
-            for (
-              const applicant
-              of application.applicants
-            ) {
-              if (
-                applicant.client
-              ) {
-                clientIds.push(
-                  applicant.client
-                );
-              }
-            }
-          }
-
-          if (
-            application.client
-          ) {
-            clientIds.push(
-              application.client
-            );
-          }
-        }
-
-        const clients =
-          await Client.find({
-            _id: {
-              $in:
-                clientIds
-            }
-          })
-          .lean();
-
-        const clientMap =
-          new Map(
-            clients.map(
-              client => [
-                String(
-                  client._id
-                ),
-                client
-              ]
-            )
-          );
 
         const controlMap =
           new Map(
@@ -335,10 +818,15 @@ function createAdminRouter() {
             )
           );
 
-
         const result =
           applications.map(
             application => {
+              const client =
+                resolveApplicationClient(
+                  application,
+                  clientMap
+                );
+
               const control =
                 controlMap.get(
                   String(
@@ -346,61 +834,14 @@ function createAdminRouter() {
                   )
                 );
 
-              let client =
-                null;
-
-              if (
-                application.client
-              ) {
-                client =
-                  clientMap.get(
-                    String(
-                      application.client
-                    )
-                  );
-              }
-
-              if (
-                !client &&
-                Array.isArray(
-                  application.applicants
-                ) &&
-                application.applicants.length
-              ) {
-                client =
-                  clientMap.get(
-                    String(
-                      application
-                        .applicants[0]
-                        .client
-                    )
-                  );
-              }
-
               return {
                 id:
                   application._id,
 
-                client: client
-                  ? {
-                      id:
-                        client._id,
-
-                      name:
-                        client.name ||
-                        client.fullName ||
-                        "Cliente",
-
-                      email:
-                        client.email ||
-                        null,
-
-                      phone:
-                        client.phone ||
-                        client.mobile ||
-                        null
-                    }
-                  : null,
+                client:
+                  serializeClient(
+                    client
+                  ),
 
                 status:
                   application.status ||
@@ -446,39 +887,10 @@ function createAdminRouter() {
                   application.bot2 ||
                   null,
 
-                payment: {
-                  status:
-                    application.paymentStatus ||
-                    null,
-
-                  reference:
-                    application.result?.reference ||
-                    null,
-
-                  entity:
-                    application.result?.entity ||
-                    null,
-
-                  amount:
-                    application.result?.paymentAmount ||
-                    null,
-
-                  currency:
-                    application.result?.paymentCurrency ||
-                    null,
-
-                  deadline:
-                    application.result?.paymentDeadline ||
-                    null,
-
-                  transactionId:
-                    application.result?.transactionId ||
-                    null,
-
-                  confirmationUrl:
-                    application.result?.confirmationUrl ||
-                    null
-                },
+                payment:
+                  serializePayment(
+                    application
+                  ),
 
                 admin: {
                   status:
@@ -487,19 +899,24 @@ function createAdminRouter() {
 
                   credentialsConfigured:
                     Boolean(
-                      control?.vfsCredentials
+                      control
+                        ?.vfsCredentials
                         ?.emailEncrypted &&
-                      control?.vfsCredentials
+                      control
+                        ?.vfsCredentials
                         ?.passwordEncrypted
                     ),
 
                   released:
                     Boolean(
-                      control?.release?.enabled
+                      control
+                        ?.release
+                        ?.enabled
                     ),
 
                   releasedAt:
-                    control?.release
+                    control
+                      ?.release
                       ?.releasedAt ||
                     null
                 },
@@ -589,10 +1006,18 @@ function createAdminRouter() {
             });
         }
 
+        const clientMap =
+          await loadClientMap([
+            application
+          ]);
+
         const control =
           await ApplicationAdminControl.findOne({
             applicationId:
-              application._id
+              application._id,
+
+            accountId:
+              req.user.accountId
           })
           .lean();
 
@@ -600,64 +1025,21 @@ function createAdminRouter() {
           success:
             true,
 
-          application,
+          application:
+            serializeApplication(
+              application,
+              clientMap
+            ),
 
           admin:
-            control
-              ? AdminControlService.serialize(
-                  control
-                )
-              : {
-                  applicationId:
-                    application._id,
+            serializeAdmin(
+              control
+            ),
 
-                  status:
-                    "PENDING_REVIEW",
-
-                  vfsCredentials: {
-                    configured:
-                      false
-                  },
-
-                  release: {
-                    enabled:
-                      false
-                  }
-                },
-
-          payment: {
-            status:
-              application.paymentStatus ||
-              null,
-
-            reference:
-              application.result?.reference ||
-              null,
-
-            entity:
-              application.result?.entity ||
-              null,
-
-            amount:
-              application.result?.paymentAmount ||
-              null,
-
-            currency:
-              application.result?.paymentCurrency ||
-              null,
-
-            deadline:
-              application.result?.paymentDeadline ||
-              null,
-
-            transactionId:
-              application.result?.transactionId ||
-              null,
-
-            confirmationUrl:
-              application.result?.confirmationUrl ||
-              null
-          }
+          payment:
+            serializePayment(
+              application
+            )
         });
       } catch (
         error
@@ -688,6 +1070,46 @@ function createAdminRouter() {
       next
     ) => {
       try {
+        if (
+          !mongoose.isValidObjectId(
+            req.params.id
+          )
+        ) {
+          return res
+            .status(400)
+            .json({
+              success:
+                false,
+
+              error:
+                "Invalid application ID"
+            });
+        }
+
+        /*
+         * Verificar account ANTES
+         * de alterar qualquer dado.
+         */
+
+        await AdminControlService
+          .assertApplicationAccount(
+            req.params.id,
+            req.user.accountId
+          )
+          .catch(
+            () => {
+              const error =
+                new Error(
+                  "Application not found"
+                );
+
+              error.statusCode =
+                404;
+
+              throw error;
+            }
+          );
+
         const result =
           await AdminControlService
             .configureVfsCredentials({
@@ -743,11 +1165,30 @@ function createAdminRouter() {
       next
     ) => {
       try {
+        if (
+          !mongoose.isValidObjectId(
+            req.params.id
+          )
+        ) {
+          return res
+            .status(400)
+            .json({
+              success:
+                false,
+
+              error:
+                "Invalid application ID"
+            });
+        }
+
         const result =
           await AdminControlService
             .releaseForAutomation({
               applicationId:
                 req.params.id,
+
+              accountId:
+                req.user.accountId,
 
               actorId:
                 req.user._id
@@ -792,11 +1233,30 @@ function createAdminRouter() {
       next
     ) => {
       try {
+        if (
+          !mongoose.isValidObjectId(
+            req.params.id
+          )
+        ) {
+          return res
+            .status(400)
+            .json({
+              success:
+                false,
+
+              error:
+                "Invalid application ID"
+            });
+        }
+
         const result =
           await AdminControlService
             .pauseAutomation({
               applicationId:
                 req.params.id,
+
+              accountId:
+                req.user.accountId,
 
               actorId:
                 req.user._id
@@ -808,6 +1268,77 @@ function createAdminRouter() {
 
           message:
             "Automation paused",
+
+          admin:
+            result
+        });
+      } catch (
+        error
+      ) {
+        return next(
+          error
+        );
+      }
+    }
+  );
+
+
+  /*
+   * =========================================================
+   * ADMIN NOTES
+   * =========================================================
+   */
+
+  router.patch(
+    "/applications/:id/notes",
+    requireRole(
+      "owner",
+      "admin"
+    ),
+    async (
+      req,
+      res,
+      next
+    ) => {
+      try {
+        if (
+          !mongoose.isValidObjectId(
+            req.params.id
+          )
+        ) {
+          return res
+            .status(400)
+            .json({
+              success:
+                false,
+
+              error:
+                "Invalid application ID"
+            });
+        }
+
+        const result =
+          await AdminControlService
+            .updateNotes({
+              applicationId:
+                req.params.id,
+
+              accountId:
+                req.user.accountId,
+
+              notes:
+                req.body?.notes,
+
+              actorId:
+                req.user._id
+            });
+
+        return res.json({
+          success:
+            true,
+
+          message:
+            "Administrative notes saved",
 
           admin:
             result
