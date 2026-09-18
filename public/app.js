@@ -3030,7 +3030,27 @@ chooseButton?.addEventListener(
 
   }
 
-  
+  function canCreateApplication() {
+
+  const clientReady =
+    Boolean(
+      state.selectedClient
+    );
+
+  const passportReady =
+    state.passportValidation
+      ?.status === "passed";
+
+  const faceReady =
+    state.facialReady === true;
+
+  return (
+    clientReady &&
+    passportReady &&
+    faceReady
+  );
+
+}
   /* =========================================================
      READINESS
   ========================================================= */
