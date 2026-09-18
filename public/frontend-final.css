@@ -1,708 +1,908 @@
 /*
  * ============================================================
  * TRAVEL AUTOMATION
- * FRONTEND FINAL VISUAL SYSTEM
+ * FRONTEND FINAL OVERLAY
+ *
+ * IMPORTANTE:
+ * - style.css é o CSS mestre do projeto.
+ * - Este arquivo NÃO redefine :root.
+ * - Este arquivo NÃO deve controlar o layout base.
+ * - Aqui ficam apenas estados e componentes adicionados
+ *   pelo frontend-final.js.
  * ============================================================
  */
 
-:root {
-    --ta-navy: #061b3a;
-    --ta-blue: #0756a6;
-    --ta-blue-2: #1596e9;
-    --ta-cyan: #22c7f2;
-    --ta-white: #ffffff;
-    --ta-surface: #f6faff;
-    --ta-border: #dce8f2;
-    --ta-text: #082b4e;
-    --ta-muted: #64798d;
-    --ta-success: #08734b;
-    --ta-success-bg: #e5f8ef;
-    --ta-warning: #8a5a08;
-    --ta-warning-bg: #fff5d9;
-    --ta-danger: #a83232;
-    --ta-danger-bg: #fff0f0;
-}
-
 
 /* ============================================================
-   PREFERENCES
-============================================================ */
+   PREFERÊNCIAS DE VIAGEM
+   ============================================================ */
 
 .frontend-final-preferences {
-    margin-top: 24px;
-    padding: 24px;
-    border: 1px solid rgba(7, 86, 166, .12);
-    border-radius: 24px;
-    background:
-        linear-gradient(
-            145deg,
-            rgba(248, 252, 255, .98),
-            rgba(235, 246, 254, .96)
-        );
-    box-shadow:
-        0 18px 50px rgba(4, 45, 83, .06);
+  width: 100%;
+  margin-top: 24px;
+  padding: 24px;
+
+  border: 1px solid rgba(7, 86, 166, .12);
+  border-radius: 24px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(248, 252, 255, .98),
+      rgba(235, 246, 254, .96)
+    );
+
+  box-shadow:
+    0 18px 50px rgba(4, 45, 83, .06);
+
+  animation:
+    frontendFinalPanelIn .45s ease both;
 }
 
 .frontend-final-preferences-header span {
-    display: block;
-    color: var(--ta-blue);
-    font-size: 9px;
-    font-weight: 900;
-    letter-spacing: .14em;
+  display: block;
+
+  color: var(--ta-blue);
+
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .14em;
 }
 
 .frontend-final-preferences-header strong {
-    display: block;
-    margin-top: 7px;
-    color: var(--ta-text);
-    font:
-        800 20px/1.2
-        "Plus Jakarta Sans",
-        sans-serif;
+  display: block;
+
+  margin-top: 7px;
+
+  color: var(--ta-text);
+
+  font-family: var(--ta-display);
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .frontend-final-preferences-header small {
-    display: block;
-    max-width: 700px;
-    margin-top: 8px;
-    color: var(--ta-muted);
-    font-size: 11px;
-    line-height: 1.6;
+  display: block;
+
+  max-width: 700px;
+
+  margin-top: 8px;
+
+  color: var(--ta-muted);
+
+  font-size: 11px;
+  line-height: 1.6;
 }
 
 
 /* ============================================================
-   PREFERENCE GRID
-============================================================ */
+   GRID DE PREFERÊNCIAS
+   ============================================================ */
 
 .frontend-final-grid {
-    display: grid;
-    grid-template-columns:
-        repeat(2, minmax(0, 1fr));
-    gap: 16px;
-    margin-top: 20px;
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 16px;
+
+  margin-top: 20px;
 }
 
 .frontend-field {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+  display: flex;
+  flex-direction: column;
+
+  gap: 8px;
 }
 
 .frontend-field > span {
-    color: #49647b;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: .04em;
+  color: #49647b;
+
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .04em;
 }
 
 .frontend-field select {
-    width: 100%;
-    min-height: 46px;
-    padding: 0 13px;
-    border: 1px solid var(--ta-border);
-    border-radius: 12px;
-    outline: none;
-    color: var(--ta-text);
-    background: #fff;
-    font: inherit;
-    transition:
-        border-color .2s ease,
-        box-shadow .2s ease,
-        transform .2s ease;
+  width: 100%;
+  min-height: 46px;
+
+  padding: 0 13px;
+
+  border: 1px solid var(--ta-border);
+  border-radius: 12px;
+
+  outline: none;
+
+  color: var(--ta-text);
+  background: #fff;
+
+  font: inherit;
+
+  transition:
+    border-color var(--ta-fast),
+    box-shadow var(--ta-fast),
+    transform var(--ta-fast);
 }
 
 .frontend-field select:hover {
-    border-color: #a9cdea;
+  border-color: #a9cdea;
 }
 
 .frontend-field select:focus {
-    border-color: var(--ta-blue-2);
-    box-shadow:
-        0 0 0 4px rgba(21, 150, 233, .10);
+  border-color: var(--ta-blue-2);
+
+  box-shadow:
+    0 0 0 4px rgba(21, 150, 233, .10);
 }
 
 
 /* ============================================================
-   WEEKDAYS
-============================================================ */
+   DIAS DA SEMANA
+   ============================================================ */
 
 .frontend-final-weekdays {
-    margin-top: 20px;
+  margin-top: 20px;
 }
 
 .frontend-final-weekdays > span {
-    display: block;
-    margin-bottom: 10px;
-    color: #49647b;
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: .08em;
-    text-transform: uppercase;
+  display: block;
+
+  margin-bottom: 10px;
+
+  color: #49647b;
+
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+
+  text-transform: uppercase;
 }
 
 .frontend-final-weekday-grid {
-    display: grid;
-    grid-template-columns:
-        repeat(7, minmax(0, 1fr));
-    gap: 8px;
+  display: grid;
+
+  grid-template-columns:
+    repeat(7, minmax(0, 1fr));
+
+  gap: 8px;
 }
 
 .frontend-final-day {
-    position: relative;
-    cursor: pointer;
+  position: relative;
+
+  cursor: pointer;
 }
 
 .frontend-final-day input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
+  position: absolute;
+
+  width: 1px;
+  height: 1px;
+
+  opacity: 0;
+  pointer-events: none;
 }
 
 .frontend-final-day span {
-    min-height: 42px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 8px 7px;
-    border: 1px solid var(--ta-border);
-    border-radius: 12px;
-    color: #587086;
-    background: #fff;
-    font-size: 9px;
-    font-weight: 800;
-    transition:
-        border-color .2s ease,
-        background .2s ease,
-        color .2s ease,
-        transform .2s ease,
-        box-shadow .2s ease;
+  min-height: 42px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 8px 7px;
+
+  border: 1px solid var(--ta-border);
+  border-radius: 12px;
+
+  color: #587086;
+  background: #fff;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  transition:
+    border-color var(--ta-fast),
+    background var(--ta-fast),
+    color var(--ta-fast),
+    transform var(--ta-fast),
+    box-shadow var(--ta-fast);
 }
 
 .frontend-final-day:hover span {
-    transform: translateY(-2px);
-    border-color: #91c7ea;
+  transform: translateY(-2px);
+
+  border-color: #91c7ea;
+}
+
+.frontend-final-day input:focus-visible + span {
+  outline: 2px solid var(--ta-blue-2);
+  outline-offset: 2px;
 }
 
 .frontend-final-day input:checked + span {
-    color: #fff;
-    border-color: var(--ta-blue);
-    background:
-        linear-gradient(
-            135deg,
-            var(--ta-blue),
-            var(--ta-blue-2)
-        );
-    box-shadow:
-        0 10px 22px rgba(7, 86, 166, .18);
+  color: #fff;
+
+  border-color: var(--ta-blue);
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--ta-blue),
+      var(--ta-blue-2)
+    );
+
+  box-shadow:
+    0 10px 22px rgba(7, 86, 166, .18);
 }
 
 
 /* ============================================================
-   SUMMARY
-============================================================ */
+   RESUMO DAS PREFERÊNCIAS
+   ============================================================ */
 
 .frontend-final-summary {
-    display: grid;
-    grid-template-columns:
-        repeat(2, minmax(0, 1fr));
-    gap: 7px 18px;
-    margin-top: 18px;
-    padding: 15px;
-    border: 1px solid rgba(7, 86, 166, .10);
-    border-radius: 14px;
-    background: rgba(255, 255, 255, .75);
-    color: var(--ta-muted);
-    font-size: 10px;
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 7px 18px;
+
+  margin-top: 18px;
+  padding: 15px;
+
+  border: 1px solid rgba(7, 86, 166, .10);
+  border-radius: 14px;
+
+  background:
+    rgba(255, 255, 255, .75);
+
+  color: var(--ta-muted);
+
+  font-size: 10px;
 }
 
 .frontend-final-summary strong {
-    grid-column: 1 / -1;
-    color: var(--ta-text);
-    font-size: 11px;
+  grid-column: 1 / -1;
+
+  color: var(--ta-text);
+
+  font-size: 11px;
 }
 
 .frontend-final-summary span {
-    line-height: 1.5;
+  line-height: 1.5;
 }
 
 
 /* ============================================================
-   ADMIN WAITING
-============================================================ */
+   AGUARDANDO ADMINISTRAÇÃO
+   ============================================================ */
 
 .frontend-final-admin-waiting {
-    position: relative;
-    display: grid;
-    grid-template-columns:
-        auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 18px;
-    margin: 22px 0;
-    padding: 22px;
-    overflow: hidden;
-    border:
-        1px solid rgba(7, 86, 166, .14);
-    border-radius: 22px;
-    background:
-        linear-gradient(
-            135deg,
-            rgba(248, 252, 255, .99),
-            rgba(232, 245, 253, .96)
-        );
-    box-shadow:
-        0 20px 55px rgba(4, 45, 83, .08);
-    animation:
-        adminPanelIn .45s ease both;
+  position: relative;
+
+  display: grid;
+
+  grid-template-columns:
+    auto
+    minmax(0, 1fr)
+    auto;
+
+  align-items: center;
+
+  gap: 18px;
+
+  margin: 22px 0;
+  padding: 22px;
+
+  overflow: hidden;
+
+  border: 1px solid rgba(7, 86, 166, .14);
+  border-radius: 22px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(248, 252, 255, .99),
+      rgba(232, 245, 253, .96)
+    );
+
+  box-shadow:
+    0 20px 55px rgba(4, 45, 83, .08);
+
+  animation:
+    frontendFinalPanelIn .45s ease both;
 }
 
 .frontend-final-admin-waiting::before {
-    content: "";
-    position: absolute;
-    width: 240px;
-    height: 240px;
-    top: -130px;
-    right: -110px;
-    border-radius: 50%;
-    background:
-        radial-gradient(
-            circle,
-            rgba(21, 150, 233, .15),
-            transparent 70%
-        );
-    pointer-events: none;
+  content: "";
+
+  position: absolute;
+
+  width: 240px;
+  height: 240px;
+
+  top: -130px;
+  right: -110px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(21, 150, 233, .15),
+      transparent 70%
+    );
+
+  pointer-events: none;
 }
 
 .frontend-final-status-icon {
-    position: relative;
-    z-index: 1;
-    width: 52px;
-    height: 52px;
-    display: grid;
-    place-items: center;
-    border-radius: 16px;
-    color: var(--ta-blue);
-    background: #e7f3fc;
-    font-size: 20px;
-    font-weight: 900;
-    box-shadow:
-        inset 0 0 0 1px rgba(7, 86, 166, .08);
+  position: relative;
+  z-index: 1;
+
+  width: 52px;
+  height: 52px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 16px;
+
+  color: var(--ta-blue);
+
+  background:
+    #e7f3fc;
+
+  font-size: 20px;
+  font-weight: 900;
+
+  box-shadow:
+    inset 0 0 0 1px rgba(7, 86, 166, .08);
 }
 
 .frontend-final-status-icon.success {
-    color: var(--ta-success);
-    background: var(--ta-success-bg);
+  color: var(--ta-green);
+
+  background:
+    var(--ta-green-soft);
 }
 
 .frontend-final-status-copy {
-    position: relative;
-    z-index: 1;
-    min-width: 0;
+  position: relative;
+  z-index: 1;
+
+  min-width: 0;
 }
 
 .frontend-final-status-copy > span {
-    display: block;
-    color: var(--ta-blue);
-    font-size: 8px;
-    font-weight: 900;
-    letter-spacing: .14em;
+  display: block;
+
+  color: var(--ta-blue);
+
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .14em;
 }
 
 .frontend-final-status-copy > strong {
-    display: block;
-    margin-top: 6px;
-    color: var(--ta-text);
-    font:
-        800 18px/1.2
-        "Plus Jakarta Sans",
-        sans-serif;
+  display: block;
+
+  margin-top: 6px;
+
+  color: var(--ta-text);
+
+  font-family: var(--ta-display);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .frontend-final-status-copy > small {
-    display: block;
-    max-width: 760px;
-    margin-top: 7px;
-    color: var(--ta-muted);
-    font-size: 10px;
-    line-height: 1.6;
+  display: block;
+
+  max-width: 760px;
+
+  margin-top: 7px;
+
+  color: var(--ta-muted);
+
+  font-size: 10px;
+  line-height: 1.6;
 }
 
 .frontend-final-state-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 7px;
-    margin-top: 11px;
-    color: var(--ta-muted);
-    font-size: 9px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+
+  gap: 7px;
+
+  margin-top: 11px;
+
+  color: var(--ta-muted);
+
+  font-size: 9px;
 }
 
 .frontend-final-state-row strong {
-    color: var(--ta-text);
+  color: var(--ta-text);
 }
 
 .frontend-final-status-badge {
-    position: relative;
-    z-index: 2;
-    white-space: nowrap;
-    padding: 9px 12px;
-    border-radius: 999px;
-    font-size: 8px;
-    font-weight: 900;
-    letter-spacing: .08em;
+  position: relative;
+  z-index: 2;
+
+  white-space: nowrap;
+
+  padding: 9px 12px;
+
+  border-radius: 999px;
+
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .08em;
 }
 
 .frontend-final-status-badge.pending {
-    color: var(--ta-warning);
-    background: var(--ta-warning-bg);
+  color: var(--ta-orange);
+
+  background:
+    rgba(237, 146, 46, .10);
 }
 
 .frontend-final-status-badge.active {
-    color: var(--ta-success);
-    background: var(--ta-success-bg);
+  color: var(--ta-green);
+
+  background:
+    var(--ta-green-soft);
 }
 
 
 /* ============================================================
-   PAYMENT
-============================================================ */
+   PAGAMENTO
+   ============================================================ */
 
 .frontend-final-payment {
-    margin: 22px 0;
-    padding: 22px;
-    border:
-        1px solid rgba(7, 86, 166, .12);
-    border-radius: 22px;
-    background: #fff;
-    box-shadow:
-        0 18px 48px rgba(4, 45, 83, .07);
-    animation:
-        adminPanelIn .45s ease both;
+  margin: 22px 0;
+  padding: 22px;
+
+  border: 1px solid rgba(7, 86, 166, .12);
+  border-radius: 22px;
+
+  background: #fff;
+
+  box-shadow:
+    0 18px 48px rgba(4, 45, 83, .07);
+
+  animation:
+    frontendFinalPanelIn .45s ease both;
 }
 
 .frontend-final-payment-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 16px;
 }
 
 .frontend-final-payment-header span {
-    display: block;
-    color: #74899d;
-    font-size: 8px;
-    font-weight: 900;
-    letter-spacing: .14em;
+  display: block;
+
+  color: var(--ta-muted);
+
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .14em;
 }
 
 .frontend-final-payment-header strong {
-    display: block;
-    margin-top: 6px;
-    color: var(--ta-text);
-    font:
-        800 19px/1.2
-        "Plus Jakarta Sans",
-        sans-serif;
+  display: block;
+
+  margin-top: 6px;
+
+  color: var(--ta-text);
+
+  font-family: var(--ta-display);
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .frontend-final-payment-status {
-    width: 42px;
-    height: 42px;
-    display: grid;
-    place-items: center;
-    border-radius: 13px;
-    font-size: 17px;
-    font-weight: 900;
+  width: 42px;
+  height: 42px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 auto;
+
+  border-radius: 13px;
+
+  font-size: 17px;
+  font-weight: 900;
 }
 
 .frontend-final-payment-status.pending {
-    color: #9a6500;
-    background: var(--ta-warning-bg);
+  color: var(--ta-orange);
+
+  background:
+    rgba(237, 146, 46, .10);
 }
 
 .frontend-final-payment-status.confirmed {
-    color: var(--ta-success);
-    background: var(--ta-success-bg);
+  color: var(--ta-green);
+
+  background:
+    var(--ta-green-soft);
 }
 
 .frontend-final-payment-grid {
-    display: grid;
-    grid-template-columns:
-        repeat(3, minmax(0, 1fr));
-    gap: 10px;
-    margin-top: 19px;
+  display: grid;
+
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+
+  gap: 10px;
+
+  margin-top: 19px;
 }
 
 .frontend-final-payment-grid > div {
-    min-width: 0;
-    padding: 14px;
-    border:
-        1px solid #e1eaf2;
-    border-radius: 13px;
-    background: #f8fbfd;
+  min-width: 0;
+
+  padding: 14px;
+
+  border: 1px solid #e1eaf2;
+  border-radius: 13px;
+
+  background:
+    #f8fbfd;
 }
 
 .frontend-final-payment-grid span {
-    display: block;
-    color: #7b8e9f;
-    font-size: 7px;
-    font-weight: 900;
-    letter-spacing: .10em;
+  display: block;
+
+  color: var(--ta-muted);
+
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: .10em;
 }
 
 .frontend-final-payment-grid strong {
-    display: block;
-    margin-top: 7px;
-    overflow-wrap: anywhere;
-    color: var(--ta-text);
-    font-size: 12px;
+  display: block;
+
+  margin-top: 7px;
+
+  overflow-wrap: anywhere;
+
+  color: var(--ta-text);
+
+  font-size: 12px;
 }
 
 .frontend-final-payment p {
-    margin: 15px 0 0;
-    color: var(--ta-muted);
-    font-size: 9px;
-    line-height: 1.55;
+  margin: 15px 0 0;
+
+  color: var(--ta-muted);
+
+  font-size: 9px;
+  line-height: 1.55;
 }
 
 .frontend-final-confirmation-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 15px;
-    padding: 10px 14px;
-    border-radius: 10px;
-    color: #fff;
-    background:
-        linear-gradient(
-            135deg,
-            var(--ta-blue),
-            var(--ta-blue-2)
-        );
-    font-size: 9px;
-    font-weight: 800;
-    text-decoration: none;
-    box-shadow:
-        0 9px 20px rgba(7, 86, 166, .18);
-    transition:
-        transform .2s ease,
-        box-shadow .2s ease;
+  display: inline-flex;
+  align-items: center;
+
+  gap: 8px;
+
+  margin-top: 15px;
+  padding: 10px 14px;
+
+  border-radius: 10px;
+
+  color: #fff;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--ta-blue),
+      var(--ta-blue-2)
+    );
+
+  font-size: 9px;
+  font-weight: 800;
+
+  text-decoration: none;
+
+  box-shadow:
+    0 9px 20px rgba(7, 86, 166, .18);
+
+  transition:
+    transform var(--ta-fast),
+    box-shadow var(--ta-fast);
 }
 
 .frontend-final-confirmation-link:hover {
-    transform: translateY(-2px);
-    box-shadow:
-        0 13px 25px rgba(7, 86, 166, .24);
+  transform: translateY(-2px);
+
+  box-shadow:
+    0 13px 25px rgba(7, 86, 166, .24);
 }
 
 
 /* ============================================================
-   OLD PREPARE BUTTON
-============================================================ */
+   BOTÃO ANTIGO "PREPARAR"
+   ============================================================ */
 
 .application-actions button.admin-gated,
 button.admin-gated {
-    cursor: not-allowed;
-    color: #8a6a20 !important;
-    border-color: #ead9a5 !important;
-    background: #fff7df !important;
-    opacity: .9;
+  cursor: not-allowed;
+
+  color: var(--ta-orange) !important;
+
+  border-color: rgba(237, 146, 46, .35) !important;
+
+  background:
+    rgba(237, 146, 46, .09) !important;
+
+  opacity: .9;
+}
+
+.application-actions button.admin-gated:hover,
+button.admin-gated:hover {
+  transform: none !important;
+
+  box-shadow: none !important;
 }
 
 
 /* ============================================================
-   PIPELINE ANIMATION
-============================================================ */
-
-.pipeline-item {
-    transition:
-        transform .25s ease,
-        border-color .25s ease,
-        box-shadow .25s ease,
-        opacity .25s ease;
-}
+   ESTADOS DE PIPELINE
+   ============================================================ */
 
 .pipeline-item.active {
-    animation:
-        pipelinePulse 2.6s ease-in-out infinite;
+  animation:
+    frontendFinalPipelinePulse 2.6s ease-in-out infinite;
 }
 
 .pipeline-item.completed {
-    opacity: 1;
+  opacity: 1;
 }
 
 .pipeline-item.locked {
-    opacity: .48;
+  opacity: .48;
 }
 
 
 /* ============================================================
-   GENERAL PREMIUM MOTION
-============================================================ */
+   ESTADOS ESPECÍFICOS DO FRONTEND FINAL
+   ============================================================ */
 
-.panel,
-.stat-card,
-.side-panel,
-.hero-flight-card,
-.security-card {
-    transition:
-        transform .28s ease,
-        box-shadow .28s ease,
-        border-color .28s ease;
+.frontend-final-preferences.is-hidden,
+.frontend-final-admin-waiting.is-hidden,
+.frontend-final-payment.is-hidden {
+  display: none !important;
 }
 
-.panel:hover,
-.stat-card:hover,
-.side-panel:hover {
-    transform: translateY(-2px);
+.frontend-final-status-badge.completed {
+  color: var(--ta-green);
+
+  background:
+    var(--ta-green-soft);
 }
 
+.frontend-final-status-badge.paused {
+  color: var(--ta-orange);
 
-/* ============================================================
-   TOAST
-============================================================ */
-
-.toast {
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+  background:
+    rgba(237, 146, 46, .10);
 }
 
+.frontend-final-status-badge.error {
+  color: var(--ta-red);
 
-/* ============================================================
-   ANIMATIONS
-============================================================ */
-
-@keyframes adminPanelIn {
-    from {
-        opacity: 0;
-        transform:
-            translateY(12px)
-            scale(.99);
-    }
-
-    to {
-        opacity: 1;
-        transform:
-            translateY(0)
-            scale(1);
-    }
-}
-
-@keyframes pipelinePulse {
-    0%,
-    100% {
-        box-shadow:
-            0 0 0 0
-            rgba(21, 150, 233, 0);
-    }
-
-    50% {
-        box-shadow:
-            0 0 0 5px
-            rgba(21, 150, 233, .06);
-    }
+  background:
+    rgba(217, 75, 82, .10);
 }
 
 
 /* ============================================================
-   RESPONSIVE
-============================================================ */
+   LINKS / REFERÊNCIAS
+   ============================================================ */
+
+.frontend-final-reference {
+  display: inline-flex;
+  align-items: center;
+
+  max-width: 100%;
+
+  margin-top: 8px;
+  padding: 7px 10px;
+
+  border: 1px solid rgba(7, 86, 166, .10);
+  border-radius: 9px;
+
+  color: var(--ta-blue);
+
+  background:
+    rgba(7, 86, 166, .045);
+
+  font-family:
+    "JetBrains Mono",
+    "SFMono-Regular",
+    Consolas,
+    monospace;
+
+  font-size: 9px;
+  font-weight: 700;
+
+  overflow-wrap: anywhere;
+}
+
+
+/* ============================================================
+   ANIMAÇÕES EXCLUSIVAS
+   ============================================================ */
+
+@keyframes frontendFinalPanelIn {
+  from {
+    opacity: 0;
+
+    transform:
+      translateY(12px)
+      scale(.99);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+      translateY(0)
+      scale(1);
+  }
+}
+
+@keyframes frontendFinalPipelinePulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0
+      rgba(21, 150, 233, 0);
+  }
+
+  50% {
+    box-shadow:
+      0 0 0 5px
+      rgba(21, 150, 233, .06);
+  }
+}
+
+
+/* ============================================================
+   RESPONSIVE — TABLET
+   ============================================================ */
 
 @media (max-width: 900px) {
 
-    .frontend-final-weekday-grid {
-        grid-template-columns:
-            repeat(4, minmax(0, 1fr));
-    }
+  .frontend-final-weekday-grid {
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr));
+  }
 
-    .frontend-final-payment-grid {
-        grid-template-columns:
-            repeat(2, minmax(0, 1fr));
-    }
+  .frontend-final-payment-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
 }
 
+
+/* ============================================================
+   RESPONSIVE — MOBILE
+   ============================================================ */
 
 @media (max-width: 760px) {
 
-    .frontend-final-grid {
-        grid-template-columns: 1fr;
-    }
+  .frontend-final-grid {
+    grid-template-columns: 1fr;
+  }
 
-    .frontend-final-weekday-grid {
-        grid-template-columns:
-            repeat(2, minmax(0, 1fr));
-    }
+  .frontend-final-weekday-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
 
-    .frontend-final-summary {
-        grid-template-columns: 1fr;
-    }
+  .frontend-final-summary {
+    grid-template-columns: 1fr;
+  }
 
-    .frontend-final-admin-waiting {
-        grid-template-columns:
-            auto minmax(0, 1fr);
-    }
+  .frontend-final-admin-waiting {
+    grid-template-columns:
+      auto
+      minmax(0, 1fr);
+  }
 
-    .frontend-final-status-badge {
-        grid-column: 2;
-        justify-self: start;
-    }
+  .frontend-final-status-badge {
+    grid-column: 2;
 
-    .frontend-final-payment-grid {
-        grid-template-columns:
-            repeat(2, minmax(0, 1fr));
-    }
+    justify-self: start;
+  }
+
+  .frontend-final-payment-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
 }
 
 
+/* ============================================================
+   RESPONSIVE — MOBILE PEQUENO
+   ============================================================ */
+
 @media (max-width: 480px) {
 
-    .frontend-final-preferences {
-        padding: 17px;
-        border-radius: 18px;
-    }
+  .frontend-final-preferences {
+    padding: 17px;
 
-    .frontend-final-admin-waiting {
-        grid-template-columns: 1fr;
-        padding: 18px;
-        border-radius: 18px;
-    }
+    border-radius: 18px;
+  }
 
-    .frontend-final-status-badge {
-        grid-column: auto;
-    }
+  .frontend-final-admin-waiting {
+    grid-template-columns: 1fr;
 
-    .frontend-final-payment {
-        padding: 18px;
-        border-radius: 18px;
-    }
+    padding: 18px;
 
-    .frontend-final-payment-grid {
-        grid-template-columns: 1fr;
-    }
+    border-radius: 18px;
+  }
 
-    .frontend-final-weekday-grid {
-        grid-template-columns:
-            repeat(2, minmax(0, 1fr));
-    }
+  .frontend-final-status-badge {
+    grid-column: auto;
+  }
 
-    .frontend-final-status-copy > strong {
-        font-size: 16px;
-    }
+  .frontend-final-payment {
+    padding: 18px;
+
+    border-radius: 18px;
+  }
+
+  .frontend-final-payment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .frontend-final-weekday-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .frontend-final-status-copy > strong {
+    font-size: 16px;
+  }
+
+  .frontend-final-payment-header strong {
+    font-size: 17px;
+  }
 }
 
 
 /* ============================================================
    REDUCED MOTION
-============================================================ */
+   ============================================================ */
 
 @media (prefers-reduced-motion: reduce) {
 
-    *,
-    *::before,
-    *::after {
-        animation-duration: .01ms !important;
-        animation-iteration-count: 1 !important;
-        transition-duration: .01ms !important;
-        scroll-behavior: auto !important;
-    }
+  .frontend-final-preferences,
+  .frontend-final-admin-waiting,
+  .frontend-final-payment,
+  .pipeline-item.active {
+    animation: none !important;
+  }
 }
