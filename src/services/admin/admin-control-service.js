@@ -1054,6 +1054,8 @@ module.exports = {
 
   getByApplicationId,
 
+  assertApplicationAccount,
+
   configureVfsCredentials,
 
   releaseForAutomation,
