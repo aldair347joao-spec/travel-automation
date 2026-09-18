@@ -1249,21 +1249,6 @@ router.post(
 
       const mrzData =
         mrzResult.data;
-
-       if (
-  visualPassportData.passportIssueDate
-) {
-  client.passportIssueDate =
-    visualPassportData.passportIssueDate;
-}
-
-if (
-  !client.passportNumber &&
-  visualPassportData.passportNumber
-) {
-  client.passportNumber =
-    visualPassportData.passportNumber;
-}
       /*
        * =====================================================
        * 3. VALIDAR EXPIRAÇÃO
