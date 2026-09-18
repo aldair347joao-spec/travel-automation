@@ -2744,22 +2744,22 @@ chooseButton?.addEventListener(
 
       container.innerHTML = `
 
-        <div class="empty-state">
+       <div class="empty-state">
 
-          <div class="empty-icon">
-            ◎
-          </div>
+  <div class="empty-icon">
+    ◎
+  </div>
 
-          <strong>
-            Nenhuma aplicação em operação
-          </strong>
+  <strong>
+    Nenhuma candidatura enviada
+  </strong>
 
-          <p>
-            Complete a preparação e crie
-            uma aplicação.
-          </p>
+  <p>
+    Complete o perfil, os documentos e a verificação de identidade
+    para enviar uma candidatura.
+  </p>
 
-        </div>
+</div>
 
       `;
 
@@ -2887,60 +2887,6 @@ chooseButton?.addEventListener(
                     </span>
 
                   </div>
-
-                </div>
-
-
-                <div class="application-actions">
-
-                  ${
-                    (
-                      status === "created" ||
-                      status === "error"
-                    )
-                      ? `
-                        <button
-                          type="button"
-                          data-action="prepare"
-                          data-id="${escapeHtml(id)}"
-                        >
-                          Preparar
-                        </button>
-                      `
-                      : ""
-                  }
-
-
-                  ${
-                    status ===
-                    "otp_required"
-                      ? `
-                        <button
-                          type="button"
-                          data-action="continue"
-                          data-id="${escapeHtml(id)}"
-                        >
-                          Continuar
-                        </button>
-                      `
-                      : ""
-                  }
-
-
-                  ${
-                    status !== "completed" &&
-                    status !== "cancelled"
-                      ? `
-                        <button
-                          type="button"
-                          data-action="cancel"
-                          data-id="${escapeHtml(id)}"
-                        >
-                          Cancelar
-                        </button>
-                      `
-                      : ""
-                  }
 
                 </div>
 
