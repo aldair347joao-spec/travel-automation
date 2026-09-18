@@ -1837,13 +1837,23 @@
                 );
             }
 
-            state.applicationId =
-                application._id ||
-                application.id ||
-                null;
+    state.applicationId =
+    application._id ||
+    application.id ||
+    null;
 
-            state.clientId =
-                clientId;
+state.clientId =
+    clientId;
+
+/*
+ * Impede o app.js de voltar a liberar
+ * o botão enquanto esta candidatura
+ * estiver sob controlo administrativo.
+ */
+document.body.dataset.applicationSubmitted =
+    state.applicationId
+        ? "true"
+        : "false";
 
             renderAdminStatus(
                 application
@@ -1877,25 +1887,32 @@
             );
 
         } finally {
-            state.submitting =
-                false;
+    state.submitting =
+        false;
 
-            if (button) {
-                button.disabled =
-                    false;
+    /*
+     * Depois de criar a candidatura, o formulário
+     * pertence ao fluxo administrativo.
+     *
+     * Não voltar a habilitar o botão automaticamente.
+     */
+    if (
+        button &&
+        !state.applicationId
+    ) {
+        button.disabled =
+            false;
 
-                if (
-                    button.dataset
-                        .originalText
-                ) {
-                    button.textContent =
-                        button.dataset
-                            .originalText;
-                }
-            }
+        if (
+            button.dataset
+                .originalText
+        ) {
+            button.textContent =
+                button.dataset
+                    .originalText;
         }
     }
-
+}
 
     function scrollToAdminPanel() {
         window.setTimeout(
@@ -2131,6 +2148,10 @@
                 application?._id ||
                 application?.id ||
                 null;
+            document.body.dataset.applicationSubmitted =
+    state.applicationId
+        ? "true"
+        : "false";
 
             const client =
                 application?.client;
@@ -2170,6 +2191,10 @@
             application._id ||
             application.id ||
             state.applicationId;
+        document.body.dataset.applicationSubmitted =
+        state.applicationId
+            ? "true"
+            : "false";
 
         renderAdminStatus(
             application
