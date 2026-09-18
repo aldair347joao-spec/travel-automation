@@ -6,36 +6,37 @@
  * FRONTEND FINAL WORKFLOW
  * ============================================================
  *
- * FLUXO:
- *
+ * CLIENTE
+ *   ↓
  * PASSAPORTE
- *    ↓
+ *   ↓
  * IDENTIDADE — 10 POSIÇÕES
- *    ↓
+ *   ↓
  * PREFERÊNCIAS
- *    ↓
- * ENVIO DA CANDIDATURA
- *    ↓
+ *   ↓
+ * CANDIDATURA
+ *   ↓
  * AGUARDANDO ADMINISTRAÇÃO
- *    ↓
+ *   ↓
  * ADMIN LIBERA
- *    ↓
+ *   ↓
  * BOT 1 + BOT 2
- *    ↓
+ *   ↓
  * VAGA
- *    ↓
+ *   ↓
  * AGENDAMENTO
- *    ↓
+ *   ↓
  * PAGAMENTO
  *
- * IMPORTANTE:
- *
- * - Não altera IDs existentes.
- * - Não inicia automação VFS pelo cliente.
+ * REGRAS:
  * - Não envia credenciais VFS.
- * - Não chama /prepare depois da candidatura.
- * - O servidor continua sendo a autoridade.
+ * - Não chama /prepare pelo cliente.
+ * - Não inicia Bot 1.
+ * - Não inicia Bot 2.
+ * - Não inicia radar.
+ * - O backend é a autoridade.
  * - Mantém as 10 posições faciais existentes.
+ * - Passaporte máximo: 2 MB.
  * ============================================================
  */
 
@@ -47,13 +48,17 @@
         clientId: null,
         submitting: false,
         refreshTimer: null,
-        observer: null
+        observer: null,
+        initialized: false
     };
 
-    const $ = (id) => document.getElementById(id);
+    const $ = (id) =>
+        document.getElementById(id);
 
     const $$ = (selector) =>
-        Array.from(document.querySelectorAll(selector));
+        Array.from(
+            document.querySelectorAll(selector)
+        );
 
 
     /* =========================================================
@@ -132,7 +137,9 @@
         );
 
         window.setTimeout(() => {
-            toast.style.opacity = "0";
+            toast.style.opacity =
+                "0";
+
             toast.style.transform =
                 "translateY(8px)";
 
@@ -141,6 +148,73 @@
                 250
             );
         }, 4000);
+    }
+
+
+    function formatDate(value) {
+        if (!value) {
+            return "—";
+        }
+
+        const date =
+            new Date(value);
+
+        if (
+            Number.isNaN(
+                date.getTime()
+            )
+        ) {
+            return String(value);
+        }
+
+        return new Intl.DateTimeFormat(
+            "pt-PT",
+            {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric"
+            }
+        ).format(date);
+    }
+
+
+    function formatMoney(
+        amount,
+        currency = "EUR"
+    ) {
+        if (
+            amount === null ||
+            amount === undefined ||
+            amount === ""
+        ) {
+            return "—";
+        }
+
+        const numeric =
+            Number(amount);
+
+        if (
+            Number.isNaN(numeric)
+        ) {
+            return escapeHtml(
+                String(amount)
+            );
+        }
+
+        try {
+            return new Intl.NumberFormat(
+                "pt-PT",
+                {
+                    style: "currency",
+                    currency:
+                        currency || "EUR"
+                }
+            ).format(numeric);
+        } catch {
+            return `${numeric} ${
+                currency || ""
+            }`.trim();
+        }
     }
 
 
@@ -154,8 +228,19 @@
             ...(options.headers || {})
         };
 
-        if (options.body) {
-            headers["Content-Type"] =
+        const method =
+            String(
+                options.method ||
+                "GET"
+            ).toUpperCase();
+
+        if (
+            options.body &&
+            !(options.body instanceof FormData)
+        ) {
+            headers[
+                "Content-Type"
+            ] =
                 "application/json";
         }
 
@@ -164,12 +249,11 @@
 
         if (
             csrf &&
-            String(
-                options.method || "GET"
-            ).toUpperCase() !== "GET"
+            method !== "GET"
         ) {
-            headers["x-csrf-token"] =
-                csrf;
+            headers[
+                "x-csrf-token"
+            ] = csrf;
         }
 
         const response =
@@ -177,6 +261,7 @@
                 path,
                 {
                     ...options,
+                    method,
                     credentials:
                         "include",
                     headers
@@ -236,20 +321,8 @@
 
 
     /* =========================================================
-       APPLICATION STATUS
+       APPLICATION STATE
     ========================================================= */
-
-    function getApplicationStatus(
-        application
-    ) {
-        return (
-            application?.admin?.status ||
-            application?.workflowState ||
-            application?.status ||
-            "PENDING_REVIEW"
-        );
-    }
-
 
     function getAdminStatus(
         application
@@ -258,6 +331,23 @@
             application?.admin ||
             application?.adminControl ||
             {}
+        );
+    }
+
+
+    function getApplicationStatus(
+        application
+    ) {
+        const admin =
+            getAdminStatus(
+                application
+            );
+
+        return (
+            admin.status ||
+            application?.workflowState ||
+            application?.status ||
+            "PENDING_REVIEW"
         );
     }
 
@@ -273,42 +363,55 @@
     }
 
 
+    function normalizeStatus(
+        value
+    ) {
+        return String(
+            value || ""
+        )
+            .trim()
+            .toUpperCase();
+    }
+
+
     /* =========================================================
        WEEKDAYS
-       Backend receives numeric JavaScript days:
-       0 = Domingo
-       1 = Segunda
-       ...
-       6 = Sábado
     ========================================================= */
 
     const WEEKDAYS = [
         {
             value: 1,
+            short: "SEG",
             label: "Segunda-feira"
         },
         {
             value: 2,
+            short: "TER",
             label: "Terça-feira"
         },
         {
             value: 3,
+            short: "QUA",
             label: "Quarta-feira"
         },
         {
             value: 4,
+            short: "QUI",
             label: "Quinta-feira"
         },
         {
             value: 5,
+            short: "SEX",
             label: "Sexta-feira"
         },
         {
             value: 6,
+            short: "SÁB",
             label: "Sábado"
         },
         {
             value: 0,
+            short: "DOM",
             label: "Domingo"
         }
     ];
@@ -329,6 +432,7 @@
         if (
             $("frontendPreferenceBlock")
         ) {
+            updatePreferenceSummary();
             return;
         }
 
@@ -341,36 +445,28 @@
             "frontendPreferenceBlock";
 
         block.className =
-            "frontend-preference-block";
+            "frontend-final-preferences";
 
         block.innerHTML = `
-            <div class="frontend-preference-header">
-                <span>03</span>
+            <div class="frontend-final-preferences-header">
+                <span>04 · PREFERÊNCIAS</span>
 
-                <div>
-                    <small>
-                        PREFERÊNCIAS DA CANDIDATURA
-                    </small>
+                <strong>
+                    Defina como pretende o agendamento
+                </strong>
 
-                    <h3>
-                        Defina quando e onde pretende o agendamento
-                    </h3>
-
-                    <p>
-                        Estas preferências serão usadas pelo sistema
-                        para procurar apenas vagas compatíveis.
-                    </p>
-                </div>
+                <small>
+                    O sistema utilizará estas preferências
+                    para procurar vagas compatíveis.
+                </small>
             </div>
 
-            <div class="frontend-preference-grid">
+            <div class="frontend-final-grid">
 
                 <label class="frontend-field">
                     <span>Tipo de serviço</span>
 
-                    <select
-                        id="frontendServiceType"
-                    >
+                    <select id="frontendServiceType">
                         <option value="STANDARD">
                             Standard
                         </option>
@@ -381,55 +477,55 @@
                     </select>
                 </label>
 
+
                 <label class="frontend-field">
                     <span>Modo de atendimento</span>
 
-                    <select
-                        id="frontendAppointmentMode"
-                    >
+                    <select id="frontendAppointmentMode">
                         <option value="VFS_APPOINTMENT">
                             Atendimento VFS
                         </option>
                     </select>
                 </label>
 
-                <div class="frontend-field frontend-field-full">
-                    <span>Dias preferidos</span>
+            </div>
 
-                    <div
-                        class="frontend-weekdays"
-                        id="frontendWeekdays"
-                    >
-                        ${WEEKDAYS.map(day => `
-                            <label class="frontend-weekday">
-                                <input
-                                    type="checkbox"
-                                    name="preferredWeekdays"
-                                    value="${day.value}"
-                                >
 
-                                <span>
-                                    ${escapeHtml(day.label)}
-                                </span>
-                            </label>
-                        `).join("")}
-                    </div>
-                </div>
+            <div class="frontend-final-weekdays">
 
-                <div
-                    id="frontendFinalPreferenceSummary"
-                    class="frontend-preference-summary"
-                >
-                    <strong>
-                        Resumo das preferências
-                    </strong>
+                <span>
+                    Dias preferidos
+                </span>
 
-                    <span>
-                        Preencha os dados acima.
-                    </span>
+                <div class="frontend-final-weekday-grid">
+
+                    ${WEEKDAYS.map(day => `
+                        <label class="frontend-final-day">
+
+                            <input
+                                type="checkbox"
+                                name="preferredWeekdays"
+                                value="${day.value}"
+                            >
+
+                            <span>
+                                ${escapeHtml(
+                                    day.short
+                                )}
+                            </span>
+
+                        </label>
+                    `).join("")}
+
                 </div>
 
             </div>
+
+
+            <div
+                id="frontendFinalPreferenceSummary"
+                class="frontend-final-summary"
+            ></div>
         `;
 
         form.appendChild(
@@ -451,89 +547,72 @@
                     )
             )
             .filter(
-                Number.isInteger
+                value =>
+                    Number.isInteger(
+                        value
+                    )
             );
     }
 
 
     function getFinalPreferences() {
-        const visaType =
-            $(
-                "applicationVisaType"
-            )?.value
-                ?.trim()
-                .toUpperCase() ||
-            "";
-
-        const visaCenter =
-            $(
-                "applicationVisaCenter"
-            )?.value
-                ?.trim() ||
-            "";
-
-        const travelPurpose =
-            $(
-                "applicationTravelPurpose"
-            )?.value
-                ?.trim() ||
-            "";
-
-        const preferredStartDate =
-            $(
-                "preferredStartDate"
-            )?.value ||
-            null;
-
-        const preferredEndDate =
-            $(
-                "preferredEndDate"
-            )?.value ||
-            null;
-
-        const preferredTime =
-            $(
-                "preferredTime"
-            )?.value ||
-            "ANY";
-
-        const serviceType =
-            $(
-                "frontendServiceType"
-            )?.value ||
-            "STANDARD";
-
-        const appointmentMode =
-            $(
-                "frontendAppointmentMode"
-            )?.value ||
-            "VFS_APPOINTMENT";
-
-        const preferredWeekdays =
-            getCheckedWeekdays();
-
         return {
-            visaType,
+            visaType:
+                $(
+                    "applicationVisaType"
+                )?.value
+                    ?.trim()
+                    .toUpperCase() ||
+                "",
 
-            visaCenter,
+            visaCenter:
+                $(
+                    "applicationVisaCenter"
+                )?.value
+                    ?.trim() ||
+                "",
 
-            travelPurpose,
+            travelPurpose:
+                $(
+                    "applicationTravelPurpose"
+                )?.value
+                    ?.trim() ||
+                "",
 
-            serviceType,
+            serviceType:
+                $(
+                    "frontendServiceType"
+                )?.value ||
+                "STANDARD",
 
-            appointmentMode,
+            appointmentMode:
+                $(
+                    "frontendAppointmentMode"
+                )?.value ||
+                "VFS_APPOINTMENT",
 
             preferredDates: {
                 start:
-                    preferredStartDate,
+                    $(
+                        "preferredStartDate"
+                    )?.value ||
+                    null,
 
                 end:
-                    preferredEndDate
+                    $(
+                        "preferredEndDate"
+                    )?.value ||
+                    null
             },
 
-            preferredTime,
+            preferredTime:
+                $(
+                    "preferredTime"
+                )?.value ||
+                null,
 
-            preferredWeekdays
+            preferredWeekdays:
+                getCheckedWeekdays()
         };
     }
 
@@ -552,30 +631,39 @@
             getFinalPreferences();
 
         const weekdays =
-            preferences.preferredWeekdays
+            preferences
+                .preferredWeekdays
                 .map(
                     value =>
                         WEEKDAYS.find(
                             day =>
                                 day.value ===
                                 value
-                        )?.label
+                        )
                 )
                 .filter(Boolean);
 
-        const dateRange =
+        const period =
             preferences
                 .preferredDates
                 .start &&
             preferences
                 .preferredDates
                 .end
-                ? `${preferences.preferredDates.start} → ${preferences.preferredDates.end}`
-                : "Intervalo não definido";
+                ? `${
+                    preferences
+                        .preferredDates
+                        .start
+                } → ${
+                    preferences
+                        .preferredDates
+                        .end
+                }`
+                : "Não definido";
 
         summary.innerHTML = `
             <strong>
-                Resumo das preferências
+                Resumo da procura
             </strong>
 
             <span>
@@ -588,9 +676,7 @@
 
             <span>
                 Período:
-                ${escapeHtml(
-                    dateRange
-                )}
+                ${escapeHtml(period)}
             </span>
 
             <span>
@@ -605,7 +691,12 @@
                 Dias:
                 ${escapeHtml(
                     weekdays.length
-                        ? weekdays.join(", ")
+                        ? weekdays
+                            .map(
+                                day =>
+                                    day.label
+                            )
+                            .join(", ")
                         : "Qualquer dia"
                 )}
             </span>
@@ -620,7 +711,7 @@
     }
 
 
-    function validateFinalPreferences(
+    function validatePreferences(
         preferences
     ) {
         if (
@@ -634,7 +725,7 @@
             return {
                 valid: false,
                 message:
-                    "Selecione um tipo de visto válido."
+                    "Selecione o tipo de visto."
             };
         }
 
@@ -659,18 +750,22 @@
             return {
                 valid: false,
                 message:
-                    "Defina o período de datas pretendido."
+                    "Defina o período de datas."
             };
         }
 
         const start =
             new Date(
-                `${preferences.preferredDates.start}T00:00:00`
+                `${preferences
+                    .preferredDates
+                    .start}T00:00:00`
             );
 
         const end =
             new Date(
-                `${preferences.preferredDates.end}T23:59:59`
+                `${preferences
+                    .preferredDates
+                    .end}T23:59:59`
             );
 
         if (
@@ -688,11 +783,13 @@
             };
         }
 
-        if (end < start) {
+        if (
+            end < start
+        ) {
             return {
                 valid: false,
                 message:
-                    "A data final não pode ser anterior à data inicial."
+                    "A data final não pode ser anterior à inicial."
             };
         }
 
@@ -703,30 +800,19 @@
 
 
     /* =========================================================
-       APPLICATION CLIENT
+       CLIENT
     ========================================================= */
 
-    function getSelectedClientId() {
-        return (
-            state.clientId ||
-            $("applicationClient")?.value ||
-            $("identityClient")?.value ||
-            $("passportClientSelect")?.value ||
-            null
-        );
-    }
-
-
-    function detectClientFromPage() {
-        const candidates = [
+    function detectClientId() {
+        const values = [
+            state.clientId,
             $("applicationClient")?.value,
             $("identityClient")?.value,
-            $("passportClientSelect")?.value,
-            state.clientId
+            $("passportClientSelect")?.value
         ];
 
         const found =
-            candidates.find(
+            values.find(
                 value =>
                     value &&
                     String(
@@ -744,7 +830,7 @@
 
 
     /* =========================================================
-       ADMIN WAITING PANEL
+       ADMIN WAITING
     ========================================================= */
 
     function ensureAdminWaitingPanel() {
@@ -770,36 +856,49 @@
             "frontendAdminWaiting";
 
         panel.className =
-            "frontend-admin-waiting";
+            "frontend-final-admin-waiting";
 
         panel.hidden =
             true;
 
         panel.innerHTML = `
-            <div class="frontend-admin-icon">
+            <div
+                id="frontendAdminWaitingIcon"
+                class="frontend-final-status-icon"
+            >
                 ✓
             </div>
 
-            <div>
+            <div class="frontend-final-status-copy">
+
                 <span>
                     PROCESSO RECEBIDO
                 </span>
 
-                <h3 id="frontendAdminWaitingTitle">
+                <strong id="frontendAdminWaitingTitle">
                     AGUARDANDO ADMINISTRAÇÃO
-                </h3>
+                </strong>
 
-                <p id="frontendAdminWaitingText">
-                    Os seus dados foram recebidos.
-                    Um administrador irá verificar o processo
-                    antes de a automação ser liberada.
-                </p>
+                <small id="frontendAdminWaitingText">
+                    A candidatura foi recebida.
+                    A administração precisa configurar
+                    e liberar o processo antes de qualquer
+                    automação VFS.
+                </small>
+
+                <div
+                    id="frontendAdminWaitingMeta"
+                    class="frontend-final-state-row"
+                ></div>
+
             </div>
 
-            <div
-                id="frontendAdminWaitingMeta"
-                class="frontend-admin-meta"
-            ></div>
+            <span
+                id="frontendAdminWaitingBadge"
+                class="frontend-final-status-badge pending"
+            >
+                AGUARDANDO
+            </span>
         `;
 
         form.parentNode.insertBefore(
@@ -827,15 +926,12 @@
             );
 
         const status =
-            String(
+            normalizeStatus(
                 admin.status ||
-                getApplicationStatus(
-                    application
-                )
-            ).toUpperCase();
-
-        panel.hidden =
-            false;
+                application?.workflowState ||
+                application?.status ||
+                "PENDING_REVIEW"
+            );
 
         const title =
             $("frontendAdminWaitingTitle");
@@ -843,8 +939,62 @@
         const text =
             $("frontendAdminWaitingText");
 
+        const badge =
+            $("frontendAdminWaitingBadge");
+
+        const icon =
+            $("frontendAdminWaitingIcon");
+
         const meta =
             $("frontendAdminWaitingMeta");
+
+        panel.hidden =
+            false;
+
+        if (
+            status ===
+            "PENDING_REVIEW"
+        ) {
+            if (title) {
+                title.textContent =
+                    "AGUARDANDO ADMINISTRAÇÃO";
+            }
+
+            if (text) {
+                text.textContent =
+                    "Os seus dados foram recebidos. A administração irá verificar o processo, configurar os dados necessários e decidir quando liberá-lo para automação.";
+            }
+
+            if (badge) {
+                badge.textContent =
+                    "AGUARDANDO";
+                badge.className =
+                    "frontend-final-status-badge pending";
+            }
+
+            if (icon) {
+                icon.textContent =
+                    "✓";
+                icon.className =
+                    "frontend-final-status-icon";
+            }
+
+            if (meta) {
+                meta.innerHTML = `
+                    <strong>
+                        Nenhuma automação está ativa.
+                    </strong>
+                    <span>
+                        O processo permanece protegido até a liberação administrativa.
+                    </span>
+                `;
+            }
+
+            disableApplicationForm();
+
+            return;
+        }
+
 
         if (
             status ===
@@ -852,18 +1002,43 @@
         ) {
             if (title) {
                 title.textContent =
-                    "AUTOMAÇÃO LIBERADA";
+                    "PROCESSO LIBERADO";
             }
 
             if (text) {
                 text.textContent =
-                    "A administração verificou o processo e liberou a automação. O sistema continuará o fluxo automaticamente.";
+                    "A administração liberou o processo. A partir deste ponto, o servidor poderá iniciar a automação conforme as regras do processo.";
             }
 
-            panel.classList.add(
-                "released"
-            );
-        } else if (
+            if (badge) {
+                badge.textContent =
+                    "LIBERADO";
+                badge.className =
+                    "frontend-final-status-badge active";
+            }
+
+            if (icon) {
+                icon.textContent =
+                    "✓";
+                icon.className =
+                    "frontend-final-status-icon success";
+            }
+
+            if (meta) {
+                meta.innerHTML = `
+                    <strong>
+                        Automação autorizada pelo servidor.
+                    </strong>
+                `;
+            }
+
+            disableApplicationForm();
+
+            return;
+        }
+
+
+        if (
             status ===
             "AUTOMATION_ACTIVE"
         ) {
@@ -874,77 +1049,146 @@
 
             if (text) {
                 text.textContent =
-                    "O processo foi liberado e os bots estão a executar o fluxo de forma automática.";
+                    "O processo foi liberado e os serviços de automação estão a ser executados pelo backend.";
             }
 
-            panel.classList.add(
-                "released"
-            );
-        } else if (
+            if (badge) {
+                badge.textContent =
+                    "ATIVO";
+                badge.className =
+                    "frontend-final-status-badge active";
+            }
+
+            if (icon) {
+                icon.textContent =
+                    "●";
+                icon.className =
+                    "frontend-final-status-icon success";
+            }
+
+            if (meta) {
+                meta.innerHTML = `
+                    <strong>
+                        Bot 1 e Bot 2 controlados pelo servidor.
+                    </strong>
+                `;
+            }
+
+            disableApplicationForm();
+
+            return;
+        }
+
+
+        if (
             status ===
             "PAUSED"
         ) {
             if (title) {
                 title.textContent =
-                    "AUTOMAÇÃO PAUSADA";
+                    "PROCESSO PAUSADO";
             }
 
             if (text) {
                 text.textContent =
-                    "A administração colocou temporariamente a automação em pausa.";
+                    "A administração colocou o processo em pausa.";
             }
 
-            panel.classList.remove(
-                "released"
-            );
-        } else {
-            if (title) {
-                title.textContent =
-                    "AGUARDANDO ADMINISTRAÇÃO";
+            if (badge) {
+                badge.textContent =
+                    "PAUSADO";
+                badge.className =
+                    "frontend-final-status-badge pending";
             }
 
-            if (text) {
-                text.textContent =
-                    "Os seus dados foram recebidos. Um administrador irá verificar o processo antes de liberar a automação.";
+            if (meta) {
+                meta.innerHTML = `
+                    <strong>
+                        Nenhuma nova automação será iniciada.
+                    </strong>
+                `;
             }
 
-            panel.classList.remove(
-                "released"
-            );
+            disableApplicationForm();
+
+            return;
         }
 
-        if (meta) {
-            meta.innerHTML = `
-                <span>
-                    Processo:
-                    ${escapeHtml(
-                        application._id ||
-                        application.id ||
-                        state.applicationId ||
-                        "—"
-                    )}
-                </span>
 
-                <span>
-                    Estado:
-                    ${escapeHtml(
-                        status
-                    )}
-                </span>
-            `;
+        if (
+            status ===
+            "COMPLETED"
+        ) {
+            if (title) {
+                title.textContent =
+                    "PROCESSO CONCLUÍDO";
+            }
+
+            if (text) {
+                text.textContent =
+                    "O processo foi concluído.";
+            }
+
+            if (badge) {
+                badge.textContent =
+                    "CONCLUÍDO";
+                badge.className =
+                    "frontend-final-status-badge active";
+            }
+
+            if (icon) {
+                icon.textContent =
+                    "✓";
+                icon.className =
+                    "frontend-final-status-icon success";
+            }
+
+            if (meta) {
+                meta.innerHTML = `
+                    <strong>
+                        Processo encerrado pelo servidor.
+                    </strong>
+                `;
+            }
+
+            disableApplicationForm();
+
+            return;
         }
     }
 
 
-    /* =========================================================
-       PAYMENT PANEL
-    ========================================================= */
-
-    function ensurePaymentPanel() {
+    function disableApplicationForm() {
         const form =
             $("applicationForm");
 
         if (!form) {
+            return;
+        }
+
+        $$(
+            "#applicationForm input, " +
+            "#applicationForm select, " +
+            "#applicationForm textarea, " +
+            "#applicationForm button"
+        ).forEach(
+            element => {
+                element.disabled =
+                    true;
+            }
+        );
+    }
+
+
+    /* =========================================================
+       PAYMENT
+    ========================================================= */
+
+    function ensurePaymentPanel() {
+        const mount =
+            $("verificationSection");
+
+        if (!mount) {
             return;
         }
 
@@ -963,105 +1207,57 @@
             "frontendPaymentPanel";
 
         panel.className =
-            "frontend-payment-panel";
+            "frontend-final-payment";
 
         panel.hidden =
             true;
 
         panel.innerHTML = `
-            <div class="frontend-payment-header">
-                <span>
-                    PAGAMENTO
-                </span>
-
-                <h3>
-                    Dados para pagamento
-                </h3>
-
-                <p>
-                    O seu agendamento foi processado.
-                    Consulte os dados abaixo para efetuar o pagamento.
-                </p>
-            </div>
-
-            <div class="frontend-payment-grid">
+            <div class="frontend-final-payment-header">
 
                 <div>
-                    <small>
-                        REFERÊNCIA
-                    </small>
+                    <span>
+                        PAGAMENTO
+                    </span>
 
-                    <strong id="frontendPaymentReference">
-                        —
+                    <strong>
+                        Dados do pagamento
                     </strong>
                 </div>
 
-                <div>
-                    <small>
-                        ENTIDADE
-                    </small>
-
-                    <strong id="frontendPaymentEntity">
-                        —
-                    </strong>
-                </div>
-
-                <div>
-                    <small>
-                        VALOR
-                    </small>
-
-                    <strong id="frontendPaymentAmount">
-                        —
-                    </strong>
-                </div>
-
-                <div>
-                    <small>
-                        PRAZO
-                    </small>
-
-                    <strong id="frontendPaymentDeadline">
-                        —
-                    </strong>
-                </div>
-
-                <div>
-                    <small>
-                        ESTADO
-                    </small>
-
-                    <strong id="frontendPaymentStatus">
-                        —
-                    </strong>
-                </div>
-
-                <div>
-                    <small>
-                        TRANSAÇÃO
-                    </small>
-
-                    <strong id="frontendPaymentTransaction">
-                        —
-                    </strong>
+                <div
+                    id="frontendPaymentStatusIcon"
+                    class="frontend-final-payment-status pending"
+                >
+                    €
                 </div>
 
             </div>
+
+            <div
+                id="frontendPaymentGrid"
+                class="frontend-final-payment-grid"
+            ></div>
+
+            <p
+                id="frontendPaymentText"
+            ></p>
 
             <a
                 id="frontendPaymentConfirmation"
+                class="frontend-final-confirmation-link"
                 href="#"
                 target="_blank"
                 rel="noopener noreferrer"
                 hidden
             >
                 Abrir confirmação
+                →
             </a>
         `;
 
-        form.parentNode.insertBefore(
-            panel,
-            form.nextSibling
+        mount.appendChild(
+            panel
         );
     }
 
@@ -1085,48 +1281,58 @@
 
         const reference =
             payment.reference ||
-            payment.paymentReference ||
+            payment.referenceNumber ||
+            payment.referenceNo ||
             null;
 
         const entity =
             payment.entity ||
-            payment.paymentEntity ||
+            payment.entityNumber ||
             null;
 
         const amount =
-            payment.paymentAmount ??
             payment.amount ??
+            payment.paymentAmount ??
             null;
 
         const currency =
-            payment.paymentCurrency ||
             payment.currency ||
-            "";
-
-        const deadline =
-            payment.paymentDeadline ||
-            payment.deadline ||
+            payment.paymentCurrency ||
             null;
 
-        const transaction =
+        const deadline =
+            payment.deadline ||
+            payment.paymentDeadline ||
+            null;
+
+        const status =
+            normalizeStatus(
+                payment.status ||
+                payment.paymentStatus ||
+                ""
+            );
+
+        const transactionId =
             payment.transactionId ||
             payment.transactionID ||
             null;
 
-        const status =
-            payment.paymentStatus ||
-            payment.status ||
-            application?.paymentStatus ||
+        const confirmationUrl =
+            payment.confirmationUrl ||
+            payment.confirmationURL ||
             null;
 
-        if (
-            !reference &&
-            !entity &&
-            amount === null &&
-            !deadline &&
-            !transaction &&
-            !status
-        ) {
+        const hasPayment =
+            Boolean(
+                reference ||
+                entity ||
+                amount !== null ||
+                deadline ||
+                transactionId ||
+                status
+            );
+
+        if (!hasPayment) {
             panel.hidden =
                 true;
 
@@ -1136,84 +1342,119 @@
         panel.hidden =
             false;
 
-        const referenceElement =
-            $("frontendPaymentReference");
+        const grid =
+            $("frontendPaymentGrid");
 
-        const entityElement =
-            $("frontendPaymentEntity");
+        if (grid) {
+            grid.innerHTML = `
+                <div>
+                    <span>REFERÊNCIA</span>
+                    <strong>
+                        ${escapeHtml(
+                            reference || "—"
+                        )}
+                    </strong>
+                </div>
 
-        const amountElement =
-            $("frontendPaymentAmount");
+                <div>
+                    <span>ENTIDADE</span>
+                    <strong>
+                        ${escapeHtml(
+                            entity || "—"
+                        )}
+                    </strong>
+                </div>
 
-        const deadlineElement =
-            $("frontendPaymentDeadline");
+                <div>
+                    <span>VALOR</span>
+                    <strong>
+                        ${escapeHtml(
+                            amount !== null
+                                ? formatMoney(
+                                    amount,
+                                    currency
+                                )
+                                : "—"
+                        )}
+                    </strong>
+                </div>
 
-        const statusElement =
-            $("frontendPaymentStatus");
-
-        const transactionElement =
-            $("frontendPaymentTransaction");
-
-        if (referenceElement) {
-            referenceElement.textContent =
-                reference || "—";
-        }
-
-        if (entityElement) {
-            entityElement.textContent =
-                entity || "—";
-        }
-
-        if (amountElement) {
-            amountElement.textContent =
-                amount !== null &&
-                amount !== undefined
-                    ? `${amount} ${currency}`.trim()
-                    : "—";
-        }
-
-        if (deadlineElement) {
-            deadlineElement.textContent =
-                deadline
-                    ? new Intl.DateTimeFormat(
-                        "pt-PT",
-                        {
-                            dateStyle:
-                                "medium",
-                            timeStyle:
-                                "short"
-                        }
-                    ).format(
-                        new Date(
+                <div>
+                    <span>PRAZO</span>
+                    <strong>
+                        ${escapeHtml(
                             deadline
-                        )
-                    )
-                    : "—";
+                                ? formatDate(
+                                    deadline
+                                )
+                                : "—"
+                        )}
+                    </strong>
+                </div>
+
+                <div>
+                    <span>ESTADO</span>
+                    <strong>
+                        ${escapeHtml(
+                            formatPaymentStatus(
+                                status
+                            )
+                        )}
+                    </strong>
+                </div>
+
+                <div>
+                    <span>TRANSAÇÃO</span>
+                    <strong>
+                        ${escapeHtml(
+                            transactionId ||
+                            "—"
+                        )}
+                    </strong>
+                </div>
+            `;
         }
 
-        if (statusElement) {
-            statusElement.textContent =
-                String(
-                    status ||
-                    "PENDENTE"
-                ).toUpperCase();
+        const statusIcon =
+            $("frontendPaymentStatusIcon");
+
+        if (statusIcon) {
+            if (
+                status ===
+                "PAYMENT_CONFIRMED"
+            ) {
+                statusIcon.textContent =
+                    "✓";
+
+                statusIcon.className =
+                    "frontend-final-payment-status confirmed";
+            } else {
+                statusIcon.textContent =
+                    "€";
+
+                statusIcon.className =
+                    "frontend-final-payment-status pending";
+            }
         }
 
-        if (transactionElement) {
-            transactionElement.textContent =
-                transaction ||
-                "—";
+        const text =
+            $("frontendPaymentText");
+
+        if (text) {
+            if (
+                status ===
+                "PAYMENT_CONFIRMED"
+            ) {
+                text.textContent =
+                    "O pagamento foi confirmado pelo backend.";
+            } else {
+                text.textContent =
+                    "Pagamento pendente. Utilize os dados apresentados para concluir o pagamento dentro do prazo indicado.";
+            }
         }
 
         const confirmation =
-            $(
-                "frontendPaymentConfirmation"
-            );
-
-        const confirmationUrl =
-            payment.confirmationUrl ||
-            payment.confirmationURL ||
-            null;
+            $("frontendPaymentConfirmation");
 
         if (
             confirmation &&
@@ -1224,15 +1465,51 @@
 
             confirmation.hidden =
                 false;
-        } else if (confirmation) {
+        } else if (
+            confirmation
+        ) {
             confirmation.hidden =
                 true;
         }
     }
 
 
+    function formatPaymentStatus(
+        status
+    ) {
+        const map = {
+            PAYMENT_PENDING:
+                "Pagamento pendente",
+
+            PAYMENT_CONFIRMED:
+                "Pagamento confirmado",
+
+            PENDING:
+                "Pendente",
+
+            CONFIRMED:
+                "Confirmado",
+
+            FAILED:
+                "Falhou",
+
+            EXPIRED:
+                "Expirado",
+
+            COMPLETED:
+                "Concluído"
+        };
+
+        return (
+            map[status] ||
+            status ||
+            "Pendente"
+        );
+    }
+
+
     /* =========================================================
-       PIPELINE STATE
+       BOT / WORKFLOW STATE
     ========================================================= */
 
     function renderBotStates(
@@ -1246,40 +1523,43 @@
             application?.bot2 ||
             {};
 
-        const supervisor =
+        const workflow =
             application?.workflowState ||
             application?.status ||
             "—";
 
-        const bot1State =
-            $("bot1State");
-
-        const bot2State =
-            $("bot2State");
-
-        const supervisorState =
-            $("supervisorState");
-
-        if (bot1State) {
-            bot1State.textContent =
+        if ($("bot1State")) {
+            $("bot1State").textContent =
                 formatBotState(
-                    bot1.status ||
-                    "idle"
+                    bot1.status
                 );
         }
 
-        if (bot2State) {
-            bot2State.textContent =
+        if ($("bot2State")) {
+            $("bot2State").textContent =
                 formatBotState(
-                    bot2.status ||
-                    "idle"
+                    bot2.status
                 );
         }
 
-        if (supervisorState) {
-            supervisorState.textContent =
+        if ($("supervisorState")) {
+            $("supervisorState").textContent =
                 formatWorkflowState(
-                    supervisor
+                    workflow
+                );
+        }
+
+        if ($("bot1LastAction")) {
+            $("bot1LastAction").textContent =
+                formatBotState(
+                    bot1.status
+                );
+        }
+
+        if ($("bot2LastAction")) {
+            $("bot2LastAction").textContent =
+                formatBotState(
+                    bot2.status
                 );
         }
     }
@@ -1290,7 +1570,7 @@
     ) {
         const map = {
             idle:
-                "Inativo",
+                "Aguardando administração",
 
             starting:
                 "A iniciar",
@@ -1328,7 +1608,8 @@
 
         return (
             map[status] ||
-            String(status || "—")
+            status ||
+            "Aguardando"
         );
     }
 
@@ -1341,7 +1622,7 @@
                 "Criado",
 
             READY_FOR_AUTOMATION:
-                "Pronto",
+                "Pronto para automação",
 
             VFS_SESSION:
                 "Sessão VFS",
@@ -1409,15 +1690,14 @@
 
         return (
             map[state] ||
-            String(
-                state || "—"
-            )
+            state ||
+            "Aguardando"
         );
     }
 
 
     /* =========================================================
-       CREATE APPLICATION
+       APPLICATION
     ========================================================= */
 
     async function submitApplication(
@@ -1443,11 +1723,11 @@
         ensurePreferenceFields();
 
         const clientId =
-            detectClientFromPage();
+            detectClientId();
 
         if (!clientId) {
             showToast(
-                "Valide primeiro o passaporte e crie o perfil do viajante.",
+                "Valide primeiro o passaporte para criar o perfil do viajante.",
                 "error"
             );
 
@@ -1458,11 +1738,13 @@
             getFinalPreferences();
 
         const validation =
-            validateFinalPreferences(
+            validatePreferences(
                 preferences
             );
 
-        if (!validation.valid) {
+        if (
+            !validation.valid
+        ) {
             showToast(
                 validation.message,
                 "error"
@@ -1474,22 +1756,19 @@
         state.submitting =
             true;
 
-        const submitButton =
+        const button =
             event.submitter ||
-            $("applicationSubmitButton") ||
-            $(
-                '#applicationForm button[type="submit"]'
-            );
+            $("applicationSubmitButton");
 
-        if (submitButton) {
-            submitButton.disabled =
+        if (button) {
+            button.disabled =
                 true;
 
-            submitButton.dataset.originalText =
-                submitButton.textContent;
+            button.dataset.originalText =
+                button.textContent;
 
-            submitButton.textContent =
-                "A enviar candidatura...";
+            button.textContent =
+                "A enviar...";
         }
 
         try {
@@ -1502,7 +1781,8 @@
                 await api(
                     "/api/applications",
                     {
-                        method: "POST",
+                        method:
+                            "POST",
 
                         headers: {
                             "Idempotency-Key":
@@ -1514,45 +1794,56 @@
                                 clientId,
 
                                 visaType:
-                                    preferences.visaType,
+                                    preferences
+                                        .visaType,
 
                                 visaCenter:
-                                    preferences.visaCenter,
+                                    preferences
+                                        .visaCenter,
 
                                 travelPurpose:
-                                    preferences.travelPurpose,
+                                    preferences
+                                        .travelPurpose,
 
                                 serviceType:
-                                    preferences.serviceType,
+                                    preferences
+                                        .serviceType,
 
                                 appointmentMode:
-                                    preferences.appointmentMode,
+                                    preferences
+                                        .appointmentMode,
 
                                 preferredDates:
-                                    preferences.preferredDates,
+                                    preferences
+                                        .preferredDates,
 
                                 preferredTime:
-                                    preferences.preferredTime,
+                                    preferences
+                                        .preferredTime,
 
                                 preferredWeekdays:
-                                    preferences.preferredWeekdays
+                                    preferences
+                                        .preferredWeekdays
                             })
                     }
                 );
 
             const application =
-                data?.application ||
-                null;
+                data?.application;
 
             if (!application) {
                 throw new Error(
-                    "A aplicação foi recebida mas o servidor não devolveu o processo."
+                    "O backend não devolveu a candidatura criada."
                 );
             }
 
             state.applicationId =
                 application._id ||
-                application.id;
+                application.id ||
+                null;
+
+            state.clientId =
+                clientId;
 
             renderAdminStatus(
                 application
@@ -1567,17 +1858,15 @@
             );
 
             showToast(
-                "Candidatura recebida. Aguarde a administração.",
+                "Candidatura enviada. Aguarde a administração.",
                 "success"
             );
 
-            updateApplicationInterface(
-                application
-            );
+            scrollToAdminPanel();
 
         } catch (error) {
             console.error(
-                "[TRAVEL AUTOMATION] Application submit error",
+                "[TRAVEL AUTOMATION] submit",
                 error
             );
 
@@ -1591,23 +1880,41 @@
             state.submitting =
                 false;
 
-            if (submitButton) {
-                submitButton.disabled =
+            if (button) {
+                button.disabled =
                     false;
 
                 if (
-                    submitButton.dataset.originalText
+                    button.dataset
+                        .originalText
                 ) {
-                    submitButton.textContent =
-                        submitButton.dataset.originalText;
+                    button.textContent =
+                        button.dataset
+                            .originalText;
                 }
             }
         }
     }
 
 
+    function scrollToAdminPanel() {
+        window.setTimeout(
+            () => {
+                $("frontendAdminWaiting")
+                    ?.scrollIntoView({
+                        behavior:
+                            "smooth",
+                        block:
+                            "center"
+                    });
+            },
+            120
+        );
+    }
+
+
     /* =========================================================
-       OLD PREPARE BUTTONS
+       OLD PREPARE CONTROLS
     ========================================================= */
 
     function neutralizePrepareButtons() {
@@ -1618,52 +1925,140 @@
             ".prepare-application-button"
         ];
 
-        for (
-            const selector
-            of selectors
+        selectors.forEach(
+            selector => {
+                $$(selector).forEach(
+                    button => {
+                        if (
+                            button.dataset
+                                .frontendFinalBound ===
+                            "true"
+                        ) {
+                            return;
+                        }
+
+                        button.dataset
+                            .frontendFinalBound =
+                            "true";
+
+                        button.textContent =
+                            "Aguardar administração";
+
+                        button.classList.add(
+                            "admin-gated"
+                        );
+
+                        button.addEventListener(
+                            "click",
+                            event => {
+                                event.preventDefault();
+                                event.stopPropagation();
+
+                                if (
+                                    typeof event.stopImmediatePropagation ===
+                                    "function"
+                                ) {
+                                    event.stopImmediatePropagation();
+                                }
+
+                                showToast(
+                                    "A administração precisa liberar este processo antes da automação.",
+                                    "info"
+                                );
+                            },
+                            true
+                        );
+                    }
+                );
+            }
+        );
+    }
+
+
+    /* =========================================================
+       PASSPORT
+    ========================================================= */
+
+    function bindPassportLimit() {
+        const input =
+            $("passportFile");
+
+        if (!input) {
+            return;
+        }
+
+        const limit =
+            2 * 1024 * 1024;
+
+        const limitLabel =
+            document.querySelector(
+                ".passport-upload-limit"
+            );
+
+        if (limitLabel) {
+            limitLabel.textContent =
+                "MÁX. 2 MB";
+        }
+
+        if (
+            input.dataset
+                .frontendFinalPassportBound ===
+            "true"
         ) {
-            $$(selector).forEach(
-                button => {
-                    if (
-                        button.dataset.frontendFinalBound ===
-                        "true"
-                    ) {
-                        return;
+            return;
+        }
+
+        input.dataset
+            .frontendFinalPassportBound =
+            "true";
+
+        input.addEventListener(
+            "change",
+            event => {
+                const file =
+                    event.target.files?.[0];
+
+                if (!file) {
+                    return;
+                }
+
+                if (
+                    file.size >
+                    limit
+                ) {
+                    event.target.value =
+                        "";
+
+                    if ($(
+                        "passportFileStatus"
+                    )) {
+                        $("passportFileStatus")
+                            .textContent =
+                            "O ficheiro ultrapassa o limite de 2 MB.";
                     }
 
-                    button.dataset.frontendFinalBound =
-                        "true";
-
-                    button.disabled =
-                        false;
-
-                    button.textContent =
-                        "Aguardar administração";
-
-                    button.addEventListener(
-                        "click",
-                        event => {
-                            event.preventDefault();
-
-                            event.stopPropagation();
-
-                            if (
-                                typeof event.stopImmediatePropagation ===
-                                "function"
-                            ) {
-                                event.stopImmediatePropagation();
-                            }
-
-                            showToast(
-                                "O processo só será liberado depois da verificação da administração.",
-                                "info"
-                            );
-                        },
-                        true
+                    showToast(
+                        "O passaporte não pode ultrapassar 2 MB.",
+                        "error"
                     );
+
+                    return;
                 }
-            );
-        }
+
+                if ($(
+                    "passportFileStatus"
+                )) {
+                    $("passportFileStatus")
+                        .textContent =
+                        `${file.name} · ${(
+                            file.size /
+                            1024 /
+                            1024
+                        ).toFixed(2)} MB`;
+                }
+            },
+            true
+        );
     }
 
 
@@ -1672,7 +2067,9 @@
     ========================================================= */
 
     async function refreshApplication() {
-        if (!state.applicationId) {
+        if (
+            !state.applicationId
+        ) {
             return;
         }
 
@@ -1686,7 +2083,7 @@
 
             const application =
                 data?.application ||
-                null;
+                data;
 
             if (!application) {
                 return;
@@ -1698,7 +2095,64 @@
 
         } catch (error) {
             console.warn(
-                "[TRAVEL AUTOMATION] Application refresh failed",
+                "[TRAVEL AUTOMATION] application refresh",
+                error
+            );
+        }
+    }
+
+
+    async function restoreLatestApplication() {
+        try {
+            const data =
+                await api(
+                    "/api/applications"
+                );
+
+            const applications =
+                Array.isArray(
+                    data?.applications
+                )
+                    ? data.applications
+                    : Array.isArray(data)
+                        ? data
+                        : [];
+
+            if (
+                !applications.length
+            ) {
+                return;
+            }
+
+            const application =
+                applications[0];
+
+            state.applicationId =
+                application?._id ||
+                application?.id ||
+                null;
+
+            const client =
+                application?.client;
+
+            if (
+                client &&
+                typeof client ===
+                    "object"
+            ) {
+                state.clientId =
+                    client._id ||
+                    client.id ||
+                    state.clientId;
+            }
+
+            updateApplicationInterface(
+                application
+            );
+
+        } catch (error) {
+            console.warn(
+                "[TRAVEL AUTOMATION] restore",
                 error
             );
         }
@@ -1729,65 +2183,103 @@
             application
         );
 
-        const status =
-            getApplicationStatus(
-                application
-            );
-
-        const form =
-            $("applicationForm");
-
-        if (
-            [
-                "PENDING_REVIEW",
-                "READY_FOR_AUTOMATION",
-                "AUTOMATION_ACTIVE",
-                "PAUSED",
-                "COMPLETED"
-            ].includes(
-                String(
-                    status
-                ).toUpperCase()
-            )
-        ) {
-            if (
-                String(
-                    status
-                ).toUpperCase() !==
-                "PENDING_REVIEW"
-            ) {
-                disableFinalApplicationForm();
-            }
-        }
+        updatePipeline(
+            application
+        );
     }
 
 
-    function disableFinalApplicationForm() {
-        const form =
-            $("applicationForm");
+    function updatePipeline(
+        application
+    ) {
+        const status =
+            normalizeStatus(
+                getApplicationStatus(
+                    application
+                )
+            );
 
-        if (!form) {
+        const items =
+            $$(".pipeline-item");
+
+        if (!items.length) {
             return;
         }
 
-        $$(
-            "input, select, textarea, button"
-        ).forEach(
-            element => {
-                if (
-                    element.closest(
-                        "#frontendAdminWaiting"
-                    ) ||
-                    element.closest(
-                        "#frontendPaymentPanel"
-                    )
-                ) {
-                    return;
-                }
-
-                element.disabled =
-                    true;
+        items.forEach(
+            item => {
+                item.classList.remove(
+                    "active",
+                    "completed",
+                    "locked"
+                );
             }
+        );
+
+        if (
+            status ===
+            "PENDING_REVIEW"
+        ) {
+            items[0]?.classList.add(
+                "completed"
+            );
+
+            items[1]?.classList.add(
+                "completed"
+            );
+
+            items[2]?.classList.add(
+                "active"
+            );
+
+            items[3]?.classList.add(
+                "locked"
+            );
+
+            return;
+        }
+
+        if (
+            status ===
+            "READY_FOR_AUTOMATION" ||
+            status ===
+            "AUTOMATION_ACTIVE"
+        ) {
+            items[0]?.classList.add(
+                "completed"
+            );
+
+            items[1]?.classList.add(
+                "completed"
+            );
+
+            items[2]?.classList.add(
+                "completed"
+            );
+
+            items[3]?.classList.add(
+                "active"
+            );
+
+            return;
+        }
+
+        if (
+            status ===
+            "COMPLETED"
+        ) {
+            items.forEach(
+                item =>
+                    item.classList.add(
+                        "completed"
+                    )
+            );
+
+            return;
+        }
+
+        items[0]?.classList.add(
+            "active"
         );
     }
 
@@ -1807,21 +2299,22 @@
         ensurePreferenceFields();
 
         if (
-            form.dataset.frontendFinalBound ===
+            form.dataset
+                .frontendFinalBound ===
             "true"
         ) {
             return;
         }
 
-        form.dataset.frontendFinalBound =
+        form.dataset
+            .frontendFinalBound =
             "true";
 
         /*
-         * CAPTURE PHASE
-         *
-         * Isto impede que o app.js antigo
-         * envie a candidatura e depois execute
-         * /prepare.
+         * CAPTURE:
+         * impede o listener antigo
+         * de enviar outra candidatura
+         * ou chamar /prepare.
          */
         form.addEventListener(
             "submit",
@@ -1837,56 +2330,6 @@
         form.addEventListener(
             "change",
             updatePreferenceSummary
-        );
-    }
-
-
-    /* =========================================================
-       PASSPORT BRIDGE
-    ========================================================= */
-
-    function bindPassportBridge() {
-        const passportInput =
-            $("passportFile");
-
-        if (!passportInput) {
-            return;
-        }
-
-        if (
-            passportInput.dataset.frontendFinalBound ===
-            "true"
-        ) {
-            return;
-        }
-
-        passportInput.dataset.frontendFinalBound =
-            "true";
-
-        passportInput.addEventListener(
-            "change",
-            event => {
-                const file =
-                    event.target.files?.[0];
-
-                if (!file) {
-                    return;
-                }
-
-                if (
-                    file.size >
-                    2 * 1024 * 1024
-                ) {
-                    event.target.value =
-                        "";
-
-                    showToast(
-                        "O passaporte não pode ultrapassar 2 MB.",
-                        "error"
-                    );
-                }
-            },
-            true
         );
     }
 
@@ -1908,9 +2351,9 @@
                     ensurePreferenceFields();
                     ensureAdminWaitingPanel();
                     ensurePaymentPanel();
+                    bindPassportLimit();
                     neutralizePrepareButtons();
                     bindApplicationForm();
-                    bindPassportBridge();
                 }
             );
 
@@ -1929,25 +2372,30 @@
     ========================================================= */
 
     function initialize() {
+        if (
+            state.initialized
+        ) {
+            return;
+        }
+
+        state.initialized =
+            true;
+
         ensurePreferenceFields();
 
         ensureAdminWaitingPanel();
 
         ensurePaymentPanel();
 
-        bindApplicationForm();
+        bindPassportLimit();
 
-        bindPassportBridge();
+        bindApplicationForm();
 
         neutralizePrepareButtons();
 
         startObserver();
 
-        /*
-         * Procuramos automaticamente
-         * uma aplicação criada anteriormente.
-         */
-        refreshExistingApplication();
+        restoreLatestApplication();
 
         state.refreshTimer =
             window.setInterval(
@@ -1957,63 +2405,16 @@
     }
 
 
-    async function refreshExistingApplication() {
-        try {
-            const data =
-                await api(
-                    "/api/applications"
-                );
-
-            const applications =
-                Array.isArray(
-                    data?.applications
-                )
-                    ? data.applications
-                    : [];
-
-            if (!applications.length) {
-                return;
-            }
-
-            /*
-             * Usamos a candidatura mais recente.
-             */
-            const application =
-                applications[0];
-
-            const id =
-                application?._id ||
-                application?.id;
-
-            if (!id) {
-                return;
-            }
-
-            state.applicationId =
-                id;
-
-            detectClientFromPage();
-
-            updateApplicationInterface(
-                application
-            );
-
-        } catch (error) {
-            console.warn(
-                "[TRAVEL AUTOMATION] Could not restore application",
-                error
-            );
-        }
-    }
-
-
     if (
         document.readyState ===
         "loading"
     ) {
         document.addEventListener(
             "DOMContentLoaded",
-            initialize
+            initialize,
+            {
+                once: true
+            }
         );
     } else {
         initialize();
