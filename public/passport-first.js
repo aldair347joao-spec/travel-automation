@@ -672,15 +672,15 @@
     }
 
     if (
-      file.size >
-      6 * 1024 * 1024
-    ) {
-      toast(
-        "A fotografia não pode ultrapassar 6 MB.",
-        "error"
-      );
-      return;
-    }
+  file.size >
+  2 * 1024 * 1024
+) {
+  toast(
+    "A fotografia não pode ultrapassar 2 MB.",
+    "error"
+  );
+  return;
+}
 
     state.file = file;
 
