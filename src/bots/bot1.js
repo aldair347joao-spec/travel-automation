@@ -1230,7 +1230,7 @@ class Bot1 {
     } catch (
       error
     ) {
-
+     
       await this.markError(
         application,
         "BOT1_PREPARATION_ERROR",
@@ -1252,7 +1252,9 @@ class Bot1 {
     applicationId,
     code
   ) {
-
+     await this.assertAdminRelease(
+    applicationId
+  );
     const application =
       await Application.findById(
         applicationId
@@ -1474,7 +1476,9 @@ class Bot1 {
   async continueAfterVerification(
     applicationId
   ) {
-
+     await this.assertAdminRelease(
+    applicationId
+  );
     const application =
       await Application.findById(
         applicationId
@@ -1662,7 +1666,9 @@ class Bot1 {
     applicationId,
     slotReceivedAt = null
   ) {
-
+      await this.assertAdminRelease(
+    applicationId
+  );
     const startedAt =
       Date.now();
 
@@ -2838,7 +2844,9 @@ class Bot1 {
   async finalizeAfterOtp(
     applicationId
   ) {
-
+     await this.assertAdminRelease(
+    applicationId
+  );
     const application =
       await Application.findById(
         applicationId
