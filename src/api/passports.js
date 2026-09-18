@@ -114,6 +114,308 @@ function normalizeCompact(
     .replace(/[^A-Z0-9]/g, "");
 }
 
+function normalizeOcrValue(value) {
+  return String(value || "")
+    .replace(/[|]/g, "I")
+    .replace(/[“”"]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeDateCandidate(value) {
+  const raw = String(value || "")
+    .trim()
+    .replace(/[Oo]/g, "0")
+    .replace(/[Il|]/g, "1")
+    .replace(/[Ss]/g, "5");
+
+  let match =
+    raw.match(
+      /\b(\d{2})[\/.\-](\d{2})[\/.\-](\d{4})\b/
+    );
+
+  if (match) {
+    const day = match[1];
+    const month = match[2];
+    const year = match[3];
+
+    return `${year}-${month}-${day}`;
+  }
+
+  match =
+    raw.match(
+      /\b(\d{4})[\/.\-](\d{2})[\/.\-](\d{2})\b/
+    );
+
+  if (match) {
+    return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+
+  return null;
+}
+
+function extractVisualPassportFields(
+  ocrText
+) {
+  const text =
+    normalizeOcrValue(
+      ocrText
+    );
+
+  if (!text) {
+    return {
+      fullName: null,
+      passportNumber: null,
+      nationality: null,
+      dateOfBirth: null,
+      gender: null,
+      passportIssueDate: null,
+      passportExpiryDate: null
+    };
+  }
+
+  const lines =
+    text
+      .split(/\r?\n/)
+      .map(line =>
+        normalizeOcrValue(line)
+      )
+      .filter(Boolean);
+
+  const result = {
+    fullName: null,
+    passportNumber: null,
+    nationality: null,
+    dateOfBirth: null,
+    gender: null,
+    passportIssueDate: null,
+    passportExpiryDate: null
+  };
+
+  /*
+   * IMPORTANTE:
+   * A MRZ continuará sendo a fonte primária.
+   * Estas regras servem apenas para complementar
+   * informações que não existem na MRZ, principalmente
+   * a data de emissão.
+   */
+
+  const issueLabels = [
+    "DATE OF ISSUE",
+    "ISSUE DATE",
+    "DATE OF ISSUANCE",
+    "ISSUED",
+    "DATA DE EMISSÃO",
+    "DATA EMISSÃO",
+    "EMITIDO EM",
+    "DATE D'EMISSION"
+  ];
+
+  const expiryLabels = [
+    "DATE OF EXPIRY",
+    "EXPIRY DATE",
+    "DATE OF EXPIRATION",
+    "VALID UNTIL",
+    "EXPIRATION",
+    "DATA DE VALIDADE",
+    "VALIDADE",
+    "EXPIRA EM"
+  ];
+
+  const birthLabels = [
+    "DATE OF BIRTH",
+    "BIRTH DATE",
+    "DOB",
+    "DATA DE NASCIMENTO",
+    "NASCIMENTO"
+  ];
+
+  const passportNumberLabels = [
+    "PASSPORT NO",
+    "PASSPORT NO.",
+    "PASSPORT NUMBER",
+    "PASSPORT N°",
+    "PASSPORT Nº",
+    "Nº DO PASSAPORTE",
+    "N DO PASSAPORTE",
+    "NO DO PASSAPORTE"
+  ];
+
+  function findDateAfterLabels(
+    labels
+  ) {
+    for (
+      let index = 0;
+      index < lines.length;
+      index += 1
+    ) {
+      const line =
+        lines[index].toUpperCase();
+
+      if (
+        labels.some(label =>
+          line.includes(label)
+        )
+      ) {
+        const sameLine =
+          normalizeDateCandidate(
+            lines[index]
+          );
+
+        if (sameLine) {
+          return sameLine;
+        }
+
+        for (
+          let offset = 1;
+          offset <= 2;
+          offset += 1
+        ) {
+          if (
+            lines[index + offset]
+          ) {
+            const candidate =
+              normalizeDateCandidate(
+                lines[index + offset]
+              );
+
+            if (candidate) {
+              return candidate;
+            }
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  result.passportIssueDate =
+    findDateAfterLabels(
+      issueLabels
+    );
+
+  result.passportExpiryDate =
+    findDateAfterLabels(
+      expiryLabels
+    );
+
+  result.dateOfBirth =
+    findDateAfterLabels(
+      birthLabels
+    );
+
+  /*
+   * Número visual do passaporte.
+   * Não substitui o número confirmado pela MRZ.
+   */
+  for (
+    let index = 0;
+    index < lines.length;
+    index += 1
+  ) {
+    const upper =
+      lines[index].toUpperCase();
+
+    if (
+      passportNumberLabels.some(
+        label =>
+          upper.includes(label)
+      )
+    ) {
+      const value =
+        lines[index]
+          .replace(
+            /.*?(PASSPORT\s*(?:NO|NUMBER|N°|Nº)?\s*[:#]?)\s*/i,
+            ""
+          )
+          .replace(
+            /[^A-Z0-9]/gi,
+            ""
+          );
+
+      if (
+        value.length >= 6 &&
+        value.length <= 12
+      ) {
+        result.passportNumber =
+          value.toUpperCase();
+
+        break;
+      }
+
+      for (
+        let offset = 1;
+        offset <= 2;
+        offset += 1
+      ) {
+        const next =
+          lines[index + offset];
+
+        if (!next) {
+          continue;
+        }
+
+        const candidate =
+          next
+            .replace(
+              /[^A-Z0-9]/gi,
+              ""
+            )
+            .toUpperCase();
+
+        if (
+          candidate.length >= 6 &&
+          candidate.length <= 12
+        ) {
+          result.passportNumber =
+            candidate;
+
+          break;
+        }
+      }
+
+      if (
+        result.passportNumber
+      ) {
+        break;
+      }
+    }
+  }
+
+  /*
+   * Sexo.
+   */
+  for (
+    const line of lines
+  ) {
+    const upper =
+      line.toUpperCase();
+
+    if (
+      /\bSEX\b|\bSEXO\b|\bGENDER\b/
+        .test(upper)
+    ) {
+      if (
+        /\bF\b|\bFEMALE\b|\bFEMININO\b/
+          .test(upper)
+      ) {
+        result.gender = "female";
+        break;
+      }
+
+      if (
+        /\bM\b|\bMALE\b|\bMASCULINO\b/
+          .test(upper)
+      ) {
+        result.gender = "male";
+        break;
+      }
+    }
+  }
+
+  return result;
+}
 function createInternalEmail(
   passportNumber
 ) {
@@ -614,14 +916,16 @@ function findValidMrz(
  * =========================================================
  */
 
-async function createClientFromPassport(
+   async function createClientFromPassport(
   {
     accountId,
     createdBy,
     mrzData,
-    passportType
+    passportType,
+    visualData
   }
-) {
+)
+  {
   const passportNumber =
     normalizeText(
       mrzData.passportNumber
@@ -669,7 +973,12 @@ async function createClientFromPassport(
     mapMrzSex(
       mrzData.sex
     );
+    const visual =
+  visualData || {};
 
+const passportIssueDate =
+  visual.passportIssueDate ||
+  null;
   if (!client) {
     client =
       new Client({
@@ -697,7 +1006,7 @@ async function createClientFromPassport(
         passportNumber,
 
         passportIssueDate:
-          null,
+         passportIssueDate,
 
         passportExpiryDate:
           mrzData.passportExpiryDate ||
@@ -776,6 +1085,12 @@ async function createClientFromPassport(
       mrzData.passportExpiryDate ||
       client.passportExpiryDate ||
       null;
+    if (
+  passportIssueDate
+) {
+  client.passportIssueDate =
+    passportIssueDate;
+}
 
     client.passportCountry =
       mrzData.issuingCountry ||
@@ -845,6 +1160,10 @@ router.post(
           req.file.buffer
         );
 
+      const visualPassportData =
+  extractVisualPassportFields(
+    ocrResult.text
+  );
       /*
        * =====================================================
        * 2. VALIDAR MRZ
@@ -931,6 +1250,20 @@ router.post(
       const mrzData =
         mrzResult.data;
 
+       if (
+  visualPassportData.passportIssueDate
+) {
+  client.passportIssueDate =
+    visualPassportData.passportIssueDate;
+}
+
+if (
+  !client.passportNumber &&
+  visualPassportData.passportNumber
+) {
+  client.passportNumber =
+    visualPassportData.passportNumber;
+}
       /*
        * =====================================================
        * 3. VALIDAR EXPIRAÇÃO
@@ -1019,19 +1352,21 @@ router.post(
        */
 
       const client =
-        await createClientFromPassport({
-          accountId:
-            req.user.accountId,
+  await createClientFromPassport({
+    accountId:
+      req.user.accountId,
 
-          createdBy:
-            req.user._id,
+    createdBy:
+      req.user._id,
 
-          mrzData,
+    mrzData,
 
-          passportType:
-            passportType.type
-        });
+    passportType:
+      passportType.type,
 
+    visualData:
+      visualPassportData
+  });
       /*
        * =====================================================
        * 6. COMPARAR DADOS
@@ -1257,7 +1592,8 @@ router.post(
 
           passportNumber:
             client.passportNumber,
-
+          passportIssueDate:
+         client.passportIssueDate,
           passportExpiryDate:
             client.passportExpiryDate,
 
@@ -1398,7 +1734,10 @@ router.post(
         await ocr.extract(
           req.file.buffer
         );
-
+        const visualPassportData =
+  extractVisualPassportFields(
+    ocrResult.text
+  );
       const fingerprint =
         createFingerprint(
           req.file.buffer
@@ -1494,6 +1833,20 @@ router.post(
       const mrzData =
         mrzResult.data;
 
+      if (
+  visualPassportData.passportIssueDate
+) {
+  client.passportIssueDate =
+    visualPassportData.passportIssueDate;
+}
+
+if (
+  !client.passportNumber &&
+  visualPassportData.passportNumber
+) {
+  client.passportNumber =
+    visualPassportData.passportNumber;
+}
       /*
        * =====================================================
        * 3. COMPARAR COM CLIENTE
