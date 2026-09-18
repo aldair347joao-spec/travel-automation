@@ -1592,6 +1592,38 @@ class Bot2 {
           siteState !==
           "SERVICES"
         ) {
+
+          /*
+           * O administrador pode ter
+           * pausado durante detectState().
+           * Não gravamos novamente o estado
+           * sem confirmar a liberação.
+           */
+
+          try {
+            await this.assertAdminRelease(
+              id
+            );
+          } catch (
+            guardError
+          ) {
+            logger.info(
+              "RADAR state update discarded because automation was paused",
+              {
+                applicationId:
+                  id,
+
+                workerId:
+                  this.workerId,
+
+                reason:
+                  guardError.message
+              }
+            );
+
+            return;
+          }
+
           await Application.updateOne(
             {
               _id:
@@ -1645,6 +1677,20 @@ class Bot2 {
         );
 
 
+      /*
+       * A liberação administrativa pode ser
+       * retirada enquanto a consulta ao VFS
+       * está em andamento.
+       *
+       * Antes de processar ou gravar qualquer
+       * resultado, validamos novamente.
+       */
+
+      await this.assertAdminRelease(
+        id
+      );
+
+
       const hash =
         hashAvailability(
           availability
@@ -1666,6 +1712,17 @@ class Bot2 {
 
       const now =
         new Date();
+
+
+      /*
+       * Última barreira antes de alterar
+       * o estado da aplicação e entregar
+       * uma vaga ao Bot 1.
+       */
+
+      await this.assertAdminRelease(
+        id
+      );
 
 
       /*
@@ -1861,6 +1918,38 @@ class Bot2 {
         );
 
 
+      /*
+       * Se o administrador pausou a aplicação
+       * enquanto a consulta estava em andamento,
+       * não devemos reativar o radar nem alterar
+       * os controles da aplicação.
+       */
+
+      try {
+        await this.assertAdminRelease(
+          id
+        );
+      } catch (
+        guardError
+      ) {
+        logger.info(
+          "RADAR result discarded because automation was paused",
+          {
+            applicationId:
+              id,
+
+            workerId:
+              this.workerId,
+
+            reason:
+              guardError.message
+          }
+        );
+
+        return;
+      }
+
+
       await Application.updateOne(
         {
           _id:
@@ -1924,6 +2013,45 @@ class Bot2 {
 
       const now =
         new Date();
+
+
+      /*
+       * IMPORTANTE:
+       *
+       * O erro pode ter sido causado
+       * pelo próprio bloqueio administrativo.
+       *
+       * Antes de gravar cooldown como se
+       * fosse erro do VFS, verificamos
+       * novamente a liberação.
+       */
+
+      try {
+        await this.assertAdminRelease(
+          id
+        );
+      } catch (
+        guardError
+      ) {
+        logger.info(
+          "RADAR error state discarded because automation was paused",
+          {
+            applicationId:
+              id,
+
+            workerId:
+              this.workerId,
+
+            reason:
+              guardError.message,
+
+            originalError:
+              error.message
+          }
+        );
+
+        return;
+      }
 
 
       await Application.updateOne(
