@@ -1,4 +1,5 @@
 const Tesseract = require("tesseract.js");
+const sharp = require("sharp");
 
 const MAX_IMAGE_BYTES =
   8 * 1024 * 1024;
@@ -14,10 +15,25 @@ const OCR_PASSES = [
   {
     name: "sparse",
     psm: 11
+  }
+];
+
+const MRZ_OCR_PASSES = [
+  {
+    name: "mrz_block",
+    psm: 6,
+    whitelist:
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<"
   },
   {
-    name: "mrz",
-    psm: 6,
+    name: "mrz_sparse",
+    psm: 11,
+    whitelist:
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<"
+  },
+  {
+    name: "mrz_line",
+    psm: 13,
     whitelist:
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<"
   }
@@ -82,12 +98,8 @@ function scoreMrzCandidate(line) {
 }
 
 /*
- * OCR pode trocar caracteres alfabéticos por números
- * e vice-versa.
- *
- * Estas conversões só são utilizadas quando a posição
- * da MRZ determina que o carácter deveria pertencer
- * ao conjunto correspondente.
+ * Correções utilizadas somente quando a estrutura
+ * da MRZ permite determinar o tipo esperado.
  */
 const DIGIT_CORRECTIONS = {
   O: "0",
@@ -145,8 +157,7 @@ function correctLetterCharacter(char) {
 }
 
 /*
- * Corrige a linha 1 do TD3 apenas nos campos
- * onde o tipo do carácter é conhecido.
+ * Linha 1 TD3:
  *
  * P<XXX...
  */
@@ -159,31 +170,28 @@ function normalizeFirstMrzLine(line) {
   }
 
   const chars =
-    normalized
-      .split("");
+    normalized.split("");
 
   if (chars.length >= 1) {
     chars[0] =
       chars[0] === "P"
         ? "P"
-        : correctLetterCharacter(chars[0]);
+        : correctLetterCharacter(
+            chars[0]
+          );
   }
 
   if (chars.length >= 2) {
-    if (
-      chars[1] !== "<"
-    ) {
-      chars[1] = "<";
-    }
+    chars[1] = "<";
   }
 
   /*
-   * ISO issuing country:
-   * posições 2, 3 e 4.
+   * País emissor.
    */
   for (
     let index = 2;
-    index <= 4 && index < chars.length;
+    index <= 4 &&
+    index < chars.length;
     index += 1
   ) {
     chars[index] =
@@ -196,9 +204,9 @@ function normalizeFirstMrzLine(line) {
 }
 
 /*
- * Corrige a linha 2 usando a estrutura TD3:
+ * Linha 2 TD3:
  *
- * 0-8   número
+ * 0-8   número do passaporte
  * 9     check digit
  * 10-12 nacionalidade
  * 13-18 nascimento
@@ -219,27 +227,10 @@ function normalizeSecondMrzLine(line) {
   }
 
   const chars =
-    normalized
-      .split("");
+    normalized.split("");
 
   /*
-   * Número do passaporte:
-   * alfanumérico. Não fazemos conversão agressiva.
-   */
-  for (
-    let index = 0;
-    index <= 8 && index < chars.length;
-    index += 1
-  ) {
-    if (
-      chars[index] === " "
-    ) {
-      chars[index] = "<";
-    }
-  }
-
-  /*
-   * Check digit do número.
+   * Check digit do número do passaporte.
    */
   if (chars.length > 9) {
     chars[9] =
@@ -253,7 +244,8 @@ function normalizeSecondMrzLine(line) {
    */
   for (
     let index = 10;
-    index <= 12 && index < chars.length;
+    index <= 12 &&
+    index < chars.length;
     index += 1
   ) {
     chars[index] =
@@ -263,26 +255,17 @@ function normalizeSecondMrzLine(line) {
   }
 
   /*
-   * Data de nascimento.
+   * Data de nascimento + check digit.
    */
   for (
     let index = 13;
-    index <= 18 && index < chars.length;
+    index <= 19 &&
+    index < chars.length;
     index += 1
   ) {
     chars[index] =
       correctDigitCharacter(
         chars[index]
-      );
-  }
-
-  /*
-   * Check digit nascimento.
-   */
-  if (chars.length > 19) {
-    chars[19] =
-      correctDigitCharacter(
-        chars[19]
       );
   }
 
@@ -305,11 +288,12 @@ function normalizeSecondMrzLine(line) {
   }
 
   /*
-   * Data de validade.
+   * Data de validade + check digit.
    */
   for (
     let index = 21;
-    index <= 26 && index < chars.length;
+    index <= 27 &&
+    index < chars.length;
     index += 1
   ) {
     chars[index] =
@@ -319,65 +303,32 @@ function normalizeSecondMrzLine(line) {
   }
 
   /*
-   * Check digit validade.
+   * Número pessoal:
+   * permanece alfanumérico.
    */
-  if (chars.length > 27) {
-    chars[27] =
-      correctDigitCharacter(
-        chars[27]
-      );
-  }
 
   /*
-   * Número pessoal.
-   *
-   * É alfanumérico, portanto não fazemos
-   * substituição agressiva aqui.
+   * Check digit pessoal + check final.
    */
   for (
-    let index = 28;
-    index <= 41 && index < chars.length;
+    let index = 42;
+    index <= 43 &&
+    index < chars.length;
     index += 1
   ) {
-    if (
-      chars[index] === " "
-    ) {
-      chars[index] = "<";
-    }
-  }
-
-  /*
-   * Check digit número pessoal.
-   */
-  if (chars.length > 42) {
-    chars[42] =
+    chars[index] =
       correctDigitCharacter(
-        chars[42]
-      );
-  }
-
-  /*
-   * Check digit final.
-   */
-  if (chars.length > 43) {
-    chars[43] =
-      correctDigitCharacter(
-        chars[43]
+        chars[index]
       );
   }
 
   return chars.join("");
 }
 
-/*
- * Gera uma pequena família de candidatos.
- *
- * Importante:
- * não criamos combinações exponenciais.
- * O objetivo é corrigir apenas os erros
- * mais comuns do OCR.
- */
-function generateMrzVariants(line, lineNumber) {
+function generateMrzVariants(
+  line,
+  lineNumber
+) {
   const normalized =
     compactMrzCandidate(line);
 
@@ -385,9 +336,12 @@ function generateMrzVariants(line, lineNumber) {
     return [];
   }
 
-  const variants = new Set();
+  const variants =
+    new Set();
 
-  variants.add(normalized);
+  variants.add(
+    normalized
+  );
 
   if (lineNumber === 1) {
     const corrected =
@@ -396,7 +350,9 @@ function generateMrzVariants(line, lineNumber) {
       );
 
     if (corrected) {
-      variants.add(corrected);
+      variants.add(
+        corrected
+      );
     }
   }
 
@@ -407,7 +363,9 @@ function generateMrzVariants(line, lineNumber) {
       );
 
     if (corrected) {
-      variants.add(corrected);
+      variants.add(
+        corrected
+      );
     }
   }
 
@@ -470,9 +428,6 @@ function generateCandidates(text) {
 
   /*
    * Três linhas juntas.
-   *
-   * Algumas fotografias fazem o OCR quebrar
-   * uma MRZ em três segmentos.
    */
   for (
     let i = 0;
@@ -494,7 +449,9 @@ function generateCandidates(text) {
   }
 
   return [
-    ...new Set(candidates)
+    ...new Set(
+      candidates
+    )
   ].sort(
     (a, b) =>
       scoreMrzCandidate(b) -
@@ -502,82 +459,144 @@ function generateCandidates(text) {
   );
 }
 
-function normalizeTo44(value) {
-  if (!value) {
-    return null;
-  }
-
+/*
+ * Produz possíveis linhas de exatamente 44 caracteres.
+ *
+ * Não aceitamos cortes arbitrários.
+ * Quando o OCR produzir uma linha um pouco maior,
+ * testamos apenas pequenas janelas.
+ */
+function normalizeTo44Variants(
+  value,
+  lineNumber
+) {
   const line =
     compactMrzCandidate(
       value
     );
 
+  if (!line) {
+    return [];
+  }
+
+  const variants =
+    new Set();
+
+  const addVariant =
+    candidate => {
+      if (
+        candidate.length !== 44
+      ) {
+        return;
+      }
+
+      const normalized =
+        lineNumber === 1
+          ? normalizeFirstMrzLine(
+              candidate
+            )
+          : normalizeSecondMrzLine(
+              candidate
+            );
+
+      if (
+        normalized &&
+        normalized.length === 44
+      ) {
+        variants.add(
+          normalized
+        );
+      }
+
+      variants.add(
+        candidate
+      );
+    };
+
   if (
     line.length === 44
   ) {
-    return line;
+    addVariant(
+      line
+    );
   }
 
   /*
-   * OCR pode adicionar alguns caracteres
-   * no início/fim.
-   *
-   * Só aceitamos uma diferença pequena.
+   * Permite pequenos caracteres extras
+   * produzidos pelo OCR.
    */
   if (
     line.length > 44 &&
     line.length <= 48
   ) {
-    const firstP =
-      line.indexOf("P");
-
-    if (
-      firstP >= 0 &&
-      firstP <= 3
+    for (
+      let start = 0;
+      start <= line.length - 44;
+      start += 1
     ) {
-      const trimmed =
+      const window =
         line.slice(
-          firstP,
-          firstP + 44
+          start,
+          start + 44
         );
 
       if (
-        trimmed.length === 44
+        lineNumber === 1 &&
+        !window.startsWith("P")
       ) {
-        return trimmed;
+        continue;
       }
+
+      addVariant(
+        window
+      );
     }
   }
 
-  return null;
+  return [
+    ...variants
+  ];
 }
 
 function buildMrzPairs(
   candidates
 ) {
-  const normalized =
-    candidates
-      .map(normalizeTo44)
-      .filter(Boolean);
-
-  const unique =
-    [
-      ...new Set(
-        normalized
-      )
-    ];
-
   const firstLines =
-    unique.filter(
-      line =>
-        line.startsWith("P")
-    );
+    new Set();
 
   const secondLines =
-    unique.filter(
-      line =>
-        !line.startsWith("P")
-    );
+    new Set();
+
+  for (
+    const candidate of candidates
+  ) {
+    const lineNumber =
+      candidate.startsWith("P")
+        ? 1
+        : 2;
+
+    const variants =
+      normalizeTo44Variants(
+        candidate,
+        lineNumber
+      );
+
+    for (
+      const line of variants
+    ) {
+      if (
+        line.startsWith("P")
+      ) {
+        firstLines.add(
+          line
+        );
+      } else {
+        secondLines.add(
+          line
+        );
+      }
+    }
+  }
 
   const pairs =
     [];
@@ -610,7 +629,11 @@ function buildMrzPairs(
   );
 
   return {
-    candidates: unique,
+    candidates: [
+      ...firstLines,
+      ...secondLines
+    ],
+
     pairs
   };
 }
@@ -653,7 +676,8 @@ function extractOcrFields(text) {
       .filter(Boolean);
 
   return {
-    rawLines: lines,
+    rawLines:
+      lines,
 
     text:
       lines.join(" ")
@@ -666,14 +690,199 @@ function mergeOcrTexts(
   return results
     .map(
       result =>
-        result?.data?.text || ""
+        result?.data?.text ||
+        ""
     )
     .filter(Boolean)
     .join("\n");
 }
 
+/*
+ * Cria versões derivadas exclusivamente para OCR.
+ *
+ * IMPORTANTE:
+ * buffer continua sendo o arquivo original.
+ * Nenhuma dessas transformações substitui o arquivo
+ * enviado pelo cliente.
+ */
+async function createOcrVariants(
+  buffer,
+  logger
+) {
+  const base =
+    sharp(buffer)
+      .rotate()
+      .resize({
+        width: 2400,
+        withoutEnlargement: false,
+        fit: "inside"
+      })
+      .flatten({
+        background: "#ffffff"
+      });
+
+  const normalizedResult =
+    await base
+      .jpeg({
+        quality: 92,
+        chromaSubsampling: "4:4:4"
+      })
+      .toBuffer({
+        resolveWithObject: true
+      });
+
+  const normalized =
+    normalizedResult.data;
+
+  const info =
+    normalizedResult.info;
+
+  const variants = [
+    {
+      name: "full",
+      buffer:
+        normalized
+    }
+  ];
+
+  const width =
+    info.width;
+
+  const height =
+    info.height;
+
+  if (
+    width > 0 &&
+    height > 0
+  ) {
+    /*
+     * Como a MRZ fica na parte inferior,
+     * usamos mais de um recorte.
+     *
+     * Isto evita depender de uma posição
+     * única da fotografia.
+     */
+    const cropRatios = [
+      0.42,
+      0.50
+    ];
+
+    for (
+      const ratio of cropRatios
+    ) {
+      const cropHeight =
+        Math.max(
+          1,
+          Math.floor(
+            height * ratio
+          )
+        );
+
+      const top =
+        Math.max(
+          0,
+          height -
+            cropHeight
+        );
+
+      const cropBase =
+        sharp(
+          normalized
+        )
+          .extract({
+            left: 0,
+            top,
+            width,
+            height:
+              cropHeight
+          })
+          .extend({
+            top: 18,
+            bottom: 18,
+            left: 18,
+            right: 18,
+            background:
+              "#ffffff"
+          });
+
+      /*
+       * Versão colorida/nítida.
+       */
+      const colorMrz =
+        await cropBase
+          .clone()
+          .sharpen()
+          .jpeg({
+            quality: 96,
+            chromaSubsampling:
+              "4:4:4"
+          })
+          .toBuffer();
+
+      /*
+       * Versão em escala de cinza,
+       * normalizada e mais nítida.
+       */
+      const grayMrz =
+        await cropBase
+          .clone()
+          .grayscale()
+          .normalize()
+          .sharpen()
+          .jpeg({
+            quality: 96,
+            chromaSubsampling:
+              "4:4:4"
+          })
+          .toBuffer();
+
+      variants.push(
+        {
+          name:
+            `mrz_crop_${Math.round(
+              ratio * 100
+            )}`,
+
+          buffer:
+            colorMrz
+        },
+
+        {
+          name:
+            `mrz_gray_${Math.round(
+              ratio * 100
+            )}`,
+
+          buffer:
+            grayMrz
+        }
+      );
+    }
+  }
+
+  if (
+    logger
+  ) {
+    logger({
+      event:
+        "passport_ocr_preprocessing",
+
+      width,
+
+      height,
+
+      variants:
+        variants.length
+    });
+  }
+
+  return variants;
+}
+
 class PassportOcrService {
-  constructor(options = {}) {
+  constructor(
+    options = {}
+  ) {
     this.language =
       options.language ||
       DEFAULT_LANGUAGE;
@@ -688,33 +897,30 @@ class PassportOcrService {
     pass
   ) {
     const config = {
-      logger: message => {
-        if (
-          this.logger
-        ) {
-          this.logger({
-            ...message,
-            pass:
-              pass.name
-          });
+      logger:
+        message => {
+          if (
+            this.logger
+          ) {
+            this.logger({
+              ...message,
+
+              pass:
+                pass.name
+            });
+          }
         }
-      }
     };
 
-    /*
-     * Tesseract.js aceita estas opções
-     * como parâmetros de configuração.
-     *
-     * A whitelist é utilizada apenas
-     * na passagem específica da MRZ.
-     */
     if (
       Number.isInteger(
         pass.psm
       )
     ) {
       config.tessedit_pageseg_mode =
-        String(pass.psm);
+        String(
+          pass.psm
+        );
     }
 
     if (
@@ -722,6 +928,16 @@ class PassportOcrService {
     ) {
       config.tessedit_char_whitelist =
         pass.whitelist;
+
+      /*
+       * Reduz influência dos dicionários
+       * normais do Tesseract na MRZ.
+       */
+      config.load_system_dawg =
+        "0";
+
+      config.load_freq_dawg =
+        "0";
     }
 
     return Tesseract.recognize(
@@ -731,8 +947,14 @@ class PassportOcrService {
     );
   }
 
-  async recognize(buffer) {
-    if (!Buffer.isBuffer(buffer)) {
+  async recognize(
+    buffer
+  ) {
+    if (
+      !Buffer.isBuffer(
+        buffer
+      )
+    ) {
       throw new TypeError(
         "Passport image must be provided as a Buffer"
       );
@@ -755,38 +977,105 @@ class PassportOcrService {
       );
     }
 
+    let variants;
+
+    try {
+      variants =
+        await createOcrVariants(
+          buffer,
+          this.logger
+        );
+    } catch (
+      error
+    ) {
+      /*
+       * Se o processamento falhar,
+       * não bloqueamos o OCR original.
+       */
+      if (
+        this.logger
+      ) {
+        this.logger({
+          event:
+            "passport_ocr_preprocessing_failed",
+
+          error:
+            error.message
+        });
+      }
+
+      variants = [
+        {
+          name:
+            "original",
+
+          buffer
+        }
+      ];
+    }
+
     const results =
       [];
 
     for (
-      const pass of OCR_PASSES
+      const variant of variants
     ) {
-      try {
-        const result =
-          await this.runOcr(
-            buffer,
-            pass
-          );
+      /*
+       * A imagem completa usa OCR normal.
+       *
+       * Os recortes usam OCR especializado
+       * na MRZ.
+       */
+      const passes =
+        variant.name ===
+          "full"
+          ? OCR_PASSES
+          : MRZ_OCR_PASSES;
 
-        results.push(
-          result
-        );
-      } catch (error) {
-        /*
-         * Uma passagem que falhe não invalida
-         * as outras.
-         */
-        if (
-          this.logger
-        ) {
-          this.logger({
-            event:
-              "passport_ocr_pass_failed",
+      for (
+        const pass of passes
+      ) {
+        try {
+          const result =
+            await this.runOcr(
+              variant.buffer,
+              {
+                ...pass,
+
+                name:
+                  `${variant.name}_${pass.name}`
+              }
+            );
+
+          results.push({
+            ...result,
+
+            variant:
+              variant.name,
+
             pass:
-              pass.name,
-            error:
-              error.message
+              pass.name
           });
+        } catch (
+          error
+        ) {
+          if (
+            this.logger
+          ) {
+            this.logger({
+              event:
+                "passport_ocr_pass_failed",
+
+              variant:
+                variant.name,
+
+              pass:
+                pass.name,
+
+              error:
+                error.message
+            });
+          }
         }
       }
     }
@@ -848,11 +1137,21 @@ class PassportOcrService {
         mrz.candidates,
 
       mrzPairs:
-        mrz.pairs
+        mrz.pairs,
+
+      diagnostics: {
+        ocrPasses:
+          results.length,
+
+        preprocessingVariants:
+          variants.length
+      }
     };
   }
 
-  async extract(buffer) {
+  async extract(
+    buffer
+  ) {
     const result =
       await this.recognize(
         buffer
@@ -892,7 +1191,7 @@ module.exports.findMrzLines =
   findMrzLines;
 
 module.exports.normalizeTo44 =
-  normalizeTo44;
+  normalizeTo44Variants;
 
 module.exports.normalizeFirstMrzLine =
   normalizeFirstMrzLine;
