@@ -8,11 +8,13 @@ const Application =
 
 const eventBus =
   require("../utils/event-bus");
+
 const {
   requireAutomationRelease
-} = require(
-  "../services/admin/automation-guard"
-);
+} =
+  require(
+    "../services/admin/automation-guard"
+  );
 
 const logger =
   require("../utils/logger");
@@ -21,7 +23,9 @@ const {
   STATES,
   isKnownState
 } =
-  require("../services/application/application-state-machine");
+  require(
+    "../services/application/application-state-machine"
+  );
 
 
 const MIN_INTERVAL =
@@ -76,23 +80,19 @@ function withTimeout(
   timeoutMs,
   operation
 ) {
-
   let timer;
 
   const timeout =
     new Promise(
       (_, reject) => {
-
         timer =
           setTimeout(
             () => {
-
               reject(
                 new Error(
                   `${operation} timed out after ${timeoutMs}ms`
                 )
               );
-
             },
             timeoutMs
           );
@@ -113,7 +113,6 @@ function withTimeout(
 function normalizeAvailability(
   availability
 ) {
-
   if (!availability) {
     return [];
   }
@@ -123,7 +122,6 @@ function normalizeAvailability(
       availability
     )
   ) {
-
     return availability;
   }
 
@@ -132,7 +130,6 @@ function normalizeAvailability(
       availability.slots
     )
   ) {
-
     return availability.slots;
   }
 
@@ -141,7 +138,6 @@ function normalizeAvailability(
       availability.dates
     )
   ) {
-
     return availability.dates;
   }
 
@@ -152,7 +148,6 @@ function normalizeAvailability(
 function slotKey(
   slot
 ) {
-
   return [
     slot?.date || "",
     slot?.time || "",
@@ -164,7 +159,6 @@ function slotKey(
 function hashAvailability(
   availability
 ) {
-
   const normalized =
     normalizeAvailability(
       availability
@@ -233,14 +227,12 @@ function hashAvailability(
 function getWorkflowState(
   application
 ) {
-
   if (
     application?.workflowState &&
     isKnownState(
       application.workflowState
     )
   ) {
-
     return application.workflowState;
   }
 
@@ -248,7 +240,6 @@ function getWorkflowState(
     typeof application?.getWorkflowState ===
     "function"
   ) {
-
     return application.getWorkflowState();
   }
 
@@ -260,7 +251,6 @@ function getWorkflowState(
   switch (
     application?.status
   ) {
-
     case "created":
       return STATES.CREATED;
 
@@ -311,11 +301,9 @@ async function persistWorkflowState(
   state,
   metadata = {}
 ) {
-
   if (
     !application
   ) {
-
     return null;
   }
 
@@ -328,7 +316,6 @@ async function persistWorkflowState(
     current === state &&
     application.workflowState === state
   ) {
-
     return application;
   }
 
@@ -341,9 +328,7 @@ async function persistWorkflowState(
     typeof application.transitionTo ===
     "function"
   ) {
-
     try {
-
       application.transitionTo(
         state,
         metadata
@@ -352,17 +337,9 @@ async function persistWorkflowState(
       await application.save();
 
       return application;
-
     } catch (
       error
     ) {
-
-      /*
-       * Se a transição foi rejeitada,
-       * não forçamos uma transição
-       * impossível.
-       */
-
       logger.warn(
         "RADAR workflow transition rejected",
         {
@@ -434,7 +411,6 @@ async function persistWorkflowState(
 function normalizeDate(
   value
 ) {
-
   if (!value) {
     return null;
   }
@@ -452,7 +428,6 @@ function normalizeDate(
       stringValue
     )
   ) {
-
     return stringValue;
   }
 
@@ -463,7 +438,6 @@ function normalizeDate(
 function normalizeTime(
   value
 ) {
-
   if (!value) {
     return null;
   }
@@ -495,7 +469,6 @@ function normalizeTime(
     minute < 0 ||
     minute > 59
   ) {
-
     return null;
   }
 
@@ -510,12 +483,10 @@ function matchesPreferences(
   slot,
   application
 ) {
-
   if (
     !slot ||
     !slot.date
   ) {
-
     return false;
   }
 
@@ -527,7 +498,6 @@ function matchesPreferences(
   if (
     !dateString
   ) {
-
     return false;
   }
 
@@ -541,7 +511,6 @@ function matchesPreferences(
       date.getTime()
     )
   ) {
-
     return false;
   }
 
@@ -570,7 +539,6 @@ function matchesPreferences(
     start &&
     dateString < start
   ) {
-
     return false;
   }
 
@@ -578,7 +546,6 @@ function matchesPreferences(
     end &&
     dateString > end
   ) {
-
     return false;
   }
 
@@ -599,7 +566,6 @@ function matchesPreferences(
   if (
     weekdays.length
   ) {
-
     const normalizedWeekdays =
       weekdays
         .map(
@@ -621,7 +587,6 @@ function matchesPreferences(
         date.getDay()
       )
     ) {
-
       return false;
     }
   }
@@ -647,12 +612,10 @@ function matchesPreferences(
     preferredTime &&
     slotTime
   ) {
-
     if (
       slotTime !==
       preferredTime
     ) {
-
       return false;
     }
   }
@@ -680,7 +643,6 @@ function findCompatibleGroupSlots(
   availability,
   application
 ) {
-
   const slots =
     normalizeAvailability(
       availability
@@ -696,10 +658,8 @@ function findCompatibleGroupSlots(
   if (
     !slots.length
   ) {
-
     return null;
   }
-
 
   const required =
     Math.max(
@@ -712,7 +672,6 @@ function findCompatibleGroupSlots(
       ) ||
       1
     );
-
 
   const mode =
     application.bookingMode ||
@@ -729,12 +688,10 @@ function findCompatibleGroupSlots(
     required === 1 ||
     mode === "SINGLE"
   ) {
-
     const first =
       slots[0];
 
     return {
-
       date:
         String(
           first.date
@@ -781,27 +738,22 @@ function findCompatibleGroupSlots(
   const groups =
     new Map();
 
-
   for (
     const slot of slots
   ) {
-
     const key =
       `${slot.date}|${slot.time || ""}`;
-
 
     if (
       !groups.has(
         key
       )
     ) {
-
       groups.set(
         key,
         []
       );
     }
-
 
     groups
       .get(key)
@@ -813,7 +765,6 @@ function findCompatibleGroupSlots(
     const [key, group]
     of groups
   ) {
-
     const explicitCapacity =
       Number(
         group[0]?.capacity
@@ -826,22 +777,18 @@ function findCompatibleGroupSlots(
         ? explicitCapacity
         : group.length;
 
-
     if (
       capacity <
       required
     ) {
-
       continue;
     }
-
 
     const [
       date,
       time
     ] =
       key.split("|");
-
 
     const applicants =
       (
@@ -863,18 +810,14 @@ function findCompatibleGroupSlots(
           })
         );
 
-
     if (
       applicants.length !==
       required
     ) {
-
       continue;
     }
 
-
     return {
-
       date,
 
       time,
@@ -886,7 +829,6 @@ function findCompatibleGroupSlots(
       applicants
     };
   }
-
 
   return null;
 }
@@ -902,19 +844,15 @@ function calculateNextInterval(
   current,
   result
 ) {
-
   if (
     result === "slot"
   ) {
-
     return MIN_INTERVAL;
   }
-
 
   if (
     result === "change"
   ) {
-
     return Math.max(
       MIN_INTERVAL,
       Math.floor(
@@ -923,11 +861,9 @@ function calculateNextInterval(
     );
   }
 
-
   if (
     result === "empty"
   ) {
-
     return Math.min(
       MAX_INTERVAL,
       Math.floor(
@@ -936,11 +872,9 @@ function calculateNextInterval(
     );
   }
 
-
   if (
     result === "error"
   ) {
-
     return Math.min(
       MAX_INTERVAL,
       Math.max(
@@ -949,7 +883,6 @@ function calculateNextInterval(
       )
     );
   }
-
 
   return current;
 }
@@ -966,7 +899,6 @@ class Bot2 {
   constructor({
     getAdapter
   }) {
-
     this.getAdapter =
       getAdapter;
 
@@ -986,7 +918,6 @@ class Bot2 {
       new Set();
 
     this.stats = {
-
       checks:
         0,
 
@@ -1013,6 +944,7 @@ class Bot2 {
     };
   }
 
+
   /*
    * =======================================================
    * ADMIN AUTOMATION GATE
@@ -1028,6 +960,8 @@ class Bot2 {
 
     return true;
   }
+
+
   /*
    * ==========================================================
    * PREPARE APPLICATION FOR RADAR
@@ -1037,6 +971,26 @@ class Bot2 {
   async prepareApplication(
     application
   ) {
+    const id =
+      application?._id?.toString?.();
+
+    if (
+      !id
+    ) {
+      throw new Error(
+        "Application ID is required."
+      );
+    }
+
+    /*
+     * PRIMEIRO CHECK:
+     * nenhuma preparação do Bot 2
+     * acontece sem liberação administrativa.
+     */
+
+    await this.assertAdminRelease(
+      id
+    );
 
     const state =
       getWorkflowState(
@@ -1062,7 +1016,6 @@ class Bot2 {
       state !==
         STATES.RADAR_ACTIVE
     ) {
-
       return {
         ready:
           false,
@@ -1084,7 +1037,6 @@ class Bot2 {
       state ===
       STATES.VFS_AUTHENTICATED
     ) {
-
       return {
         ready:
           true,
@@ -1103,9 +1055,6 @@ class Bot2 {
      * --------------------------------------------------------
      */
 
-    const id =
-      application._id.toString();
-
     const adapter =
       await this.getAdapter(
         id
@@ -1122,7 +1071,6 @@ class Bot2 {
       state ===
       STATES.READY_FOR_AUTOMATION
     ) {
-
       await persistWorkflowState(
         application,
         STATES.VFS_SESSION,
@@ -1153,7 +1101,6 @@ class Bot2 {
       typeof adapter.ensureAuthenticated ===
       "function"
     ) {
-
       await persistWorkflowState(
         application,
         STATES.VFS_AUTHENTICATING,
@@ -1180,7 +1127,6 @@ class Bot2 {
       if (
         authentication?.captchaRequired
       ) {
-
         this.stats.authenticationRequired++;
 
 
@@ -1221,7 +1167,6 @@ class Bot2 {
         authentication?.authenticated ===
         true
       ) {
-
         await persistWorkflowState(
           application,
           STATES.VFS_AUTHENTICATED,
@@ -1298,7 +1243,6 @@ class Bot2 {
       typeof adapter.detectState ===
       "function"
     ) {
-
       const siteState =
         await withTimeout(
           adapter.detectState(),
@@ -1313,6 +1257,7 @@ class Bot2 {
        *
        * Chegar a DASHBOARD não significa,
        * sozinho, que a sessão está autenticada.
+       *
        * Por isso não promovemos o estado
        * automaticamente para AUTHENTICATED.
        */
@@ -1321,7 +1266,6 @@ class Bot2 {
         siteState ===
         "SERVICES"
       ) {
-
         await persistWorkflowState(
           application,
           STATES.VFS_AUTHENTICATED,
@@ -1361,7 +1305,6 @@ class Bot2 {
         siteState ===
         "YOUR_DETAILS"
       ) {
-
         await persistWorkflowState(
           application,
           STATES.VFS_AUTHENTICATING,
@@ -1421,9 +1364,24 @@ class Bot2 {
   async checkApplication(
     application
   ) {
-
     const id =
       application._id.toString();
+
+
+    /*
+     * SEGUNDO CHECK:
+     * cada execução individual do radar
+     * precisa continuar autorizada.
+     *
+     * Isto impede que uma aplicação
+     * liberada anteriormente continue
+     * pesquisando depois de ser pausada
+     * pelo administrador.
+     */
+
+    await this.assertAdminRelease(
+      id
+    );
 
 
     if (
@@ -1431,7 +1389,6 @@ class Bot2 {
         id
       )
     ) {
-
       return;
     }
 
@@ -1464,10 +1421,22 @@ class Bot2 {
         currentState !==
         STATES.RADAR_ACTIVE
       ) {
-
         return;
       }
 
+
+      /*
+       * IMPORTANTE:
+       *
+       * O filtro anterior tinha dois
+       * "$or" no mesmo objeto MongoDB.
+       *
+       * Isso é incorreto porque uma
+       * propriedade "$or" substitui a outra.
+       *
+       * Agora usamos "$and" contendo
+       * os dois grupos de condições.
+       */
 
       const claimed =
         await Application.findOneAndUpdate(
@@ -1478,41 +1447,48 @@ class Bot2 {
             workflowState:
               STATES.RADAR_ACTIVE,
 
-            $or: [
+            $and: [
               {
-                "bot2.monitoring":
-                  true
-              },
-
-              {
-                "bot2.monitoring":
-                  null
-              },
-
-              {
-                "bot2.monitoring":
+                $or: [
                   {
-                    $exists:
-                      false
-                  }
-              }
-            ],
+                    "bot2.monitoring":
+                      true
+                  },
 
-            $or: [
-              {
-                "radar.nextCheckAt":
-                  null
+                  {
+                    "bot2.monitoring":
+                      null
+                  },
+
+                  {
+                    "bot2.monitoring":
+                      {
+                        $exists:
+                          false
+                      }
+                  }
+                ]
               },
 
               {
-                "radar.nextCheckAt":
+                $or: [
                   {
-                    $lte:
-                      new Date()
+                    "radar.nextCheckAt":
+                      null
+                  },
+
+                  {
+                    "radar.nextCheckAt":
+                      {
+                        $lte:
+                          new Date()
+                      }
                   }
+                ]
               }
             ]
           },
+
           {
             $set: {
 
@@ -1540,6 +1516,7 @@ class Bot2 {
                 1
             }
           },
+
           {
             new:
               true
@@ -1550,9 +1527,25 @@ class Bot2 {
       if (
         !claimed
       ) {
-
         return;
       }
+
+
+      /*
+       * ------------------------------------------------------
+       * REVALIDAÇÃO ADMINISTRATIVA
+       * ------------------------------------------------------
+       *
+       * Existe uma pequena janela entre
+       * o primeiro check e o claim.
+       *
+       * Revalidamos antes de contactar
+       * o VFS.
+       */
+
+      await this.assertAdminRelease(
+        id
+      );
 
 
       /*
@@ -1580,7 +1573,6 @@ class Bot2 {
         typeof adapter.detectState ===
         "function"
       ) {
-
         const siteState =
           await withTimeout(
             adapter.detectState(),
@@ -1600,7 +1592,6 @@ class Bot2 {
           siteState !==
           "SERVICES"
         ) {
-
           await Application.updateOne(
             {
               _id:
@@ -1609,6 +1600,7 @@ class Bot2 {
               workflowState:
                 STATES.RADAR_ACTIVE
             },
+
             {
               $set: {
 
@@ -1638,6 +1630,10 @@ class Bot2 {
        * AVAILABILITY
        * ------------------------------------------------------
        */
+
+      await this.assertAdminRelease(
+        id
+      );
 
       const availability =
         await withTimeout(
@@ -1682,6 +1678,18 @@ class Bot2 {
         compatibleSlot
       ) {
 
+        /*
+         * Antes de emitir o evento,
+         * confirmamos novamente que o
+         * administrador ainda mantém
+         * a aplicação liberada.
+         */
+
+        await this.assertAdminRelease(
+          id
+        );
+
+
         const updated =
           await Application.findOneAndUpdate(
             {
@@ -1694,6 +1702,7 @@ class Bot2 {
               "bot2.monitoring":
                 true
             },
+
             {
               $set: {
 
@@ -1749,6 +1758,7 @@ class Bot2 {
                   null
               }
             },
+
             {
               new:
                 true
@@ -1759,7 +1769,6 @@ class Bot2 {
         if (
           !updated
         ) {
-
           return;
         }
 
@@ -1831,7 +1840,6 @@ class Bot2 {
       if (
         changed
       ) {
-
         this.stats.changes++;
       }
 
@@ -1861,6 +1869,7 @@ class Bot2 {
           workflowState:
             STATES.RADAR_ACTIVE
         },
+
         {
           $set: {
 
@@ -1925,6 +1934,7 @@ class Bot2 {
           workflowState:
             STATES.RADAR_ACTIVE
         },
+
         {
           $set: {
 
@@ -1958,6 +1968,12 @@ class Bot2 {
         }
       );
 
+
+      /*
+       * Uma pausa administrativa
+       * não deve ser tratada como
+       * uma falha do VFS.
+       */
 
       logger.error(
         "RADAR availability check failed",
@@ -1995,14 +2011,12 @@ class Bot2 {
       !this.running ||
       this.tickInProgress
     ) {
-
       return;
     }
 
 
     this.tickInProgress =
       true;
-
 
     this.stats.lastTickAt =
       new Date();
@@ -2054,12 +2068,36 @@ class Bot2 {
           );
 
 
+      /*
+       * checkApplication() faz sua
+       * própria validação administrativa.
+       *
+       * Portanto uma aplicação que
+       * tenha sido pausada entre o
+       * find() e a execução não passa.
+       */
+
       await Promise.all(
         applications.map(
           application =>
             this.checkApplication(
               application
             )
+              .catch(
+                error => {
+                  logger.warn(
+                    "RADAR application skipped",
+                    {
+                      applicationId:
+                        application._id?.toString?.() ||
+                        null,
+
+                      error:
+                        error.message
+                    }
+                  );
+                }
+              )
         )
       );
 
@@ -2102,7 +2140,6 @@ class Bot2 {
     if (
       this.running
     ) {
-
       return;
     }
 
@@ -2132,7 +2169,6 @@ class Bot2 {
         if (
           !this.running
         ) {
-
           return;
         }
 
