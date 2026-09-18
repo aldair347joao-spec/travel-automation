@@ -99,12 +99,10 @@ async function getOrCreate(
   application
 ) {
   let control =
-    await ApplicationAdminControl.findOne(
-      {
-        applicationId:
-          application._id
-      }
-    );
+    await ApplicationAdminControl.findOne({
+      applicationId:
+        application._id
+    });
 
   if (control) {
     return control;
@@ -142,15 +140,15 @@ async function getByApplicationId(
  *
  * As credenciais são específicas desta aplicação.
  *
- * Nunca ficam em:
- * - frontend
- * - localStorage
- * - sessionStorage
- * - resposta da API
- * - variáveis globais do VFS
+ * Nunca ficam:
+ * - no frontend;
+ * - no localStorage;
+ * - no sessionStorage;
+ * - em resposta da API;
+ * - em variáveis globais do VFS.
  *
- * São guardadas encriptadas através do
- * DATA_ENCRYPTION_KEY existente.
+ * São armazenadas encriptadas.
+ * ============================================================
  */
 
 async function configureVfsCredentials({
@@ -169,7 +167,6 @@ async function configureVfsCredentials({
       password || ""
     );
 
-
   if (!normalizedEmail) {
     const error =
       new Error(
@@ -184,7 +181,6 @@ async function configureVfsCredentials({
 
     throw error;
   }
-
 
   if (!normalizedPassword) {
     const error =
@@ -201,12 +197,10 @@ async function configureVfsCredentials({
     throw error;
   }
 
-
   const application =
     await Application.findById(
       applicationId
     );
-
 
   if (!application) {
     const error =
@@ -223,17 +217,10 @@ async function configureVfsCredentials({
     throw error;
   }
 
-
-  let control =
+  const control =
     await getOrCreate(
       application
     );
-
-
-  /*
-   * Guardamos apenas os valores
-   * encriptados.
-   */
 
   control.vfsCredentials = {
     emailEncrypted:
@@ -253,15 +240,9 @@ async function configureVfsCredentials({
       actorId || null
   };
 
-
   /*
    * Configurar credenciais NÃO libera
    * a aplicação.
-   *
-   * O administrador ainda precisa
-   * executar explicitamente:
-   *
-   * LIBERAR PARA AUTOMAÇÃO
    */
 
   if (
@@ -271,7 +252,6 @@ async function configureVfsCredentials({
     control.status =
       "PENDING_REVIEW";
   }
-
 
   control.lastAdminAction = {
     action:
@@ -284,9 +264,7 @@ async function configureVfsCredentials({
       new Date()
   };
 
-
   await control.save();
-
 
   return serialize(
     control
@@ -296,19 +274,21 @@ async function configureVfsCredentials({
 
 /*
  * ============================================================
- * LIBERAR PARA AUTOMAÇÃO
+ * GUARD DE PROPRIEDADE DA APLICAÇÃO
  * ============================================================
  */
 
-async function releaseForAutomation({
+async function assertApplicationAccount(
   applicationId,
-  actorId
-}) {
+  accountId
+) {
   const application =
-    await Application.findById(
-      applicationId
-    );
+    await Application.findOne({
+      _id:
+        applicationId,
 
+      accountId
+    });
 
   if (!application) {
     const error =
@@ -325,18 +305,31 @@ async function releaseForAutomation({
     throw error;
   }
 
+  return application;
+}
 
-  let control =
+
+/*
+ * ============================================================
+ * LIBERAR PARA AUTOMAÇÃO
+ * ============================================================
+ */
+
+async function releaseForAutomation({
+  applicationId,
+  accountId,
+  actorId
+}) {
+  const application =
+    await assertApplicationAccount(
+      applicationId,
+      accountId
+    );
+
+  const control =
     await getOrCreate(
       application
     );
-
-
-  /*
-   * ----------------------------------------------------------
-   * CREDENCIAIS
-   * ----------------------------------------------------------
-   */
 
   const hasCredentials =
     Boolean(
@@ -344,7 +337,6 @@ async function releaseForAutomation({
       control.vfsCredentials.emailEncrypted &&
       control.vfsCredentials.passwordEncrypted
     );
-
 
   if (!hasCredentials) {
     const error =
@@ -361,10 +353,9 @@ async function releaseForAutomation({
     throw error;
   }
 
-
   /*
    * ----------------------------------------------------------
-   * READINESS
+   * VALIDAR DADOS DO PROCESSO
    * ----------------------------------------------------------
    */
 
@@ -373,12 +364,10 @@ async function releaseForAutomation({
       "../application/application-service"
     );
 
-
   const readiness =
     await ApplicationService.validateReadiness(
       application
     );
-
 
   if (!readiness.ready) {
     const error =
@@ -411,7 +400,6 @@ async function releaseForAutomation({
     throw error;
   }
 
-
   /*
    * ----------------------------------------------------------
    * PREPARAR WORKFLOW
@@ -423,7 +411,6 @@ async function releaseForAutomation({
       application._id,
       application.accountId
     );
-
 
   if (
     prepared &&
@@ -459,12 +446,13 @@ async function releaseForAutomation({
     throw error;
   }
 
-
   const refreshedApplication =
-    await Application.findById(
-      applicationId
-    );
+    await Application.findOne({
+      _id:
+        applicationId,
 
+      accountId
+    });
 
   if (!refreshedApplication) {
     const error =
@@ -481,13 +469,11 @@ async function releaseForAutomation({
     throw error;
   }
 
-
   const workflowState =
     typeof refreshedApplication.getWorkflowState ===
     "function"
       ? refreshedApplication.getWorkflowState()
       : refreshedApplication.workflowState;
-
 
   if (
     workflowState !==
@@ -507,7 +493,6 @@ async function releaseForAutomation({
     throw error;
   }
 
-
   /*
    * ----------------------------------------------------------
    * LIBERTAÇÃO
@@ -525,10 +510,8 @@ async function releaseForAutomation({
       actorId || null
   };
 
-
   control.status =
     "READY_FOR_AUTOMATION";
-
 
   control.lastAdminAction = {
     action:
@@ -541,9 +524,7 @@ async function releaseForAutomation({
       new Date()
   };
 
-
   await control.save();
-
 
   return serialize(
     control
@@ -555,33 +536,22 @@ async function releaseForAutomation({
  * ============================================================
  * PAUSAR AUTOMAÇÃO
  * ============================================================
- *
- * IMPORTANTE:
- *
- * Não basta desligar release.enabled.
- *
- * O Bot 2 pode estar com radar.monitoring ativo.
- * Por isso a pausa também desliga:
- *
- * - bot2.monitoring
- * - bot2.status
- * - radar.enabled
- *
- * O estado da aplicação NÃO é apagado.
- *
- * Se já existir uma vaga ou pagamento pendente,
- * esses dados continuam preservados.
  */
 
 async function pauseAutomation({
   applicationId,
+  accountId,
   actorId
 }) {
+  await assertApplicationAccount(
+    applicationId,
+    accountId
+  );
+
   const control =
     await getByApplicationId(
       applicationId
     );
-
 
   if (!control) {
     const error =
@@ -598,14 +568,11 @@ async function pauseAutomation({
     throw error;
   }
 
-
   control.release.enabled =
     false;
 
-
   control.status =
     "PAUSED";
-
 
   control.lastAdminAction = {
     action:
@@ -618,26 +585,14 @@ async function pauseAutomation({
       new Date()
   };
 
-
   await control.save();
-
-
-  /*
-   * ----------------------------------------------------------
-   * PARAR RADAR / BOT 2
-   * ----------------------------------------------------------
-   *
-   * Isto é feito directamente no banco.
-   *
-   * Assim, mesmo que exista um Bot 2 já executando
-   * ou uma próxima ronda de radar esteja prestes a iniciar,
-   * a aplicação deixa de estar marcada como monitorável.
-   */
 
   await Application.updateOne(
     {
       _id:
-        applicationId
+        applicationId,
+
+      accountId
     },
     {
       $set: {
@@ -653,7 +608,6 @@ async function pauseAutomation({
     }
   );
 
-
   return serialize(
     control
   );
@@ -662,7 +616,7 @@ async function pauseAutomation({
 
 /*
  * ============================================================
- * VERIFICAR SE PODE AUTOMATIZAR
+ * GUARD ADMINISTRATIVO
  * ============================================================
  */
 
@@ -674,11 +628,9 @@ async function canAutomate(
       applicationId
     );
 
-
   if (!control) {
     return false;
   }
-
 
   const hasCredentials =
     Boolean(
@@ -686,7 +638,6 @@ async function canAutomate(
       control.vfsCredentials.emailEncrypted &&
       control.vfsCredentials.passwordEncrypted
     );
-
 
   return Boolean(
     control.release?.enabled &&
@@ -706,10 +657,6 @@ async function canAutomate(
  * ============================================================
  * BARREIRA SERVER-SIDE
  * ============================================================
- *
- * Esta função deve ser chamada pelos bots e serviços internos.
- *
- * Não depende do frontend.
  */
 
 async function assertAutomationReleased(
@@ -719,7 +666,6 @@ async function assertAutomationReleased(
     await getByApplicationId(
       applicationId
     );
-
 
   if (!control) {
     const error =
@@ -736,14 +682,12 @@ async function assertAutomationReleased(
     throw error;
   }
 
-
   const hasCredentials =
     Boolean(
       control.vfsCredentials &&
       control.vfsCredentials.emailEncrypted &&
       control.vfsCredentials.passwordEncrypted
     );
-
 
   if (!hasCredentials) {
     const error =
@@ -759,7 +703,6 @@ async function assertAutomationReleased(
 
     throw error;
   }
-
 
   if (
     !control.release?.enabled
@@ -777,7 +720,6 @@ async function assertAutomationReleased(
 
     throw error;
   }
-
 
   if (
     ![
@@ -801,18 +743,10 @@ async function assertAutomationReleased(
     throw error;
   }
 
-
-  /*
-   * Segunda barreira:
-   * a Application também precisa estar
-   * num estado permitido.
-   */
-
   const application =
     await Application.findById(
       applicationId
     );
-
 
   if (!application) {
     const error =
@@ -829,16 +763,15 @@ async function assertAutomationReleased(
     throw error;
   }
 
-
   const workflowState =
     typeof application.getWorkflowState ===
     "function"
       ? application.getWorkflowState()
       : application.workflowState;
 
-
   const allowedStates = [
     "READY_FOR_AUTOMATION",
+
     "VFS_SESSION",
     "VFS_AUTHENTICATING",
     "VFS_AUTHENTICATED",
@@ -883,7 +816,6 @@ async function assertAutomationReleased(
     "PAYMENT_CONFIRMED"
   ];
 
-
   if (
     !allowedStates.includes(
       workflowState
@@ -903,20 +835,14 @@ async function assertAutomationReleased(
     throw error;
   }
 
-
   return true;
 }
 
 
 /*
  * ============================================================
- * OBTER CREDENCIAIS PARA AUTOMAÇÃO
+ * CREDENCIAIS PARA AUTOMAÇÃO
  * ============================================================
- *
- * O email/password só são desencriptados no backend,
- * imediatamente antes de serem utilizados pelo adapter.
- *
- * Nunca são devolvidos ao frontend.
  */
 
 async function getCredentialsForAutomation(
@@ -926,12 +852,10 @@ async function getCredentialsForAutomation(
     applicationId
   );
 
-
   const control =
     await getByApplicationId(
       applicationId
     );
-
 
   if (!control) {
     const error =
@@ -947,7 +871,6 @@ async function getCredentialsForAutomation(
 
     throw error;
   }
-
 
   return {
     email:
@@ -967,6 +890,61 @@ async function getCredentialsForAutomation(
 
 /*
  * ============================================================
+ * GUARDAR OBSERVAÇÕES ADMINISTRATIVAS
+ * ============================================================
+ */
+
+async function updateNotes({
+  applicationId,
+  accountId,
+  notes,
+  actorId
+}) {
+  const application =
+    await assertApplicationAccount(
+      applicationId,
+      accountId
+    );
+
+  const control =
+    await getOrCreate(
+      application
+    );
+
+  const normalizedNotes =
+    String(
+      notes || ""
+    )
+      .trim()
+      .slice(
+        0,
+        5000
+      );
+
+  control.notes =
+    normalizedNotes;
+
+  control.lastAdminAction = {
+    action:
+      "ADMIN_NOTES_UPDATED",
+
+    actorId:
+      actorId || null,
+
+    at:
+      new Date()
+  };
+
+  await control.save();
+
+  return serialize(
+    control
+  );
+}
+
+
+/*
+ * ============================================================
  * MARCAR AUTOMAÇÃO COMO ATIVA
  * ============================================================
  */
@@ -979,18 +957,15 @@ async function markAutomationActive(
       applicationId
     );
 
-
   if (!control) {
     return null;
   }
-
 
   if (
     control.release?.enabled
   ) {
     control.status =
       "AUTOMATION_ACTIVE";
-
 
     control.lastAdminAction = {
       action:
@@ -1003,10 +978,8 @@ async function markAutomationActive(
         new Date()
     };
 
-
     await control.save();
   }
-
 
   return serialize(
     control
@@ -1028,19 +1001,15 @@ async function markCompleted(
       applicationId
     );
 
-
   if (!control) {
     return null;
   }
 
-
   control.status =
     "COMPLETED";
 
-
   control.release.enabled =
     false;
-
 
   control.lastAdminAction = {
     action:
@@ -1053,14 +1022,7 @@ async function markCompleted(
       new Date()
   };
 
-
   await control.save();
-
-
-  /*
-   * Garantir que o radar também fique
-   * definitivamente desligado.
-   */
 
   await Application.updateOne(
     {
@@ -1080,7 +1042,6 @@ async function markCompleted(
       }
     }
   );
-
 
   return serialize(
     control
@@ -1104,6 +1065,8 @@ module.exports = {
   assertAutomationReleased,
 
   getCredentialsForAutomation,
+
+  updateNotes,
 
   markAutomationActive,
 
