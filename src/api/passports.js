@@ -118,7 +118,16 @@ function normalizeOcrValue(value) {
   return String(value || "")
     .replace(/[|]/g, "I")
     .replace(/[“”"]/g, "")
-    .replace(/\s+/g, " ")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map(line =>
+      line
+        .replace(/\s+/g, " ")
+        .trim()
+    )
+    .filter(Boolean)
+    .join("\n")
     .trim();
 }
 
@@ -1817,20 +1826,11 @@ router.post(
 
       const mrzData =
         mrzResult.data;
-
-      if (
+        if (
   visualPassportData.passportIssueDate
 ) {
   client.passportIssueDate =
     visualPassportData.passportIssueDate;
-}
-
-if (
-  !client.passportNumber &&
-  visualPassportData.passportNumber
-) {
-  client.passportNumber =
-    visualPassportData.passportNumber;
 }
       /*
        * =====================================================
