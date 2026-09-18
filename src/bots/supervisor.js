@@ -11,6 +11,7 @@ const Bot2 =
 
 const eventBus =
   require("../utils/event-bus");
+
 const {
   requireAutomationRelease
 } = require(
@@ -100,6 +101,8 @@ class Supervisor {
         this
       );
   }
+
+
   /*
    * =======================================================
    * ADMIN AUTOMATION GATE
@@ -109,12 +112,14 @@ class Supervisor {
   async assertAdminRelease(
     applicationId
   ) {
+
     await requireAutomationRelease(
       applicationId
     );
 
     return true;
   }
+
 
   /* =======================================================
    * ADAPTER
@@ -135,6 +140,7 @@ class Supervisor {
       );
     }
 
+
     const adapter =
       this.siteFactory(
         applicationId
@@ -142,10 +148,12 @@ class Supervisor {
 
     await adapter.initialize();
 
+
     this.adapters.set(
       applicationId,
       adapter
     );
+
 
     return adapter;
   }
@@ -158,9 +166,12 @@ class Supervisor {
   async getBot1(
     applicationId
   ) {
-      await this.assertAdminRelease(
-  applicationId
-);
+
+    await this.assertAdminRelease(
+      applicationId
+    );
+
+
     if (
       this.bot1.has(
         applicationId
@@ -172,20 +183,24 @@ class Supervisor {
       );
     }
 
+
     const adapter =
       await this.getAdapter(
         applicationId
       );
+
 
     const bot =
       new Bot1(
         adapter
       );
 
+
     this.bot1.set(
       applicationId,
       bot
     );
+
 
     return bot;
   }
@@ -194,13 +209,17 @@ class Supervisor {
   async prepare(
     applicationId
   ) {
-     await this.assertAdminRelease(
-  applicationId
-);
+
+    await this.assertAdminRelease(
+      applicationId
+    );
+
+
     const bot =
       await this.getBot1(
         applicationId
       );
+
 
     return bot.prepare(
       applicationId
@@ -218,6 +237,7 @@ class Supervisor {
         applicationId
       );
 
+
     return bot.verifyOtp(
       applicationId,
       code
@@ -233,6 +253,7 @@ class Supervisor {
       await this.getBot1(
         applicationId
       );
+
 
     return bot.continueAfterVerification(
       applicationId
@@ -255,6 +276,7 @@ class Supervisor {
       return STATES.ERROR;
     }
 
+
     if (
       application.workflowState &&
       isKnownState(
@@ -265,6 +287,7 @@ class Supervisor {
       return application.workflowState;
     }
 
+
     if (
       typeof application.getWorkflowState ===
       "function"
@@ -272,6 +295,7 @@ class Supervisor {
 
       return application.getWorkflowState();
     }
+
 
     return STATES.CREATED;
   }
@@ -292,10 +316,12 @@ class Supervisor {
       );
     }
 
+
     const currentState =
       this.getWorkflowState(
         application
       );
+
 
     if (
       currentState ===
@@ -305,6 +331,7 @@ class Supervisor {
       return application;
     }
 
+
     try {
 
       application.transitionTo(
@@ -312,11 +339,15 @@ class Supervisor {
         metadata
       );
 
+
       await application.save();
+
 
       return application;
 
-    } catch (error) {
+    } catch (
+      error
+    ) {
 
       logger.warn(
         "APPLICATION workflow transition rejected",
@@ -342,6 +373,7 @@ class Supervisor {
         }
       );
 
+
       throw error;
     }
   }
@@ -358,10 +390,12 @@ class Supervisor {
       return null;
     }
 
+
     const current =
       this.getWorkflowState(
         application
       );
+
 
     if (
       application.workflowState ===
@@ -371,8 +405,10 @@ class Supervisor {
       return current;
     }
 
+
     application.workflowState =
       current;
+
 
     if (
       !application.workflow
@@ -381,11 +417,14 @@ class Supervisor {
       application.workflow = {};
     }
 
+
     application.workflow.stateChangedAt =
       application.workflow.stateChangedAt ||
       new Date();
 
+
     await application.save();
+
 
     return current;
   }
@@ -399,10 +438,28 @@ class Supervisor {
     applicationId
   ) {
 
+    /*
+     * GATE ADMINISTRATIVO
+     *
+     * Mesmo uma retomada de pagamento depois
+     * de um restart do processo só pode ocorrer
+     * para uma candidatura previamente liberada
+     * pelo administrador.
+     *
+     * Não dependemos da interface /admin.
+     * A validação acontece no backend.
+     */
+
+    await this.assertAdminRelease(
+      applicationId
+    );
+
+
     let application =
       await Application.findById(
         applicationId
       );
+
 
     if (
       !application
@@ -413,14 +470,17 @@ class Supervisor {
       );
     }
 
+
     await this.ensureWorkflowState(
       application
     );
+
 
     const workflowState =
       this.getWorkflowState(
         application
       );
+
 
     const paymentPending =
       workflowState ===
@@ -432,6 +492,7 @@ class Supervisor {
           "pending"
       );
 
+
     if (
       !paymentPending
     ) {
@@ -441,10 +502,12 @@ class Supervisor {
       );
     }
 
+
     const adapter =
       await this.getAdapter(
         applicationId
       );
+
 
     const service =
       new PaymentResumeService({
@@ -488,16 +551,6 @@ class Supervisor {
 
       /*
        * LOCK EXCLUSIVO
-       *
-       * O erro antigo estava aqui:
-       *
-       * $or
-       * $or
-       *
-       * O segundo sobrescrevia o primeiro.
-       *
-       * Agora as duas condições são combinadas
-       * dentro de $and.
        */
 
       const locked =
@@ -549,6 +602,7 @@ class Supervisor {
           },
           {
             $set: {
+
               workflowState:
                 STATES.PAYMENT_PENDING,
 
@@ -1101,6 +1155,7 @@ class Supervisor {
         }
       );
 
+
       throw error;
     }
   }
@@ -1120,10 +1175,24 @@ class Supervisor {
     } =
       payload;
 
+
     this.stats.slotEvents++;
 
 
     try {
+
+      /*
+       * Defesa adicional.
+       *
+       * Um evento slot_found nunca deve iniciar
+       * Bot 1 se a candidatura não tiver sido
+       * liberada pelo administrador.
+       */
+
+      await this.assertAdminRelease(
+        applicationId
+      );
+
 
       let application =
         await Application.findById(
@@ -1143,6 +1212,7 @@ class Supervisor {
             applicationId
           }
         );
+
 
         return;
       }
@@ -1206,6 +1276,7 @@ class Supervisor {
           application.workflow.lastReason =
             "Recovered legacy slot_received state";
 
+
           await application.save();
 
         } else {
@@ -1222,6 +1293,7 @@ class Supervisor {
                 currentState
             }
           );
+
 
           return;
         }
@@ -1327,6 +1399,7 @@ class Supervisor {
           }
         );
 
+
         return;
       }
 
@@ -1387,6 +1460,7 @@ class Supervisor {
           }
         );
 
+
         throw botError;
       }
 
@@ -1400,6 +1474,7 @@ class Supervisor {
           await Application.findById(
             applicationId
           );
+
 
         logger.info(
           "ORCHESTRATOR slot processing did not complete",
@@ -1419,6 +1494,7 @@ class Supervisor {
               null
           }
         );
+
 
         return;
       }
@@ -1443,6 +1519,7 @@ class Supervisor {
             applicationId
           }
         );
+
 
         return;
       }
@@ -1503,6 +1580,7 @@ class Supervisor {
 
           updatedApplication.status =
             "review_pay";
+
 
           await updatedApplication.save();
         }
@@ -1576,6 +1654,7 @@ class Supervisor {
         await this.closeAdapter(
           applicationId
         );
+
 
         return;
       }
@@ -1651,6 +1730,7 @@ class Supervisor {
         await this.closeAdapter(
           applicationId
         );
+
 
         return;
       }
@@ -1743,6 +1823,41 @@ class Supervisor {
       of applications
     ) {
 
+      /*
+       * Só recuperamos slots de aplicações
+       * liberadas pelo administrador.
+       *
+       * O método assertAdminRelease é usado
+       * individualmente porque não devemos fazer
+       * um update global em candidaturas sem
+       * consultar o controle administrativo.
+       */
+
+      try {
+
+        await this.assertAdminRelease(
+          application._id.toString()
+        );
+
+      } catch (
+        error
+      ) {
+
+        logger.warn(
+          "ORCHESTRATOR skipped slot recovery because automation is not released",
+          {
+            applicationId:
+              application._id.toString(),
+
+            error:
+              error.message
+          }
+        );
+
+        continue;
+      }
+
+
       this.stats.recovered++;
 
 
@@ -1768,6 +1883,7 @@ class Supervisor {
 
         application.workflow.lastReason =
           "Recovered slot_received application after process restart";
+
 
         await application.save();
       }
@@ -1880,48 +1996,107 @@ class Supervisor {
 
   async recoverWaitingApplications() {
 
-    const result =
-      await Application.updateMany(
-        {
-          status:
-            "waiting_for_slot",
+    /*
+     * Não podemos fazer um updateMany global
+     * aqui porque uma candidatura pode estar
+     * waiting_for_slot mas ainda não ter sido
+     * liberada pelo administrador.
+     *
+     * Primeiro buscamos as candidaturas e depois
+     * validamos o gate individualmente.
+     */
 
-          "bot2.monitoring": {
-            $ne:
-              true
-          }
-        },
-        {
-          $set: {
+    const applications =
+      await Application.find({
+        status:
+          "waiting_for_slot",
 
-            workflowState:
-              STATES.RADAR_ACTIVE,
-
-            "bot2.monitoring":
-              true,
-
-            "bot2.status":
-              "monitoring",
-
-            "bot2.workerId":
-              null,
-
-            "radar.enabled":
-              true
-          }
+        "bot2.monitoring": {
+          $ne:
+            true
         }
-      );
+      })
+        .sort({
+          updatedAt:
+            1
+        })
+        .limit(100);
+
+
+    let restored =
+      0;
+
+
+    for (
+      const application
+      of applications
+    ) {
+
+      try {
+
+        await this.assertAdminRelease(
+          application._id.toString()
+        );
+
+      } catch (
+        error
+      ) {
+
+        logger.warn(
+          "ORCHESTRATOR skipped waiting application recovery because automation is not released",
+          {
+            applicationId:
+              application._id.toString(),
+
+            error:
+              error.message
+          }
+        );
+
+        continue;
+      }
+
+
+      application.workflowState =
+        STATES.RADAR_ACTIVE;
+
+      application.bot2 =
+        application.bot2 ||
+        {};
+
+      application.bot2.monitoring =
+        true;
+
+      application.bot2.status =
+        "monitoring";
+
+      application.bot2.workerId =
+        null;
+
+      application.radar =
+        application.radar ||
+        {};
+
+      application.radar.enabled =
+        true;
+
+
+      await application.save();
+
+
+      restored++;
+    }
 
 
     if (
-      result.modifiedCount
+      restored
     ) {
 
       logger.info(
         "ORCHESTRATOR restored waiting applications",
         {
           count:
-            result.modifiedCount
+            restored
         }
       );
     }
@@ -1987,6 +2162,7 @@ class Supervisor {
     this.adapters.delete(
       applicationId
     );
+
 
     this.bot1.delete(
       applicationId
