@@ -3,6 +3,9 @@ const express = require("express");
 const Application =
   require("../models/application");
 
+const ApplicationAdminControl =
+  require("../models/application-admin-control");
+
 const AuditLog =
   require("../models/audit-log");
 
@@ -21,6 +24,201 @@ const VISA_TYPES = [
   "NACIONAL"
 ];
 
+
+/*
+ * ============================================================
+ * ADMIN STATUS SANITIZADO
+ * ============================================================
+ *
+ * O cliente pode saber:
+ *
+ * - estado administrativo
+ * - se as credenciais foram configuradas
+ * - se a automação foi liberada
+ * - quando foi liberada
+ *
+ * O cliente NUNCA recebe:
+ *
+ * - VFS email
+ * - VFS password
+ * - emailEncrypted
+ * - passwordEncrypted
+ * - qualquer segredo administrativo
+ *
+ * ============================================================
+ */
+
+function serializeAdminControl(
+  control
+) {
+  if (!control) {
+    return {
+      status:
+        "PENDING_REVIEW",
+
+      released:
+        false,
+
+      credentialsConfigured:
+        false,
+
+      releasedAt:
+        null
+    };
+  }
+
+
+  const credentialsConfigured =
+    Boolean(
+      control.vfsCredentials &&
+      control.vfsCredentials.emailEncrypted &&
+      control.vfsCredentials.passwordEncrypted
+    );
+
+
+  return {
+    status:
+      control.status ||
+      "PENDING_REVIEW",
+
+    released:
+      Boolean(
+        control.release?.enabled
+      ),
+
+    credentialsConfigured,
+
+    releasedAt:
+      control.release?.releasedAt ||
+      null
+  };
+}
+
+
+/*
+ * ============================================================
+ * ANEXAR ESTADO ADMINISTRATIVO
+ * ============================================================
+ *
+ * Funciona tanto para uma aplicação como para uma lista.
+ *
+ * ============================================================
+ */
+
+async function attachAdminStatus(
+  applications
+) {
+  if (
+    !Array.isArray(
+      applications
+    ) ||
+    !applications.length
+  ) {
+    return applications;
+  }
+
+
+  const applicationIds =
+    applications
+      .map(
+        application =>
+          application?._id
+      )
+      .filter(Boolean);
+
+
+  if (
+    !applicationIds.length
+  ) {
+    return applications;
+  }
+
+
+  const controls =
+    await ApplicationAdminControl.find(
+      {
+        applicationId: {
+          $in:
+            applicationIds
+        }
+      }
+    )
+      .select(
+        [
+          "applicationId",
+          "status",
+          "vfsCredentials.emailEncrypted",
+          "vfsCredentials.passwordEncrypted",
+          "release.enabled",
+          "release.releasedAt"
+        ].join(" ")
+      )
+      .lean();
+
+
+  const controlsByApplication =
+    new Map();
+
+
+  controls.forEach(
+    control => {
+      controlsByApplication.set(
+        String(
+          control.applicationId
+        ),
+        control
+      );
+    }
+  );
+
+
+  applications.forEach(
+    application => {
+      const id =
+        application?._id
+          ? String(
+              application._id
+            )
+          : null;
+
+
+      const control =
+        id
+          ? controlsByApplication.get(
+              id
+            )
+          : null;
+
+
+      const admin =
+        serializeAdminControl(
+          control
+        );
+
+
+      /*
+       * Se for documento Mongoose,
+       * podemos atribuir directamente.
+       *
+       * Se for objeto lean,
+       * também funciona.
+       */
+
+      application.admin =
+        admin;
+    }
+  );
+
+
+  return applications;
+}
+
+
+/*
+ * ============================================================
+ * PREPARED DATA
+ * ============================================================
+ */
 
 function buildPreparedData(
   clients,
@@ -94,12 +292,21 @@ function buildPreparedData(
 }
 
 
-function getErrorStatus(error) {
+/*
+ * ============================================================
+ * ERROR STATUS
+ * ============================================================
+ */
+
+function getErrorStatus(
+  error
+) {
   if (
     !error
   ) {
     return 500;
   }
+
 
   if (
     error.code ===
@@ -107,6 +314,7 @@ function getErrorStatus(error) {
   ) {
     return 404;
   }
+
 
   if (
     error.code ===
@@ -123,6 +331,7 @@ function getErrorStatus(error) {
     return 409;
   }
 
+
   if (
     error.code ===
       "PASSPORT_NOT_READY" ||
@@ -134,6 +343,7 @@ function getErrorStatus(error) {
     return 409;
   }
 
+
   if (
     error.code ===
     "NO_APPLICANTS"
@@ -141,12 +351,14 @@ function getErrorStatus(error) {
     return 400;
   }
 
+
   if (
     error.name ===
     "ValidationError"
   ) {
     return 400;
   }
+
 
   if (
     error.code ===
@@ -157,9 +369,16 @@ function getErrorStatus(error) {
     return 409;
   }
 
+
   return 500;
 }
 
+
+/*
+ * ============================================================
+ * SEND ERROR
+ * ============================================================
+ */
 
 function sendError(
   res,
@@ -169,6 +388,7 @@ function sendError(
     getErrorStatus(
       error
     );
+
 
   return res.status(
     status
@@ -190,6 +410,12 @@ function sendError(
 }
 
 
+/*
+ * ============================================================
+ * ROUTER
+ * ============================================================
+ */
+
 function createApplicationRouter({
   supervisor
 }) {
@@ -203,18 +429,20 @@ function createApplicationRouter({
 
 
   /*
-   * =========================================================
+   * ==========================================================
    * CREATE APPLICATION
-   * =========================================================
+   * ==========================================================
    */
 
   router.post(
     "/",
+
     requireRole(
       "owner",
       "admin",
       "operator"
     ),
+
     async (
       req,
       res,
@@ -252,9 +480,9 @@ function createApplicationRouter({
 
 
         /*
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          * CLIENT IDS
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          */
 
         let clientIds = [];
@@ -328,9 +556,9 @@ function createApplicationRouter({
 
 
         /*
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          * BOOKING MODE
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          */
 
         const bookingMode =
@@ -392,9 +620,9 @@ function createApplicationRouter({
 
 
         /*
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          * PREFERÊNCIAS
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          */
 
         const preferredDates =
@@ -458,9 +686,9 @@ function createApplicationRouter({
 
 
         /*
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          * IDEMPOTENCY
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          */
 
         const idempotencyKey =
@@ -487,6 +715,12 @@ function createApplicationRouter({
           if (
             existing
           ) {
+
+            await attachAdminStatus([
+              existing
+            ]);
+
+
             return res.status(
               200
             ).json({
@@ -502,9 +736,9 @@ function createApplicationRouter({
 
 
         /*
-         * -----------------------------------------------------
-         * CLIENTS PARA PREPARED DATA / GROUP
-         * -----------------------------------------------------
+         * ------------------------------------------------------
+         * CLIENTS
+         * ------------------------------------------------------
          */
 
         const clients =
@@ -571,9 +805,9 @@ function createApplicationRouter({
 
 
         /*
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          * APPLICATION SERVICE
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          */
 
         const application =
@@ -594,20 +828,9 @@ function createApplicationRouter({
 
 
         /*
-         * -----------------------------------------------------
-         * COMPATIBILIDADE COM DADOS LEGADOS
-         * -----------------------------------------------------
-         *
-         * O ApplicationService é responsável
-         * pela criação principal.
-         *
-         * Aqui preservamos:
-         * - groupId
-         * - idempotencyKey
-         * - preparedDataEncrypted
-         *
-         * para não quebrar documentos/fluxos
-         * existentes.
+         * ------------------------------------------------------
+         * LEGACY DATA
+         * ------------------------------------------------------
          */
 
         application.groupId =
@@ -624,12 +847,6 @@ function createApplicationRouter({
           );
 
 
-        /*
-         * A função encryptJson permanece
-         * no model layer legado. Carregamos
-         * somente aqui para compatibilidade.
-         */
-
         const {
           encryptJson
         } =
@@ -644,17 +861,60 @@ function createApplicationRouter({
           );
 
 
+        /*
+         * ------------------------------------------------------
+         * NOVO FLUXO
+         * ------------------------------------------------------
+         *
+         * Uma candidatura recém-criada NÃO é liberada.
+         *
+         * O estado administrativo é criado separadamente
+         * como PENDING_REVIEW.
+         *
+         * Nenhum Bot 1 ou Bot 2 deve iniciar aqui.
+         */
+
         await application.save();
 
 
+        await ApplicationAdminControl.findOneAndUpdate(
+          {
+            applicationId:
+              application._id
+          },
+          {
+            $setOnInsert: {
+              accountId:
+                application.accountId,
+
+              applicationId:
+                application._id,
+
+              status:
+                "PENDING_REVIEW",
+
+              "release.enabled":
+                false
+            }
+          },
+          {
+            upsert: true,
+
+            new: true,
+
+            setDefaultsOnInsert:
+              true
+          }
+        );
+
+
         /*
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          * AUDIT
-         * -----------------------------------------------------
+         * ------------------------------------------------------
          */
 
         await AuditLog.create({
-
           actorId:
             req.user._id,
 
@@ -670,6 +930,25 @@ function createApplicationRouter({
           ip:
             req.ip
         });
+
+
+        /*
+         * ------------------------------------------------------
+         * ESTADO ADMINISTRATIVO
+         * ------------------------------------------------------
+         */
+
+        const adminControl =
+          await ApplicationAdminControl.findOne({
+            applicationId:
+              application._id
+          });
+
+
+        application.admin =
+          serializeAdminControl(
+            adminControl
+          );
 
 
         return res.status(
@@ -715,13 +994,19 @@ function createApplicationRouter({
 
 
   /*
-   * =========================================================
-   * LIST
-   * =========================================================
+   * ==========================================================
+   * LIST APPLICATIONS
+   * ==========================================================
+   *
+   * O cliente recebe o estado administrativo sanitizado.
+   *
+   * NUNCA recebe as credenciais VFS.
+   * ==========================================================
    */
 
   router.get(
     "/",
+
     async (
       req,
       res,
@@ -749,6 +1034,11 @@ function createApplicationRouter({
             .limit(200);
 
 
+        await attachAdminStatus(
+          applications
+        );
+
+
         return res.json({
           success: true,
 
@@ -767,13 +1057,14 @@ function createApplicationRouter({
 
 
   /*
-   * =========================================================
+   * ==========================================================
    * GET ONE
-   * =========================================================
+   * ==========================================================
    */
 
   router.get(
     "/:id",
+
     async (
       req,
       res,
@@ -803,6 +1094,23 @@ function createApplicationRouter({
         );
 
 
+        /*
+         * Estado administrativo sanitizado.
+         */
+
+        const adminControl =
+          await ApplicationAdminControl.findOne({
+            applicationId:
+              application._id
+          });
+
+
+        application.admin =
+          serializeAdminControl(
+            adminControl
+          );
+
+
         return res.json({
           success: true,
 
@@ -824,9 +1132,19 @@ function createApplicationRouter({
 
 
   /*
-   * =========================================================
+   * ==========================================================
    * PREPARE
-   * =========================================================
+   * ==========================================================
+   *
+   * Mantido para compatibilidade com o sistema existente.
+   *
+   * IMPORTANTE:
+   *
+   * O novo frontend NÃO chama este endpoint.
+   *
+   * A liberação normal agora acontece através
+   * da administração.
+   * ==========================================================
    */
 
   router.post(
@@ -845,20 +1163,6 @@ function createApplicationRouter({
     ) => {
 
       try {
-
-        /*
-         * A preparação agora significa:
-         *
-         * passport
-         * +
-         * 10 posições faciais
-         * +
-         * preferências
-         *
-         * e termina em READY_FOR_AUTOMATION.
-         *
-         * Não inicia login VFS neste endpoint.
-         */
 
         const result =
           await ApplicationService.prepare(
@@ -912,9 +1216,9 @@ function createApplicationRouter({
 
 
   /*
-   * =========================================================
+   * ==========================================================
    * CONTINUE
-   * =========================================================
+   * ==========================================================
    */
 
   router.post(
@@ -940,14 +1244,6 @@ function createApplicationRouter({
             req.user.accountId
           );
 
-
-        /*
-         * Continue é reservado para
-         * checkpoints oficiais do fluxo.
-         *
-         * O Supervisor continua sendo
-         * responsável pelo Bot 1/VFS.
-         */
 
         if (
           !supervisor
@@ -994,9 +1290,9 @@ function createApplicationRouter({
 
 
   /*
-   * =========================================================
+   * ==========================================================
    * OTP VERIFY
-   * =========================================================
+   * ==========================================================
    */
 
   router.post(
@@ -1105,9 +1401,9 @@ function createApplicationRouter({
 
 
   /*
-   * =========================================================
+   * ==========================================================
    * RESUME
-   * =========================================================
+   * ==========================================================
    */
 
   router.post(
@@ -1237,9 +1533,9 @@ function createApplicationRouter({
 
 
   /*
-   * =========================================================
+   * ==========================================================
    * CANCEL
-   * =========================================================
+   * ==========================================================
    */
 
   router.post(
