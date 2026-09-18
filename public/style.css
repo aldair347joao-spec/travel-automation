@@ -617,7 +617,7 @@ video {
 }
 
 /* ============================================================
-   OLD MAIN CONTAINER
+   MAIN CONTAINER
    ============================================================ */
 
 .main-container {
@@ -634,11 +634,6 @@ video {
 
   padding: 0;
 }
-
-/*
- * Quando o workflow assume o controlo,
- * os elementos antigos ficam dentro da etapa.
- */
 
 .workflow-section-host {
   display: block !important;
@@ -1610,7 +1605,6 @@ button:disabled {
   opacity: .58;
 }
 
-.secondary-button,
 .secondary-button,
 .hero-button.secondary {
   border: 1px solid var(--ta-border);
