@@ -6,6 +6,7 @@
  *
  * IMPORTANT:
  * - VFS password is never persisted in frontend state.
+ * - VFS credentials are never read back from the API.
  * - All permission enforcement remains server-side.
  * - This page only consumes /api/admin endpoints.
  */
@@ -23,14 +24,24 @@ const AdminApp = (() => {
         refreshTimer: null
     };
 
-    const $ = (selector) => document.querySelector(selector);
+    const $ = selector =>
+        document.querySelector(selector);
 
-    const $$ = (selector) => Array.from(
-        document.querySelectorAll(selector)
-    );
+    const $$ = selector =>
+        Array.from(
+            document.querySelectorAll(selector)
+        );
+
+    /* =========================
+       UTILITIES
+    ========================= */
 
     function escapeHtml(value) {
-        if (value === null || value === undefined) {
+
+        if (
+            value === null ||
+            value === undefined
+        ) {
             return "";
         }
 
@@ -43,39 +54,59 @@ const AdminApp = (() => {
     }
 
     function formatDate(value) {
+
         if (!value) {
             return "—";
         }
 
         const date = new Date(value);
 
-        if (Number.isNaN(date.getTime())) {
+        if (
+            Number.isNaN(
+                date.getTime()
+            )
+        ) {
             return String(value);
         }
 
-        return new Intl.DateTimeFormat("pt-PT", {
-            dateStyle: "medium",
-            timeStyle: "short"
-        }).format(date);
+        return new Intl.DateTimeFormat(
+            "pt-PT",
+            {
+                dateStyle: "medium",
+                timeStyle: "short"
+            }
+        ).format(date);
     }
 
     function formatDateOnly(value) {
+
         if (!value) {
             return "—";
         }
 
         const date = new Date(value);
 
-        if (Number.isNaN(date.getTime())) {
+        if (
+            Number.isNaN(
+                date.getTime()
+            )
+        ) {
             return String(value);
         }
 
-        return new Intl.DateTimeFormat("pt-PT", {
-            dateStyle: "medium"
-        }).format(date);
+        return new Intl.DateTimeFormat(
+            "pt-PT",
+            {
+                dateStyle: "medium"
+            }
+        ).format(date);
     }
 
-    function formatMoney(amount, currency) {
+    function formatMoney(
+        amount,
+        currency
+    ) {
+
         if (
             amount === null ||
             amount === undefined ||
@@ -84,24 +115,40 @@ const AdminApp = (() => {
             return "—";
         }
 
-        const numericAmount = Number(amount);
+        const numericAmount =
+            Number(amount);
 
-        if (!Number.isFinite(numericAmount)) {
+        if (
+            !Number.isFinite(
+                numericAmount
+            )
+        ) {
             return `${amount} ${currency || ""}`.trim();
         }
 
         try {
-            return new Intl.NumberFormat("pt-AO", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-            }).format(numericAmount) +
-                (currency ? ` ${currency}` : "");
+
+            return new Intl.NumberFormat(
+                "pt-AO",
+                {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }
+            ).format(numericAmount) +
+                (
+                    currency
+                        ? ` ${currency}`
+                        : ""
+                );
+
         } catch {
+
             return `${numericAmount.toFixed(2)} ${currency || ""}`.trim();
         }
     }
 
     function firstLetter(value) {
+
         if (!value) {
             return "A";
         }
@@ -112,26 +159,53 @@ const AdminApp = (() => {
             .toUpperCase() || "A";
     }
 
+    function normalizeArray(value) {
+
+        if (Array.isArray(value)) {
+            return value;
+        }
+
+        if (
+            typeof value === "string" &&
+            value.trim()
+        ) {
+            return value
+                .split(",")
+                .map(item =>
+                    item.trim()
+                )
+                .filter(Boolean);
+        }
+
+        return [];
+    }
+
     function getClient(application) {
+
         if (!application) {
             return {};
         }
 
-        if (application.client && typeof application.client === "object") {
+        if (
+            application.client &&
+            typeof application.client === "object"
+        ) {
             return application.client;
         }
 
         if (
-            application.clients &&
-            Array.isArray(application.clients) &&
+            Array.isArray(
+                application.clients
+            ) &&
             application.clients.length
         ) {
             return application.clients[0];
         }
 
         if (
-            application.applicants &&
-            Array.isArray(application.applicants) &&
+            Array.isArray(
+                application.applicants
+            ) &&
             application.applicants.length
         ) {
             return application.applicants[0];
@@ -140,18 +214,29 @@ const AdminApp = (() => {
         return {};
     }
 
+    function getAdminControl(application) {
+
+        return (
+            application?.admin ||
+            application?.adminControl ||
+            {}
+        );
+    }
+
     function getApplicationStatus(application) {
-    return (
-        application?.admin?.status ||
-        application?.adminControl?.status ||
-        application?.adminStatus ||
-        application?.workflowState ||
-        application?.status ||
-        "UNKNOWN"
-    );
-}
+
+        return (
+            application?.admin?.status ||
+            application?.adminControl?.status ||
+            application?.adminStatus ||
+            application?.workflowState ||
+            application?.status ||
+            "UNKNOWN"
+        );
+    }
 
     function getWorkflowState(application) {
+
         return (
             application?.workflowState ||
             application?.workflow?.state ||
@@ -161,6 +246,7 @@ const AdminApp = (() => {
     }
 
     function getPayment(application) {
+
         return (
             application?.result ||
             application?.payment ||
@@ -169,6 +255,7 @@ const AdminApp = (() => {
     }
 
     function getBot1(application) {
+
         return (
             application?.bot1 ||
             application?.bot1Status ||
@@ -177,6 +264,7 @@ const AdminApp = (() => {
     }
 
     function getBot2(application) {
+
         return (
             application?.bot2 ||
             application?.bot2Status ||
@@ -185,9 +273,11 @@ const AdminApp = (() => {
     }
 
     function getVfsStatus(application) {
+
         if (
             application?.vfs?.authenticated === true ||
-            application?.vfsStatus === "authenticated"
+            application?.vfsStatus === "authenticated" ||
+            application?.admin?.vfsStatus === "authenticated"
         ) {
             return "AUTENTICADO";
         }
@@ -199,7 +289,8 @@ const AdminApp = (() => {
         }
 
         if (
-            application?.adminControl?.vfsCredentials?.configured
+            application?.admin?.credentialsConfigured === true ||
+            application?.adminControl?.vfsCredentials?.configured === true
         ) {
             return "CREDENCIAIS CONFIGURADAS";
         }
@@ -207,115 +298,218 @@ const AdminApp = (() => {
         return "NÃO CONFIGURADO";
     }
 
-    function normalizeArray(value) {
-        if (Array.isArray(value)) {
-            return value;
-        }
-
-        if (typeof value === "string" && value.trim()) {
-            return value
-                .split(",")
-                .map(item => item.trim())
-                .filter(Boolean);
-        }
-
-        return [];
-    }
+    /* =========================
+       STATUS
+    ========================= */
 
     function labelStatus(status) {
+
         const map = {
-            PENDING_REVIEW: "Aguardando administração",
-            READY_FOR_AUTOMATION: "Pronto para automação",
-            AUTOMATION_ACTIVE: "Automação ativa",
-            PAUSED: "Pausado",
-            COMPLETED: "Concluído",
-            CANCELLED: "Cancelado",
 
-            CREATED: "Criado",
-            PASSPORT_PENDING: "Passaporte pendente",
-            PASSPORT_VERIFIED: "Passaporte verificado",
-            IDENTITY_PREPARATION: "Preparação da identidade",
-            IDENTITY_READY: "Identidade pronta",
-            PREFERENCES_PENDING: "Preferências pendentes",
-            READY_FOR_AUTOMATION: "Pronto para automação",
-            VFS_SESSION: "Sessão VFS",
-            VFS_AUTHENTICATING: "Autenticação VFS",
-            VFS_AUTHENTICATED: "VFS autenticado",
-            RADAR_ACTIVE: "Radar ativo",
-            SLOT_FOUND: "Vaga encontrada",
-            SLOT_LOCKED: "Vaga bloqueada",
-            SLOT_REVALIDATED: "Vaga revalidada",
-            BOOKING: "Agendamento",
-            DOCUMENT_UPLOAD: "Envio de documentos",
-            PASSPORT_UPLOAD_REQUIRED: "Passaporte solicitado",
-            PASSPORT_UPLOADING: "A enviar passaporte",
-            PASSPORT_UPLOADED: "Passaporte enviado",
-            FACIAL_SESSION_STARTING: "A iniciar facial",
-            FACIAL_LIVENESS_REQUIRED: "Liveness solicitado",
-            FACIAL_PROCESSING: "Processamento facial",
-            FACIAL_POSITION_REQUESTED: "Posição facial solicitada",
-            FACIAL_VERIFICATION_COMPLETED: "Facial concluído",
-            OTP_REQUIRED: "OTP solicitado",
-            OTP_RECEIVED: "OTP recebido",
-            OTP_SUBMITTING: "A validar OTP",
-            OTP_VERIFIED: "OTP verificado",
-            REVIEW: "Revisão",
-            APPOINTMENT_BOOKED: "Agendamento concluído",
-            PAYMENT_PENDING: "Pagamento pendente",
-            PAYMENT_CONFIRMED: "Pagamento confirmado",
-            PAYMENT_EXPIRED: "Pagamento expirado",
-            COMPLETED: "Concluído",
-            ERROR: "Erro",
-            CANCELLED: "Cancelado",
+            PENDING_REVIEW:
+                "Aguardando administração",
 
-            idle: "Inativo",
-            starting: "A iniciar",
-            running: "Em execução",
-            waiting: "A aguardar",
-            continuing: "A continuar",
-            monitoring: "A monitorizar",
-            slot_found: "Vaga encontrada",
-            cooldown: "Cooldown",
-            stopped: "Parado",
-            error: "Erro",
-            requires_user: "Requer ação"
+            READY_FOR_AUTOMATION:
+                "Pronto para automação",
+
+            AUTOMATION_ACTIVE:
+                "Automação ativa",
+
+            PAUSED:
+                "Pausado",
+
+            COMPLETED:
+                "Concluído",
+
+            CANCELLED:
+                "Cancelado",
+
+            CREATED:
+                "Criado",
+
+            PASSPORT_PENDING:
+                "Passaporte pendente",
+
+            PASSPORT_VERIFIED:
+                "Passaporte verificado",
+
+            IDENTITY_PREPARATION:
+                "Preparação da identidade",
+
+            IDENTITY_READY:
+                "Identidade pronta",
+
+            PREFERENCES_PENDING:
+                "Preferências pendentes",
+
+            VFS_SESSION:
+                "Sessão VFS",
+
+            VFS_AUTHENTICATING:
+                "Autenticação VFS",
+
+            VFS_AUTHENTICATED:
+                "VFS autenticado",
+
+            RADAR_ACTIVE:
+                "Radar ativo",
+
+            SLOT_FOUND:
+                "Vaga encontrada",
+
+            SLOT_LOCKED:
+                "Vaga bloqueada",
+
+            SLOT_REVALIDATED:
+                "Vaga revalidada",
+
+            BOOKING:
+                "Agendamento",
+
+            DOCUMENT_UPLOAD:
+                "Envio de documentos",
+
+            PASSPORT_UPLOAD_REQUIRED:
+                "Passaporte solicitado",
+
+            PASSPORT_UPLOADING:
+                "A enviar passaporte",
+
+            PASSPORT_UPLOADED:
+                "Passaporte enviado",
+
+            FACIAL_SESSION_STARTING:
+                "A iniciar facial",
+
+            FACIAL_LIVENESS_REQUIRED:
+                "Liveness solicitado",
+
+            FACIAL_PROCESSING:
+                "Processamento facial",
+
+            FACIAL_POSITION_REQUESTED:
+                "Posição facial solicitada",
+
+            FACIAL_VERIFICATION_COMPLETED:
+                "Facial concluído",
+
+            OTP_REQUIRED:
+                "OTP solicitado",
+
+            OTP_RECEIVED:
+                "OTP recebido",
+
+            OTP_SUBMITTING:
+                "A validar OTP",
+
+            OTP_VERIFIED:
+                "OTP verificado",
+
+            REVIEW:
+                "Revisão",
+
+            APPOINTMENT_BOOKED:
+                "Agendamento concluído",
+
+            PAYMENT_PENDING:
+                "Pagamento pendente",
+
+            PAYMENT_CONFIRMED:
+                "Pagamento confirmado",
+
+            PAYMENT_EXPIRED:
+                "Pagamento expirado",
+
+            ERROR:
+                "Erro",
+
+            idle:
+                "Inativo",
+
+            starting:
+                "A iniciar",
+
+            running:
+                "Em execução",
+
+            waiting:
+                "A aguardar",
+
+            continuing:
+                "A continuar",
+
+            monitoring:
+                "A monitorizar",
+
+            slot_found:
+                "Vaga encontrada",
+
+            cooldown:
+                "Cooldown",
+
+            stopped:
+                "Parado",
+
+            error:
+                "Erro",
+
+            requires_user:
+                "Requer ação"
         };
 
-        return map[status] || String(status || "—");
+        return (
+            map[status] ||
+            String(
+                status || "—"
+            )
+        );
     }
 
     function statusClass(status) {
-        switch (String(status || "").toUpperCase()) {
+
+        switch (
+            String(status || "")
+                .toUpperCase()
+        ) {
+
             case "PENDING_REVIEW":
             case "PAYMENT_PENDING":
             case "WAITING":
             case "WAITING_FOR_SLOT":
+
                 return "status-pending";
 
             case "READY_FOR_AUTOMATION":
             case "VFS_AUTHENTICATED":
             case "SLOT_FOUND":
+
                 return "status-ready";
 
             case "AUTOMATION_ACTIVE":
             case "RUNNING":
             case "COMPLETED":
             case "PAYMENT_CONFIRMED":
+
                 return "status-active";
 
             case "PAUSED":
             case "ERROR":
             case "CANCELLED":
             case "PAYMENT_EXPIRED":
+
                 return "status-paused";
 
             default:
+
                 return "status-cancelled";
         }
     }
 
     function botClass(status) {
-        const normalized = String(status || "").toLowerCase();
+
+        const normalized =
+            String(status || "")
+                .toLowerCase();
 
         if (
             normalized.includes("running") ||
@@ -344,53 +538,181 @@ const AdminApp = (() => {
         return "";
     }
 
-    async function api(path, options = {}) {
+    /* =========================
+       CSRF
+    ========================= */
 
-        const requestOptions = {
-            credentials: "include",
-            headers: {
-                "Accept": "application/json",
-                ...(options.body
-                    ? { "Content-Type": "application/json" }
-                    : {}),
-                ...(options.headers || {})
-            },
-            ...options
+    function getCookie(name) {
+
+        const prefix =
+            `${name}=`;
+
+        const parts =
+            document.cookie
+                .split(";")
+                .map(
+                    value =>
+                        value.trim()
+                );
+
+        const match =
+            parts.find(
+                value =>
+                    value.startsWith(
+                        prefix
+                    )
+            );
+
+        if (!match) {
+            return "";
+        }
+
+        try {
+
+            return decodeURIComponent(
+                match.slice(
+                    prefix.length
+                )
+            );
+
+        } catch {
+
+            return match.slice(
+                prefix.length
+            );
+        }
+    }
+
+    function getCsrfHeaders() {
+
+        const token =
+            getCookie(
+                "csrf_token"
+            );
+
+        if (!token) {
+            return {};
+        }
+
+        return {
+            "x-csrf-token":
+                token
+        };
+    }
+
+    /* =========================
+       API
+    ========================= */
+
+    async function api(
+        path,
+        options = {}
+    ) {
+
+        const method =
+            String(
+                options.method ||
+                "GET"
+            ).toUpperCase();
+
+        const headers = {
+
+            "Accept":
+                "application/json",
+
+            ...(options.body
+                ? {
+                    "Content-Type":
+                        "application/json"
+                }
+                : {}),
+
+            ...(
+                method !== "GET" &&
+                method !== "HEAD" &&
+                method !== "OPTIONS"
+                    ? getCsrfHeaders()
+                    : {}
+            ),
+
+            ...(options.headers || {})
         };
 
-        const response = await fetch(path, requestOptions);
+        const requestOptions = {
+
+            ...options,
+
+            credentials:
+                "include",
+
+            headers
+        };
+
+        const response =
+            await fetch(
+                path,
+                requestOptions
+            );
 
         let data = null;
 
         try {
-            data = await response.json();
+
+            data =
+                await response.json();
+
         } catch {
+
             data = null;
         }
 
-        if (response.status === 401) {
+        if (
+            response.status === 401
+        ) {
+
             handleUnauthorized();
-            throw new Error(
-                data?.message ||
-                "Sessão administrativa expirada."
-            );
+
+            const error =
+                new Error(
+                    data?.message ||
+                    data?.error ||
+                    "Sessão administrativa expirada."
+                );
+
+            error.status = 401;
+
+            throw error;
         }
 
-        if (response.status === 403) {
-            throw new Error(
-                data?.message ||
-                "Não tem permissão para esta operação."
-            );
+        if (
+            response.status === 403
+        ) {
+
+            const error =
+                new Error(
+                    data?.message ||
+                    data?.error ||
+                    "Não tem permissão para esta operação."
+                );
+
+            error.status = 403;
+            error.data = data;
+
+            throw error;
         }
 
         if (!response.ok) {
-            const error = new Error(
-                data?.message ||
-                data?.error ||
-                `Erro HTTP ${response.status}`
-            );
 
-            error.status = response.status;
+            const error =
+                new Error(
+                    data?.message ||
+                    data?.error ||
+                    `Erro HTTP ${response.status}`
+                );
+
+            error.status =
+                response.status;
+
             error.data = data;
 
             throw error;
@@ -400,19 +722,31 @@ const AdminApp = (() => {
     }
 
     function handleUnauthorized() {
+
         setConnectionStatus(
             "offline",
             "Sessão inválida"
         );
 
-        setTimeout(() => {
-            window.location.href = "/";
-        }, 1000);
+        setTimeout(
+            () => {
+                window.location.href = "/";
+            },
+            1000
+        );
     }
 
-    function setConnectionStatus(type, text) {
+    /* =========================
+       CONNECTION
+    ========================= */
 
-        const element = $("#connectionStatus");
+    function setConnectionStatus(
+        type,
+        text
+    ) {
+
+        const element =
+            $("#connectionStatus");
 
         if (!element) {
             return;
@@ -424,7 +758,9 @@ const AdminApp = (() => {
             "offline"
         );
 
-        element.classList.add(type);
+        element.classList.add(
+            type
+        );
 
         element.innerHTML = `
             <i></i>
@@ -438,30 +774,45 @@ const AdminApp = (() => {
         type = "success"
     ) {
 
-        const container = $("#toastContainer");
+        const container =
+            $("#toastContainer");
 
         if (!container) {
             return;
         }
 
-        const toast = document.createElement("div");
+        const toast =
+            document.createElement(
+                "div"
+            );
 
-        toast.className = `toast ${type}`;
+        toast.className =
+            `toast ${type}`;
 
         toast.innerHTML = `
-            <strong>${escapeHtml(title)}</strong>
-            <span>${escapeHtml(message)}</span>
+            <strong>
+                ${escapeHtml(title)}
+            </strong>
+
+            <span>
+                ${escapeHtml(message)}
+            </span>
         `;
 
-        container.appendChild(toast);
+        container.appendChild(
+            toast
+        );
 
-        setTimeout(() => {
-            toast.remove();
-        }, 4500);
+        setTimeout(
+            () => toast.remove(),
+            4500
+        );
     }
 
     function updateTimestamp() {
-        const element = $("#lastUpdated");
+
+        const element =
+            $("#lastUpdated");
 
         if (!element) {
             return;
@@ -481,37 +832,51 @@ const AdminApp = (() => {
     ========================= */
 
     async function loadStats() {
-    const data = await api(
-        "/api/admin/stats"
-    );
 
-    const stats =
-        data?.stats ||
-        data?.data ||
-        data ||
-        {};
+        const data =
+            await api(
+                "/api/admin/stats"
+            );
 
-    $("#statTotal").textContent =
-        stats.total ??
-        stats.totalApplications ??
-        0;
+        const stats =
+            data?.stats ||
+            data?.data ||
+            data ||
+            {};
 
-    $("#statPending").textContent =
-        stats.pendingAdmin ??
-        stats.pendingReview ??
-        stats.pending ??
-        0;
+        if ($("#statTotal")) {
 
-    $("#statActive").textContent =
-        stats.automationActive ??
-        stats.active ??
-        0;
+            $("#statTotal").textContent =
+                stats.total ??
+                stats.totalApplications ??
+                0;
+        }
 
-    $("#statPayment").textContent =
-        stats.paymentPending ??
-        stats.pendingPayment ??
-        0;
-}
+        if ($("#statPending")) {
+
+            $("#statPending").textContent =
+                stats.pendingAdmin ??
+                stats.pendingReview ??
+                stats.pending ??
+                0;
+        }
+
+        if ($("#statActive")) {
+
+            $("#statActive").textContent =
+                stats.automationActive ??
+                stats.active ??
+                0;
+        }
+
+        if ($("#statPayment")) {
+
+            $("#statPayment").textContent =
+                stats.paymentPending ??
+                stats.pendingPayment ??
+                0;
+        }
+    }
 
     /* =========================
        APPLICATIONS
@@ -519,15 +884,17 @@ const AdminApp = (() => {
 
     async function loadApplications() {
 
-        state.loadingApplications = true;
+        state.loadingApplications =
+            true;
 
         renderApplicationsLoading();
 
         try {
 
-            const data = await api(
-                "/api/admin/applications"
-            );
+            const data =
+                await api(
+                    "/api/admin/applications"
+                );
 
             const applications =
                 data?.applications ||
@@ -535,9 +902,12 @@ const AdminApp = (() => {
                 data?.data ||
                 [];
 
-            state.applications = Array.isArray(applications)
-                ? applications
-                : [];
+            state.applications =
+                Array.isArray(
+                    applications
+                )
+                    ? applications
+                    : [];
 
             applyFilters();
 
@@ -550,13 +920,15 @@ const AdminApp = (() => {
 
         } finally {
 
-            state.loadingApplications = false;
+            state.loadingApplications =
+                false;
         }
     }
 
     function renderApplicationsLoading() {
 
-        const container = $("#applicationsList");
+        const container =
+            $("#applicationsList");
 
         if (!container) {
             return;
@@ -565,81 +937,116 @@ const AdminApp = (() => {
         container.innerHTML = `
             <div class="loading-state">
                 <div class="loading-spinner"></div>
-                <span>A carregar processos...</span>
+
+                <span>
+                    A carregar processos...
+                </span>
             </div>
         `;
     }
 
     function applyFilters() {
 
-        const search = (
-            $("#applicationSearch")?.value ||
-            ""
-        )
-            .trim()
-            .toLowerCase();
+        const search =
+            (
+                $("#applicationSearch")?.value ||
+                ""
+            )
+                .trim()
+                .toLowerCase();
 
         const status =
             $("#statusFilter")?.value ||
             "all";
 
         state.filteredApplications =
-            state.applications.filter(application => {
+            state.applications.filter(
+                application => {
 
-                const client = getClient(application);
+                    const client =
+                        getClient(
+                            application
+                        );
 
-                const searchable = [
-                    application?._id,
-                    application?.id,
-                    application?.applicationId,
-                    client?.name,
-                    client?.fullName,
-                    client?.email,
-                    client?.phone,
-                    client?.passportNumber,
-                    application?.passportNumber
-                ]
-                    .filter(Boolean)
-                    .join(" ")
-                    .toLowerCase();
+                    const searchable = [
 
-                if (
-                    search &&
-                    !searchable.includes(search)
-                ) {
-                    return false;
+                        application?._id,
+                        application?.id,
+                        application?.applicationId,
+
+                        client?.name,
+                        client?.fullName,
+                        client?.email,
+                        client?.phone,
+                        client?.passportNumber,
+
+                        application?.passportNumber,
+                        application?.visaCenter,
+                        application?.visaType
+
+                    ]
+                        .filter(Boolean)
+                        .join(" ")
+                        .toLowerCase();
+
+                    if (
+                        search &&
+                        !searchable.includes(
+                            search
+                        )
+                    ) {
+                        return false;
+                    }
+
+                    if (
+                        status !== "all"
+                    ) {
+
+                        return (
+                            String(
+                                getApplicationStatus(
+                                    application
+                                )
+                            ).toUpperCase() ===
+                            String(status)
+                                .toUpperCase()
+                        );
+                    }
+
+                    return true;
                 }
+            );
 
-                if (status !== "all") {
-                    return (
-                        String(
-                            getApplicationStatus(application)
-                        ).toUpperCase() === status
-                    );
-                }
+        if (
+            $("#applicationCount")
+        ) {
 
-                return true;
-            });
-
-        $("#applicationCount").textContent =
-            state.filteredApplications.length;
+            $("#applicationCount")
+                .textContent =
+                state.filteredApplications.length;
+        }
 
         renderApplications();
     }
 
     function renderApplications() {
 
-        const container = $("#applicationsList");
+        const container =
+            $("#applicationsList");
 
         if (!container) {
             return;
         }
 
-        if (!state.filteredApplications.length) {
+        if (
+            !state.filteredApplications.length
+        ) {
 
             container.innerHTML = `
                 <div class="empty-list">
-                    <span>Nenhum processo encontrado.</span>
+                    <span>
+                        Nenhum processo encontrado.
+                    </span>
                 </div>
             `;
 
@@ -648,27 +1055,41 @@ const AdminApp = (() => {
 
         container.innerHTML =
             state.filteredApplications
-                .map(renderApplicationRow)
+                .map(
+                    renderApplicationRow
+                )
                 .join("");
 
-        $$(".application-row").forEach(row => {
+        $$(".application-row")
+            .forEach(row => {
 
-            row.addEventListener("click", () => {
+                row.addEventListener(
+                    "click",
+                    () => {
 
-                const id = row.dataset.applicationId;
+                        const id =
+                            row.dataset
+                                .applicationId;
 
-                if (id) {
-                    selectApplication(id);
-                }
+                        if (id) {
+                            selectApplication(
+                                id
+                            );
+                        }
+                    }
+                );
 
             });
-
-        });
     }
 
-    function renderApplicationRow(application) {
+    function renderApplicationRow(
+        application
+    ) {
 
-        const client = getClient(application);
+        const client =
+            getClient(
+                application
+            );
 
         const id =
             application?._id ||
@@ -700,11 +1121,15 @@ const AdminApp = (() => {
             "Visto —";
 
         const status =
-            getApplicationStatus(application);
+            getApplicationStatus(
+                application
+            );
 
         const selected =
             state.selectedApplicationId &&
-            String(state.selectedApplicationId) === String(id);
+            String(
+                state.selectedApplicationId
+            ) === String(id);
 
         return `
             <button
@@ -716,10 +1141,13 @@ const AdminApp = (() => {
                 <div class="application-client">
 
                     <div class="application-avatar">
-                        ${escapeHtml(firstLetter(name))}
+                        ${escapeHtml(
+                            firstLetter(name)
+                        )}
                     </div>
 
                     <div class="application-client-copy">
+
                         <strong>
                             ${escapeHtml(name)}
                         </strong>
@@ -727,535 +1155,768 @@ const AdminApp = (() => {
                         <span>
                             ${escapeHtml(email)}
                         </span>
+
                     </div>
 
                 </div>
 
                 <div class="application-column">
-                    <span>Passaporte</span>
+
+                    <span>
+                        Passaporte
+                    </span>
+
                     <strong>
                         ${escapeHtml(passport)}
                     </strong>
+
                 </div>
 
                 <div class="application-column">
-                    <span>Centro</span>
+
+                    <span>
+                        Centro
+                    </span>
+
                     <strong>
                         ${escapeHtml(center)}
                     </strong>
+
                 </div>
 
                 <div class="application-column">
-                    <span>Visto</span>
+
+                    <span>
+                        Visto
+                    </span>
+
                     <strong>
                         ${escapeHtml(visa)}
                     </strong>
+
                 </div>
 
-                <div>
-                    <span class="status-badge ${statusClass(status)}">
-                        ${escapeHtml(labelStatus(status))}
+                <div class="application-status">
+
+                    <span
+                        class="status-pill ${statusClass(status)}"
+                    >
+                        ${escapeHtml(
+                            labelStatus(status)
+                        )}
                     </span>
-                </div>
 
-                <span class="row-arrow">›</span>
+                </div>
 
             </button>
         `;
     }
 
     /* =========================
-       DETAILS
+       SELECT APPLICATION
     ========================= */
 
-    async function selectApplication(id) {
+    async function selectApplication(
+        applicationId
+    ) {
 
-        if (!id) {
+        if (!applicationId) {
             return;
         }
 
-        state.selectedApplicationId = id;
+        state.selectedApplicationId =
+            applicationId;
 
-        renderApplications();
-
-        $("#emptyDetails").classList.add("hidden");
-        $("#detailsPanel").classList.remove("hidden");
-
-        $("#selectedProcessId").textContent = id;
+        state.loadingDetails =
+            true;
 
         try {
 
-            const data = await api(
-                `/api/admin/applications/${encodeURIComponent(id)}`
-            );
+            const data =
+                await api(
+                    `/api/admin/applications/${encodeURIComponent(
+                        applicationId
+                    )}`
+                );
 
             const application =
                 data?.application ||
                 data?.data ||
                 data;
 
-            state.selectedApplication = application;
+            if (!application) {
+                throw new Error(
+                    "Processo não encontrado."
+                );
+            }
 
-            renderDetails(application);
+            state.selectedApplication =
+                application;
 
-            document
-                .getElementById("detailsSection")
-                ?.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start"
-                });
+            renderApplicationDetails(
+                application
+            );
+
+            renderApplications();
 
         } catch (error) {
 
+            console.error(
+                "[ADMIN] select application:",
+                error
+            );
+
             showToast(
                 "Erro",
-                error.message,
+                error.message ||
+                    "Não foi possível carregar o processo.",
                 "error"
             );
 
+        } finally {
+
+            state.loadingDetails =
+                false;
         }
     }
 
-    function renderDetails(application) {
+    function renderApplicationDetails(
+        application
+    ) {
 
-        if (!application) {
-            return;
-        }
+        renderClient(
+            application
+        );
 
-        const client = getClient(application);
+        renderWorkflow(
+            application
+        );
+
+        renderBots(
+            application
+        );
+
+        renderVfs(
+            application
+        );
+
+        renderApplicationData(
+            application
+        );
+
+        renderPassport(
+            application
+        );
+
+        renderIdentity(
+            application
+        );
+
+        renderPayment(
+            application
+        );
+
+        renderError(
+            application
+        );
+
+        renderCredentials(
+            application
+        );
+
+        renderAutomationControls(
+            application
+        );
+    }
+
+    /* =========================
+       CLIENT
+    ========================= */
+
+    function renderClient(
+        application
+    ) {
+
+        const client =
+            getClient(
+                application
+            );
 
         const name =
             client?.name ||
             client?.fullName ||
             application?.name ||
-            "Cliente";
-
-        $("#detailClientName").textContent = name;
-
-        $("#detailClientFullName").textContent =
-            client?.fullName ||
-            client?.name ||
             "—";
 
-        $("#detailClientEmail").textContent =
+        const email =
             client?.email ||
+            application?.email ||
             "—";
 
-        $("#detailClientPhone").textContent =
+        const phone =
             client?.phone ||
             client?.mobile ||
             "—";
 
-        $("#detailApplicationId").textContent =
-            application?._id ||
-            application?.id ||
-            application?.applicationId ||
+        const passport =
+            client?.passportNumber ||
+            application?.passportNumber ||
             "—";
 
-        $("#detailClientAvatar").textContent =
-            firstLetter(name);
+        if ($("#detailClientName")) {
 
-        renderAdminStatus(application);
-        renderWorkflow(application);
-        renderBots(application);
-        renderApplicationData(application);
-        renderPassport(application);
-        renderIdentity(application);
-        renderCredentials(application);
-        renderAutomationControls(application);
-        renderPayment(application);
-        renderError(application);
+            $("#detailClientName")
+                .textContent =
+                name;
+        }
 
-        $("#adminNotes").value =
-            application?.adminControl?.notes ||
-            application?.adminNotes ||
-            "";
+        if ($("#detailClientEmail")) {
+
+            $("#detailClientEmail")
+                .textContent =
+                email;
+        }
+
+        if ($("#detailClientPhone")) {
+
+            $("#detailClientPhone")
+                .textContent =
+                phone;
+        }
+
+        if ($("#detailClientPassport")) {
+
+            $("#detailClientPassport")
+                .textContent =
+                passport;
+        }
+
+        if ($("#detailClientAvatar")) {
+
+            $("#detailClientAvatar")
+                .textContent =
+                firstLetter(name);
+        }
     }
 
-    function renderAdminStatus(application) {
+    /* =========================
+       WORKFLOW
+    ========================= */
 
-        const status = getApplicationStatus(application);
+    function renderWorkflow(
+        application
+    ) {
 
-        const element = $("#detailAdminStatus");
-
-        element.textContent =
-            labelStatus(status);
-
-        element.className =
-            `status-badge ${statusClass(status)}`;
-    }
-
-    function renderWorkflow(application) {
-
-        const workflow = application?.workflow || {};
-
-        const stateName =
-            getWorkflowState(application);
-
-        $("#detailWorkflowStatus").textContent =
-            labelStatus(stateName);
-
-        $("#detailLegacyStatus").textContent =
-            `Estado legado: ${labelStatus(
-                application?.status
-            )}`;
-
-        $("#detailPreviousState").textContent =
-            labelStatus(
-                workflow?.previousState ||
-                "—"
+        const workflowState =
+            getWorkflowState(
+                application
             );
 
-        $("#detailStateChangedAt").textContent =
-            formatDate(
-                workflow?.stateChangedAt ||
-                application?.stateChangedAt
+        const adminStatus =
+            getApplicationStatus(
+                application
             );
+
+        if ($("#detailWorkflowState")) {
+
+            $("#detailWorkflowState")
+                .textContent =
+                labelStatus(
+                    workflowState
+                );
+        }
+
+        if ($("#detailAdminStatus")) {
+
+            $("#detailAdminStatus")
+                .textContent =
+                labelStatus(
+                    adminStatus
+                );
+        }
+
+        if ($("#detailStatusPill")) {
+
+            const element =
+                $("#detailStatusPill");
+
+            element.textContent =
+                labelStatus(
+                    adminStatus
+                );
+
+            element.className =
+                `status-pill ${statusClass(
+                    adminStatus
+                )}`;
+        }
+
+        if (
+            $("#detailCreatedAt")
+        ) {
+
+            $("#detailCreatedAt")
+                .textContent =
+                formatDate(
+                    application?.createdAt
+                );
+        }
+
+        if (
+            $("#detailUpdatedAt")
+        ) {
+
+            $("#detailUpdatedAt")
+                .textContent =
+                formatDate(
+                    application?.updatedAt
+                );
+        }
     }
 
-    function renderBots(application) {
+    /* =========================
+       BOTS
+    ========================= */
+
+    function renderBots(
+        application
+    ) {
 
         const bot1 =
-            application?.bot1?.status ||
-            application?.bot1Status ||
-            application?.bot1 ||
-            "idle";
+            getBot1(
+                application
+            );
 
         const bot2 =
-            application?.bot2?.status ||
-            application?.bot2Status ||
-            application?.bot2 ||
-            "idle";
+            getBot2(
+                application
+            );
 
-        const vfs =
-            getVfsStatus(application);
+        const bot1Status =
+            typeof bot1 === "object"
+                ? (
+                    bot1?.status ||
+                    "idle"
+                )
+                : bot1;
 
-        const bot1Element =
-            $("#detailBot1Status");
+        const bot2Status =
+            typeof bot2 === "object"
+                ? (
+                    bot2?.status ||
+                    "idle"
+                )
+                : bot2;
 
-        const bot2Element =
-            $("#detailBot2Status");
+        if ($("#detailBot1Status")) {
 
-        const vfsElement =
-            $("#detailVfsStatus");
+            $("#detailBot1Status")
+                .textContent =
+                labelStatus(
+                    bot1Status
+                );
 
-        bot1Element.textContent =
-            labelStatus(bot1);
+            $("#detailBot1Status")
+                .className =
+                `bot-status ${botClass(
+                    bot1Status
+                )}`;
+        }
 
-        bot1Element.className =
-            `bot-badge ${botClass(bot1)}`;
+        if ($("#detailBot2Status")) {
 
-        bot2Element.textContent =
-            labelStatus(bot2);
+            $("#detailBot2Status")
+                .textContent =
+                labelStatus(
+                    bot2Status
+                );
 
-        bot2Element.className =
-            `bot-badge ${botClass(bot2)}`;
+            $("#detailBot2Status")
+                .className =
+                `bot-status ${botClass(
+                    bot2Status
+                )}`;
+        }
 
-        vfsElement.textContent =
-            labelStatus(vfs);
+        if ($("#detailRadarStatus")) {
 
-        vfsElement.className =
-            `bot-badge ${botClass(vfs)}`;
+            const radarEnabled =
+                application?.radar?.enabled === true;
+
+            const monitoring =
+                application?.bot2?.monitoring === true;
+
+            $("#detailRadarStatus")
+                .textContent =
+                radarEnabled &&
+                monitoring
+                    ? "Radar ativo"
+                    : "Radar parado";
+        }
     }
 
-    function renderApplicationData(application) {
+    /* =========================
+       VFS
+    ========================= */
 
-        $("#detailVisaType").textContent =
-            application?.visaType ||
-            "—";
+    function renderVfs(
+        application
+    ) {
 
-        $("#detailVisaCenter").textContent =
-            application?.visaCenter ||
-            "—";
+        const status =
+            getVfsStatus(
+                application
+            );
 
-        $("#detailServiceType").textContent =
-            application?.serviceType ||
-            "—";
+        if ($("#detailVfsStatus")) {
 
-        $("#detailAppointmentMode").textContent =
-            application?.appointmentMode ||
-            application?.bookingMode ||
-            "—";
+            $("#detailVfsStatus")
+                .textContent =
+                status;
+        }
 
-        const dates =
+        if ($("#detailVfsStatusPill")) {
+
+            $("#detailVfsStatusPill")
+                .textContent =
+                status;
+        }
+
+        const admin =
+            getAdminControl(
+                application
+            );
+
+        const configured =
+            admin?.credentialsConfigured === true ||
+            admin?.vfsCredentials?.configured === true ||
+            application?.vfsCredentialsConfigured === true;
+
+        if ($("#vfsCredentialsStatus")) {
+
+            $("#vfsCredentialsStatus")
+                .textContent =
+                configured
+                    ? "Configuradas"
+                    : "Não configuradas";
+        }
+
+        /*
+         * IMPORTANT:
+         * Never populate vfsEmail from server data.
+         *
+         * The backend intentionally returns only
+         * credentialsConfigured, never the encrypted
+         * email/password values.
+         */
+
+        if ($("#vfsEmail")) {
+
+            $("#vfsEmail").value =
+                "";
+        }
+
+        if ($("#vfsPassword")) {
+
+            $("#vfsPassword").value =
+                "";
+        }
+    }
+
+    /* =========================
+       APPLICATION DATA
+    ========================= */
+
+    function renderApplicationData(
+        application
+    ) {
+
+        const preferredDates =
             application?.preferredDates ||
             {};
-
-        $("#detailDateStart").textContent =
-            formatDateOnly(
-                dates?.start ||
-                application?.preferredDateStart
-            );
-
-        $("#detailDateEnd").textContent =
-            formatDateOnly(
-                dates?.end ||
-                application?.preferredDateEnd
-            );
-
-        $("#detailPreferredTime").textContent =
-            application?.preferredTime ||
-            "Qualquer horário";
 
         const weekdays =
             normalizeArray(
                 application?.preferredWeekdays
             );
 
-        $("#detailPreferredWeekdays").textContent =
-            weekdays.length
-                ? weekdays.join(", ")
-                : "Qualquer dia";
+        const values = {
+
+            visaType:
+                application?.visaType,
+
+            visaCenter:
+                application?.visaCenter,
+
+            travelPurpose:
+                application?.travelPurpose,
+
+            serviceType:
+                application?.serviceType,
+
+            appointmentMode:
+                application?.appointmentMode,
+
+            preferredStart:
+                preferredDates?.start,
+
+            preferredEnd:
+                preferredDates?.end,
+
+            preferredTime:
+                application?.preferredTime,
+
+            weekdays:
+                weekdays.join(", ")
+
+        };
+
+        const fields = {
+
+            "#detailVisaType":
+                values.visaType,
+
+            "#detailVisaCenter":
+                values.visaCenter,
+
+            "#detailTravelPurpose":
+                values.travelPurpose,
+
+            "#detailServiceType":
+                values.serviceType,
+
+            "#detailAppointmentMode":
+                values.appointmentMode,
+
+            "#detailPreferredStart":
+                formatDateOnly(
+                    values.preferredStart
+                ),
+
+            "#detailPreferredEnd":
+                formatDateOnly(
+                    values.preferredEnd
+                ),
+
+            "#detailPreferredTime":
+                values.preferredTime,
+
+            "#detailPreferredWeekdays":
+                values.weekdays
+        };
+
+        Object.entries(
+            fields
+        ).forEach(
+            ([selector, value]) => {
+
+                const element =
+                    $(selector);
+
+                if (!element) {
+                    return;
+                }
+
+                element.textContent =
+                    value ||
+                    "—";
+            }
+        );
+
+        if (
+            $("#detailTravelDate")
+        ) {
+
+            $("#detailTravelDate")
+                .textContent =
+                formatDateOnly(
+                    application?.travelDate
+                );
+        }
     }
 
-    function renderPassport(application) {
+    /* =========================
+       PASSPORT
+    ========================= */
 
-        const client = getClient(application);
+    function renderPassport(
+        application
+    ) {
 
         const passport =
             application?.passport ||
-            client?.passport ||
+            application?.client?.passport ||
             {};
 
-        const passportNumber =
+        const number =
             passport?.number ||
-            client?.passportNumber ||
+            passport?.passportNumber ||
             application?.passportNumber ||
-            "Não informado";
-
-        const passportName =
-            passport?.fullName ||
-            passport?.name ||
-            client?.fullName ||
-            client?.name ||
+            getClient(
+                application
+            )?.passportNumber ||
             "—";
 
-        $("#detailPassportNumber").textContent =
-            passportNumber;
+        const name =
+            passport?.fullName ||
+            passport?.name ||
+            "—";
 
-        $("#detailPassportName").textContent =
-            passportName;
+        const nationality =
+            passport?.nationality ||
+            "—";
 
-        let verified =
-            application?.passportVerified === true ||
-            passport?.verified === true ||
-            application?.workflowState === "PASSPORT_VERIFIED";
+        const expiry =
+            passport?.expiryDate ||
+            passport?.expirationDate;
 
-        const statusElement =
-            $("#detailPassportStatus");
+        if (
+            $("#detailPassportNumber")
+        ) {
 
-        statusElement.textContent =
-            verified
-                ? "Verificado"
-                : "Estado não confirmado";
+            $("#detailPassportNumber")
+                .textContent =
+                number;
+        }
 
-        statusElement.className =
-            `status-badge ${
-                verified
-                    ? "status-active"
-                    : "status-pending"
-            }`;
-    }
+        if (
+            $("#detailPassportName")
+        ) {
 
-    function renderIdentity(application) {
+            $("#detailPassportName")
+                .textContent =
+                name;
+        }
 
-        const client = getClient(application);
+        if (
+            $("#detailPassportNationality")
+        ) {
 
-        const positions =
-            client?.facialPositions ||
-            client?.facePositions ||
-            application?.facialPositions ||
-            application?.facePositions ||
-            [];
+            $("#detailPassportNationality")
+                .textContent =
+                nationality;
+        }
 
-        const count =
-            Array.isArray(positions)
-                ? positions.length
-                : Number(
-                    application?.facialPositionCount ||
-                    0
+        if (
+            $("#detailPassportExpiry")
+        ) {
+
+            $("#detailPassportExpiry")
+                .textContent =
+                formatDateOnly(
+                    expiry
                 );
+        }
 
-        const safeCount =
-            Math.min(Math.max(count, 0), 10);
+        const verified =
+            application?.passportVerified === true ||
+            application?.passport?.verified === true ||
+            application?.client?.passportVerified === true;
 
-        $("#detailFaceCount").textContent =
-            safeCount;
+        if (
+            $("#detailPassportStatus")
+        ) {
 
-        $("#identityProgressBar").style.width =
-            `${safeCount * 10}%`;
-
-        const status =
-            application?.facialVerificationStatus ||
-            application?.identityStatus ||
-            (
-                safeCount === 10
-                    ? "READY"
-                    : "PENDING"
-            );
-
-        const statusElement =
-            $("#detailIdentityStatus");
-
-        statusElement.textContent =
-            status === "READY"
-                ? "Pronta"
-                : labelStatus(status);
-
-        statusElement.className =
-            `status-badge ${
-                status === "READY"
-                    ? "status-active"
-                    : "status-pending"
-            }`;
+            $("#detailPassportStatus")
+                .textContent =
+                verified
+                    ? "Validado"
+                    : "Não validado";
+        }
     }
 
-    function renderCredentials(application) {
+    /* =========================
+       IDENTITY
+    ========================= */
 
-        const configured =
-            application?.adminControl?.vfsCredentials?.configured === true ||
-            application?.vfsCredentialsConfigured === true;
+    function renderIdentity(
+        application
+    ) {
 
-        const element =
-            $("#credentialsStatus");
-
-        element.textContent =
-            configured
-                ? "Configuradas"
-                : "Não configuradas";
-
-        element.className =
-            `credentials-status ${
-                configured
-                    ? "credentials-ready"
-                    : "credentials-pending"
-            }`;
-
-        /*
-         * We deliberately DO NOT fill the password field.
-         * The backend never returns the encrypted/decrypted password.
-         */
-
-        $("#vfsEmail").value =
-            application?.adminControl?.vfsCredentials?.email ||
-            application?.vfsEmail ||
-            "";
-
-        $("#vfsPassword").value = "";
-    }
-
-    function renderAutomationControls(application) {
-
-        const control =
-            application?.adminControl ||
+        const identity =
+            application?.identity ||
             {};
 
-        const status =
-            control?.status ||
-            getApplicationStatus(application);
+        const positions =
+            normalizeArray(
+                identity?.positions ||
+                application?.facialPositions
+            );
 
-        const released =
-            control?.release?.enabled === true ||
-            status === "READY_FOR_AUTOMATION" ||
-            status === "AUTOMATION_ACTIVE";
+        const count =
+            positions.length;
 
-        const configured =
-            control?.vfsCredentials?.configured === true ||
-            application?.vfsCredentialsConfigured === true;
+        const verified =
+            identity?.verified === true ||
+            application?.identityVerified === true ||
+            application?.facialVerified === true;
 
-        const releaseButton =
-            $("#releaseButton");
+        if (
+            $("#detailIdentityStatus")
+        ) {
 
-        const pauseButton =
-            $("#pauseButton");
-
-        const releaseStatus =
-            $("#releaseStatus");
-
-        const warning =
-            $("#releaseWarning");
-
-        const description =
-            $("#releaseDescription");
-
-        if (released) {
-
-            releaseStatus.textContent =
-                status === "AUTOMATION_ACTIVE"
-                    ? "ATIVA"
-                    : "LIBERADO";
-
-            releaseStatus.className =
-                "status-badge status-active";
-
-            description.textContent =
-                "Este processo está autorizado a avançar para a automação.";
-
-            warning.classList.add("hidden");
-
-            releaseButton.disabled = true;
-
-            pauseButton.disabled =
-                status === "PAUSED" ||
-                status === "COMPLETED" ||
-                status === "CANCELLED";
-
-        } else {
-
-            releaseStatus.textContent =
-                "BLOQUEADO";
-
-            releaseStatus.className =
-                "status-badge status-pending";
-
-            description.textContent =
-                configured
-                    ? "As credenciais estão configuradas. O administrador pode liberar o processo."
-                    : "Configure primeiro as credenciais VFS.";
-
-            warning.classList.remove("hidden");
-
-            releaseButton.disabled =
-                !configured;
-
-            pauseButton.disabled = true;
+            $("#detailIdentityStatus")
+                .textContent =
+                verified
+                    ? "Identidade preparada"
+                    : "Identidade não concluída";
         }
 
-        if (status === "PAUSED") {
+        if (
+            $("#detailFacialPositions")
+        ) {
 
-            releaseStatus.textContent =
-                "PAUSADO";
+            $("#detailFacialPositions")
+                .textContent =
+                `${count} posições registadas`;
+        }
 
-            releaseStatus.className =
-                "status-badge status-paused";
+        if (
+            $("#detailFacialCount")
+        ) {
 
-            description.textContent =
-                "A automação deste processo está pausada.";
+            $("#detailFacialCount")
+                .textContent =
+                count;
+        }
 
-            warning.classList.remove("hidden");
+        if (
+            $("#detailFacialVerification")
+        ) {
 
-            releaseButton.disabled =
-                !configured;
-
-            pauseButton.disabled = true;
+            $("#detailFacialVerification")
+                .textContent =
+                verified
+                    ? "Pronta"
+                    : "Pendente";
         }
     }
 
-    function renderPayment(application) {
+    /* =========================
+       PAYMENT
+    ========================= */
 
-        const payment = getPayment(application);
+    function renderPayment(
+        application
+    ) {
+
+        const payment =
+            getPayment(
+                application
+            );
 
         const reference =
             payment?.reference ||
             payment?.referenceNumber ||
-            payment?.paymentReference ||
             application?.reference ||
+            application?.referenceNumber ||
             "—";
 
         const entity =
             payment?.entity ||
-            payment?.entityCode ||
+            payment?.entityNumber ||
             application?.entity ||
+            application?.entityNumber ||
             "—";
 
         const amount =
@@ -1281,39 +1942,89 @@ const AdminApp = (() => {
             payment?.status ||
             application?.paymentStatus ||
             (
-                application?.workflowState === "PAYMENT_CONFIRMED"
+                application?.workflowState ===
+                "PAYMENT_CONFIRMED"
                     ? "confirmed"
-                    : application?.workflowState === "PAYMENT_PENDING"
+                    : application?.workflowState ===
+                        "PAYMENT_PENDING"
                         ? "pending"
                         : "—"
             );
 
-        $("#detailPaymentReference").textContent =
-            reference;
+        if (
+            $("#detailPaymentReference")
+        ) {
 
-        $("#detailPaymentEntity").textContent =
-            entity;
+            $("#detailPaymentReference")
+                .textContent =
+                reference;
+        }
 
-        $("#detailPaymentAmount").textContent =
-            formatMoney(amount, currency);
+        if (
+            $("#detailPaymentEntity")
+        ) {
 
-        $("#detailPaymentCurrency").textContent =
-            currency;
+            $("#detailPaymentEntity")
+                .textContent =
+                entity;
+        }
 
-        $("#detailPaymentDeadline").textContent =
-            formatDate(deadline);
+        if (
+            $("#detailPaymentAmount")
+        ) {
 
-        $("#detailPaymentTransaction").textContent =
-            transaction;
+            $("#detailPaymentAmount")
+                .textContent =
+                formatMoney(
+                    amount,
+                    currency
+                );
+        }
+
+        if (
+            $("#detailPaymentCurrency")
+        ) {
+
+            $("#detailPaymentCurrency")
+                .textContent =
+                currency;
+        }
+
+        if (
+            $("#detailPaymentDeadline")
+        ) {
+
+            $("#detailPaymentDeadline")
+                .textContent =
+                formatDate(
+                    deadline
+                );
+        }
+
+        if (
+            $("#detailPaymentTransaction")
+        ) {
+
+            $("#detailPaymentTransaction")
+                .textContent =
+                transaction;
+        }
 
         const statusElement =
             $("#detailPaymentStatus");
 
-        statusElement.textContent =
-            labelPaymentStatus(status);
+        if (statusElement) {
 
-        statusElement.className =
-            `payment-status ${paymentClass(status)}`;
+            statusElement.textContent =
+                labelPaymentStatus(
+                    status
+                );
+
+            statusElement.className =
+                `payment-status ${paymentClass(
+                    status
+                )}`;
+        }
 
         const confirmationUrl =
             payment?.confirmationUrl ||
@@ -1325,7 +2036,11 @@ const AdminApp = (() => {
         const confirmationLink =
             $("#confirmationLink");
 
-        if (confirmationUrl) {
+        if (
+            confirmationUrl &&
+            confirmationBox &&
+            confirmationLink
+        ) {
 
             confirmationLink.href =
                 confirmationUrl;
@@ -1334,9 +2049,13 @@ const AdminApp = (() => {
                 "hidden"
             );
 
-        } else {
+        } else if (
+            confirmationBox &&
+            confirmationLink
+        ) {
 
-            confirmationLink.href = "#";
+            confirmationLink.href =
+                "#";
 
             confirmationBox.classList.add(
                 "hidden"
@@ -1344,49 +2063,81 @@ const AdminApp = (() => {
         }
     }
 
-    function labelPaymentStatus(status) {
+    function labelPaymentStatus(
+        status
+    ) {
 
         const normalized =
-            String(status || "")
-                .toLowerCase();
+            String(
+                status || ""
+            ).toLowerCase();
 
         const map = {
-            pending: "Pagamento pendente",
-            payment_pending: "Pagamento pendente",
-            confirmed: "Pagamento confirmado",
-            payment_confirmed: "Pagamento confirmado",
-            expired: "Pagamento expirado",
-            payment_expired: "Pagamento expirado",
-            failed: "Pagamento falhou",
-            paid: "Pago"
+
+            pending:
+                "Pagamento pendente",
+
+            payment_pending:
+                "Pagamento pendente",
+
+            confirmed:
+                "Pagamento confirmado",
+
+            payment_confirmed:
+                "Pagamento confirmado",
+
+            expired:
+                "Pagamento expirado",
+
+            payment_expired:
+                "Pagamento expirado",
+
+            failed:
+                "Pagamento falhou",
+
+            paid:
+                "Pago"
         };
 
-        return map[normalized] ||
-            labelStatus(status);
+        return (
+            map[normalized] ||
+            labelStatus(status)
+        );
     }
 
-    function paymentClass(status) {
+    function paymentClass(
+        status
+    ) {
 
         const normalized =
-            String(status || "")
-                .toLowerCase();
+            String(
+                status || ""
+            ).toLowerCase();
 
         if (
-            normalized.includes("confirm") ||
+            normalized.includes(
+                "confirm"
+            ) ||
             normalized === "paid"
         ) {
             return "payment-confirmed";
         }
 
         if (
-            normalized.includes("expired") ||
-            normalized.includes("failed")
+            normalized.includes(
+                "expired"
+            ) ||
+            normalized.includes(
+                "failed"
+            )
         ) {
             return "payment-expired";
         }
 
         if (
-            normalized.includes("pending")
+            normalized.includes(
+                "pending"
+            )
         ) {
             return "payment-pending";
         }
@@ -1394,7 +2145,13 @@ const AdminApp = (() => {
         return "";
     }
 
-    function renderError(application) {
+    /* =========================
+       ERROR
+    ========================= */
+
+    function renderError(
+        application
+    ) {
 
         const error =
             application?.error ||
@@ -1415,28 +2172,245 @@ const AdminApp = (() => {
         const card =
             $("#errorCard");
 
-        if (!code && !message) {
-            card.classList.add("hidden");
+        if (!card) {
             return;
         }
 
-        card.classList.remove("hidden");
+        if (
+            !code &&
+            !message
+        ) {
 
-        $("#detailErrorCode").textContent =
-            code || "ERROR";
+            card.classList.add(
+                "hidden"
+            );
 
-        $("#detailErrorMessage").textContent =
-            message || "Erro não especificado.";
+            return;
+        }
 
-        $("#detailErrorAt").textContent =
-            formatDate(at);
+        card.classList.remove(
+            "hidden"
+        );
+
+        if (
+            $("#detailErrorCode")
+        ) {
+
+            $("#detailErrorCode")
+                .textContent =
+                code ||
+                "ERROR";
+        }
+
+        if (
+            $("#detailErrorMessage")
+        ) {
+
+            $("#detailErrorMessage")
+                .textContent =
+                message ||
+                "Erro não especificado.";
+        }
+
+        if (
+            $("#detailErrorAt")
+        ) {
+
+            $("#detailErrorAt")
+                .textContent =
+                formatDate(
+                    at
+                );
+        }
     }
 
     /* =========================
        CREDENTIALS
     ========================= */
 
-    async function saveCredentials(event) {
+    function renderCredentials(
+        application
+    ) {
+
+        const admin =
+            getAdminControl(
+                application
+            );
+
+        const configured =
+            admin?.credentialsConfigured === true ||
+            admin?.vfsCredentials?.configured === true ||
+            application?.vfsCredentialsConfigured === true;
+
+        const configuredAt =
+            admin?.credentialsConfiguredAt ||
+            admin?.vfsCredentials?.configuredAt;
+
+        if (
+            $("#credentialsStatus")
+        ) {
+
+            $("#credentialsStatus")
+                .textContent =
+                configured
+                    ? "Configuradas"
+                    : "Não configuradas";
+        }
+
+        if (
+            $("#credentialsConfiguredAt")
+        ) {
+
+            $("#credentialsConfiguredAt")
+                .textContent =
+                formatDate(
+                    configuredAt
+                );
+        }
+
+        /*
+         * SECURITY:
+         * The backend never sends the VFS email/password back.
+         * Therefore the fields are intentionally blank.
+         */
+
+        if (
+            $("#vfsEmail")
+        ) {
+
+            $("#vfsEmail").value =
+                "";
+        }
+
+        if (
+            $("#vfsPassword")
+        ) {
+
+            $("#vfsPassword").value =
+                "";
+        }
+    }
+
+    /* =========================
+       AUTOMATION CONTROLS
+    ========================= */
+
+    function renderAutomationControls(
+        application
+    ) {
+
+        const control =
+            getAdminControl(
+                application
+            );
+
+        const status =
+            control?.status ||
+            getApplicationStatus(
+                application
+            );
+
+        const released =
+            control?.released === true ||
+            control?.release?.enabled === true ||
+            status ===
+                "READY_FOR_AUTOMATION" ||
+            status ===
+                "AUTOMATION_ACTIVE";
+
+        const configured =
+            control?.credentialsConfigured === true ||
+            control?.vfsCredentials?.configured === true ||
+            application?.vfsCredentialsConfigured === true;
+
+        const active =
+            status ===
+                "AUTOMATION_ACTIVE";
+
+        const paused =
+            status ===
+                "PAUSED";
+
+        const releaseButton =
+            $("#releaseButton");
+
+        const pauseButton =
+            $("#pauseButton");
+
+        if (releaseButton) {
+
+            releaseButton.disabled =
+                !configured ||
+                released ||
+                active;
+
+            releaseButton.textContent =
+                released ||
+                active
+                    ? "AUTOMAÇÃO LIBERADA"
+                    : "LIBERAR PARA AUTOMAÇÃO";
+        }
+
+        if (pauseButton) {
+
+            pauseButton.disabled =
+                !released &&
+                !active;
+
+            if (paused) {
+
+                pauseButton.textContent =
+                    "AUTOMAÇÃO PAUSADA";
+
+            } else {
+
+                pauseButton.textContent =
+                    "PAUSAR AUTOMAÇÃO";
+            }
+        }
+
+        if (
+            $("#automationStatus")
+        ) {
+
+            $("#automationStatus")
+                .textContent =
+                labelStatus(
+                    status
+                );
+        }
+
+        if (
+            $("#automationCredentials")
+        ) {
+
+            $("#automationCredentials")
+                .textContent =
+                configured
+                    ? "Credenciais VFS configuradas"
+                    : "Credenciais VFS pendentes";
+        }
+
+        if (
+            $("#automationReleasedAt")
+        ) {
+
+            $("#automationReleasedAt")
+                .textContent =
+                formatDate(
+                    control?.releasedAt ||
+                    control?.release?.releasedAt
+                );
+        }
+    }
+
+    /* =========================
+       SAVE CREDENTIALS
+    ========================= */
+
+    async function saveCredentials(
+        event
+    ) {
 
         event.preventDefault();
 
@@ -1444,6 +2418,7 @@ const AdminApp = (() => {
             state.selectedApplicationId;
 
         if (!applicationId) {
+
             showToast(
                 "Nenhum processo",
                 "Selecione primeiro um processo.",
@@ -1454,12 +2429,15 @@ const AdminApp = (() => {
         }
 
         const email =
-            $("#vfsEmail").value.trim();
+            $("#vfsEmail")?.value
+                .trim() || "";
 
         const password =
-            $("#vfsPassword").value;
+            $("#vfsPassword")?.value ||
+            "";
 
         if (!email) {
+
             showToast(
                 "Email obrigatório",
                 "Informe o email utilizado no VFS.",
@@ -1470,6 +2448,7 @@ const AdminApp = (() => {
         }
 
         if (!password) {
+
             showToast(
                 "Password obrigatória",
                 "Informe a password VFS.",
@@ -1483,10 +2462,17 @@ const AdminApp = (() => {
             $("#saveCredentialsButton");
 
         const originalText =
-            button.textContent;
+            button?.textContent ||
+            "Guardar";
 
-        button.disabled = true;
-        button.textContent = "A guardar...";
+        if (button) {
+
+            button.disabled =
+                true;
+
+            button.textContent =
+                "A guardar...";
+        }
 
         try {
 
@@ -1496,10 +2482,12 @@ const AdminApp = (() => {
                 )}/vfs-credentials`,
                 {
                     method: "POST",
-                    body: JSON.stringify({
-                        email,
-                        password
-                    })
+
+                    body:
+                        JSON.stringify({
+                            email,
+                            password
+                        })
                 }
             );
 
@@ -1508,7 +2496,28 @@ const AdminApp = (() => {
                 "As credenciais VFS foram encriptadas e associadas ao processo."
             );
 
-            $("#vfsPassword").value = "";
+            /*
+             * Immediately remove the password from
+             * the browser after successful submission.
+             */
+
+            if (
+                $("#vfsPassword")
+            ) {
+
+                $("#vfsPassword")
+                    .value =
+                    "";
+            }
+
+            if (
+                $("#vfsEmail")
+            ) {
+
+                $("#vfsEmail")
+                    .value =
+                    "";
+            }
 
             await selectApplication(
                 applicationId
@@ -1516,21 +2525,33 @@ const AdminApp = (() => {
 
         } catch (error) {
 
+            console.error(
+                "[ADMIN] save credentials:",
+                error
+            );
+
             showToast(
                 "Erro ao guardar",
-                error.message,
+                error.message ||
+                    "Não foi possível guardar as credenciais.",
                 "error"
             );
 
         } finally {
 
-            button.disabled = false;
-            button.textContent = originalText;
+            if (button) {
+
+                button.disabled =
+                    false;
+
+                button.textContent =
+                    originalText;
+            }
         }
     }
 
     /* =========================
-       RELEASE / PAUSE
+       CONFIRMATION MODAL
     ========================= */
 
     function openConfirmation({
@@ -1541,34 +2562,71 @@ const AdminApp = (() => {
         action
     }) {
 
-        state.currentAction = action;
+        state.currentAction =
+            action;
 
-        $("#modalTitle").textContent =
-            title;
+        if (
+            $("#modalTitle")
+        ) {
 
-        $("#modalMessage").textContent =
-            message;
+            $("#modalTitle")
+                .textContent =
+                title;
+        }
 
-        $("#modalConfirm").textContent =
-            confirmText;
+        if (
+            $("#modalMessage")
+        ) {
 
-        $("#modalConfirm").className =
-            `btn ${
-                danger
-                    ? "btn-danger"
-                    : "btn-primary"
-            }`;
+            $("#modalMessage")
+                .textContent =
+                message;
+        }
 
-        $("#confirmModal")
-            .classList.remove("hidden");
+        if (
+            $("#modalConfirm")
+        ) {
+
+            $("#modalConfirm")
+                .textContent =
+                confirmText;
+
+            $("#modalConfirm")
+                .className =
+                `btn ${
+                    danger
+                        ? "btn-danger"
+                        : "btn-primary"
+                }`;
+        }
+
+        if (
+            $("#confirmModal")
+        ) {
+
+            $("#confirmModal")
+                .classList
+                .remove(
+                    "hidden"
+                );
+        }
     }
 
     function closeConfirmation() {
 
-        state.currentAction = null;
+        state.currentAction =
+            null;
 
-        $("#confirmModal")
-            .classList.add("hidden");
+        if (
+            $("#confirmModal")
+        ) {
+
+            $("#confirmModal")
+                .classList
+                .add(
+                    "hidden"
+                );
+        }
     }
 
     async function confirmCurrentAction() {
@@ -1577,14 +2635,19 @@ const AdminApp = (() => {
             state.currentAction;
 
         if (!action) {
+
             closeConfirmation();
+
             return;
         }
 
         const button =
             $("#modalConfirm");
 
-        button.disabled = true;
+        if (button) {
+            button.disabled =
+                true;
+        }
 
         try {
 
@@ -1592,11 +2655,19 @@ const AdminApp = (() => {
 
         } finally {
 
-            button.disabled = false;
+            if (button) {
+
+                button.disabled =
+                    false;
+            }
 
             closeConfirmation();
         }
     }
+
+    /* =========================
+       RELEASE
+    ========================= */
 
     async function releaseApplication() {
 
@@ -1615,7 +2686,8 @@ const AdminApp = (() => {
                 )}/release`,
                 {
                     method: "POST",
-                    body: JSON.stringify({})
+                    body:
+                        JSON.stringify({})
                 }
             );
 
@@ -1630,14 +2702,23 @@ const AdminApp = (() => {
 
         } catch (error) {
 
-            showToast(
-                "Não foi possível liberar",
-                error.message,
-                "error"
+            console.error(
+                "[ADMIN] release:",
+                error
             );
 
+            showToast(
+                "Não foi possível liberar",
+                error.message ||
+                    "Não foi possível liberar o processo.",
+                "error"
+            );
         }
     }
+
+    /* =========================
+       PAUSE
+    ========================= */
 
     async function pauseApplication() {
 
@@ -1656,7 +2737,8 @@ const AdminApp = (() => {
                 )}/pause`,
                 {
                     method: "POST",
-                    body: JSON.stringify({})
+                    body:
+                        JSON.stringify({})
                 }
             );
 
@@ -1671,13 +2753,288 @@ const AdminApp = (() => {
 
         } catch (error) {
 
-            showToast(
-                "Não foi possível pausar",
-                error.message,
-                "error"
+            console.error(
+                "[ADMIN] pause:",
+                error
             );
 
+            showToast(
+                "Não foi possível pausar",
+                error.message ||
+                    "Não foi possível pausar o processo.",
+                "error"
+            );
         }
+    }
+
+    /* =========================
+       EVENTS
+    ========================= */
+
+    function bindEvents() {
+
+        $("#refreshButton")
+            ?.addEventListener(
+                "click",
+                () =>
+                    refreshAll()
+            );
+
+        $("#applicationSearch")
+            ?.addEventListener(
+                "input",
+                applyFilters
+            );
+
+        $("#statusFilter")
+            ?.addEventListener(
+                "change",
+                applyFilters
+            );
+
+        $("#clearFiltersButton")
+            ?.addEventListener(
+                "click",
+                () => {
+
+                    if (
+                        $("#applicationSearch")
+                    ) {
+
+                        $("#applicationSearch")
+                            .value =
+                            "";
+                    }
+
+                    if (
+                        $("#statusFilter")
+                    ) {
+
+                        $("#statusFilter")
+                            .value =
+                            "all";
+                    }
+
+                    applyFilters();
+                }
+            );
+
+        $("#credentialsForm")
+            ?.addEventListener(
+                "submit",
+                saveCredentials
+            );
+
+        $("#togglePassword")
+            ?.addEventListener(
+                "click",
+                () => {
+
+                    const input =
+                        $("#vfsPassword");
+
+                    const button =
+                        $("#togglePassword");
+
+                    if (
+                        !input ||
+                        !button
+                    ) {
+                        return;
+                    }
+
+                    if (
+                        input.type ===
+                        "password"
+                    ) {
+
+                        input.type =
+                            "text";
+
+                        button.textContent =
+                            "Ocultar";
+
+                    } else {
+
+                        input.type =
+                            "password";
+
+                        button.textContent =
+                            "Mostrar";
+                    }
+                }
+            );
+
+        $("#releaseButton")
+            ?.addEventListener(
+                "click",
+                () => {
+
+                    openConfirmation({
+
+                        title:
+                            "Liberar para automação?",
+
+                        message:
+                            "Depois desta ação, o processo poderá ser iniciado pelos mecanismos de automação. Confirme apenas se os dados e as credenciais VFS estão corretos.",
+
+                        confirmText:
+                            "Liberar",
+
+                        action:
+                            releaseApplication
+                    });
+                }
+            );
+
+        $("#pauseButton")
+            ?.addEventListener(
+                "click",
+                () => {
+
+                    openConfirmation({
+
+                        title:
+                            "Pausar automação?",
+
+                        message:
+                            "O processo será colocado em pausa e os mecanismos de automação deixarão de avançar este processo.",
+
+                        confirmText:
+                            "Pausar",
+
+                        danger:
+                            true,
+
+                        action:
+                            pauseApplication
+                    });
+                }
+            );
+
+        $("#modalCancel")
+            ?.addEventListener(
+                "click",
+                closeConfirmation
+            );
+
+        $("#modalConfirm")
+            ?.addEventListener(
+                "click",
+                confirmCurrentAction
+            );
+
+        $("#confirmModal")
+            ?.addEventListener(
+                "click",
+                event => {
+
+                    if (
+                        event.target ===
+                        $("#confirmModal")
+                    ) {
+
+                        closeConfirmation();
+                    }
+                }
+            );
+
+        $("#logoutButton")
+            ?.addEventListener(
+                "click",
+                logout
+            );
+
+        $$(
+            "[data-scroll-target]"
+        ).forEach(
+            button => {
+
+                button.addEventListener(
+                    "click",
+                    () => {
+
+                        const target =
+                            document.getElementById(
+                                button.dataset
+                                    .scrollTarget
+                            );
+
+                        if (!target) {
+                            return;
+                        }
+
+                        target.scrollIntoView({
+                            behavior:
+                                "smooth",
+
+                            block:
+                                "start"
+                        });
+
+                        $$(".sidebar-item")
+                            .forEach(
+                                item =>
+                                    item.classList
+                                        .remove(
+                                            "active"
+                                        )
+                            );
+
+                        button.classList
+                            .add(
+                                "active"
+                            );
+                    }
+                );
+            }
+        );
+
+        window.addEventListener(
+            "keydown",
+            event => {
+
+                if (
+                    event.key ===
+                    "Escape"
+                ) {
+
+                    closeConfirmation();
+                }
+            }
+        );
+    }
+
+    /* =========================
+       LOGOUT
+    ========================= */
+
+    async function logout() {
+
+        try {
+
+            await api(
+                "/api/auth/logout",
+                {
+                    method: "POST"
+                }
+            );
+
+        } catch (error) {
+
+            /*
+             * Even if logout endpoint fails,
+             * redirect the administrator.
+             */
+
+            console.warn(
+                "[ADMIN] logout:",
+                error
+            );
+        }
+
+        window.location.href =
+            "/";
     }
 
     /* =========================
@@ -1699,21 +3056,26 @@ const AdminApp = (() => {
                 preserveApplicationId ||
                 state.selectedApplicationId;
 
-            if (id) {
+            if (!id) {
+                return;
+            }
 
-                const exists =
-                    state.applications.some(
-                        item =>
-                            String(
-                                item?._id ||
-                                item?.id ||
-                                item?.applicationId
-                            ) === String(id)
-                    );
+            const exists =
+                state.applications.some(
+                    item =>
+                        String(
+                            item?._id ||
+                            item?.id ||
+                            item?.applicationId
+                        ) ===
+                        String(id)
+                );
 
-                if (exists) {
-                    await selectApplication(id);
-                }
+            if (exists) {
+
+                await selectApplication(
+                    id
+                );
             }
 
         } catch (error) {
@@ -1727,6 +3089,7 @@ const AdminApp = (() => {
                 error?.status !== 401 &&
                 error?.status !== 403
             ) {
+
                 setConnectionStatus(
                     "offline",
                     "Erro de ligação"
@@ -1735,7 +3098,7 @@ const AdminApp = (() => {
                 showToast(
                     "Erro",
                     error.message ||
-                    "Não foi possível atualizar o painel.",
+                        "Não foi possível atualizar o painel.",
                     "error"
                 );
             }
@@ -1743,15 +3106,10 @@ const AdminApp = (() => {
     }
 
     /* =========================
-       AUTH / ADMIN INFO
+       ADMIN IDENTITY
     ========================= */
 
     async function loadAdminIdentity() {
-
-        /*
-         * /api/me exists in the current authentication architecture.
-         * If unavailable, the admin API itself remains the authority.
-         */
 
         try {
 
@@ -1759,7 +3117,9 @@ const AdminApp = (() => {
                 await fetch(
                     "/api/me",
                     {
-                        credentials: "include",
+                        credentials:
+                            "include",
+
                         headers: {
                             Accept:
                                 "application/json"
@@ -1791,247 +3151,42 @@ const AdminApp = (() => {
                 user?.role ||
                 "admin";
 
-            $("#adminName").textContent =
-                name;
+            if ($("#adminName")) {
 
-            $("#adminRole").textContent =
-                String(role).toUpperCase();
-
-            $("#adminAvatar").textContent =
-                firstLetter(name);
-
-        } catch {
-            /*
-             * Do not block the dashboard.
-             * /api/admin/* remains the authoritative permission check.
-             */
-        }
-    }
-
-    /* =========================
-       EVENTS
-    ========================= */
-
-    function bindEvents() {
-
-        $("#refreshButton")
-            ?.addEventListener(
-                "click",
-                () => refreshAll()
-            );
-
-        $("#applicationSearch")
-            ?.addEventListener(
-                "input",
-                applyFilters
-            );
-
-        $("#statusFilter")
-            ?.addEventListener(
-                "change",
-                applyFilters
-            );
-
-        $("#clearFiltersButton")
-            ?.addEventListener(
-                "click",
-                () => {
-
-                    $("#applicationSearch").value =
-                        "";
-
-                    $("#statusFilter").value =
-                        "all";
-
-                    applyFilters();
-                }
-            );
-
-        $("#credentialsForm")
-            ?.addEventListener(
-                "submit",
-                saveCredentials
-            );
-
-        $("#togglePassword")
-            ?.addEventListener(
-                "click",
-                () => {
-
-                    const input =
-                        $("#vfsPassword");
-
-                    const button =
-                        $("#togglePassword");
-
-                    if (
-                        input.type === "password"
-                    ) {
-
-                        input.type = "text";
-
-                        button.textContent =
-                            "Ocultar";
-
-                    } else {
-
-                        input.type = "password";
-
-                        button.textContent =
-                            "Mostrar";
-                    }
-                }
-            );
-
-        $("#releaseButton")
-            ?.addEventListener(
-                "click",
-                () => {
-
-                    openConfirmation({
-                        title:
-                            "Liberar para automação?",
-                        message:
-                            "Depois desta ação, o processo poderá ser iniciado pelos mecanismos de automação. Confirme apenas se os dados e as credenciais VFS estão corretos.",
-                        confirmText:
-                            "Liberar",
-                        action:
-                            releaseApplication
-                    });
-                }
-            );
-
-        $("#pauseButton")
-            ?.addEventListener(
-                "click",
-                () => {
-
-                    openConfirmation({
-                        title:
-                            "Pausar automação?",
-                        message:
-                            "O processo será colocado em pausa e os mecanismos de automação deixarão de avançar este processo.",
-                        confirmText:
-                            "Pausar",
-                        danger:
-                            true,
-                        action:
-                            pauseApplication
-                    });
-                }
-            );
-
-        $("#modalCancel")
-            ?.addEventListener(
-                "click",
-                closeConfirmation
-            );
-
-        $("#modalConfirm")
-            ?.addEventListener(
-                "click",
-                confirmCurrentAction
-            );
-
-        $("#confirmModal")
-            ?.addEventListener(
-                "click",
-                event => {
-
-                    if (
-                        event.target ===
-                        $("#confirmModal")
-                    ) {
-                        closeConfirmation();
-                    }
-                }
-            );
-
-        $("#logoutButton")
-            ?.addEventListener(
-                "click",
-                logout
-            );
-
-        $$("[data-scroll-target]")
-            .forEach(button => {
-
-                button.addEventListener(
-                    "click",
-                    () => {
-
-                        const target =
-                            document.getElementById(
-                                button.dataset.scrollTarget
-                            );
-
-                        if (!target) {
-                            return;
-                        }
-
-                        target.scrollIntoView({
-                            behavior: "smooth",
-                            block: "start"
-                        });
-
-                        $$(
-                            ".sidebar-item"
-                        ).forEach(item =>
-                            item.classList.remove(
-                                "active"
-                            )
-                        );
-
-                        button.classList.add(
-                            "active"
-                        );
-                    }
-                );
-
-            });
-
-        window.addEventListener(
-            "keydown",
-            event => {
-
-                if (
-                    event.key === "Escape"
-                ) {
-                    closeConfirmation();
-                }
-
+                $("#adminName")
+                    .textContent =
+                    name;
             }
-        );
-    }
 
-    async function logout() {
+            if ($("#adminRole")) {
 
-        try {
+                $("#adminRole")
+                    .textContent =
+                    String(role)
+                        .toUpperCase();
+            }
+
+            if ($("#adminAvatar")) {
+
+                $("#adminAvatar")
+                    .textContent =
+                    firstLetter(
+                        name
+                    );
+            }
+
+        } catch (error) {
 
             /*
-             * Current project authentication is cookie/JWT based.
-             * Try the normal logout endpoint if available.
+             * /api/admin remains the
+             * authoritative permission check.
              */
 
-            await fetch(
-                "/api/auth/logout",
-                {
-                    method: "POST",
-                    credentials: "include",
-                    headers: {
-                        Accept:
-                            "application/json"
-                    }
-                }
+            console.debug(
+                "[ADMIN] identity unavailable:",
+                error
             );
-
-        } catch {
-            /*
-             * Redirect even if the logout endpoint is unavailable.
-             */
         }
-
-        window.location.href = "/";
     }
 
     /* =========================
@@ -2046,15 +3201,12 @@ const AdminApp = (() => {
 
         await refreshAll();
 
-        /*
-         * Keep admin information reasonably fresh.
-         * This does NOT start bots or alter applications.
-         */
         state.refreshTimer =
             setInterval(
-                () => refreshAll(
-                    state.selectedApplicationId
-                ),
+                () =>
+                    refreshAll(
+                        state.selectedApplicationId
+                    ),
                 30000
             );
     }
@@ -2067,5 +3219,6 @@ const AdminApp = (() => {
 
 document.addEventListener(
     "DOMContentLoaded",
-    () => AdminApp.init()
+    () =>
+        AdminApp.init()
 );
