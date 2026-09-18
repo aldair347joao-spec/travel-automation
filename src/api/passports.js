@@ -145,11 +145,15 @@ function mapMrzSex(
       .trim()
       .toUpperCase();
 
-  if (normalized === "M") {
+  if (
+    normalized === "M"
+  ) {
     return "male";
   }
 
-  if (normalized === "F") {
+  if (
+    normalized === "F"
+  ) {
     return "female";
   }
 
@@ -203,12 +207,264 @@ function buildPassportValidation(
   };
 }
 
-/**
- * O OCR já produz vários pares candidatos.
+/*
+ * =========================================================
+ * MRZ DIAGNOSTICS
+ * =========================================================
  *
- * Não confiamos simplesmente no primeiro par.
- * Cada candidato é passado pelo validador MRZ.
+ * Estes diagnósticos NÃO devolvem a MRZ nem dados pessoais
+ * ao frontend.
+ *
+ * Servem apenas para sabermos se o problema está:
+ *
+ * - na ausência de MRZ;
+ * - no tamanho das linhas;
+ * - no formato;
+ * - nos check digits;
+ * - ou na própria validação.
+ * =========================================================
  */
+
+function createMrzDiagnostics(
+  ocrResult
+) {
+  const pairs =
+    Array.isArray(
+      ocrResult?.mrzPairs
+    )
+      ? ocrResult.mrzPairs
+      : [];
+
+  const diagnostics = {
+    mrzFound:
+      pairs.length > 0,
+
+    candidates:
+      pairs.length,
+
+    validCandidates:
+      0,
+
+    invalidCandidates:
+      0,
+
+    lineLengthCandidates:
+      0,
+
+    checkDigitFailures: {
+      passportNumber: 0,
+      dateOfBirth: 0,
+      expiryDate: 0,
+      personalNumber: 0,
+      composite: 0
+    },
+
+    parserFailures: 0,
+
+    bestFailure:
+      null
+  };
+
+  for (
+    const pair of pairs
+  ) {
+    if (
+      !pair ||
+      !pair.line1 ||
+      !pair.line2
+    ) {
+      diagnostics.parserFailures += 1;
+      continue;
+    }
+
+    const line1 =
+      String(pair.line1)
+        .replace(/\s/g, "");
+
+    const line2 =
+      String(pair.line2)
+        .replace(/\s/g, "");
+
+    if (
+      line1.length === 44 &&
+      line2.length === 44
+    ) {
+      diagnostics.lineLengthCandidates += 1;
+    }
+
+    const result =
+      validation.validateMrz({
+        line1,
+        line2
+      });
+
+    if (
+      result.success &&
+      result.passed &&
+      result.data
+    ) {
+      diagnostics.validCandidates += 1;
+      continue;
+    }
+
+    diagnostics.invalidCandidates += 1;
+
+    if (
+      result?.data?.checks
+    ) {
+      const checks =
+        result.data.checks;
+
+      for (
+        const field of [
+          "passportNumber",
+          "dateOfBirth",
+          "expiryDate",
+          "personalNumber",
+          "composite"
+        ]
+      ) {
+        if (
+          checks[field] === false
+        ) {
+          diagnostics.checkDigitFailures[field] += 1;
+        }
+      }
+    } else {
+      diagnostics.parserFailures += 1;
+    }
+
+    if (
+      !diagnostics.bestFailure
+    ) {
+      diagnostics.bestFailure =
+        Array.isArray(
+          result?.errors
+        )
+          ? result.errors[0] || null
+          : null;
+    }
+  }
+
+  return diagnostics;
+}
+
+function buildMrzFailureIssues(
+  ocrResult
+) {
+  const diagnostics =
+    createMrzDiagnostics(
+      ocrResult
+    );
+
+  const issues = [];
+
+  if (
+    !diagnostics.mrzFound
+  ) {
+    issues.push(
+      "A zona MRZ não foi identificada pelo OCR."
+    );
+  } else {
+    issues.push(
+      `O OCR encontrou ${diagnostics.candidates} candidato(s) de MRZ.`
+    );
+
+    if (
+      diagnostics.lineLengthCandidates === 0
+    ) {
+      issues.push(
+        "Nenhum candidato apresentou simultaneamente duas linhas MRZ com 44 caracteres."
+      );
+    }
+
+    if (
+      diagnostics.invalidCandidates > 0
+    ) {
+      issues.push(
+        `${diagnostics.invalidCandidates} candidato(s) falharam na validação MRZ.`
+      );
+    }
+
+    const failures =
+      diagnostics.checkDigitFailures;
+
+    if (
+      failures.passportNumber > 0
+    ) {
+      issues.push(
+        `Check digit do número do passaporte falhou em ${failures.passportNumber} candidato(s).`
+      );
+    }
+
+    if (
+      failures.dateOfBirth > 0
+    ) {
+      issues.push(
+        `Check digit da data de nascimento falhou em ${failures.dateOfBirth} candidato(s).`
+      );
+    }
+
+    if (
+      failures.expiryDate > 0
+    ) {
+      issues.push(
+        `Check digit da validade falhou em ${failures.expiryDate} candidato(s).`
+      );
+    }
+
+    if (
+      failures.personalNumber > 0
+    ) {
+      issues.push(
+        `Check digit do número pessoal falhou em ${failures.personalNumber} candidato(s).`
+      );
+    }
+
+    if (
+      failures.composite > 0
+    ) {
+      issues.push(
+        `Check digit composto da MRZ falhou em ${failures.composite} candidato(s).`
+      );
+    }
+
+    if (
+      diagnostics.bestFailure
+    ) {
+      issues.push(
+        `Motivo técnico principal: ${diagnostics.bestFailure}`
+      );
+    }
+  }
+
+  if (
+    issues.length === 0
+  ) {
+    issues.push(
+      "Nenhum candidato MRZ passou na validação de segurança."
+    );
+  }
+
+  return {
+    diagnostics,
+    issues
+  };
+}
+
+/*
+ * =========================================================
+ * ENCONTRAR MRZ VÁLIDA
+ * =========================================================
+ *
+ * O OCR pode produzir vários candidatos.
+ *
+ * Nunca aceitamos apenas porque parecem 44 caracteres.
+ * Cada candidato passa pela validação criptográfica dos
+ * check digits.
+ * =========================================================
+ */
+
 function findValidMrz(
   ocrResult
 ) {
@@ -220,6 +476,8 @@ function findValidMrz(
       : [];
 
   const validCandidates = [];
+
+  const invalidCandidates = [];
 
   for (
     const pair of pairs
@@ -248,6 +506,14 @@ function findValidMrz(
     ) {
       validCandidates.push({
         pair,
+
+        validation:
+          result
+      });
+    } else {
+      invalidCandidates.push({
+        pair,
+
         validation:
           result
       });
@@ -257,36 +523,97 @@ function findValidMrz(
   if (
     validCandidates.length === 0
   ) {
-    return null;
+    return {
+      valid: false,
+
+      candidateCount:
+        pairs.length,
+
+      invalidCandidates,
+
+      diagnostics:
+        createMrzDiagnostics(
+          ocrResult
+        ),
+
+      failure:
+        buildMrzFailureIssues(
+          ocrResult
+        )
+    };
   }
 
   /*
-   * O OCR já ordena os pares por score.
-   * Entre pares que realmente passaram na
-   * validação, usamos o score original.
+   * Primeiro preferimos candidatos estruturalmente
+   * melhores.
+   *
+   * Depois usamos a confiança do OCR.
    */
   validCandidates.sort(
-    (a, b) =>
-      Number(
-        b.pair?.score || 0
-      ) -
-      Number(
-        a.pair?.score || 0
-      )
+    (a, b) => {
+      const scoreA =
+        Number(
+          a.pair?.score || 0
+        );
+
+      const scoreB =
+        Number(
+          b.pair?.score || 0
+        );
+
+      if (
+        scoreB !== scoreA
+      ) {
+        return (
+          scoreB -
+          scoreA
+        );
+      }
+
+      const confidenceA =
+        Number(
+          a.pair?.confidence ||
+          0
+        );
+
+      const confidenceB =
+        Number(
+          b.pair?.confidence ||
+          0
+        );
+
+      return (
+        confidenceB -
+        confidenceA
+      );
+    }
   );
 
-  return (
-    validCandidates[0]
-  );
+  return {
+    valid: true,
+
+    result:
+      validCandidates[0],
+
+    candidateCount:
+      pairs.length,
+
+    validCandidateCount:
+      validCandidates.length,
+
+    diagnostics:
+      createMrzDiagnostics(
+        ocrResult
+      )
+  };
 }
 
-/**
- * Cria um novo Client a partir dos dados
- * efetivamente presentes no passaporte.
- *
- * O cliente não precisa preencher previamente
- * um perfil manual.
+/*
+ * =========================================================
+ * CRIAR CLIENT A PARTIR DO PASSAPORTE
+ * =========================================================
  */
+
 async function createClientFromPassport(
   {
     accountId,
@@ -300,15 +627,16 @@ async function createClientFromPassport(
       mrzData.passportNumber
     );
 
-  if (!passportNumber) {
+  if (
+    !passportNumber
+  ) {
     throw new Error(
       "Passport number could not be extracted"
     );
   }
 
   /*
-   * Primeiro procuramos um cliente existente
-   * pelo número do passaporte.
+   * Procurar primeiro pelo número do passaporte.
    */
   let client =
     await Client.findOne({
@@ -324,7 +652,9 @@ async function createClientFromPassport(
       mrzData.fullName
     );
 
-  if (!fullName) {
+  if (
+    !fullName
+  ) {
     throw new Error(
       "Full name could not be extracted from passport"
     );
@@ -378,48 +708,48 @@ async function createClientFromPassport(
           null,
 
         passportType:
-          passportType || "unknown",
+          passportType ||
+          "unknown",
 
-        passportValidation:
-          {
-            status:
-              "pending",
+        passportValidation: {
+          status:
+            "pending",
 
-            passportType:
-              passportType ||
-              "unknown",
+          passportType:
+            passportType ||
+            "unknown",
 
-            mrzPresent:
-              true,
+          mrzPresent:
+            true,
 
-            mrzValid:
-              true,
+          mrzValid:
+            true,
 
-            ocrValid:
-              false,
+          ocrValid:
+            false,
 
-            clientMatch:
-              true,
+          clientMatch:
+            true,
 
-            expired:
-              false,
+          expired:
+            false,
 
-            fingerprint:
-              null,
+          fingerprint:
+            null,
 
-            issues: [],
+          issues: [],
 
-            checkedAt:
-              new Date()
-          },
+          checkedAt:
+            new Date()
+        },
 
         active:
           true
       });
   } else {
     /*
-     * Atualizamos os dados documentais com
-     * a fonte primária: o passaporte.
+     * O passaporte validado é a fonte primária
+     * para os dados documentais.
      */
     client.fullName =
       fullName;
@@ -462,41 +792,23 @@ async function createClientFromPassport(
 
 /*
  * =========================================================
- * IMPORTAÇÃO AUTOMÁTICA DO PASSAPORTE
- *
- * Fluxo:
- *
- * fotografia
- *    ↓
- * OCR
- *    ↓
- * candidatos MRZ
- *    ↓
- * validação MRZ
- *    ↓
- * validade do passaporte
- *    ↓
- * criação/atualização automática do Client
- *    ↓
- * armazenamento privado
- *    ↓
- * resposta com clientId
- *
- * IMPORTANTE:
- * Esta rota vem ANTES de /:clientId.
+ * IMPORTAÇÃO AUTOMÁTICA
  * =========================================================
  */
 
 router.post(
   "/import",
+
   requireRole(
     "owner",
     "admin",
     "operator"
   ),
+
   upload.single(
     "passport"
   ),
+
   async (
     req,
     res,
@@ -535,7 +847,7 @@ router.post(
 
       /*
        * =====================================================
-       * 2. ENCONTRAR UM PAR MRZ REALMENTE VÁLIDO
+       * 2. VALIDAR MRZ
        * =====================================================
        */
 
@@ -544,7 +856,15 @@ router.post(
           ocrResult
         );
 
-      if (!validMrz) {
+      if (
+        !validMrz.valid
+      ) {
+        const failure =
+          validMrz.failure ||
+          buildMrzFailureIssues(
+            ocrResult
+          );
+
         return res
           .status(422)
           .json({
@@ -567,11 +887,11 @@ router.post(
                 fingerprint,
 
                 mrzPresent:
-                  Array.isArray(
-                    ocrResult?.mrzPairs
-                  ) &&
-                  ocrResult.mrzPairs.length >
-                    0,
+                  Boolean(
+                    validMrz
+                      .diagnostics
+                      ?.mrzFound
+                  ),
 
                 mrzValid:
                   false,
@@ -587,15 +907,26 @@ router.post(
                 expired:
                   false,
 
-                issues: [
-                  "Nenhum par MRZ passou na validação de segurança"
-                ]
-              })
+                issues:
+                  failure.issues
+              }),
+
+            ocrDiagnostics: {
+              candidates:
+                validMrz
+                  .candidateCount,
+
+              validCandidates:
+                0,
+
+              diagnostics:
+                failure.diagnostics
+            }
           });
       }
 
       const mrzResult =
-        validMrz.validation;
+        validMrz.result.validation;
 
       const mrzData =
         mrzResult.data;
@@ -611,7 +942,9 @@ router.post(
           mrzData
         );
 
-      if (!expiry.passed) {
+      if (
+        !expiry.passed
+      ) {
         return res
           .status(422)
           .json({
@@ -660,10 +993,8 @@ router.post(
 
       /*
        * =====================================================
-       * 4. DETECTAR TIPO
+       * 4. DETECTAR TIPO DO PASSAPORTE
        * =====================================================
-       *
-       * Não alegamos que NFC foi validado.
        */
 
       const passportType =
@@ -683,7 +1014,7 @@ router.post(
 
       /*
        * =====================================================
-       * 5. CRIAR/ATUALIZAR CLIENTE AUTOMATICAMENTE
+       * 5. CRIAR/ATUALIZAR CLIENT
        * =====================================================
        */
 
@@ -703,14 +1034,8 @@ router.post(
 
       /*
        * =====================================================
-       * 6. VALIDAR O DOCUMENTO CONTRA O PERFIL
+       * 6. COMPARAR DADOS
        * =====================================================
-       *
-       * Para um cliente recém-criado os dados foram
-       * originados do próprio MRZ.
-       *
-       * Para um cliente existente fazemos uma nova
-       * comparação antes de aceitar o documento.
        */
 
       const clientComparison =
@@ -779,7 +1104,7 @@ router.post(
 
       /*
        * =====================================================
-       * 7. MARCAR O PASSAPORTE COMO VALIDADO
+       * 7. MARCAR COMO VALIDADO
        * =====================================================
        */
 
@@ -818,7 +1143,7 @@ router.post(
 
       /*
        * =====================================================
-       * 8. GUARDAR DOCUMENTO PRIVADO E CRIPTOGRAFADO
+       * 8. GUARDAR PASSAPORTE
        * =====================================================
        */
 
@@ -892,11 +1217,11 @@ router.post(
 
       /*
        * =====================================================
-       * 10. RESPOSTA PARA O FRONTEND
+       * 10. RESPOSTA
        * =====================================================
        *
-       * O frontend recebe o clientId e pode imediatamente
-       * iniciar o reconhecimento facial.
+       * Os dados extraídos da MRZ já seguem para o perfil.
+       * =====================================================
        */
 
       return res.json({
@@ -970,7 +1295,31 @@ router.post(
         },
 
         passportValidation:
-          client.passportValidation
+          client.passportValidation,
+
+        ocrDiagnostics: {
+          candidates:
+            validMrz.candidateCount,
+
+          validCandidates:
+            validMrz.validCandidateCount,
+
+          selectedScore:
+            Number(
+              validMrz
+                .result
+                ?.pair
+                ?.score || 0
+            ),
+
+          selectedConfidence:
+            Number(
+              validMrz
+                .result
+                ?.pair
+                ?.confidence || 0
+            )
+        }
       });
     } catch (
       error
@@ -982,20 +1331,23 @@ router.post(
 
 /*
  * =========================================================
- * UPLOAD + VALIDATE PASSPORT PARA CLIENTE EXISTENTE
+ * UPLOAD PARA CLIENTE EXISTENTE
  * =========================================================
  */
 
 router.post(
   "/:clientId",
+
   requireRole(
     "owner",
     "admin",
     "operator"
   ),
+
   upload.single(
     "passport"
   ),
+
   async (
     req,
     res,
@@ -1007,6 +1359,7 @@ router.post(
           .status(400)
           .json({
             success: false,
+
             error:
               "Passport image is required"
           });
@@ -1029,6 +1382,7 @@ router.post(
           .status(404)
           .json({
             success: false,
+
             error:
               "Client not found"
           });
@@ -1050,62 +1404,9 @@ router.post(
           req.file.buffer
         );
 
-      if (
-        !ocrResult.mrz
-      ) {
-        client.passportValidation = {
-          status:
-            "requires_user",
-
-          passportType:
-            "unknown",
-
-          mrzPresent:
-            false,
-
-          mrzValid:
-            false,
-
-          ocrValid:
-            false,
-
-          clientMatch:
-            false,
-
-          expired:
-            false,
-
-          fingerprint,
-
-          issues: [
-            "MRZ do passaporte não foi identificada com qualidade suficiente"
-          ],
-
-          checkedAt:
-            new Date()
-        };
-
-        await client.save();
-
-        return res
-          .status(422)
-          .json({
-            success: false,
-
-            status:
-              "requires_user",
-
-            error:
-              "Não foi possível ler a MRZ do passaporte. Envie uma fotografia mais nítida e completa.",
-
-            passportValidation:
-              client.passportValidation
-          });
-      }
-
       /*
        * =====================================================
-       * 2. ENCONTRAR MRZ VALIDADA
+       * 2. VALIDAR MRZ
        * =====================================================
        */
 
@@ -1114,40 +1415,49 @@ router.post(
           ocrResult
         );
 
-      if (!validMrz) {
-        client.passportValidation = {
-          status:
-            "requires_user",
+      if (
+        !validMrz.valid
+      ) {
+        const failure =
+          validMrz.failure ||
+          buildMrzFailureIssues(
+            ocrResult
+          );
 
-          passportType:
-            "unknown",
+        client.passportValidation =
+          buildPassportValidation({
+            status:
+              "requires_user",
 
-          mrzPresent:
-            true,
+            passportType:
+              "unknown",
 
-          mrzValid:
-            false,
+            fingerprint,
 
-          ocrValid:
-            Number(
-              ocrResult.confidence
-            ) >= 70,
+            mrzPresent:
+              Boolean(
+                validMrz
+                  .diagnostics
+                  ?.mrzFound
+              ),
 
-          clientMatch:
-            false,
+            mrzValid:
+              false,
 
-          expired:
-            false,
+            ocrValid:
+              Number(
+                ocrResult?.confidence
+              ) >= 70,
 
-          fingerprint,
+            clientMatch:
+              false,
 
-          issues: [
-            "A MRZ foi encontrada, mas não passou na validação de segurança."
-          ],
+            expired:
+              false,
 
-          checkedAt:
-            new Date()
-        };
+            issues:
+              failure.issues
+          });
 
         await client.save();
 
@@ -1160,15 +1470,26 @@ router.post(
               "requires_user",
 
             error:
-              "A MRZ foi encontrada, mas não passou na validação de segurança.",
+              "Não foi possível validar o passaporte. Verifique a fotografia e tente novamente.",
 
             passportValidation:
-              client.passportValidation
+              client.passportValidation,
+
+            ocrDiagnostics: {
+              candidates:
+                validMrz.candidateCount,
+
+              validCandidates:
+                0,
+
+              diagnostics:
+                failure.diagnostics
+            }
           });
       }
 
       const mrzResult =
-        validMrz.validation;
+        validMrz.result.validation;
 
       const mrzData =
         mrzResult.data;
@@ -1187,7 +1508,7 @@ router.post(
 
       /*
        * =====================================================
-       * 4. VALIDAR VALIDADE
+       * 4. VALIDAR EXPIRAÇÃO
        * =====================================================
        */
 
@@ -1236,46 +1557,44 @@ router.post(
 
       /*
        * =====================================================
-       * 6. ATUALIZAR CLIENTE
+       * 6. ATUALIZAR VALIDAÇÃO
        * =====================================================
        */
 
       client.passportType =
         passportType.type;
 
-      client.passportValidation = {
-        status:
-          passed
-            ? "passed"
-            : "requires_user",
+      client.passportValidation =
+        buildPassportValidation({
+          status:
+            passed
+              ? "passed"
+              : "requires_user",
 
-        passportType:
-          passportType.type,
+          passportType:
+            passportType.type,
 
-        mrzPresent:
-          true,
+          fingerprint,
 
-        mrzValid:
-          mrzResult.passed,
+          mrzPresent:
+            true,
 
-        ocrValid:
-          Number(
-            ocrResult.confidence
-          ) >= 70,
+          mrzValid:
+            mrzResult.passed,
 
-        clientMatch:
-          clientComparison.passed,
+          ocrValid:
+            Number(
+              ocrResult?.confidence
+            ) >= 70,
 
-        expired:
-          expiry.expired,
+          clientMatch:
+            clientComparison.passed,
 
-        fingerprint,
+          expired:
+            expiry.expired,
 
-        issues,
-
-        checkedAt:
-          new Date()
-      };
+          issues
+        });
 
       if (!passed) {
         await client.save();
@@ -1292,7 +1611,15 @@ router.post(
               "O passaporte precisa de correção antes de poder ser utilizado pelo bot.",
 
             passportValidation:
-              client.passportValidation
+              client.passportValidation,
+
+            ocrDiagnostics: {
+              candidates:
+                validMrz.candidateCount,
+
+              validCandidates:
+                validMrz.validCandidateCount
+            }
           });
       }
 
@@ -1361,7 +1688,9 @@ router.post(
             "passed",
 
           duplicate:
-            stored.duplicate
+            stored.duplicate,
+
+          fingerprint
         }
       });
 
@@ -1403,7 +1732,10 @@ router.post(
             true,
 
           documentId:
-            stored.document._id
+            stored.document._id,
+
+          duplicate:
+            stored.duplicate
         },
 
         client: {
@@ -1433,6 +1765,33 @@ router.post(
 
           passportType:
             client.passportType
+        },
+
+        passportValidation:
+          client.passportValidation,
+
+        ocrDiagnostics: {
+          candidates:
+            validMrz.candidateCount,
+
+          validCandidates:
+            validMrz.validCandidateCount,
+
+          selectedScore:
+            Number(
+              validMrz
+                .result
+                ?.pair
+                ?.score || 0
+            ),
+
+          selectedConfidence:
+            Number(
+              validMrz
+                .result
+                ?.pair
+                ?.confidence || 0
+            )
         }
       });
     } catch (
@@ -1451,11 +1810,13 @@ router.post(
 
 router.get(
   "/:clientId/status",
+
   requireRole(
     "owner",
     "admin",
     "operator"
   ),
+
   async (
     req,
     res,
@@ -1479,6 +1840,7 @@ router.get(
           .status(404)
           .json({
             success: false,
+
             error:
               "Client not found"
           });
