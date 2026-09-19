@@ -30,25 +30,15 @@
 (() => {
   "use strict";
 
-  const MEDIAPIPE_VERSION = "0.10.22";
+  const MEDIAPIPE_MODULE =
+  "/mediapipe/vision_bundle.mjs";
 
-  const WASM_PATH =
-    `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/wasm`;
-
+const WASM_PATH =
+  "/mediapipe/wasm";
   const MODEL_PATH =
     "https://storage.googleapis.com/mediapipe-models/" +
     "face_landmarker/face_landmarker/float16/1/" +
     "face_landmarker.task";
-
-    /*
-   * O endpoint +esm do jsDelivr pode falhar em alguns
-   * navegadores/dispositivos móveis durante import().
-   *
-   * Usamos o bundle oficial do MediaPipe, mantendo
-   * a versão fixa para evitar alterações inesperadas.
-   */
-  const MEDIAPIPE_MODULE =
-    `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/vision_bundle.mjs`;
 
   const AUDIO_LANGUAGE = "pt-PT";
 
@@ -337,76 +327,67 @@
    */
 
     async function loadMediaPipe() {
-    if (visionModule) {
-      return visionModule;
-    }
+  if (visionModule) {
+    return visionModule;
+  }
 
-    try {
-      console.log(
-        "[FacialPreflight] Carregando MediaPipe:",
+  try {
+    console.log(
+      "[FacialPreflight] Carregando MediaPipe local:",
+      MEDIAPIPE_MODULE
+    );
+
+    const module =
+      await import(
         MEDIAPIPE_MODULE
       );
 
-      const module =
-        await import(
-          MEDIAPIPE_MODULE
-        );
+    const vision =
+      module?.default &&
+      (
+        module.default.FaceLandmarker ||
+        module.default.FilesetResolver
+      )
+        ? module.default
+        : module;
 
-      /*
-       * Algumas versões/bundles podem expor
-       * os objetos diretamente, enquanto outras
-       * podem colocá-los no default export.
-       *
-       * Normalizamos aqui para que o restante
-       * do sistema não precise saber como o bundle
-       * foi exportado.
-       */
-      const vision =
-        module?.default &&
-        (
-          module.default.FaceLandmarker ||
-          module.default.FilesetResolver
-        )
-          ? module.default
-          : module;
-
-      if (
-        !vision ||
-        typeof vision.FaceLandmarker !==
-          "function" ||
-        typeof vision.FilesetResolver !==
-          "function"
-      ) {
-        throw new Error(
-          "O bundle MediaPipe foi carregado, mas FaceLandmarker/FilesetResolver não foram encontrados."
-        );
-      }
-
-      visionModule =
-        vision;
-
-      console.log(
-        "[FacialPreflight] MediaPipe carregado com sucesso."
-      );
-
-      return visionModule;
-
-    } catch (error) {
-      console.error(
-        "[FacialPreflight] Falha ao carregar MediaPipe.",
-        {
-          module:
-            MEDIAPIPE_MODULE,
-
-          error
-        }
-      );
-
+    if (
+      !vision ||
+      typeof vision.FaceLandmarker !==
+        "function" ||
+      typeof vision.FilesetResolver !==
+        "function"
+    ) {
       throw new Error(
-        "Não foi possível carregar o módulo de reconhecimento facial. Verifique a ligação à internet e tente novamente."
+        "O MediaPipe local foi carregado, mas FaceLandmarker/FilesetResolver não foram encontrados."
       );
     }
+
+    visionModule =
+      vision;
+
+    console.log(
+      "[FacialPreflight] MediaPipe local carregado com sucesso."
+    );
+
+    return visionModule;
+
+  } catch (error) {
+    console.error(
+      "[FacialPreflight] ERRO NO MEDIA PIPE LOCAL",
+      {
+        module:
+          MEDIAPIPE_MODULE,
+
+        error
+      }
+    );
+
+    throw new Error(
+      "Não foi possível carregar o motor facial local. Verifique o carregamento dos ficheiros MediaPipe."
+    );
   }
+}
 
   async function createLandmarker() {
     const vision =
