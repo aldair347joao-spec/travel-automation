@@ -2140,23 +2140,137 @@
         );
       }
 
-      const data =
-        await window
-          .TravelFacialPreflight
-          .submitToBackend({
-            clientId:
-              selectedClient.id,
+      let localFaceMatch = null;
 
-            /*
-             * O match real com a fotografia do
-             * passaporte ainda é uma etapa separada.
-             *
-             * Não fingimos que houve comparação
-             * biométrica quando ela ainda não existe.
-             */
-            passportMatch:
-              null
-          });
+if (
+  window.TravelLocalFaceMatch &&
+  typeof window
+    .TravelLocalFaceMatch
+    .compare ===
+    "function"
+) {
+  const video =
+    document.getElementById(
+      "facialPreflightVideo"
+    );
+
+  setState(
+    "COMPARANDO",
+    "warning"
+  );
+
+  setStatus(
+    "As 10 posições foram concluídas. Agora estamos a comparar o rosto com a fotografia do passaporte..."
+  );
+
+  try {
+    localFaceMatch =
+      await window
+        .TravelLocalFaceMatch
+        .compare({
+          clientId:
+            selectedClient.id,
+
+          videoElement:
+            video
+        });
+
+    console.info(
+      "[IdentityCenter] local face match",
+      localFaceMatch
+    );
+
+    if (
+      localFaceMatch?.attempted !== true
+    ) {
+      throw new Error(
+        "A comparação facial local não foi executada."
+      );
+    }
+
+    if (
+      localFaceMatch.matched !== true
+    ) {
+      setState(
+        "ROSTOS DIFERENTES",
+        "error"
+      );
+
+      setStatus(
+        "A fotografia do passaporte e o rosto apresentado na câmera não atingiram a correspondência mínima."
+      );
+
+      if (applicationForm) {
+        applicationForm.dataset
+          .facialPreflight =
+          "failed";
+      }
+
+      saving = false;
+
+      showResult(
+        {
+          ...result,
+
+          passed:
+            false,
+
+          localFaceMatch
+        },
+        null
+      );
+
+      return;
+    }
+
+    setState(
+      "IDENTIDADE COMPATÍVEL",
+      "success"
+    );
+
+    setStatus(
+      `Rosto compatível com o passaporte. Similaridade local: ${localFaceMatch.similarityPercent}%.`
+    );
+  } catch (faceError) {
+    console.error(
+      "[IdentityCenter] local face match",
+      faceError
+    );
+
+    setState(
+      "COMPARAÇÃO FALHOU",
+      "error"
+    );
+
+    setStatus(
+      faceError?.message ||
+      "Não foi possível comparar o rosto com a fotografia do passaporte."
+    );
+
+    if (applicationForm) {
+      applicationForm.dataset
+        .facialPreflight =
+        "failed";
+    }
+
+    saving = false;
+
+    return;
+  }
+}
+
+const data =
+  await window
+    .TravelFacialPreflight
+    .submitToBackend({
+      clientId:
+        selectedClient.id,
+
+      passportMatch: {
+        localFaceMatch:
+          localFaceMatch
+      }
+    });
 
       if (
         data?.success !== true
