@@ -293,7 +293,7 @@ function createApp({
       "../../node_modules/@mediapipe/tasks-vision"
     );
 
-  app.use(
+    app.use(
     "/mediapipe",
     express.static(
       mediaPipeDirectory,
@@ -303,7 +303,35 @@ function createApp({
         maxAge:
           config.isProduction
             ? "1d"
-            : 0
+            : 0,
+
+        setHeaders:
+          (
+            res,
+            filePath
+          ) => {
+            if (
+              filePath.endsWith(
+                ".wasm"
+              )
+            ) {
+              res.setHeader(
+                "Content-Type",
+                "application/wasm"
+              );
+            }
+
+            if (
+              filePath.endsWith(
+                ".mjs"
+              )
+            ) {
+              res.setHeader(
+                "Content-Type",
+                "text/javascript; charset=UTF-8"
+              );
+            }
+          }
       }
     )
   );
