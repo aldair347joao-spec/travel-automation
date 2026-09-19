@@ -4,16 +4,28 @@
  * IDENTITY CENTER — FACIAL PREFLIGHT UI
  * ============================================================
  *
- * Interface dedicada para preparação biométrica.
+ * Interface dedicada para preparação facial.
+ *
+ * FLUXO:
+ *
+ * 1. Cliente é criado pelo passaporte.
+ * 2. Nada abre automaticamente.
+ * 3. Operador clica em "Reconhecimento Facial".
+ * 4. Identity Center abre sem ligar a câmera.
+ * 5. Operador clica em "Iniciar verificação".
+ * 6. Só então a câmera é ativada.
+ * 7. São executadas as 10 posições.
+ * 8. Cada posição fica verde SOMENTE depois de concluída.
+ * 9. O motor TravelFacialPreflight controla a análise.
  *
  * IMPORTANTE:
- * - usa a câmera real;
- * - utiliza o motor TravelFacialPreflight existente;
- * - não simula câmera;
- * - não grava vídeo;
- * - não substitui a verificação oficial da VFS;
- * - trabalha com as 10 posições reais do motor;
- * - envia somente os resultados/métricas previstos pelo motor.
+ * - Não simula câmera.
+ * - Não inicia câmera automaticamente.
+ * - Não grava vídeo.
+ * - Não envia vídeo.
+ * - Usa o motor facial existente.
+ * - Não substitui a verificação oficial da VFS.
+ * - Não afirma identidade apenas porque 10 posições foram feitas.
  * ============================================================
  */
 
@@ -22,13 +34,6 @@
 
   const $ = (id) =>
     document.getElementById(id);
-
-  let selectedClient = null;
-  let running = false;
-  let saving = false;
-  let completed = false;
-
-  let overlay = null;
 
   const POSITIONS = [
     {
@@ -113,6 +118,29 @@
     }
   ];
 
+  let selectedClient = null;
+  let running = false;
+  let saving = false;
+  let completed = false;
+
+  let overlay = null;
+
+  /*
+   * Mantemos o estado real das posições.
+   *
+   * NÃO usamos simplesmente:
+   *
+   * index < activeIndex
+   *
+   * porque isso fazia a interface marcar posições
+   * como verdes antes de receber confirmação real
+   * do motor.
+   */
+  const completedPositions = new Set();
+
+  let activePositionIndex = 0;
+
+
   function escapeHtml(value) {
     return String(value ?? "")
       .replaceAll("&", "&amp;")
@@ -122,30 +150,77 @@
       .replaceAll("'", "&#039;");
   }
 
-  function getClientFromSelection() {
-    const select =
-      $("applicationClient");
 
-    if (!select?.value) {
+  function getClientFromSelection() {
+    /*
+     * O fluxo principal utiliza applicationClient.
+     *
+     * Mantemos fallbacks para os outros selectors
+     * existentes no projeto.
+     */
+
+    const selectors = [
+      "applicationClient",
+      "identityClient",
+      "passportClientSelect"
+    ];
+
+    for (const id of selectors) {
+      const select = $(id);
+
+      if (!select?.value) {
+        continue;
+      }
+
+      const option =
+        select.options?.[select.selectedIndex];
+
+      return {
+        id: select.value,
+        name:
+          option?.textContent?.trim() ||
+          "Cliente"
+      };
+    }
+
+    return null;
+  }
+
+
+  function normalizeClient(client) {
+    if (!client) {
+      return null;
+    }
+
+    const id =
+      client.id ||
+      client._id ||
+      client.clientId;
+
+    if (!id) {
       return null;
     }
 
     return {
-      id: select.value,
-
+      id: String(id),
       name:
-        select.options[
-          select.selectedIndex
-        ]?.textContent?.trim() ||
+        client.fullName ||
+        client.name ||
+        client.displayName ||
         "Cliente"
     };
   }
+
 
   function createOverlay() {
     if ($("identityCenter")) {
       overlay =
         $("identityCenter");
 
+      /*
+       * Se o overlay já existia, garantimos que os
+       * eventos não precisam ser registrados novamente.
+       */
       return overlay;
     }
 
@@ -156,7 +231,7 @@
       "identityCenter";
 
     overlay.className =
-      "identity-center";
+      "identity-center hidden";
 
     overlay.innerHTML = `
       <div class="identity-background">
@@ -257,7 +332,6 @@
 
         <section class="identity-workspace">
 
-
           <div class="identity-camera-column">
 
             <div class="identity-camera-shell">
@@ -321,7 +395,7 @@
                   <span
                     id="identityCameraMessage"
                   >
-                    Prepare a câmera
+                    A câmera está desligada.
                   </span>
 
                 </div>
@@ -439,11 +513,13 @@
               </span>
 
               <div class="identity-instruction-number">
+
                 <strong
                   id="identityCurrentNumber"
                 >
                   01
                 </strong>
+
               </div>
 
               <div>
@@ -457,8 +533,8 @@
                 <p
                   id="facialPreflightInstruction"
                 >
-                  Selecione um cliente e inicie
-                  a verificação.
+                  Clique em "Iniciar verificação"
+                  quando estiver pronto.
                 </p>
 
               </div>
@@ -510,6 +586,7 @@
             <div class="identity-position-list">
 
               <div class="identity-position-list-header">
+
                 <span>
                   SEQUÊNCIA BIOMÉTRICA
                 </span>
@@ -517,6 +594,7 @@
                 <small>
                   10 etapas
                 </small>
+
               </div>
 
               <div
@@ -534,12 +612,17 @@
                 type="button"
                 disabled
               >
+
                 <span>
                   Iniciar verificação
                 </span>
 
-                <b>→</b>
+                <b>
+                  →
+                </b>
+
               </button>
+
 
               <button
                 id="facialPreflightStop"
@@ -555,7 +638,9 @@
 
             <div class="identity-vfs-note">
 
-              <span>VFS</span>
+              <span>
+                VFS
+              </span>
 
               <p>
                 Esta é uma etapa interna de preparação.
@@ -577,7 +662,6 @@
         ></section>
 
       </main>
-
     `;
 
     document.body.appendChild(
@@ -607,9 +691,7 @@
               <div
                 class="identity-dot"
                 data-position-index="${index}"
-                title="${escapeHtml(
-                  position.short
-                )}"
+                title="${escapeHtml(position.short)}"
               >
                 <span>
                   ${position.number}
@@ -636,15 +718,11 @@
 
                 <div>
                   <strong>
-                    ${escapeHtml(
-                      position.short
-                    )}
+                    ${escapeHtml(position.short)}
                   </strong>
 
                   <span>
-                    ${escapeHtml(
-                      position.title
-                    )}
+                    ${escapeHtml(position.title)}
                   </span>
                 </div>
 
@@ -678,30 +756,17 @@
         "click",
         stopPreflight
       );
-
-    document.addEventListener(
-      "keydown",
-      event => {
-        if (
-          event.key === "Escape" &&
-          overlay &&
-          !overlay.classList.contains(
-            "hidden"
-          )
-        ) {
-          closeIdentityCenter();
-        }
-      }
-    );
   }
 
 
-  function openIdentityCenter(
-    client = null
-  ) {
+  function openIdentityCenter(client = null) {
     const target =
-      client ||
-      getClientFromSelection();
+      normalizeClient(
+        client
+      ) ||
+      normalizeClient(
+        getClientFromSelection()
+      );
 
     if (!target) {
       if (
@@ -711,6 +776,10 @@
         window.showToast(
           "Selecione primeiro um cliente.",
           "error"
+        );
+      } else {
+        alert(
+          "Selecione primeiro um cliente."
         );
       }
 
@@ -722,6 +791,11 @@
 
     createOverlay();
 
+    /*
+     * IMPORTANTE:
+     *
+     * Abrir o Identity Center NÃO inicia a câmera.
+     */
     overlay.classList.remove(
       "hidden"
     );
@@ -744,6 +818,19 @@
     if (start) {
       start.disabled = false;
     }
+
+    setStatus(
+      "Identity Center aberto. Clique em iniciar para ativar a câmera."
+    );
+
+    setState(
+      "AGUARDANDO",
+      "idle"
+    );
+
+    setCameraState(
+      false
+    );
   }
 
 
@@ -755,6 +842,28 @@
     if (running) {
       stopPreflight();
     }
+
+    /*
+     * Segurança adicional:
+     * se o motor ainda possuir stream, pedimos para
+     * encerrá-lo mesmo quando running estiver falso.
+     */
+    try {
+      window
+        .TravelFacialPreflight
+        ?.stop();
+    } catch (error) {
+      console.warn(
+        "[IdentityCenter] stop on close",
+        error
+      );
+    }
+
+    running = false;
+
+    setCameraState(
+      false
+    );
 
     overlay.classList.remove(
       "is-open"
@@ -787,18 +896,22 @@
       $("identityClientInitials");
 
     if (initials) {
-      initials.textContent =
+      const parts =
         selectedClient.name
           .split(/\s+/)
           .filter(Boolean)
-          .slice(0, 2)
+          .slice(0, 2);
+
+      initials.textContent =
+        parts
           .map(
             part =>
               part
                 .charAt(0)
                 .toUpperCase()
           )
-          .join("");
+          .join("") ||
+        "CL";
     }
   }
 
@@ -806,6 +919,10 @@
   function resetInterface() {
     completed = false;
     saving = false;
+
+    completedPositions.clear();
+
+    activePositionIndex = 0;
 
     setState(
       "AGUARDANDO",
@@ -833,6 +950,8 @@
       null
     );
 
+    renderPositionState();
+
     const result =
       $("identityResult");
 
@@ -845,10 +964,16 @@
       $("facialPreflightStart");
 
     if (start) {
-      start.disabled = false;
+      start.disabled =
+        !selectedClient;
+
       start.innerHTML = `
-        <span>Iniciar verificação</span>
-        <b>→</b>
+        <span>
+          Iniciar verificação
+        </span>
+        <b>
+          →
+        </b>
       `;
     }
 
@@ -892,9 +1017,7 @@
   }
 
 
-  function setStatus(
-    message
-  ) {
+  function setStatus(message) {
     const element =
       $("facialPreflightStatus");
 
@@ -915,9 +1038,7 @@
   }
 
 
-  function setCameraState(
-    active
-  ) {
+  function setCameraState(active) {
     const element =
       $("identityCameraState");
 
@@ -947,9 +1068,7 @@
   }
 
 
-  function setAnalysis(
-    analysis
-  ) {
+  function setAnalysis(analysis) {
     if (!analysis) {
       setStatusChip(
         "identityFaceStatus",
@@ -1035,13 +1154,9 @@
     );
 
     const icon =
-      element.querySelector(
-        "i"
-      );
+      element.querySelector("i");
 
-    if (
-      value === true
-    ) {
+    if (value === true) {
       element.classList.add(
         "ok"
       );
@@ -1054,9 +1169,7 @@
       return;
     }
 
-    if (
-      value === false
-    ) {
+    if (value === false) {
       element.classList.add(
         "bad"
       );
@@ -1080,9 +1193,7 @@
   }
 
 
-  function updateProgress(
-    progress
-  ) {
+  function updateProgress(progress) {
     if (!progress) {
       return;
     }
@@ -1109,7 +1220,7 @@
       );
 
     const percent =
-      total
+      total > 0
         ? (
             safeCurrent /
             total
@@ -1137,55 +1248,76 @@
 
     if (percentElement) {
       percentElement.textContent =
-        `${Math.round(
-          percent
-        )}%`;
+        `${Math.round(percent)}%`;
     }
 
-    const currentPosition =
+    /*
+     * O progresso do motor indica qual posição está
+     * em execução, mas NÃO marca posições anteriores
+     * como concluídas.
+     */
+    let positionId =
       progress.currentPosition ||
-      progress.position ||
-      POSITIONS[
+      null;
+
+    if (!positionId && progress.position) {
+      positionId =
+        POSITIONS.find(
+          item =>
+            item.title ===
+            progress.position ||
+            item.id ===
+            progress.position
+        )?.id || null;
+    }
+
+    if (positionId) {
+      const index =
+        POSITIONS.findIndex(
+          item =>
+            item.id ===
+            positionId
+        );
+
+      if (index >= 0) {
+        activePositionIndex =
+          index;
+      }
+    } else if (
+      safeCurrent < POSITIONS.length
+    ) {
+      activePositionIndex =
         Math.max(
           0,
-          safeCurrent - 1
-        )
-      ]?.id;
-
-    const positionIndex =
-      POSITIONS.findIndex(
-        item =>
-          item.id ===
-          currentPosition
-      );
-
-    if (
-      positionIndex >= 0
-    ) {
-      updateActivePosition(
-        positionIndex
-      );
+          Math.min(
+            POSITIONS.length - 1,
+            safeCurrent
+          )
+        );
     }
 
     const name =
       $("facialPreflightStepName");
 
-    if (name) {
-      const position =
-        POSITIONS[
-          Math.min(
-            Math.max(
-              0,
-              safeCurrent
-            ),
-            POSITIONS.length - 1
-          )
-        ];
+    const instruction =
+      $("facialPreflightInstruction");
 
+    const currentPosition =
+      POSITIONS[
+        activePositionIndex
+      ];
+
+    if (name && currentPosition) {
       name.textContent =
-        progress.position ||
-        position?.title ||
-        "Preparação";
+        currentPosition.title;
+    }
+
+    if (
+      instruction &&
+      currentPosition
+    ) {
+      instruction.textContent =
+        currentPosition.instruction;
     }
 
     updateQuality(
@@ -1195,12 +1327,12 @@
     setAnalysis(
       progress.analysis
     );
+
+    renderPositionState();
   }
 
 
-  function updateActivePosition(
-    activeIndex
-  ) {
+  function renderPositionState() {
     const rows =
       document.querySelectorAll(
         "[data-position-row]"
@@ -1219,14 +1351,20 @@
           );
 
         const status =
-          row.querySelector(
-            "i"
+          row.querySelector("i");
+
+        const isCompleted =
+          completedPositions.has(
+            index
           );
 
-        if (
-          index <
-          activeIndex
-        ) {
+        const isActive =
+          index ===
+          activePositionIndex &&
+          !isCompleted &&
+          running;
+
+        if (isCompleted) {
           row.classList.add(
             "completed"
           );
@@ -1244,19 +1382,14 @@
           return;
         }
 
-        if (
-          index ===
-          activeIndex
-        ) {
+        if (isActive) {
           row.classList.add(
             "active"
           );
 
           if (icon) {
             icon.textContent =
-              POSITIONS[
-                index
-              ].number;
+              POSITIONS[index].number;
           }
 
           if (status) {
@@ -1269,9 +1402,7 @@
 
         if (icon) {
           icon.textContent =
-            POSITIONS[
-              index
-            ].number;
+            POSITIONS[index].number;
         }
 
         if (status) {
@@ -1280,6 +1411,7 @@
         }
       }
     );
+
 
     const dots =
       document.querySelectorAll(
@@ -1294,15 +1426,19 @@
         );
 
         if (
-          index <
-          activeIndex
+          completedPositions.has(index)
         ) {
           dot.classList.add(
             "completed"
           );
-        } else if (
+
+          return;
+        }
+
+        if (
           index ===
-          activeIndex
+          activePositionIndex &&
+          running
         ) {
           dot.classList.add(
             "active"
@@ -1311,9 +1447,10 @@
       }
     );
 
+
     const current =
       POSITIONS[
-        activeIndex
+        activePositionIndex
       ];
 
     if (current) {
@@ -1344,9 +1481,81 @@
   }
 
 
-  function updateQuality(
-    analysis
+  function markPositionCompleted(
+    position
   ) {
+    const index =
+      POSITIONS.findIndex(
+        item =>
+          item.id ===
+          position
+      );
+
+    if (index < 0) {
+      return;
+    }
+
+    completedPositions.add(
+      index
+    );
+
+    /*
+     * A próxima posição passa a ser a ativa.
+     */
+    const next =
+      index + 1;
+
+    if (
+      next <
+      POSITIONS.length
+    ) {
+      activePositionIndex =
+        next;
+    }
+
+    renderPositionState();
+
+    /*
+     * Atualiza contador imediatamente.
+     */
+    const count =
+      completedPositions.size;
+
+    const step =
+      $("facialPreflightStep");
+
+    const percent =
+      Math.round(
+        (
+          count /
+          POSITIONS.length
+        ) * 100
+      );
+
+    if (step) {
+      step.textContent =
+        `${count} / ${POSITIONS.length}`;
+    }
+
+    const bar =
+      $("facialPreflightProgress");
+
+    if (bar) {
+      bar.style.width =
+        `${percent}%`;
+    }
+
+    const percentElement =
+      $("identityProgressPercent");
+
+    if (percentElement) {
+      percentElement.textContent =
+        `${percent}%`;
+    }
+  }
+
+
+  function updateQuality(analysis) {
     if (!analysis) {
       const value =
         $("identityQualityValue");
@@ -1399,15 +1608,15 @@
         ? 1
         : 0;
 
+    const faceArea =
+      Number(
+        analysis.faceArea ||
+        0
+      );
+
     const framing =
-      Number(
-        analysis.faceArea ||
-        0
-      ) >= 0.08 &&
-      Number(
-        analysis.faceArea ||
-        0
-      ) <= 0.72
+      faceArea >= 0.08 &&
+      faceArea <= 0.72
         ? 1
         : 0;
 
@@ -1470,9 +1679,15 @@
   async function startPreflight() {
     const client =
       selectedClient ||
-      getClientFromSelection();
+      normalizeClient(
+        getClientFromSelection()
+      );
 
     if (!client) {
+      setStatus(
+        "Selecione primeiro um cliente."
+      );
+
       return;
     }
 
@@ -1496,8 +1711,26 @@
 
     updateClientIdentity();
 
-    running = true;
+    /*
+     * Nunca iniciar duas execuções simultâneas.
+     */
+    if (running) {
+      return;
+    }
+
+    /*
+     * Reinicia o estado das posições antes de uma
+     * nova captura.
+     */
+    completedPositions.clear();
+
+    activePositionIndex = 0;
+
     completed = false;
+    running = true;
+    saving = false;
+
+    renderPositionState();
 
     const start =
       $("facialPreflightStart");
@@ -1522,9 +1755,14 @@
       "A preparar a câmera e o motor facial..."
     );
 
+    setCameraState(
+      false
+    );
+
     try {
       const engine =
         window.TravelFacialPreflight;
+
 
       await engine.initialize({
         videoElement:
@@ -1568,12 +1806,15 @@
           }
         },
 
+
         onProgress:
           updateProgress,
 
+
         onPosition: ({
           position,
-          completed: positionCompleted
+          completed:
+            positionCompleted
         }) => {
 
           const index =
@@ -1583,25 +1824,35 @@
                 position
             );
 
-          if (
-            index >= 0
-          ) {
-            updateActivePosition(
-              index
-            );
+          if (index >= 0) {
+            activePositionIndex =
+              index;
           }
 
+          /*
+           * SOMENTE aqui uma posição vira verde.
+           */
           if (
-            positionCompleted
+            positionCompleted === true &&
+            index >= 0
           ) {
-            updateActivePosition(
-              Math.min(
-                index + 1,
-                POSITIONS.length - 1
-              )
+            markPositionCompleted(
+              position
             );
+
+            setStatus(
+              index + 1 <
+                POSITIONS.length
+                ? `Posição ${
+                    POSITIONS[index].number
+                  } concluída. Prepare a próxima.`
+                : "As 10 posições foram concluídas."
+            );
+          } else {
+            renderPositionState();
           }
         },
+
 
         onComplete:
           async result => {
@@ -1610,11 +1861,18 @@
             );
           },
 
+
         onError:
           error => {
             console.error(
               "[IdentityCenter]",
               error
+            );
+
+            running = false;
+
+            setCameraState(
+              false
             );
 
             setState(
@@ -1626,13 +1884,31 @@
               error?.message ||
               "Não foi possível concluir a análise."
             );
+
+            if (start) {
+              start.disabled = false;
+            }
+
+            if (stop) {
+              stop.hidden = true;
+            }
+
+            renderPositionState();
           }
       });
 
+
+      /*
+       * A CÂMERA SÓ É ATIVADA AQUI.
+       *
+       * Portanto abrir o Identity Center nunca
+       * dispara getUserMedia().
+       */
       await engine.start({
         clientId:
           client.id
       });
+
 
       setCameraState(
         true
@@ -1647,6 +1923,8 @@
         "Câmera ativa. Posicione o rosto na área indicada."
       );
 
+      renderPositionState();
+
     } catch (error) {
       console.error(
         "[IdentityCenter] start",
@@ -1655,13 +1933,20 @@
 
       running = false;
 
-      if (start) {
-        start.disabled = false;
+      try {
+        window
+          .TravelFacialPreflight
+          ?.stop();
+      } catch (stopError) {
+        console.warn(
+          "[IdentityCenter] cleanup",
+          stopError
+        );
       }
 
-      if (stop) {
-        stop.hidden = true;
-      }
+      setCameraState(
+        false
+      );
 
       setState(
         "NÃO INICIADA",
@@ -1672,6 +1957,16 @@
         error?.message ||
         "Não foi possível iniciar a câmera."
       );
+
+      if (start) {
+        start.disabled = false;
+      }
+
+      if (stop) {
+        stop.hidden = true;
+      }
+
+      renderPositionState();
     }
   }
 
@@ -1683,6 +1978,7 @@
         ?.stop();
     } catch (error) {
       console.error(
+        "[IdentityCenter] stop",
         error
       );
     }
@@ -1710,21 +2006,27 @@
 
     if (start) {
       start.disabled = false;
+
       start.innerHTML = `
-        <span>Iniciar novamente</span>
-        <b>→</b>
+        <span>
+          Iniciar novamente
+        </span>
+
+        <b>
+          →
+        </b>
       `;
     }
 
     if (stop) {
       stop.hidden = true;
     }
+
+    renderPositionState();
   }
 
 
-  async function handleComplete(
-    result
-  ) {
+  async function handleComplete(result) {
     running = false;
 
     completed =
@@ -1735,6 +2037,26 @@
     setCameraState(
       false
     );
+
+    /*
+     * Mesmo que o motor retorne passed, a interface
+     * garante visualmente que as 10 posições foram
+     * realmente recebidas pelo callback.
+     */
+    if (
+      completedPositions.size ===
+      POSITIONS.length
+    ) {
+      activePositionIndex =
+        POSITIONS.length - 1;
+
+      renderPositionState();
+
+      updateProgress({
+        current: 10,
+        total: 10
+      });
+    }
 
     if (completed) {
       setState(
@@ -1750,7 +2072,6 @@
         current: 10,
         total: 10
       });
-
     } else {
       setState(
         "AJUSTES NECESSÁRIOS",
@@ -1768,113 +2089,124 @@
   }
 
 
-  async function saveResult(
-  result
-) {
-
-  const applicationForm =
-    document.getElementById(
-      "applicationForm"
-    );
-
-  if (applicationForm) {
-    applicationForm.dataset
-      .facialPreflight =
-      "pending";
-  }
-
-  if (
-    saving ||
-    !selectedClient
-  ) {
-    return;
-  }
-
-  saving = true;
-
-  showResult(
-    result,
-    null
-  );
-
-  if (
-    !result?.passed
-  ) {
+  async function saveResult(result) {
+    const applicationForm =
+      document.getElementById(
+        "applicationForm"
+      );
 
     if (applicationForm) {
       applicationForm.dataset
         .facialPreflight =
-        "failed";
+        "pending";
     }
-
-    saving = false;
-    return;
-  }
-
-  try {
-
-    const data =
-      await window
-        .TravelFacialPreflight
-        .submitToBackend({
-          clientId:
-            selectedClient.id,
-
-          passportMatch:
-            null
-        });
 
     if (
-      data?.success !== true
+      saving ||
+      !selectedClient
     ) {
-      throw new Error(
-        data?.error ||
-        data?.message ||
-        "O backend não confirmou a verificação facial."
-      );
+      return;
     }
 
-    if (applicationForm) {
-      applicationForm.dataset
-        .facialPreflight =
-        "passed";
-    }
+    saving = true;
 
     showResult(
       result,
-      data
+      null
     );
 
-  } catch (error) {
+    if (!result?.passed) {
+      if (applicationForm) {
+        applicationForm.dataset
+          .facialPreflight =
+          "failed";
+      }
 
-    if (applicationForm) {
-      applicationForm.dataset
-        .facialPreflight =
-        "failed";
+      saving = false;
+
+      return;
     }
 
-    console.error(
-      "[IdentityCenter] backend",
-      error
-    );
+    try {
+      if (
+        !window.TravelFacialPreflight ||
+        typeof window
+          .TravelFacialPreflight
+          .submitToBackend !==
+          "function"
+      ) {
+        throw new Error(
+          "O módulo facial não possui a função de gravação no backend."
+        );
+      }
 
-    setState(
-      "NÃO GUARDADA",
-      "error"
-    );
+      const data =
+        await window
+          .TravelFacialPreflight
+          .submitToBackend({
+            clientId:
+              selectedClient.id,
 
-    setStatus(
-      error?.message ||
-      "A preparação terminou, mas não foi possível guardar o resultado."
-    );
+            /*
+             * O match real com a fotografia do
+             * passaporte ainda é uma etapa separada.
+             *
+             * Não fingimos que houve comparação
+             * biométrica quando ela ainda não existe.
+             */
+            passportMatch:
+              null
+          });
 
-  } finally {
+      if (
+        data?.success !== true
+      ) {
+        throw new Error(
+          data?.error ||
+          data?.message ||
+          "O backend não confirmou a verificação facial."
+        );
+      }
 
-    saving = false;
+      if (applicationForm) {
+        applicationForm.dataset
+          .facialPreflight =
+          "passed";
+      }
 
+      showResult(
+        result,
+        data
+      );
+
+    } catch (error) {
+      if (applicationForm) {
+        applicationForm.dataset
+          .facialPreflight =
+          "failed";
+      }
+
+      console.error(
+        "[IdentityCenter] backend",
+        error
+      );
+
+      setState(
+        "NÃO GUARDADA",
+        "error"
+      );
+
+      setStatus(
+        error?.message ||
+        "A preparação terminou, mas não foi possível guardar o resultado."
+      );
+
+    } finally {
+      saving = false;
+    }
   }
 
-}
+
   function showResult(
     result,
     backend
@@ -1972,9 +2304,7 @@
                     .slice(0, 6)
                     .map(
                       issue =>
-                        `<li>${escapeHtml(
-                          issue
-                        )}</li>`
+                        `<li>${escapeHtml(issue)}</li>`
                     )
                     .join("")}
                 </ul>
@@ -1989,17 +2319,30 @@
             ? `
               <div class="identity-result-checks">
 
-                <span>✓ 10/10 posições</span>
-                <span>✓ Pré-check aprovado</span>
-                <span>✓ Resultado guardado</span>
+                <span>
+                  ✓ 10/10 posições
+                </span>
+
+                <span>
+                  ✓ Pré-check aprovado
+                </span>
+
+                <span>
+                  ✓ Resultado guardado
+                </span>
 
               </div>
             `
             : `
               <div class="identity-result-checks warning">
 
-                <span>⚠ Corrija as orientações</span>
-                <span>⚠ Execute novamente</span>
+                <span>
+                  ⚠ Corrija as orientações
+                </span>
+
+                <span>
+                  ⚠ Execute novamente
+                </span>
 
               </div>
             `
@@ -2020,8 +2363,13 @@
                   class="identity-primary-button"
                   type="button"
                 >
-                  <span>Continuar operação</span>
-                  <b>→</b>
+                  <span>
+                    Continuar operação
+                  </span>
+
+                  <b>
+                    →
+                  </b>
                 </button>
               `
               : `
@@ -2030,8 +2378,13 @@
                   class="identity-primary-button"
                   type="button"
                 >
-                  <span>Repetir verificação</span>
-                  <b>↻</b>
+                  <span>
+                    Repetir verificação
+                  </span>
+
+                  <b>
+                    ↻
+                  </b>
                 </button>
               `
           }
@@ -2040,6 +2393,7 @@
 
       </div>
     `;
+
 
     if (passed) {
       $("identityContinueButton")
@@ -2058,19 +2412,38 @@
               });
           }
         );
+
     } else {
       $("identityRetryButton")
         ?.addEventListener(
           "click",
-          () => {
+          async () => {
             box.hidden = true;
+
+            /*
+             * Garantimos que a câmera anterior foi
+             * encerrada antes de começar novamente.
+             */
+            try {
+              window
+                .TravelFacialPreflight
+                ?.stop();
+            } catch (error) {
+              console.warn(
+                "[IdentityCenter] retry cleanup",
+                error
+              );
+            }
+
+            running = false;
 
             resetInterface();
 
-            startPreflight();
+            await startPreflight();
           }
         );
     }
+
 
     if (
       backend?.preflight?.passed
@@ -2082,9 +2455,17 @@
 
       if (checks) {
         checks.innerHTML = `
-          <span>✓ 10/10 posições</span>
-          <span>✓ Pré-check aprovado</span>
-          <span>✓ Resultado guardado</span>
+          <span>
+            ✓ 10/10 posições
+          </span>
+
+          <span>
+            ✓ Pré-check aprovado
+          </span>
+
+          <span>
+            ✓ Resultado guardado
+          </span>
         `;
       }
     }
@@ -2092,6 +2473,16 @@
 
 
   function attachLaunchButtons() {
+    /*
+     * Botões externos podem utilizar:
+     *
+     * data-open-identity-center
+     *
+     * e opcionalmente:
+     *
+     * data-client-id="..."
+     */
+
     document.addEventListener(
       "click",
       event => {
@@ -2129,16 +2520,10 @@
             );
 
           if (found) {
-            client = {
-              id:
-                found.id ||
-                found._id,
-
-              name:
-                found.fullName ||
-                found.name ||
-                "Cliente"
-            };
+            client =
+              normalizeClient(
+                found
+              );
           }
         }
 
@@ -2164,6 +2549,15 @@
       return;
     }
 
+    const host =
+      section.querySelector(
+        ".verification-overview-main"
+      );
+
+    if (!host) {
+      return;
+    }
+
     const button =
       document.createElement(
         "button"
@@ -2184,13 +2578,15 @@
       </span>
 
       <span>
+
         <strong>
-          Abrir Identity Center
+          Reconhecimento Facial
         </strong>
 
         <small>
-          Verificação facial em tela dedicada
+          Abrir Identity Center
         </small>
+
       </span>
 
       <b>
@@ -2200,37 +2596,94 @@
 
     button.addEventListener(
       "click",
-      () => {
+      event => {
+        event.preventDefault();
+
+        /*
+         * ABRE A INTERFACE.
+         *
+         * NÃO inicia a câmera.
+         */
         openIdentityCenter();
       }
     );
 
-    section
-      .querySelector(
-        ".verification-overview-main"
-      )
-      ?.appendChild(
-        button
-      );
+    host.appendChild(
+      button
+    );
+  }
+
+
+  function attachClientSelection() {
+    document.addEventListener(
+      "change",
+      event => {
+        const id =
+          event.target?.id;
+
+        if (
+          id ===
+          "applicationClient"
+        ) {
+          selectedClient =
+            normalizeClient(
+              getClientFromSelection()
+            );
+
+          /*
+           * Apenas habilitamos a entrada no Identity Center.
+           *
+           * NÃO iniciamos câmera.
+           */
+          const start =
+            $("facialPreflightStart");
+
+          if (
+            start &&
+            selectedClient &&
+            overlay
+          ) {
+            start.disabled =
+              false;
+          }
+        }
+
+        if (
+          id ===
+          "identityClient"
+        ) {
+          selectedClient =
+            normalizeClient(
+              getClientFromSelection()
+            );
+        }
+
+        if (
+          id ===
+          "passportClientSelect"
+        ) {
+          selectedClient =
+            normalizeClient(
+              getClientFromSelection()
+            );
+        }
+      }
+    );
   }
 
 
   function initialize() {
     attachLaunchButtons();
 
-    document.addEventListener(
-      "change",
-      event => {
-        if (
-          event.target?.id ===
-          "applicationClient"
-        ) {
-          selectedClient =
-            getClientFromSelection();
-        }
-      }
-    );
+    attachClientSelection();
 
+    /*
+     * Não abrimos o Identity Center aqui.
+     *
+     * Não iniciamos câmera aqui.
+     *
+     * Apenas colocamos o botão no dashboard.
+     */
     setTimeout(
       createDashboardButton,
       600
@@ -2239,9 +2692,14 @@
 
 
   window.TravelIdentityCenter = {
-    open: openIdentityCenter,
-    close: closeIdentityCenter,
-    reset: resetInterface
+    open:
+      openIdentityCenter,
+
+    close:
+      closeIdentityCenter,
+
+    reset:
+      resetInterface
   };
 
 
