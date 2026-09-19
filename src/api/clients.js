@@ -12,7 +12,11 @@ const {
   requireRole
 } =
   require("../middleware/auth");
+const PassportStorageService =
+  require("../services/passport/passport-storage-service");
 
+const passportStorage =
+  new PassportStorageService();
 const FacialService =
   require("../services/facial/facial-service");
 const preflight =
@@ -555,7 +559,133 @@ router.post(
     }
   }
 );
+/*
+ * =========================================================
+ * GET PASSPORT IMAGE FOR LOCAL FACIAL MATCH
+ * =========================================================
+ *
+ * A fotografia nunca fica pública.
+ *
+ * Apenas utilizadores autenticados com permissão
+ * operacional podem obtê-la.
+ *
+ * O processamento facial acontece no navegador.
+ * =========================================================
+ */
 
+router.get(
+  "/:id/facial-preflight/passport-image",
+  requireRole(
+    "owner",
+    "admin",
+    "operator"
+  ),
+  async (
+    req,
+    res,
+    next
+  ) => {
+    try {
+      const client =
+        await Client.findOne({
+          _id:
+            req.params.id,
+
+          accountId:
+            req.user.accountId,
+
+          active:
+            true
+        });
+
+      if (!client) {
+        return res
+          .status(404)
+          .json({
+            success:
+              false,
+
+            error:
+              "Client not found"
+          });
+      }
+
+      const document =
+        await passportStorage.getForBot({
+          accountId:
+            req.user.accountId,
+
+          clientId:
+            client._id
+        });
+
+      if (!document) {
+        return res
+          .status(404)
+          .json({
+            success:
+              false,
+
+            error:
+              "No validated passport image is available for this client"
+          });
+      }
+
+      const allowedMimeTypes = [
+        "image/jpeg",
+        "image/png"
+      ];
+
+      const mimeType =
+        allowedMimeTypes.includes(
+          document.mimeType
+        )
+          ? document.mimeType
+          : "image/jpeg";
+
+      /*
+       * Impede cache persistente da fotografia biométrica.
+       */
+      res.setHeader(
+        "Cache-Control",
+        "no-store, no-cache, must-revalidate, private"
+      );
+
+      res.setHeader(
+        "Pragma",
+        "no-cache"
+      );
+
+      res.setHeader(
+        "Expires",
+        "0"
+      );
+
+      res.setHeader(
+        "X-Content-Type-Options",
+        "nosniff"
+      );
+
+      res.setHeader(
+        "Content-Type",
+        mimeType
+      );
+
+      res.setHeader(
+        "Content-Disposition",
+        "inline"
+      );
+
+      return res.end(
+        document.buffer
+      );
+    } catch (
+      error
+    ) {
+      next(error);
+    }
+  }
+);
 /*
  * =========================================================
  * FACIAL PREFLIGHT INSTRUCTIONS
