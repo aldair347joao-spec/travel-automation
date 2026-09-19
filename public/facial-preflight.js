@@ -1841,8 +1841,7 @@
    * START
    * ==========================================================
    */
-
-    async function start(
+     async function start(
     options = {}
   ) {
     if (
@@ -1853,10 +1852,37 @@
     }
 
     /*
+     * Guardamos os callbacks imediatamente.
+     * Assim o start() pode ser chamado diretamente
+     * pelo clique do utilizador, sem precisar de um
+     * initialize() anterior.
+     */
+    callbacks = {
+      onStatus:
+        options.onStatus ||
+        callbacks.onStatus,
+
+      onProgress:
+        options.onProgress ||
+        callbacks.onProgress,
+
+      onPosition:
+        options.onPosition ||
+        callbacks.onPosition,
+
+      onComplete:
+        options.onComplete ||
+        callbacks.onComplete,
+
+      onError:
+        options.onError ||
+        callbacks.onError
+    };
+
+    /*
      * IMPORTANTE:
      *
-     * O reset vem primeiro porque o reset
-     * cancela qualquer fala anterior.
+     * O reset cancela qualquer fala anterior.
      */
     reset();
 
@@ -1864,13 +1890,15 @@
       getCurrentPosition();
 
     /*
-     * O PRIMEIRO ÁUDIO é disparado
-     * imediatamente durante o mesmo
-     * gesto que iniciou o reconhecimento.
+     * ========================================================
+     * ÁUDIO — PRIMEIRO ATO DO CLIQUE
+     * ========================================================
      *
-     * Isto evita o bloqueio de autoplay
-     * existente em vários navegadores
-     * Android.
+     * Isto acontece ANTES de qualquer await.
+     *
+     * Portanto o speechSynthesis continua associado
+     * ao gesto do utilizador que clicou em
+     * "Iniciar verificação".
      */
     if (
       initialPosition
@@ -1880,37 +1908,60 @@
         "instruction"
       );
 
-      primeAudio(
+      preparePortugueseVoice();
+
+      speak(
         initialPosition.instruction
       );
     }
 
     /*
-     * Agora podemos carregar o motor
-     * facial local.
+     * ========================================================
+     * MOTOR FACIAL
+     * ========================================================
+     *
+     * Se ainda não estiver preparado, o próprio start()
+     * faz a inicialização.
      */
     if (
       !initialized
     ) {
       await initialize({
-        videoElement,
-        clientId,
+        videoElement:
+          options.videoElement ||
+          videoElement,
+
+        clientId:
+          clientId,
+
         onStatus:
           callbacks.onStatus,
+
         onProgress:
           callbacks.onProgress,
+
         onPosition:
           callbacks.onPosition,
+
         onComplete:
           callbacks.onComplete,
+
         onError:
           callbacks.onError
       });
+    } else if (
+      options.videoElement
+    ) {
+      videoElement =
+        options.videoElement;
     }
 
     /*
-     * A câmera é iniciada dentro do
-     * mesmo fluxo iniciado pelo clique.
+     * ========================================================
+     * CÂMERA
+     * ========================================================
+     *
+     * A câmera é iniciada no mesmo fluxo do clique.
      */
     await startCamera();
 
@@ -1920,11 +1971,6 @@
     positionStartedAt =
       Date.now();
 
-    /*
-     * Não repetimos a primeira instrução
-     * aqui porque ela já foi falada no
-     * mesmo gesto do utilizador.
-     */
     emitProgress();
 
     animationFrame =
@@ -1933,8 +1979,8 @@
       );
 
     return true;
-  }
-
+  } 
+    
   /*
    * ==========================================================
    * PROCESSAMENTO
