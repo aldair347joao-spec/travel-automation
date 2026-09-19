@@ -7,7 +7,7 @@
  * MOTOR FACIAL LOCAL
  *
  * FaceAPI:
- * @vladmandic/face-api
+ * /face-api/face-api.min.js
  *
  * Modelos:
  * /models
@@ -15,9 +15,10 @@
  * Não utiliza:
  * - MediaPipe Face Landmarker
  * - MediaPipe WASM
+ * - CDN para FaceAPI
  * - API externa de reconhecimento facial
  *
- * O processamento facial acontece no navegador.
+ * O processamento facial acontece localmente no navegador.
  * ============================================================
  */
 
@@ -26,137 +27,202 @@
 
   const FACE_API_SCRIPT_URL =
     window.TRAVEL_FACE_API_SCRIPT_URL ||
-    "https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.min.js";
+    "/face-api/face-api.min.js";
 
   const FACE_API_MODEL_URL =
     window.TRAVEL_FACE_API_MODEL_URL ||
     "/models";
 
-  const AUDIO_LANGUAGE = "pt-PT";
+  const AUDIO_LANGUAGE =
+    "pt-PT";
 
   const POSITIONS = [
     {
       id: "frontal",
-      label: "Olhe diretamente para a câmera",
+      label:
+        "Olhe diretamente para a câmera",
       instruction:
         "Olhe diretamente para a câmera e mantenha o rosto parado."
     },
     {
       id: "left",
-      label: "Vire o rosto para a esquerda",
+      label:
+        "Vire o rosto para a esquerda",
       instruction:
         "Vire lentamente o rosto para a esquerda."
     },
     {
       id: "right",
-      label: "Vire o rosto para a direita",
+      label:
+        "Vire o rosto para a direita",
       instruction:
         "Vire lentamente o rosto para a direita."
     },
     {
       id: "up",
-      label: "Olhe para cima",
+      label:
+        "Olhe para cima",
       instruction:
         "Levante lentamente o rosto e olhe para cima."
     },
     {
       id: "down",
-      label: "Olhe para baixo",
+      label:
+        "Olhe para baixo",
       instruction:
         "Baixe lentamente o rosto e olhe para baixo."
     },
     {
       id: "left_up",
-      label: "Esquerda e para cima",
+      label:
+        "Esquerda e para cima",
       instruction:
         "Vire o rosto para a esquerda e olhe para cima."
     },
     {
       id: "right_up",
-      label: "Direita e para cima",
+      label:
+        "Direita e para cima",
       instruction:
         "Vire o rosto para a direita e olhe para cima."
     },
     {
       id: "left_down",
-      label: "Esquerda e para baixo",
+      label:
+        "Esquerda e para baixo",
       instruction:
         "Vire o rosto para a esquerda e olhe para baixo."
     },
     {
       id: "right_down",
-      label: "Direita e para baixo",
+      label:
+        "Direita e para baixo",
       instruction:
         "Vire o rosto para a direita e olhe para baixo."
     },
     {
       id: "smile",
-      label: "Sorria",
+      label:
+        "Sorria",
       instruction:
         "Agora sorria e mantenha o sorriso por alguns segundos."
     }
   ];
 
   const CONFIG = {
-    detectorInputSize: 320,
-    detectorScoreThreshold: 0.5,
+    detectorInputSize:
+      320,
 
-    minFaceArea: 0.04,
-    maxFaceArea: 0.82,
+    detectorScoreThreshold:
+      0.5,
 
-    idealFaceAreaMin: 0.10,
-    idealFaceAreaMax: 0.60,
+    minFaceArea:
+      0.04,
 
-    minBrightness: 35,
-    maxBrightness: 235,
+    maxFaceArea:
+      0.82,
 
-    stableFramesRequired: 6,
-    detectionIntervalMs: 100,
+    idealFaceAreaMin:
+      0.10,
 
-    positionScoreThreshold: 0.66,
-    overallScoreThreshold: 0.68,
+    idealFaceAreaMax:
+      0.60,
 
-    smileThreshold: 0.50,
+    minBrightness:
+      35,
 
-    positionTimeoutMs: 12000,
+    maxBrightness:
+      235,
 
-    maxFaces: 1,
+    stableFramesRequired:
+      6,
 
-    cameraWidth: 1280,
-    cameraHeight: 720,
-    cameraFrameRate: 24
+    detectionIntervalMs:
+      100,
+
+    positionScoreThreshold:
+      0.66,
+
+    overallScoreThreshold:
+      0.68,
+
+    smileThreshold:
+      0.50,
+
+    positionTimeoutMs:
+      12000,
+
+    maxFaces:
+      1,
+
+    cameraWidth:
+      1280,
+
+    cameraHeight:
+      720,
+
+    cameraFrameRate:
+      24
   };
 
   let faceApi = null;
-  let faceApiPromise = null;
-  let modelsPromise = null;
 
-  let stream = null;
-  let videoElement = null;
+  let faceApiPromise =
+    null;
 
-  let canvasElement = null;
-  let canvasContext = null;
+  let modelsPromise =
+    null;
 
-  let clientId = null;
+  let stream =
+    null;
 
-  let running = false;
-  let processing = false;
+  let videoElement =
+    null;
 
-  let animationFrame = null;
-  let lastDetectionAt = 0;
+  let canvasElement =
+    null;
 
-  let currentPositionIndex = 0;
-  let stableFrames = 0;
-  let positionStartedAt = 0;
+  let canvasContext =
+    null;
 
-  let completedPositions = [];
-  let capturedPositions = [];
+  let clientId =
+    null;
 
-  let result = null;
+  let running =
+    false;
 
-  let callbacks = {};
+  let processing =
+    false;
 
-  let initialized = false;
+  let animationFrame =
+    null;
+
+  let lastDetectionAt =
+    0;
+
+  let currentPositionIndex =
+    0;
+
+  let stableFrames =
+    0;
+
+  let positionStartedAt =
+    0;
+
+  let completedPositions =
+    [];
+
+  let capturedPositions =
+    [];
+
+  let result =
+    null;
+
+  let callbacks =
+    {};
+
+  let initialized =
+    false;
 
   function safeCall(
     name,
@@ -168,7 +234,9 @@
         typeof callbacks[name] ===
           "function"
       ) {
-        callbacks[name](payload);
+        callbacks[name](
+          payload
+        );
       }
     } catch (error) {
       console.error(
@@ -220,7 +288,10 @@
   ) {
     return Math.max(
       min,
-      Math.min(max, value)
+      Math.min(
+        max,
+        value
+      )
     );
   }
 
@@ -236,7 +307,10 @@
 
     return (
       values.reduce(
-        (sum, value) =>
+        (
+          sum,
+          value
+        ) =>
           sum +
           Number(
             value || 0
@@ -268,9 +342,14 @@
       utterance.lang =
         AUDIO_LANGUAGE;
 
-      utterance.rate = 0.95;
-      utterance.pitch = 1;
-      utterance.volume = 1;
+      utterance.rate =
+        0.95;
+
+      utterance.pitch =
+        1;
+
+      utterance.volume =
+        1;
 
       window.speechSynthesis.speak(
         utterance
@@ -301,25 +380,25 @@
     );
   }
 
-  function getCompletedCount() {
-    return completedPositions.length;
-  }
-
   /*
    * ==========================================================
-   * FACE API
+   * FACE API LOCAL
    * ==========================================================
    */
 
   async function loadFaceApi() {
-    if (window.faceapi) {
+    if (
+      window.faceapi
+    ) {
       faceApi =
         window.faceapi;
 
       return faceApi;
     }
 
-    if (faceApiPromise) {
+    if (
+      faceApiPromise
+    ) {
       return faceApiPromise;
     }
 
@@ -356,36 +435,42 @@
           script.src =
             FACE_API_SCRIPT_URL;
 
-          script.async = true;
-          script.defer = true;
+          script.async =
+            true;
+
+          script.defer =
+            true;
 
           script.dataset.travelFaceApi =
             "true";
 
-          script.onload = () => {
-            if (
-              window.faceapi
-            ) {
-              faceApi =
-                window.faceapi;
+          script.onload =
+            () => {
+              if (
+                window.faceapi
+              ) {
+                faceApi =
+                  window.faceapi;
 
-              resolve(
-                faceApi
-              );
-            } else {
+                resolve(
+                  faceApi
+                );
+
+                return;
+              }
+
               reject(
                 new Error(
-                  "FaceAPI carregou mas não ficou disponível."
+                  "A biblioteca FaceAPI foi carregada, mas não ficou disponível no navegador."
                 )
               );
-            }
-          };
+            };
 
           script.onerror =
             () => {
               reject(
                 new Error(
-                  "Não foi possível carregar a biblioteca FaceAPI."
+                  "Não foi possível carregar a biblioteca FaceAPI local."
                 )
               );
             };
@@ -399,7 +484,8 @@
     try {
       return await faceApiPromise;
     } catch (error) {
-      faceApiPromise = null;
+      faceApiPromise =
+        null;
 
       throw error;
     }
@@ -407,7 +493,7 @@
 
   /*
    * ==========================================================
-   * MODELOS LOCAIS
+   * MODELOS
    * ==========================================================
    */
 
@@ -418,8 +504,11 @@
       await fetch(
         `${FACE_API_MODEL_URL}/${file}`,
         {
-          method: "GET",
-          cache: "no-store"
+          method:
+            "GET",
+
+          cache:
+            "no-store"
         }
       );
 
@@ -427,7 +516,7 @@
       !response.ok
     ) {
       throw new Error(
-        `Modelo não encontrado: ${file} (${response.status})`
+        `Modelo não encontrado: ${file} (HTTP ${response.status})`
       );
     }
 
@@ -435,7 +524,9 @@
   }
 
   async function loadModels() {
-    if (modelsPromise) {
+    if (
+      modelsPromise
+    ) {
       return modelsPromise;
     }
 
@@ -461,8 +552,12 @@
           "face_expression_model-weights_manifest.json"
         );
 
+        await verifyModelFile(
+          "face_recognition_model-weights_manifest.json"
+        );
+
         setStatus(
-          "A carregar os modelos faciais locais...",
+          "A carregar o detector facial...",
           "info"
         );
 
@@ -472,11 +567,21 @@
             FACE_API_MODEL_URL
           );
 
+        setStatus(
+          "A carregar os pontos faciais...",
+          "info"
+        );
+
         await api.nets
           .faceLandmark68Net
           .loadFromUri(
             FACE_API_MODEL_URL
           );
+
+        setStatus(
+          "A carregar a análise facial...",
+          "info"
+        );
 
         await api.nets
           .faceExpressionNet
@@ -484,12 +589,9 @@
             FACE_API_MODEL_URL
           );
 
-        /*
-         * Modelo adicional preparado para a comparação
-         * entre fotografia do passaporte e rosto vivo.
-         */
-        await verifyModelFile(
-          "face_recognition_model-weights_manifest.json"
+        setStatus(
+          "A preparar o reconhecimento facial...",
+          "info"
         );
 
         await api.nets
@@ -499,7 +601,7 @@
           );
 
         console.info(
-          "[FacialPreflight] Todos os modelos locais carregados."
+          "[FacialPreflight] Todos os modelos faciais locais carregados."
         );
 
         return true;
@@ -508,16 +610,12 @@
     try {
       return await modelsPromise;
     } catch (error) {
-      modelsPromise = null;
-
-      const message =
-        error &&
-        error.message
-          ? error.message
-          : "Falha desconhecida ao carregar os modelos faciais.";
+      modelsPromise =
+        null;
 
       emitError(
-        message,
+        error?.message ||
+          "Não foi possível carregar os modelos faciais locais.",
         error
       );
 
@@ -598,7 +696,8 @@
     const size =
       getVideoSize();
 
-    const width = 160;
+    const width =
+      160;
 
     const height =
       Math.max(
@@ -635,8 +734,11 @@
     const data =
       imageData.data;
 
-    let total = 0;
-    let count = 0;
+    let total =
+      0;
+
+    let count =
+      0;
 
     for (
       let i = 0;
@@ -645,8 +747,10 @@
     ) {
       total +=
         0.299 * data[i] +
-        0.587 * data[i + 1] +
-        0.114 * data[i + 2];
+        0.587 *
+          data[i + 1] +
+        0.114 *
+          data[i + 2];
 
       count++;
     }
@@ -676,7 +780,8 @@
       CONFIG.maxBrightness
     ) {
       return clamp(
-        (255 - brightness) /
+        (255 -
+          brightness) /
           (255 -
             CONFIG.maxBrightness),
         0,
@@ -689,7 +794,7 @@
 
   /*
    * ==========================================================
-   * POSE
+   * GEOMETRIA FACIAL
    * ==========================================================
    */
 
@@ -898,7 +1003,7 @@
 
   /*
    * ==========================================================
-   * AVALIAÇÃO
+   * AVALIAÇÃO DA POSIÇÃO
    * ==========================================================
    */
 
@@ -927,9 +1032,14 @@
         )
       );
 
-    let yawScore = 0;
-    let pitchScore = 0;
-    let smilePositionScore = 0;
+    let yawScore =
+      0;
+
+    let pitchScore =
+      0;
+
+    let smilePositionScore =
+      0;
 
     switch (
       position.id
@@ -1141,8 +1251,11 @@
         break;
 
       default:
-        yawScore = 1;
-        pitchScore = 1;
+        yawScore =
+          1;
+
+        pitchScore =
+          1;
     }
 
     const rollScore =
@@ -1198,20 +1311,28 @@
     }
 
     return {
-      score: clamp(
-        score,
-        0,
-        1
-      ),
+      score:
+        clamp(
+          score,
+          0,
+          1
+        ),
+
       yawScore,
+
       pitchScore,
+
       rollScore,
+
       smileScore:
         smilePositionScore,
+
       faceSizeScore:
         size,
+
       brightnessScore:
         light,
+
       detectionScore:
         detector
     };
@@ -1294,15 +1415,16 @@
 
     if (
       !navigator.mediaDevices ||
-      !navigator.mediaDevices
-        .getUserMedia
+      !navigator.mediaDevices.getUserMedia
     ) {
       throw new Error(
         "O navegador não disponibiliza acesso à câmera."
       );
     }
 
-    if (stream) {
+    if (
+      stream
+    ) {
       return stream;
     }
 
@@ -1316,7 +1438,8 @@
         {
           video: {
             facingMode: {
-              ideal: "user"
+              ideal:
+                "user"
             },
 
             width: {
@@ -1332,18 +1455,22 @@
             frameRate: {
               ideal:
                 CONFIG.cameraFrameRate,
-              max: 30
+
+              max:
+                30
             }
           },
 
-          audio: false
+          audio:
+            false
         }
       );
 
     videoElement.srcObject =
       stream;
 
-    videoElement.muted = true;
+    videoElement.muted =
+      true;
 
     videoElement.playsInline =
       true;
@@ -1428,7 +1555,9 @@
   }
 
   function stopCamera() {
-    if (stream) {
+    if (
+      stream
+    ) {
       stream
         .getTracks()
         .forEach(
@@ -1440,7 +1569,8 @@
         );
     }
 
-    stream = null;
+    stream =
+      null;
 
     if (
       videoElement
@@ -1456,7 +1586,7 @@
 
   /*
    * ==========================================================
-   * INICIALIZAÇÃO
+   * INITIALIZE
    * ==========================================================
    */
 
@@ -1534,8 +1664,11 @@
    */
 
   function reset() {
-    running = false;
-    processing = false;
+    running =
+      false;
+
+    processing =
+      false;
 
     currentPositionIndex =
       0;
@@ -2015,7 +2148,8 @@
 
         currentPosition:
           getCurrentPosition()
-            ? getCurrentPosition().id
+            ? getCurrentPosition()
+                .id
             : null,
 
         currentPositionIndex,
@@ -2057,7 +2191,9 @@
       );
 
     const score =
-      average(scores);
+      average(
+        scores
+      );
 
     result = {
       completed:
@@ -2080,7 +2216,9 @@
 
       score:
         Number(
-          score.toFixed(4)
+          score.toFixed(
+            4
+          )
         ),
 
       positions:
@@ -2181,7 +2319,8 @@
         null,
 
       facialResult:
-        result || null
+        result ||
+        null
     };
 
     const response =
@@ -2235,7 +2374,7 @@
 
   /*
    * ==========================================================
-   * API
+   * API PÚBLICA
    * ==========================================================
    */
 
@@ -2276,6 +2415,8 @@
         POSITIONS,
 
         CONFIG,
+
+        FACE_API_SCRIPT_URL,
 
         FACE_API_MODEL_URL
       }
