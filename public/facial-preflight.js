@@ -321,22 +321,106 @@
     );
   }
 
+    let preferredPortugueseVoice =
+    null;
+
+  let audioPrimed =
+    false;
+
+  function selectPortugueseVoice() {
+    if (
+      !("speechSynthesis" in window)
+    ) {
+      return null;
+    }
+
+    try {
+      const voices =
+        window.speechSynthesis.getVoices();
+
+      if (
+        !voices ||
+        !voices.length
+      ) {
+        return null;
+      }
+
+      return (
+        voices.find(
+          voice =>
+            /^pt-PT$/i.test(
+              voice.lang || ""
+            )
+        ) ||
+        voices.find(
+          voice =>
+            /^pt-BR$/i.test(
+              voice.lang || ""
+            )
+        ) ||
+        voices.find(
+          voice =>
+            /^pt/i.test(
+              voice.lang || ""
+            )
+        ) ||
+        null
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function preparePortugueseVoice() {
+    preferredPortugueseVoice =
+      selectPortugueseVoice();
+
+    try {
+      if (
+        "speechSynthesis" in window
+      ) {
+        window.speechSynthesis.onvoiceschanged =
+          () => {
+            preferredPortugueseVoice =
+              selectPortugueseVoice();
+          };
+      }
+    } catch (_) {}
+  }
+
   function speak(
     text
   ) {
     if (
       !text ||
-      !window.speechSynthesis
+      !(
+        "speechSynthesis" in
+        window
+      ) ||
+      typeof SpeechSynthesisUtterance ===
+        "undefined"
     ) {
-      return;
+      return false;
     }
 
     try {
-      window.speechSynthesis.cancel();
+      const synthesis =
+        window.speechSynthesis;
+
+      synthesis.cancel();
+
+      /*
+       * resume() é importante em alguns
+       * navegadores Android quando o
+       * mecanismo de voz fica suspenso.
+       */
+      try {
+        synthesis.resume();
+      } catch (_) {}
 
       const utterance =
         new SpeechSynthesisUtterance(
-          text
+          String(text)
         );
 
       utterance.lang =
@@ -351,15 +435,65 @@
       utterance.volume =
         1;
 
-      window.speechSynthesis.speak(
+      const voice =
+        preferredPortugueseVoice ||
+        selectPortugueseVoice();
+
+      if (voice) {
+        utterance.voice =
+          voice;
+      }
+
+      synthesis.speak(
         utterance
       );
+
+      audioPrimed =
+        true;
+
+      return true;
     } catch (error) {
       console.warn(
         "[FacialPreflight] speech error",
         error
       );
+
+      return false;
     }
+  }
+
+  function primeAudio(
+    firstInstruction
+  ) {
+    /*
+     * Esta função precisa ser chamada
+     * diretamente durante o clique do
+     * utilizador.
+     *
+     * Não existe campo de áudio.
+     * O primeiro comando de voz é também
+     * a ativação do mecanismo de áudio.
+     */
+    if (
+      !firstInstruction ||
+      !("speechSynthesis" in window)
+    ) {
+      return false;
+    }
+
+    preparePortugueseVoice();
+
+    const activated =
+      speak(
+        firstInstruction
+      );
+
+    if (activated) {
+      audioPrimed =
+        true;
+    }
+
+    return activated;
   }
 
   function stopSpeech() {
@@ -1708,7 +1842,7 @@
    * ==========================================================
    */
 
-  async function start(
+    async function start(
     options = {}
   ) {
     if (
@@ -1718,6 +1852,43 @@
         options.clientId;
     }
 
+    /*
+     * IMPORTANTE:
+     *
+     * O reset vem primeiro porque o reset
+     * cancela qualquer fala anterior.
+     */
+    reset();
+
+    const initialPosition =
+      getCurrentPosition();
+
+    /*
+     * O PRIMEIRO ÁUDIO é disparado
+     * imediatamente durante o mesmo
+     * gesto que iniciou o reconhecimento.
+     *
+     * Isto evita o bloqueio de autoplay
+     * existente em vários navegadores
+     * Android.
+     */
+    if (
+      initialPosition
+    ) {
+      setStatus(
+        initialPosition.instruction,
+        "instruction"
+      );
+
+      primeAudio(
+        initialPosition.instruction
+      );
+    }
+
+    /*
+     * Agora podemos carregar o motor
+     * facial local.
+     */
     if (
       !initialized
     ) {
@@ -1737,8 +1908,10 @@
       });
     }
 
-    reset();
-
+    /*
+     * A câmera é iniciada dentro do
+     * mesmo fluxo iniciado pelo clique.
+     */
     await startCamera();
 
     running =
@@ -1747,22 +1920,11 @@
     positionStartedAt =
       Date.now();
 
-    const position =
-      getCurrentPosition();
-
-    if (
-      position
-    ) {
-      setStatus(
-        position.instruction,
-        "instruction"
-      );
-
-      speak(
-        position.instruction
-      );
-    }
-
+    /*
+     * Não repetimos a primeira instrução
+     * aqui porque ela já foi falada no
+     * mesmo gesto do utilizador.
+     */
     emitProgress();
 
     animationFrame =
