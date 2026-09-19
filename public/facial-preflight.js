@@ -389,6 +389,245 @@ const WASM_PATH =
 }
 
     async function createLandmarker() {
+  console.log(
+    "[FacialPreflight] ===== DIAGNÓSTICO WASM ====="
+  );
+
+  /*
+   * ========================================================
+   * TESTE 1 — SUPORTE NATIVO DO NAVEGADOR
+   * ========================================================
+   */
+
+  if (
+    typeof WebAssembly ===
+    "undefined"
+  ) {
+    throw new Error(
+      "WebAssembly não está disponível neste navegador."
+    );
+  }
+
+  console.log(
+    "[FacialPreflight] WebAssembly disponível:",
+    true
+  );
+
+  /*
+   * ========================================================
+   * TESTE 2 — COMPILAÇÃO BÁSICA
+   * ========================================================
+   */
+
+  try {
+    const emptyWasm =
+      new Uint8Array([
+        0x00,
+        0x61,
+        0x73,
+        0x6d,
+        0x01,
+        0x00,
+        0x00,
+        0x00
+      ]);
+
+    await WebAssembly.compile(
+      emptyWasm
+    );
+
+    console.log(
+      "[FacialPreflight] WebAssembly.compile básico: OK"
+    );
+
+  } catch (error) {
+    console.error(
+      "[FacialPreflight] WebAssembly básico FALHOU",
+      error
+    );
+
+    throw new Error(
+      `O navegador não consegue compilar WebAssembly básico: ${
+        error?.message ||
+        String(error)
+      }`
+    );
+  }
+
+  /*
+   * ========================================================
+   * TESTE 3 — CARREGAR O WASM NOSIMD
+   * ========================================================
+   *
+   * Fazemos este teste explicitamente apenas para descobrir
+   * se o arquivo servido pelo Render é realmente um WASM.
+   * ========================================================
+   */
+
+  const wasmCandidates = [
+    `${WASM_PATH}/vision_wasm_nosimd_internal.wasm`,
+    `${WASM_PATH}/vision_wasm_internal.wasm`,
+    `${WASM_PATH}/vision_wasm_module_internal.wasm`
+  ];
+
+  for (
+    const wasmUrl of wasmCandidates
+  ) {
+    try {
+      console.log(
+        "[FacialPreflight] Testando WASM:",
+        wasmUrl
+      );
+
+      const response =
+        await fetch(
+          wasmUrl,
+          {
+            cache:
+              "no-store"
+          }
+        );
+
+      const contentType =
+        response.headers.get(
+          "content-type"
+        );
+
+      const contentLength =
+        response.headers.get(
+          "content-length"
+        );
+
+      const buffer =
+        await response.arrayBuffer();
+
+      const bytes =
+        new Uint8Array(
+          buffer
+        );
+
+      const signature =
+        Array.from(
+          bytes.slice(
+            0,
+            8
+          )
+        )
+          .map(
+            value =>
+              value
+                .toString(16)
+                .padStart(
+                  2,
+                  "0"
+                )
+          )
+          .join(" ");
+
+      const isWasm =
+        bytes.length >= 4 &&
+        bytes[0] === 0x00 &&
+        bytes[1] === 0x61 &&
+        bytes[2] === 0x73 &&
+        bytes[3] === 0x6d;
+
+      console.log(
+        "[FacialPreflight] Resultado WASM:",
+        {
+          url:
+            wasmUrl,
+
+          status:
+            response.status,
+
+          ok:
+            response.ok,
+
+          contentType,
+
+          contentLength,
+
+          bytes:
+            bytes.length,
+
+          signature,
+
+          isWasm
+        }
+      );
+
+      if (
+        !response.ok
+      ) {
+        continue;
+      }
+
+      if (
+        !isWasm
+      ) {
+        console.error(
+          "[FacialPreflight] RESPOSTA NÃO É WASM:",
+          wasmUrl
+        );
+
+        continue;
+      }
+
+      /*
+       * ====================================================
+       * TESTE DE COMPILAÇÃO DO ARQUIVO REAL
+       * ====================================================
+       */
+
+      try {
+        await WebAssembly.compile(
+          buffer
+        );
+
+        console.log(
+          "[FacialPreflight] WASM COMPILOU:",
+          wasmUrl
+        );
+
+      } catch (compileError) {
+        console.error(
+          "[FacialPreflight] WASM NÃO COMPILOU:",
+          {
+            url:
+              wasmUrl,
+
+            name:
+              compileError?.name,
+
+            message:
+              compileError?.message,
+
+            stack:
+              compileError?.stack,
+
+            bytes:
+              bytes.length,
+
+            signature
+          }
+        );
+      }
+
+    } catch (error) {
+      console.error(
+        "[FacialPreflight] ERRO AO TESTAR WASM:",
+        wasmUrl,
+        error
+      );
+    }
+  }
+
+  /*
+   * ========================================================
+   * TESTE 4 — MEDIA PIPE
+   * ========================================================
+   */
+
   const vision =
     await loadMediaPipe();
 
@@ -402,7 +641,7 @@ const WASM_PATH =
     "function"
   ) {
     throw new Error(
-      "FilesetResolver não está disponível no MediaPipe local."
+      "FilesetResolver não está disponível."
     );
   }
 
@@ -411,49 +650,29 @@ const WASM_PATH =
     "function"
   ) {
     throw new Error(
-      "FaceLandmarker não está disponível no MediaPipe local."
+      "FaceLandmarker não está disponível."
     );
   }
 
   console.log(
-    "[FacialPreflight] Preparando runtime WASM oficial do MediaPipe..."
+    "[FacialPreflight] Criando FilesetResolver..."
   );
 
   let fileset;
 
   try {
-    /*
-     * ========================================================
-     * MEDIA PIPE TASKS VISION
-     * ========================================================
-     *
-     * Não escolhemos manualmente:
-     *
-     * - vision_wasm_internal
-     * - vision_wasm_module_internal
-     * - vision_wasm_nosimd_internal
-     *
-     * O FilesetResolver do próprio MediaPipe decide
-     * qual runtime deve ser utilizado pelo navegador.
-     * ========================================================
-     */
-
     fileset =
       await FilesetResolver.forVisionTasks(
         WASM_PATH
       );
 
     console.log(
-      "[FacialPreflight] Runtime WASM MediaPipe preparado com sucesso.",
-      {
-        wasmPath:
-          WASM_PATH
-      }
+      "[FacialPreflight] FilesetResolver criado."
     );
 
   } catch (error) {
     console.error(
-      "[FacialPreflight] FALHA AO PREPARAR WASM MEDIA PIPE",
+      "[FacialPreflight] FilesetResolver FALHOU:",
       {
         name:
           error?.name,
@@ -462,24 +681,83 @@ const WASM_PATH =
           error?.message,
 
         stack:
-          error?.stack,
-
-        error
+          error?.stack
       }
     );
 
     throw new Error(
-      `Não foi possível iniciar o runtime WASM facial: ${
+      `Falha no FilesetResolver: ${
         error?.message ||
-        error?.name ||
-        "erro desconhecido"
+        String(error)
       }`
     );
   }
 
-  console.log(
-    "[FacialPreflight] Criando Face Landmarker..."
-  );
+  /*
+   * ========================================================
+   * TESTE 5 — MODELO
+   * ========================================================
+   */
+
+  try {
+    const modelResponse =
+      await fetch(
+        MODEL_PATH,
+        {
+          cache:
+            "no-store"
+        }
+      );
+
+    const modelBuffer =
+      await modelResponse.arrayBuffer();
+
+    console.log(
+      "[FacialPreflight] Modelo:",
+      {
+        status:
+          modelResponse.status,
+
+        ok:
+          modelResponse.ok,
+
+        contentType:
+          modelResponse.headers.get(
+            "content-type"
+          ),
+
+        bytes:
+          modelBuffer.byteLength
+      }
+    );
+
+    if (
+      !modelResponse.ok
+    ) {
+      throw new Error(
+        `Modelo HTTP ${modelResponse.status}`
+      );
+    }
+
+  } catch (error) {
+    console.error(
+      "[FacialPreflight] Modelo FALHOU:",
+      error
+    );
+
+    throw new Error(
+      `Falha ao carregar modelo: ${
+        error?.message ||
+        String(error)
+      }`
+    );
+  }
+
+  /*
+   * ========================================================
+   * TESTE 6 — FACE LANDMARKER
+   * ========================================================
+   */
 
   try {
     faceLandmarker =
@@ -490,12 +768,6 @@ const WASM_PATH =
             modelAssetPath:
               MODEL_PATH,
 
-            /*
-             * CPU é intencional.
-             *
-             * Não queremos depender de GPU/WebGL
-             * para o primeiro fluxo.
-             */
             delegate:
               "CPU"
           },
@@ -523,23 +795,15 @@ const WASM_PATH =
         }
       );
 
-    if (
-      !faceLandmarker
-    ) {
-      throw new Error(
-        "FaceLandmarker não foi criado."
-      );
-    }
-
     console.log(
-      "[FacialPreflight] Face Landmarker iniciado com sucesso."
+      "[FacialPreflight] ===== FACE LANDMARKER OK ====="
     );
 
     return faceLandmarker;
 
   } catch (error) {
     console.error(
-      "[FacialPreflight] ERRO REAL DO FACELANDMARKER",
+      "[FacialPreflight] ===== FACE LANDMARKER FALHOU =====",
       {
         name:
           error?.name,
