@@ -15,26 +15,12 @@ const MRZ_WHITELIST =
  * ESTRATÉGIA OCR
  * =========================================================
  *
- * A versão anterior fazia:
+ * MRZ primeiro.
  *
- * 6 crops × 3 tratamentos × 3 PSM
- *
- * e depois ainda expandia centenas de candidatos.
- *
- * Isso tornava a análise lenta e aumentava muito o ruído.
- *
- * Agora:
- *
- * 1. normalização da imagem
- * 2. MRZ inferior principal
- * 3. poucas tentativas OCR
- * 4. se não houver candidatos fortes:
- *      segundo crop
- * 5. somente no fim:
- *      OCR da página completa
- *
- * A validação real continua no
+ * A validação final continua no
  * PassportValidationService.
+ *
+ * O OCR apenas encontra candidatos.
  */
 
 const PRIMARY_MRZ_PASSES = [
@@ -81,12 +67,6 @@ const FULL_OCR_PASSES = [
  * =========================================================
  * CORREÇÕES OCR
  * =========================================================
- *
- * Estas tabelas NÃO validam o passaporte.
- *
- * Apenas ajudam a transformar erros comuns do OCR
- * em candidatos que posteriormente serão submetidos
- * aos check digits ICAO.
  */
 
 const DIGIT_ALTERNATIVES = {
@@ -185,13 +165,6 @@ function normalizeFirstMrzLine(value) {
   const chars =
     line.split("");
 
-  /*
-   * A primeira posição deve ser P.
-   *
-   * Não confiamos cegamente no OCR.
-   * O candidato original continua disponível
-   * em outras etapas.
-   */
   if (chars.length > 0) {
     if (chars[0] !== "P") {
       chars[0] =
@@ -199,18 +172,10 @@ function normalizeFirstMrzLine(value) {
     }
   }
 
-  /*
-   * TD3:
-   *
-   * P<
-   */
   if (chars.length > 1) {
     chars[1] = "<";
   }
 
-  /*
-   * Código do país emissor.
-   */
   for (
     let i = 2;
     i <= 4 && i < chars.length;
@@ -240,17 +205,11 @@ function normalizeSecondMrzLine(value) {
   const chars =
     line.split("");
 
-  /*
-   * Check digit do número do passaporte.
-   */
   if (chars.length > 9) {
     chars[9] =
       correctDigit(chars[9]);
   }
 
-  /*
-   * Nacionalidade.
-   */
   for (
     let i = 10;
     i <= 12 && i < chars.length;
@@ -261,7 +220,10 @@ function normalizeSecondMrzLine(value) {
   }
 
   /*
-   * Data de nascimento.
+   * DOB.
+   *
+   * Mantemos a normalização numérica porque
+   * o validador final exige YYMMDD.
    */
   for (
     let i = 13;
@@ -272,9 +234,6 @@ function normalizeSecondMrzLine(value) {
       correctDigit(chars[i]);
   }
 
-  /*
-   * Sexo.
-   */
   if (chars.length > 20) {
     const sex =
       correctLetter(chars[20]);
@@ -290,9 +249,6 @@ function normalizeSecondMrzLine(value) {
     }
   }
 
-  /*
-   * Validade.
-   */
   for (
     let i = 21;
     i <= 27 && i < chars.length;
@@ -302,23 +258,614 @@ function normalizeSecondMrzLine(value) {
       correctDigit(chars[i]);
   }
 
-  /*
-   * Check digit do número pessoal.
-   */
   if (chars.length > 42) {
     chars[42] =
       correctDigit(chars[42]);
   }
 
-  /*
-   * Check digit composto.
-   */
   if (chars.length > 43) {
     chars[43] =
       correctDigit(chars[43]);
   }
 
   return chars.join("");
+}
+
+/*
+ * =========================================================
+ * ICAO — FUNÇÕES LOCAIS DE CHECK DIGIT
+ * =========================================================
+ *
+ * Estas funções NÃO substituem a validação oficial.
+ *
+ * Servem apenas para recuperar candidatos OCR.
+ */
+
+function mrzCharacterValue(char) {
+  if (
+    char >= "0" &&
+    char <= "9"
+  ) {
+    return Number(char);
+  }
+
+  if (
+    char >= "A" &&
+    char <= "Z"
+  ) {
+    return (
+      char.charCodeAt(0) -
+      55
+    );
+  }
+
+  if (char === "<") {
+    return 0;
+  }
+
+  return null;
+}
+
+function calculateMrzCheckDigit(value) {
+  const weights = [
+    7,
+    3,
+    1
+  ];
+
+  let sum = 0;
+
+  for (
+    let index = 0;
+    index < value.length;
+    index += 1
+  ) {
+    const number =
+      mrzCharacterValue(
+        value[index]
+      );
+
+    if (number === null) {
+      return null;
+    }
+
+    sum +=
+      number *
+      weights[index % 3];
+  }
+
+  return String(
+    sum % 10
+  );
+}
+
+/*
+ * =========================================================
+ * DATA MRZ
+ * =========================================================
+ */
+
+function isRealCalendarDate(
+  yy,
+  mm,
+  dd
+) {
+  if (
+    !/^\d{2}$/.test(yy) ||
+    !/^\d{2}$/.test(mm) ||
+    !/^\d{2}$/.test(dd)
+  ) {
+    return false;
+  }
+
+  const month =
+    Number(mm);
+
+  const day =
+    Number(dd);
+
+  if (
+    month < 1 ||
+    month > 12
+  ) {
+    return false;
+  }
+
+  if (
+    day < 1 ||
+    day > 31
+  ) {
+    return false;
+  }
+
+  /*
+   * Verificação real do calendário.
+   *
+   * Usamos 2000 + YY porque o objetivo aqui
+   * é verificar mês/dia e anos bissextos.
+   */
+  const year =
+    2000 + Number(yy);
+
+  const date =
+    new Date(
+      Date.UTC(
+        year,
+        month - 1,
+        day
+      )
+    );
+
+  return (
+    date.getUTCFullYear() ===
+      year &&
+    date.getUTCMonth() ===
+      month - 1 &&
+    date.getUTCDate() ===
+      day
+  );
+}
+
+function isPlausibleBirthDate(
+  value
+) {
+  if (
+    !/^\d{6}$/.test(value)
+  ) {
+    return false;
+  }
+
+  const yy =
+    value.slice(0, 2);
+
+  const mm =
+    value.slice(2, 4);
+
+  const dd =
+    value.slice(4, 6);
+
+  if (
+    !isRealCalendarDate(
+      yy,
+      mm,
+      dd
+    )
+  ) {
+    return false;
+  }
+
+  /*
+   * Verificação de idade.
+   *
+   * O YY da MRZ pode representar 19xx ou 20xx.
+   *
+   * Aqui só rejeitamos datas que não possam
+   * corresponder a uma pessoa viva em termos
+   * razoáveis.
+   */
+  const currentYear =
+    new Date()
+      .getUTCFullYear();
+
+  const yyNumber =
+    Number(yy);
+
+  const candidates = [
+    1900 + yyNumber,
+    2000 + yyNumber
+  ];
+
+  return candidates.some(
+    year => {
+      const age =
+        currentYear -
+        year;
+
+      return (
+        age >= 0 &&
+        age <= 120
+      );
+    }
+  );
+}
+
+/*
+ * =========================================================
+ * RECUPERAÇÃO DA DOB
+ * =========================================================
+ *
+ * Este é o principal ajuste desta versão.
+ *
+ * Se o OCR ler:
+ *
+ * 900532
+ *
+ * em vez de:
+ *
+ * 900302
+ *
+ * a expansão genérica antiga poderia nunca
+ * chegar à posição errada da data.
+ *
+ * Agora pesquisamos especificamente a DOB.
+ *
+ * Não aceitamos simplesmente "qualquer data".
+ *
+ * O candidato precisa:
+ *
+ * 1. ser uma data real;
+ * 2. ser plausível como nascimento;
+ * 3. possuir check digit ICAO correto.
+ */
+
+function recoverBirthDateCandidates(
+  line2,
+  maxCandidates = 80
+) {
+  if (
+    !line2 ||
+    line2.length !== 44
+  ) {
+    return [];
+  }
+
+  const observed =
+    line2.slice(
+      13,
+      19
+    );
+
+  const observedCheck =
+    line2[19];
+
+  if (
+    !/^[0-9]{6}$/.test(
+      observed
+    )
+  ) {
+    return [];
+  }
+
+  const candidates = [];
+
+  /*
+   * Distância máxima de 2 caracteres.
+   *
+   * Isto corrige erros OCR reais sem permitir
+   * uma explosão combinatória.
+   */
+  for (
+    let index = 0;
+    index < 6;
+    index += 1
+  ) {
+    const original =
+      observed[index];
+
+    for (
+      let digit = 0;
+      digit <= 9;
+      digit += 1
+    ) {
+      const value =
+        String(digit);
+
+      if (
+        value === original
+      ) {
+        continue;
+      }
+
+      const chars =
+        observed.split("");
+
+      chars[index] =
+        value;
+
+      const date =
+        chars.join("");
+
+      if (
+        !isPlausibleBirthDate(
+          date
+        )
+      ) {
+        continue;
+      }
+
+      const expectedCheck =
+        calculateMrzCheckDigit(
+          date
+        );
+
+      if (
+        expectedCheck ===
+        observedCheck
+      ) {
+        candidates.push({
+          date,
+          checkDigit:
+            expectedCheck,
+          distance: 1
+        });
+      }
+    }
+  }
+
+  /*
+   * Se uma posição de DOB e o check digit
+   * também foram lidos incorretamente,
+   * tentamos novamente aceitando qualquer
+   * check digit, mas continuamos a exigir
+   * uma data real.
+   *
+   * O PassportValidationService fará a
+   * confirmação final do check digit.
+   */
+  if (
+    candidates.length === 0
+  ) {
+    for (
+      let index = 0;
+      index < 6;
+      index += 1
+    ) {
+      const original =
+        observed[index];
+
+      for (
+        let digit = 0;
+        digit <= 9;
+        digit += 1
+      ) {
+        const value =
+          String(digit);
+
+        if (
+          value === original
+        ) {
+          continue;
+        }
+
+        const chars =
+          observed.split("");
+
+        chars[index] =
+          value;
+
+        const date =
+          chars.join("");
+
+        if (
+          !isPlausibleBirthDate(
+            date
+          )
+        ) {
+          continue;
+        }
+
+        const expectedCheck =
+          calculateMrzCheckDigit(
+            date
+          );
+
+        candidates.push({
+          date,
+          checkDigit:
+            expectedCheck,
+          distance: 1
+        });
+
+        if (
+          candidates.length >=
+          maxCandidates
+        ) {
+          break;
+        }
+      }
+
+      if (
+        candidates.length >=
+        maxCandidates
+      ) {
+        break;
+      }
+    }
+  }
+
+  /*
+   * Distância 2.
+   *
+   * Só é usada quando não encontramos
+   * nenhuma solução com uma única alteração.
+   */
+  if (
+    candidates.length === 0
+  ) {
+    for (
+      let first = 0;
+      first < 6;
+      first += 1
+    ) {
+      for (
+        let second = first + 1;
+        second < 6;
+        second += 1
+      ) {
+        for (
+          let digitA = 0;
+          digitA <= 9;
+          digitA += 1
+        ) {
+          for (
+            let digitB = 0;
+            digitB <= 9;
+            digitB += 1
+          ) {
+            const chars =
+              observed.split("");
+
+            chars[first] =
+              String(digitA);
+
+            chars[second] =
+              String(digitB);
+
+            const date =
+              chars.join("");
+
+            if (
+              !isPlausibleBirthDate(
+                date
+              )
+            ) {
+              continue;
+            }
+
+            const expectedCheck =
+              calculateMrzCheckDigit(
+                date
+              );
+
+            /*
+             * Para distância 2, damos prioridade
+             * ao check digit observado.
+             */
+            if (
+              expectedCheck !==
+              observedCheck
+            ) {
+              continue;
+            }
+
+            candidates.push({
+              date,
+              checkDigit:
+                expectedCheck,
+              distance: 2
+            });
+
+            if (
+              candidates.length >=
+              maxCandidates
+            ) {
+              break;
+            }
+          }
+
+          if (
+            candidates.length >=
+            maxCandidates
+          ) {
+            break;
+          }
+        }
+
+        if (
+          candidates.length >=
+          maxCandidates
+        ) {
+          break;
+        }
+      }
+
+      if (
+        candidates.length >=
+        maxCandidates
+      ) {
+        break;
+      }
+    }
+  }
+
+  /*
+   * Remover duplicados.
+   */
+  const seen =
+    new Set();
+
+  return candidates
+    .filter(candidate => {
+      const key =
+        `${candidate.date}|${candidate.checkDigit}`;
+
+      if (
+        seen.has(key)
+      ) {
+        return false;
+      }
+
+      seen.add(key);
+
+      return true;
+    })
+    .slice(
+      0,
+      maxCandidates
+    );
+}
+
+function applyBirthDateCandidates(
+  line2,
+  maxCandidates = 80
+) {
+  const recovered =
+    recoverBirthDateCandidates(
+      line2,
+      maxCandidates
+    );
+
+  const variants = [];
+
+  for (
+    const candidate of recovered
+  ) {
+    const chars =
+      line2.split("");
+
+    chars[13] =
+      candidate.date[0];
+
+    chars[14] =
+      candidate.date[1];
+
+    chars[15] =
+      candidate.date[2];
+
+    chars[16] =
+      candidate.date[3];
+
+    chars[17] =
+      candidate.date[4];
+
+    chars[18] =
+      candidate.date[5];
+
+    /*
+     * Se sabemos qual é o check digit ICAO
+     * da data, colocamos o valor calculado.
+     *
+     * Isto não é uma aprovação do passaporte.
+     */
+    chars[19] =
+      candidate.checkDigit;
+
+    variants.push({
+      line:
+        chars.join(""),
+
+      recoveredBirthDate:
+        candidate.date,
+
+      recoveredBirthCheckDigit:
+        candidate.checkDigit,
+
+      recoveryDistance:
+        candidate.distance
+    });
+  }
+
+  return variants;
 }
 
 /*
@@ -337,7 +884,9 @@ function scoreMrzLine(
 
   let score = 0;
 
-  if (line.length === 44) {
+  if (
+    line.length === 44
+  ) {
     score += 30;
   }
 
@@ -347,31 +896,39 @@ function scoreMrzLine(
     score += 8;
   }
 
-  if (lineNumber === 1) {
-    if (line[0] === "P") {
+  if (
+    lineNumber === 1
+  ) {
+    if (
+      line[0] === "P"
+    ) {
       score += 20;
     }
 
-    if (line[1] === "<") {
-      score += 10;
-    }
-
     if (
-      /^P<[A-Z<]{3}/.test(line)
+      line[1] === "<"
     ) {
       score += 10;
     }
 
-    /*
-     * Passaportes TD3 normalmente têm
-     * bastante conteúdo de filler <.
-     */
-    if (/<{2,}/.test(line)) {
+    if (
+      /^P<[A-Z<]{3}/.test(
+        line
+      )
+    ) {
+      score += 10;
+    }
+
+    if (
+      /<{2,}/.test(line)
+    ) {
       score += 3;
     }
   }
 
-  if (lineNumber === 2) {
+  if (
+    lineNumber === 2
+  ) {
     if (
       /^.{9}\d/.test(line)
     ) {
@@ -379,21 +936,45 @@ function scoreMrzLine(
     }
 
     if (
-      /^.{10}[A-Z]{3}/.test(line)
+      /^.{10}[A-Z]{3}/.test(
+        line
+      )
     ) {
       score += 5;
     }
 
     if (
-      /^.{20}[MF<]/.test(line)
+      /^.{20}[MF<]/.test(
+        line
+      )
     ) {
       score += 5;
     }
 
     if (
-      /^.{28}[A-Z0-9<]+$/.test(line)
+      /^.{28}[A-Z0-9<]+$/.test(
+        line
+      )
     ) {
       score += 3;
+    }
+
+    /*
+     * Uma DOB semanticamente possível recebe
+     * pequena prioridade.
+     */
+    const birthDate =
+      line.slice(
+        13,
+        19
+      );
+
+    if (
+      isPlausibleBirthDate(
+        birthDate
+      )
+    ) {
+      score += 8;
     }
   }
 
@@ -443,31 +1024,24 @@ function add44Window(
         set.add(normalized);
       }
 
-      /*
-       * Mantemos a leitura original.
-       * O validador decidirá depois.
-       */
       set.add(candidate);
     };
 
-  if (compact.length === 44) {
+  if (
+    compact.length === 44
+  ) {
     add(compact);
     return;
   }
 
-  /*
-   * Pequenas sobras do OCR são comuns.
-   *
-   * Limitamos a procura a textos razoáveis
-   * para evitar explosão combinatória.
-   */
   if (
     compact.length > 44 &&
     compact.length <= 100
   ) {
     for (
       let start = 0;
-      start <= compact.length - 44;
+      start <=
+        compact.length - 44;
       start += 1
     ) {
       const window =
@@ -492,9 +1066,7 @@ function add44Window(
         continue;
       }
 
-      add(
-        window
-      );
+      add(window);
     }
   }
 }
@@ -523,11 +1095,9 @@ function addLikelyLineCandidates(
     lineNumber
   );
 
-  /*
-   * Para a primeira linha:
-   * procurar P.
-   */
-  if (lineNumber === 1) {
+  if (
+    lineNumber === 1
+  ) {
     const p =
       compact.indexOf("P");
 
@@ -562,9 +1132,6 @@ function extractLineCandidates(
   const second =
     new Set();
 
-  /*
-   * 1. Linhas individuais.
-   */
   for (
     const line of rawLines
   ) {
@@ -581,9 +1148,6 @@ function extractLineCandidates(
     );
   }
 
-  /*
-   * 2. Pares de linhas adjacentes.
-   */
   for (
     let i = 0;
     i < rawLines.length - 1;
@@ -600,11 +1164,9 @@ function extractLineCandidates(
         `${line1}${line2}`
       );
 
-    /*
-     * Caso clássico:
-     * duas linhas perfeitas.
-     */
-    if (joined.length >= 88) {
+    if (
+      joined.length >= 88
+    ) {
       const p =
         joined.indexOf("P");
 
@@ -612,16 +1174,24 @@ function extractLineCandidates(
         const tail =
           joined.slice(p);
 
-        if (tail.length >= 88) {
+        if (
+          tail.length >= 88
+        ) {
           add44Window(
             first,
-            tail.slice(0, 44),
+            tail.slice(
+              0,
+              44
+            ),
             1
           );
 
           add44Window(
             second,
-            tail.slice(44, 88),
+            tail.slice(
+              44,
+              88
+            ),
             2
           );
         }
@@ -629,15 +1199,12 @@ function extractLineCandidates(
     }
   }
 
-  /*
-   * 3. Texto completo.
-   *
-   * Útil quando o Tesseract juntou as duas linhas.
-   */
   const whole =
     compactMrz(text);
 
-  if (whole.length >= 88) {
+  if (
+    whole.length >= 88
+  ) {
     const p =
       whole.indexOf("P");
 
@@ -645,31 +1212,36 @@ function extractLineCandidates(
       const tail =
         whole.slice(p);
 
-      if (tail.length >= 88) {
+      if (
+        tail.length >= 88
+      ) {
         add44Window(
           first,
-          tail.slice(0, 44),
+          tail.slice(
+            0,
+            44
+          ),
           1
         );
 
         add44Window(
           second,
-          tail.slice(44, 88),
+          tail.slice(
+            44,
+            88
+          ),
           2
         );
       }
 
-      /*
-       * Pequeno deslocamento caso o OCR tenha
-       * inserido alguns caracteres antes/depois.
-       */
       if (
         tail.length > 88 &&
         tail.length <= 110
       ) {
         for (
           let start = 0;
-          start <= tail.length - 88;
+          start <=
+            tail.length - 88;
           start += 1
         ) {
           const pair =
@@ -686,13 +1258,19 @@ function extractLineCandidates(
 
           add44Window(
             first,
-            pair.slice(0, 44),
+            pair.slice(
+              0,
+              44
+            ),
             1
           );
 
           add44Window(
             second,
-            pair.slice(44, 88),
+            pair.slice(
+              44,
+              88
+            ),
             2
           );
         }
@@ -704,10 +1282,16 @@ function extractLineCandidates(
     rawLines,
 
     first:
-      [...first].slice(0, 40),
+      [...first].slice(
+        0,
+        40
+      ),
 
     second:
-      [...second].slice(0, 40)
+      [...second].slice(
+        0,
+        40
+      )
   };
 }
 
@@ -729,16 +1313,17 @@ function buildPairsFromOcrText(
 
   const pairs = [];
 
-  /*
-   * Limite defensivo.
-   *
-   * Não precisamos de milhares de pares.
-   */
   const firstCandidates =
-    candidates.first.slice(0, 20);
+    candidates.first.slice(
+      0,
+      20
+    );
 
   const secondCandidates =
-    candidates.second.slice(0, 20);
+    candidates.second.slice(
+      0,
+      20
+    );
 
   for (
     const line1 of firstCandidates
@@ -756,11 +1341,9 @@ function buildPairsFromOcrText(
           2
         );
 
-      /*
-       * Um par TD3 precisa pelo menos
-       * parecer estruturalmente correto.
-       */
-      if (score < 45) {
+      if (
+        score < 45
+      ) {
         continue;
       }
 
@@ -784,14 +1367,22 @@ function buildPairsFromOcrText(
 
   pairs.sort(
     (a, b) =>
-      Number(b.score || 0) -
-      Number(a.score || 0)
+      Number(
+        b.score || 0
+      ) -
+      Number(
+        a.score || 0
+      )
   );
 
   return {
     candidates,
+
     pairs:
-      pairs.slice(0, 30)
+      pairs.slice(
+        0,
+        30
+      )
   };
 }
 
@@ -799,22 +1390,6 @@ function buildPairsFromOcrText(
  * =========================================================
  * EXPANSÃO INTELIGENTE
  * =========================================================
- *
- * A versão anterior fazia expansão sequencial de muitas
- * posições e podia chegar rapidamente a centenas/milhares
- * de combinações.
- *
- * Agora usamos uma pequena busca em largura.
- *
- * O objetivo é cobrir:
- *
- * O -> 0
- * I -> 1
- * L -> 1
- * B -> 8
- * etc.
- *
- * sem destruir o desempenho.
  */
 
 function getAlternativesForPosition(
@@ -830,12 +1405,18 @@ function getAlternativesForPosition(
       char
     ]);
 
-  if (lineNumber === 1) {
-    if (index === 0) {
+  if (
+    lineNumber === 1
+  ) {
+    if (
+      index === 0
+    ) {
       alternatives.add("P");
     }
 
-    if (index === 1) {
+    if (
+      index === 1
+    ) {
       alternatives.add("<");
     }
 
@@ -849,7 +1430,9 @@ function getAlternativesForPosition(
             char
           ] || []
       ) {
-        alternatives.add(item);
+        alternatives.add(
+          item
+        );
       }
     }
 
@@ -857,10 +1440,6 @@ function getAlternativesForPosition(
       ...alternatives
     ];
   }
-
-  /*
-   * Segunda linha.
-   */
 
   const numeric =
     index === 9 ||
@@ -875,14 +1454,18 @@ function getAlternativesForPosition(
     index === 42 ||
     index === 43;
 
-  if (numeric) {
+  if (
+    numeric
+  ) {
     for (
       const item of
         DIGIT_ALTERNATIVES[
           char
         ] || []
     ) {
-      alternatives.add(item);
+      alternatives.add(
+        item
+      );
     }
 
     return [
@@ -890,9 +1473,6 @@ function getAlternativesForPosition(
     ];
   }
 
-  /*
-   * Nacionalidade.
-   */
   if (
     index >= 10 &&
     index <= 12
@@ -903,7 +1483,9 @@ function getAlternativesForPosition(
           char
         ] || []
     ) {
-      alternatives.add(item);
+      alternatives.add(
+        item
+      );
     }
 
     return [
@@ -911,18 +1493,25 @@ function getAlternativesForPosition(
     ];
   }
 
-  /*
-   * Sexo.
-   */
-  if (index === 20) {
+  if (
+    index === 20
+  ) {
     if (
       char !== "M" &&
       char !== "F" &&
       char !== "<"
     ) {
-      alternatives.add("<");
-      alternatives.add("M");
-      alternatives.add("F");
+      alternatives.add(
+        "<"
+      );
+
+      alternatives.add(
+        "M"
+      );
+
+      alternatives.add(
+        "F"
+      );
     }
 
     return [
@@ -934,6 +1523,20 @@ function getAlternativesForPosition(
     ...alternatives
   ];
 }
+
+/*
+ * =========================================================
+ * EXPANSÃO MRZ
+ * =========================================================
+ *
+ * ALTERAÇÃO PRINCIPAL:
+ *
+ * A DOB recebe prioridade absoluta.
+ *
+ * Não deixamos as primeiras 8 ambiguidades
+ * do número do passaporte consumirem a
+ * capacidade de recuperação da data.
+ */
 
 function expandMrzLine(
   value,
@@ -956,17 +1559,149 @@ function expandMrzLine(
     return [];
   }
 
-  /*
-   * Primeiro preservamos sempre o candidato original.
-   */
   let variants = [
     normalized
   ];
 
   /*
-   * Só analisamos posições que realmente
-   * possuem uma alternativa OCR.
+   * =======================================================
+   * SEGUNDA LINHA — RECUPERAÇÃO DIRECIONADA DA DOB
+   * =======================================================
    */
+
+  if (
+    lineNumber === 2
+  ) {
+    const birthDateVariants =
+      applyBirthDateCandidates(
+        normalized,
+        Math.min(
+          80,
+          maxVariants
+        )
+      );
+
+    /*
+     * A DOB recuperada vem imediatamente
+     * depois do candidato original.
+     */
+    for (
+      const recovered of
+        birthDateVariants
+    ) {
+      variants.push(
+        recovered.line
+      );
+    }
+
+    /*
+     * Também tentamos alternativas OCR
+     * diretamente nas posições da DOB.
+     *
+     * Isto cobre O/0, I/1, B/8, etc.
+     */
+    let dateVariants = [
+      normalized
+    ];
+
+    const datePositions = [
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+    ];
+
+    for (
+      const index of datePositions
+    ) {
+      const next =
+        [];
+
+      for (
+        const current of
+          dateVariants
+      ) {
+        const chars =
+          current.split("");
+
+        const alternatives =
+          getAlternativesForPosition(
+            chars,
+            index,
+            2
+          );
+
+        for (
+          const alternative of
+            alternatives
+        ) {
+          const candidate =
+            current.split("");
+
+          candidate[index] =
+            alternative;
+
+          next.push(
+            candidate.join("")
+          );
+
+          if (
+            next.length >=
+            maxVariants
+          ) {
+            break;
+          }
+        }
+
+        if (
+          next.length >=
+          maxVariants
+        ) {
+          break;
+        }
+      }
+
+      dateVariants =
+        [
+          ...new Set(next)
+        ].slice(
+          0,
+          maxVariants
+        );
+
+      if (
+        !dateVariants.length
+      ) {
+        break;
+      }
+    }
+
+    for (
+      const candidate of
+        dateVariants
+    ) {
+      variants.push(
+        candidate
+      );
+
+      if (
+        variants.length >=
+        maxVariants
+      ) {
+        break;
+      }
+    }
+  }
+
+  /*
+   * =======================================================
+   * EXPANSÃO GERAL
+   * =======================================================
+   */
+
   const positions = [];
 
   for (
@@ -974,6 +1709,21 @@ function expandMrzLine(
     index < 44;
     index += 1
   ) {
+    /*
+     * DOB já recebeu tratamento dedicado.
+     */
+    if (
+      lineNumber === 2 &&
+      (
+        (
+          index >= 13 &&
+          index <= 19
+        )
+      )
+    ) {
+      continue;
+    }
+
     const alternatives =
       getAlternativesForPosition(
         normalized.split(""),
@@ -992,72 +1742,88 @@ function expandMrzLine(
   }
 
   /*
-   * No máximo 8 posições ambíguas.
-   *
-   * Mais do que isso normalmente indica
-   * que o OCR está muito ruim e é melhor
-   * executar outra passagem de OCR.
+   * A expansão geral continua limitada
+   * para proteger o desempenho.
    */
   const limitedPositions =
-    positions.slice(0, 8);
+    positions.slice(
+      0,
+      8
+    );
 
   for (
-    const position of limitedPositions
+    const position of
+      limitedPositions
   ) {
-    const next = [];
+    const next =
+      [];
 
     for (
-      const current of variants
+      const current of
+        variants
     ) {
-      const chars =
-        current.split("");
-
       const alternatives =
         getAlternativesForPosition(
-          chars,
+          current.split(""),
           position.index,
           lineNumber
         );
 
       for (
-        const alternative of alternatives
+        const alternative of
+          alternatives
       ) {
-        chars[position.index] =
+        const candidate =
+          current.split("");
+
+        candidate[
+          position.index
+        ] =
           alternative;
 
         next.push(
-          chars.join("")
+          candidate.join("")
         );
 
         if (
-          next.length >= maxVariants
+          next.length >=
+          maxVariants
         ) {
           break;
         }
-
-        chars[position.index] =
-          current[position.index];
       }
 
       if (
-        next.length >= maxVariants
+        next.length >=
+        maxVariants
       ) {
         break;
       }
     }
 
-    variants =
+    const uniqueNext =
       [
         ...new Set(next)
-      ].slice(
-        0,
-        maxVariants
-      );
+      ];
+
+    if (
+      uniqueNext.length
+    ) {
+      variants =
+        uniqueNext.slice(
+          0,
+          maxVariants
+        );
+    }
+
+    if (
+      variants.length >=
+      maxVariants
+    ) {
+      break;
+    }
   }
 
-  /*
-   * Garante o candidato original.
-   */
   variants.unshift(
     normalized
   );
@@ -1074,19 +1840,6 @@ function expandMrzLine(
  * =========================================================
  * PRÉ-PROCESSAMENTO
  * =========================================================
- *
- * Aqui está uma das maiores correções de desempenho.
- *
- * Não criamos dezenas de variantes.
- *
- * Criamos:
- *
- * - imagem normalizada
- * - crop MRZ principal
- * - grayscale MRZ principal
- * - crop MRZ fallback
- * - grayscale fallback
- * - full image para último recurso
  */
 
 async function createPreprocessedVariants(
@@ -1102,14 +1855,17 @@ async function createPreprocessedVariants(
         withoutEnlargement: false
       })
       .flatten({
-        background: "#ffffff"
+        background:
+          "#ffffff"
       })
       .jpeg({
         quality: 94,
-        chromaSubsampling: "4:4:4"
+        chromaSubsampling:
+          "4:4:4"
       })
       .toBuffer({
-        resolveWithObject: true
+        resolveWithObject:
+          true
       });
 
   const normalized =
@@ -1123,27 +1879,24 @@ async function createPreprocessedVariants(
 
   const variants = [];
 
-  /*
-   * Full image fica guardada, mas marcada
-   * para uso somente como fallback.
-   */
   variants.push({
-    name: "full",
-    type: "full",
-    buffer: normalized,
-    priority: 3
+    name:
+      "full",
+
+    type:
+      "full",
+
+    buffer:
+      normalized,
+
+    priority:
+      3
   });
 
   if (
     width &&
     height
   ) {
-    /*
-     * Crop principal.
-     *
-     * 34% da parte inferior cobre a MRZ
-     * mesmo quando existe margem significativa.
-     */
     const primaryRatio =
       0.34;
 
@@ -1212,26 +1965,31 @@ async function createPreprocessedVariants(
     variants.push({
       name:
         "mrz_primary_color",
-      type: "mrz",
+
+      type:
+        "mrz",
+
       buffer:
         primaryColor,
-      priority: 1
+
+      priority:
+        1
     });
 
     variants.push({
       name:
         "mrz_primary_gray",
-      type: "mrz",
+
+      type:
+        "mrz",
+
       buffer:
         primaryGray,
-      priority: 1
+
+      priority:
+        1
     });
 
-    /*
-     * Fallback mais largo.
-     *
-     * 48% inferior.
-     */
     const fallbackRatio =
       0.48;
 
@@ -1287,23 +2045,26 @@ async function createPreprocessedVariants(
     variants.push({
       name:
         "mrz_fallback_gray",
-      type: "mrz",
+
+      type:
+        "mrz",
+
       buffer:
         fallbackGray,
-      priority: 2
+
+      priority:
+        2
     });
   }
 
-  /*
-   * Ordenamos:
-   *
-   * MRZ primeiro.
-   * Full somente no final.
-   */
   variants.sort(
     (a, b) =>
-      Number(a.priority || 0) -
-      Number(b.priority || 0)
+      Number(
+        a.priority || 0
+      ) -
+      Number(
+        b.priority || 0
+      )
   );
 
   return {
@@ -1385,11 +2146,6 @@ class PassportOcrService {
     );
   }
 
-  /*
-   * Verifica rapidamente se já temos
-   * uma estrutura suficientemente boa para
-   * parar de gastar CPU.
-   */
   hasStrongMrzCandidate(
     mrzSources
   ) {
@@ -1404,10 +2160,14 @@ class PassportOcrService {
         const pair of pairs
       ) {
         if (
-          pair.line1?.length === 44 &&
-          pair.line2?.length === 44 &&
-          pair.line1[0] === "P" &&
-          pair.line1[1] === "<" &&
+          pair.line1?.length ===
+            44 &&
+          pair.line2?.length ===
+            44 &&
+          pair.line1[0] ===
+            "P" &&
+          pair.line1[1] ===
+            "<" &&
           pair.score >= 90
         ) {
           return true;
@@ -1462,6 +2222,7 @@ class PassportOcrService {
         this.logger({
           event:
             "passport_ocr_preprocessing_failed",
+
           error:
             error.message
         });
@@ -1472,15 +2233,22 @@ class PassportOcrService {
           {
             name:
               "original",
+
             type:
               "full",
+
             buffer,
+
             priority:
               3
           }
         ],
-        width: null,
-        height: null
+
+        width:
+          null,
+
+        height:
+          null
       };
     }
 
@@ -1497,11 +2265,9 @@ class PassportOcrService {
       const variant of
         prepared.variants
     ) {
-      /*
-       * Full image só entra na fase final.
-       */
       if (
-        variant.type === "full"
+        variant.type ===
+        "full"
       ) {
         continue;
       }
@@ -1526,10 +2292,12 @@ class PassportOcrService {
       }
 
       for (
-        const basePass of passes
+        const basePass of
+          passes
       ) {
         const pass = {
           ...basePass,
+
           whitelist:
             MRZ_WHITELIST
         };
@@ -1561,10 +2329,13 @@ class PassportOcrService {
           const entry = {
             variant:
               variant.name,
+
             pass:
               pass.name,
+
             confidence:
               normalizedConfidence,
+
             text
           };
 
@@ -1575,7 +2346,9 @@ class PassportOcrService {
           const extracted =
             buildPairsFromOcrText(
               text,
+
               `${variant.name}/${pass.name}`,
+
               normalizedConfidence
             );
 
@@ -1589,13 +2362,6 @@ class PassportOcrService {
             extracted
           });
 
-          /*
-           * Se a MRZ já parece excelente,
-           * não fazemos OCR adicional.
-           *
-           * O PassportValidationService continuará
-           * responsável pela confirmação final.
-           */
           if (
             this.hasStrongMrzCandidate(
               mrzSources
@@ -1639,10 +2405,8 @@ class PassportOcrService {
      * =====================================================
      * FASE 2 — OCR COMPLETO
      * =====================================================
-     *
-     * Só executamos se a MRZ inferior não
-     * produzir uma estrutura forte.
      */
+
     if (
       !this.hasStrongMrzCandidate(
         mrzSources
@@ -1651,10 +2415,13 @@ class PassportOcrService {
       const fullVariant =
         prepared.variants.find(
           variant =>
-            variant.type === "full"
+            variant.type ===
+            "full"
         );
 
-      if (fullVariant) {
+      if (
+        fullVariant
+      ) {
         for (
           const pass of
             FULL_OCR_PASSES
@@ -1686,17 +2453,22 @@ class PassportOcrService {
             allResults.push({
               variant:
                 "full",
+
               pass:
                 pass.name,
+
               confidence:
                 normalizedConfidence,
+
               text
             });
 
             const extracted =
               buildPairsFromOcrText(
                 text,
+
                 `full/${pass.name}`,
+
                 normalizedConfidence
               );
 
@@ -1799,11 +2571,6 @@ class PassportOcrService {
               pair.line2
             ];
 
-      /*
-       * Não fazemos produto cartesiano gigante.
-       *
-       * Priorizamos variantes por score.
-       */
       const candidates = [];
 
       for (
@@ -1814,6 +2581,7 @@ class PassportOcrService {
         ) {
           candidates.push({
             line1,
+
             line2,
 
             source:
@@ -1843,8 +2611,12 @@ class PassportOcrService {
 
       candidates.sort(
         (a, b) =>
-          Number(b.score || 0) -
-          Number(a.score || 0)
+          Number(
+            b.score || 0
+          ) -
+          Number(
+            a.score || 0
+          )
       );
 
       expandedPairs.push(
@@ -1866,7 +2638,8 @@ class PassportOcrService {
       new Set();
 
     for (
-      const pair of expandedPairs
+      const pair of
+        expandedPairs
     ) {
       const key =
         `${pair.line1}|${pair.line2}`;
@@ -1997,7 +2770,31 @@ class PassportOcrService {
             expanded:
               Boolean(
                 pair.expanded
-              )
+              ),
+
+            /*
+             * Diagnóstico específico da DOB.
+             */
+            ocrBirthDate:
+              pair.line2
+                ? pair.line2.slice(
+                    13,
+                    19
+                  )
+                : null,
+
+            ocrBirthCheckDigit:
+              pair.line2
+                ? pair.line2[19]
+                : null,
+
+            recoveredBirthCandidates:
+              pair.line2
+                ? recoverBirthDateCandidates(
+                    pair.line2,
+                    10
+                  )
+                : []
           })
         );
 
@@ -2143,9 +2940,6 @@ class PassportOcrService {
  * =========================================================
  * EXPORTS
  * =========================================================
- *
- * Mantemos os mesmos exports utilizados
- * pelo restante do projeto.
  */
 
 module.exports =
