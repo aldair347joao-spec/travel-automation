@@ -2629,7 +2629,7 @@
       !analysis.faceDetected
     ) {
 
-      return:
+      return
         "Posicione o rosto diante da câmera.";
 
     }
@@ -2639,7 +2639,7 @@
       !analysis.singleFace
     ) {
 
-      return:
+      return
         "Deixe apenas uma pessoa diante da câmera.";
 
     }
@@ -2651,7 +2651,7 @@
       0.55
     ) {
 
-      return:
+      return
         "Melhore a iluminação do rosto.";
 
     }
@@ -2663,7 +2663,7 @@
       0.18
     ) {
 
-      return:
+      return
         "Mantenha o dispositivo estável.";
 
     }
@@ -2682,8 +2682,8 @@
     }
 
 
-    return:
-      "Perfeito. Mantenha esta posição.";
+    return
+       "Perfeito. Mantenha esta posição.";
   }
 
 
