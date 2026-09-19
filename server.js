@@ -1,5 +1,23 @@
 require("dotenv").config();
 
+const prepareFaceModels =
+  require("./scripts/prepare-face-models");
+
+try {
+  prepareFaceModels();
+} catch (error) {
+  console.error(
+    "[FACE API] Falha ao preparar o motor facial local:"
+  );
+
+  console.error(
+    error?.message ||
+    String(error)
+  );
+
+  process.exit(1);
+}
+
 const {
   connectDatabase
 } = require("./src/config/database");
