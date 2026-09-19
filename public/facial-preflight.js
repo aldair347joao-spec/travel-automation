@@ -5,20 +5,23 @@
  * ============================================================
  *
  * Objetivo:
- * - Usar a câmera real do dispositivo.
+ * - Usar a câmera real do dispositivo somente quando iniciado.
  * - Detectar rosto localmente com MediaPipe Face Landmarker.
  * - Orientar o cliente sobre enquadramento, distância,
  *   pose, iluminação e sorriso.
  * - Executar uma sequência de 10 posições.
+ * - Orientar cada posição também por áudio.
  * - Enviar somente métricas/resultados para o backend.
  *
  * IMPORTANTE:
  * Este módulo NÃO:
+ * - abre a câmera automaticamente;
  * - falsifica câmera;
  * - reproduz vídeo como webcam;
  * - tenta enganar sistemas de liveness;
  * - substitui a verificação oficial do VFS;
- * - grava vídeo do cliente.
+ * - grava vídeo do cliente;
+ * - utiliza uma API externa de reconhecimento de identidade.
  *
  * As imagens usadas durante a análise permanecem em memória.
  * ============================================================
@@ -40,12 +43,14 @@
   const MEDIAPIPE_MODULE =
     `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VERSION}/+esm`;
 
+  const AUDIO_LANGUAGE = "pt-PT";
+
   const POSITIONS = [
     {
       id: "frontal",
       label: "Olhe diretamente para a câmera",
       instruction:
-        "Mantenha o rosto de frente para a câmera.",
+        "Olhe diretamente para a câmera e mantenha o rosto parado.",
       duration: 1100
     },
 
@@ -53,7 +58,7 @@
       id: "left",
       label: "Vire lentamente para a esquerda",
       instruction:
-        "Vire a cabeça suavemente para a esquerda.",
+        "Vire lentamente a cabeça para a esquerda.",
       duration: 1100
     },
 
@@ -61,7 +66,7 @@
       id: "right",
       label: "Vire lentamente para a direita",
       instruction:
-        "Vire a cabeça suavemente para a direita.",
+        "Vire lentamente a cabeça para a direita.",
       duration: 1100
     },
 
@@ -69,7 +74,7 @@
       id: "up",
       label: "Olhe ligeiramente para cima",
       instruction:
-        "Levante o olhar e incline ligeiramente a cabeça para cima.",
+        "Olhe ligeiramente para cima.",
       duration: 1100
     },
 
@@ -77,7 +82,7 @@
       id: "down",
       label: "Olhe ligeiramente para baixo",
       instruction:
-        "Baixe ligeiramente o olhar e a cabeça.",
+        "Olhe ligeiramente para baixo.",
       duration: 1100
     },
 
@@ -85,7 +90,7 @@
       id: "left_up",
       label: "Esquerda e cima",
       instruction:
-        "Vire ligeiramente para a esquerda e para cima.",
+        "Vire ligeiramente para a esquerda e olhe para cima.",
       duration: 1100
     },
 
@@ -93,7 +98,7 @@
       id: "right_up",
       label: "Direita e cima",
       instruction:
-        "Vire ligeiramente para a direita e para cima.",
+        "Vire ligeiramente para a direita e olhe para cima.",
       duration: 1100
     },
 
@@ -101,7 +106,7 @@
       id: "left_down",
       label: "Esquerda e baixo",
       instruction:
-        "Vire ligeiramente para a esquerda e para baixo.",
+        "Vire ligeiramente para a esquerda e olhe para baixo.",
       duration: 1100
     },
 
@@ -109,7 +114,7 @@
       id: "right_down",
       label: "Direita e baixo",
       instruction:
-        "Vire ligeiramente para a direita e para baixo.",
+        "Vire ligeiramente para a direita e olhe para baixo.",
       duration: 1100
     },
 
@@ -157,6 +162,7 @@
   let canvasContext = null;
 
   let stream = null;
+
   let running = false;
   let initialized = false;
 
@@ -181,36 +187,52 @@
   };
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * UTILIDADES
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function clamp(value, min, max) {
-    return Math.max(min, Math.min(max, value));
+    return Math.max(
+      min,
+      Math.min(max, value)
+    );
   }
 
   function average(values) {
-    if (!values.length) return 0;
+    if (!values.length) {
+      return 0;
+    }
 
     return (
       values.reduce(
-        (sum, value) => sum + value,
+        (sum, value) =>
+          sum + value,
         0
       ) / values.length
     );
   }
 
-  function safeNumber(value, fallback = 0) {
+  function safeNumber(
+    value,
+    fallback = 0
+  ) {
     return Number.isFinite(value)
       ? value
       : fallback;
   }
 
-  function emit(name, payload) {
-    const callback = callbacks[name];
+  function emit(
+    name,
+    payload
+  ) {
+    const callback =
+      callbacks[name];
 
-    if (typeof callback === "function") {
+    if (
+      typeof callback ===
+      "function"
+    ) {
       try {
         callback(payload);
       } catch (error) {
@@ -222,17 +244,89 @@
     }
   }
 
-  function setStatus(message, type = "info") {
-    emit("onStatus", {
-      message,
-      type
-    });
+  function setStatus(
+    message,
+    type = "info"
+  ) {
+    emit(
+      "onStatus",
+      {
+        message,
+        type
+      }
+    );
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
+   * ÁUDIO
+   * ==========================================================
+   */
+
+  function speakInstruction(
+    message
+  ) {
+    if (
+      !message ||
+      typeof window ===
+        "undefined" ||
+      !(
+        "speechSynthesis" in
+        window
+      )
+    ) {
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+
+      const utterance =
+        new SpeechSynthesisUtterance(
+          String(message)
+        );
+
+      utterance.lang =
+        AUDIO_LANGUAGE;
+
+      utterance.rate = 0.92;
+
+      utterance.pitch = 1;
+
+      utterance.volume = 1;
+
+      window.speechSynthesis.speak(
+        utterance
+      );
+    } catch (error) {
+      console.warn(
+        "[FacialPreflight] áudio indisponível",
+        error
+      );
+    }
+  }
+
+  function stopSpeech() {
+    if (
+      typeof window ===
+        "undefined" ||
+      !(
+        "speechSynthesis" in
+        window
+      )
+    ) {
+      return;
+    }
+
+    try {
+      window.speechSynthesis.cancel();
+    } catch (_) {}
+  }
+
+  /*
+   * ==========================================================
    * MEDIA PIPE
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   async function loadMediaPipe() {
@@ -241,7 +335,9 @@
     }
 
     visionModule =
-      await import(MEDIAPIPE_MODULE);
+      await import(
+        MEDIAPIPE_MODULE
+      );
 
     return visionModule;
   }
@@ -261,12 +357,10 @@
       );
 
     /*
-     * Primeiro tentamos GPU.
+     * Primeiro GPU.
      *
-     * Alguns dispositivos móveis não conseguem
-     * inicializar o backend GPU corretamente.
-     *
-     * Nesse caso fazemos fallback para CPU.
+     * Caso o dispositivo não consiga
+     * inicializar GPU, usamos CPU.
      */
 
     try {
@@ -283,15 +377,20 @@
 
             runningMode: "VIDEO",
 
-            numFaces: CONFIG.maxFaces,
+            numFaces:
+              CONFIG.maxFaces,
 
-            minFaceDetectionConfidence: 0.55,
+            minFaceDetectionConfidence:
+              0.55,
 
-            minFacePresenceConfidence: 0.55,
+            minFacePresenceConfidence:
+              0.55,
 
-            minTrackingConfidence: 0.55,
+            minTrackingConfidence:
+              0.55,
 
-            outputFaceBlendshapes: true,
+            outputFaceBlendshapes:
+              true,
 
             outputFacialTransformationMatrixes:
               true
@@ -316,15 +415,20 @@
 
             runningMode: "VIDEO",
 
-            numFaces: CONFIG.maxFaces,
+            numFaces:
+              CONFIG.maxFaces,
 
-            minFaceDetectionConfidence: 0.55,
+            minFaceDetectionConfidence:
+              0.55,
 
-            minFacePresenceConfidence: 0.55,
+            minFacePresenceConfidence:
+              0.55,
 
-            minTrackingConfidence: 0.55,
+            minTrackingConfidence:
+              0.55,
 
-            outputFaceBlendshapes: true,
+            outputFaceBlendshapes:
+              true,
 
             outputFacialTransformationMatrixes:
               true
@@ -336,14 +440,17 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * CAMERA
-   * ----------------------------------------------------------
+   * ==========================================================
+   * CÂMERA
+   * ==========================================================
    */
 
   async function startCamera() {
-    if (!navigator.mediaDevices ||
-        !navigator.mediaDevices.getUserMedia) {
+    if (
+      !navigator.mediaDevices ||
+      !navigator.mediaDevices
+        .getUserMedia
+    ) {
       throw new Error(
         "Este navegador não disponibiliza acesso à câmera."
       );
@@ -352,28 +459,30 @@
     stopCamera();
 
     stream =
-      await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: {
-            ideal: "user"
+      await navigator.mediaDevices.getUserMedia(
+        {
+          video: {
+            facingMode: {
+              ideal: "user"
+            },
+
+            width: {
+              ideal: 1280
+            },
+
+            height: {
+              ideal: 720
+            },
+
+            frameRate: {
+              ideal: 30,
+              max: 30
+            }
           },
 
-          width: {
-            ideal: 1280
-          },
-
-          height: {
-            ideal: 720
-          },
-
-          frameRate: {
-            ideal: 30,
-            max: 30
-          }
-        },
-
-        audio: false
-      });
+          audio: false
+        }
+      );
 
     if (!video) {
       throw new Error(
@@ -381,7 +490,8 @@
       );
     }
 
-    video.srcObject = stream;
+    video.srcObject =
+      stream;
 
     video.muted = true;
 
@@ -424,15 +534,17 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * CANVAS
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function ensureCanvas() {
     if (!canvas) {
       canvas =
-        document.createElement("canvas");
+        document.createElement(
+          "canvas"
+        );
 
       canvas.width = 640;
       canvas.height = 480;
@@ -441,7 +553,8 @@
         canvas.getContext(
           "2d",
           {
-            willReadFrequently: true
+            willReadFrequently:
+              true
           }
         );
     }
@@ -497,28 +610,33 @@
     ) {
       const r = data[i];
 
-      const g = data[i + 1];
+      const g =
+        data[i + 1];
 
-      const b = data[i + 2];
+      const b =
+        data[i + 2];
 
       const gray =
         0.299 * r +
         0.587 * g +
         0.114 * b;
 
-      brightnessSum += gray;
+      brightnessSum +=
+        gray;
 
       if (
-        previousGray !== null
+        previousGray !==
+        null
       ) {
         const difference =
           Math.abs(
             gray -
-            previousGray
+              previousGray
           );
 
         varianceSum +=
-          difference * difference;
+          difference *
+          difference;
       }
 
       previousGray = gray;
@@ -528,15 +646,18 @@
 
     const brightness =
       samples
-        ? brightnessSum / samples
+        ? brightnessSum /
+          samples
         : 0;
 
     const sharpness =
       samples
-        ? varianceSum / samples
+        ? varianceSum /
+          samples
         : 0;
 
-    let brightnessScore = 1;
+    let brightnessScore =
+      1;
 
     if (
       brightness <
@@ -565,8 +686,7 @@
 
     const sharpnessScore =
       clamp(
-        sharpness /
-          100,
+        sharpness / 100,
         0,
         1
       );
@@ -589,9 +709,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * FACE GEOMETRY
-   * ----------------------------------------------------------
+   * ==========================================================
+   * GEOMETRIA DO ROSTO
+   * ==========================================================
    */
 
   function calculateBoundingBox(
@@ -605,16 +725,13 @@
     }
 
     let minX = 1;
-
     let maxX = 0;
 
     let minY = 1;
-
     let maxY = 0;
 
     for (
-      const point
-      of landmarks
+      const point of landmarks
     ) {
       minX =
         Math.min(
@@ -694,32 +811,29 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * POSE
-   * ----------------------------------------------------------
+   * ==========================================================
+   * ESTIMATIVA DA POSE
+   * ==========================================================
    *
-   * Estas estimativas servem para orientação.
-   * Não são uma decisão biométrica de identidade.
-   * ----------------------------------------------------------
+   * Convenção utilizada:
+   *
+   * yaw:
+   *   negativo = esquerda
+   *   positivo = direita
+   *
+   * pitch:
+   *   negativo = cima
+   *   positivo = baixo
+   *
+   * Isto é importante porque anteriormente
+   * utilizávamos Math.abs(), fazendo com que
+   * esquerda e direita pudessem ser confundidas.
+   * ==========================================================
    */
 
   function estimatePose(
     landmarks
   ) {
-    /*
-     * MediaPipe Face Mesh:
-     *
-     * 1   - região próxima do olho direito
-     * 33  - canto externo do olho
-     * 263 - canto externo do outro olho
-     * 168 - região central
-     * 1   - nariz
-     * 152 - queixo
-     *
-     * Usamos relações geométricas,
-     * não reconhecimento de identidade.
-     */
-
     const nose =
       landmarks[1];
 
@@ -770,6 +884,11 @@
         )
       );
 
+    /*
+     * YAW
+     *
+     * Mantemos o sinal.
+     */
     const yaw =
       clamp(
         (
@@ -798,6 +917,15 @@
       ) *
         0.48;
 
+    /*
+     * Em coordenadas de imagem:
+     *
+     * olhar para cima:
+     * nariz sobe -> pitch negativo
+     *
+     * olhar para baixo:
+     * nariz desce -> pitch positivo
+     */
     const pitch =
       clamp(
         (
@@ -826,20 +954,15 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * SMILE
-   * ----------------------------------------------------------
+   * ==========================================================
+   * SORRISO
+   * ==========================================================
    */
 
   function estimateSmile(
     landmarks,
     blendshapes
   ) {
-    /*
-     * Se o modelo fornecer blendshapes,
-     * usamos os coeficientes de sorriso.
-     */
-
     if (
       Array.isArray(
         blendshapes
@@ -876,10 +999,6 @@
         1
       );
     }
-
-    /*
-     * Fallback geométrico.
-     */
 
     const leftMouth =
       landmarks[61];
@@ -931,9 +1050,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * DETECÇÃO DE ROSTO
-   * ----------------------------------------------------------
+   * ==========================================================
+   * ANÁLISE DO RESULTADO
+   * ==========================================================
    */
 
   function analyzeResult(
@@ -946,14 +1065,13 @@
     const quality =
       analyzeImageQuality();
 
-    if (faces.length === 0) {
+    if (
+      faces.length === 0
+    ) {
       return {
         faceDetected: false,
-
         singleFace: false,
-
         faceCount: 0,
-
         score: 0,
 
         issues: [
@@ -961,9 +1079,7 @@
         ],
 
         quality,
-
         pose: null,
-
         smileScore: 0
       };
     }
@@ -973,11 +1089,9 @@
     ) {
       return {
         faceDetected: true,
-
         singleFace: false,
-
-        faceCount: faces.length,
-
+        faceCount:
+          faces.length,
         score: 0,
 
         issues: [
@@ -985,9 +1099,7 @@
         ],
 
         quality,
-
         pose: null,
-
         smileScore: 0
       };
     }
@@ -1055,7 +1167,7 @@
 
       if (
         box.centerX <
-          0.35
+        0.35
       ) {
         issues.push(
           "Centralize o rosto."
@@ -1066,7 +1178,7 @@
 
       if (
         box.centerX >
-          0.65
+        0.65
       ) {
         issues.push(
           "Centralize o rosto."
@@ -1077,7 +1189,7 @@
 
       if (
         box.centerY <
-          0.25
+        0.25
       ) {
         issues.push(
           "Baixe ligeiramente o enquadramento."
@@ -1088,7 +1200,7 @@
 
       if (
         box.centerY >
-          0.75
+        0.75
       ) {
         issues.push(
           "Suba ligeiramente o enquadramento."
@@ -1165,9 +1277,20 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * POSE MATCH
-   * ----------------------------------------------------------
+   * ==========================================================
+   * POSIÇÃO
+   * ==========================================================
+   *
+   * CORREÇÃO PRINCIPAL:
+   *
+   * Antes:
+   *   Math.abs(yaw)
+   *
+   * Isso aceitava esquerda e direita
+   * como se fossem a mesma coisa.
+   *
+   * Agora usamos o sinal.
+   * ==========================================================
    */
 
   function positionScore(
@@ -1195,14 +1318,12 @@
     let score = 1;
 
     /*
-     * Em todas as posições
-     * queremos evitar uma inclinação
-     * exagerada da cabeça.
+     * Inclinação excessiva
+     * reduz a qualidade.
      */
 
     if (
-      absRoll >
-      0.45
+      absRoll > 0.45
     ) {
       score *= 0.55;
     }
@@ -1210,6 +1331,12 @@
     switch (
       positionId
     ) {
+      /*
+       * ------------------------------------------------------
+       * FRENTE
+       * ------------------------------------------------------
+       */
+
       case "frontal":
         score *=
           clamp(
@@ -1231,125 +1358,203 @@
 
         break;
 
+      /*
+       * ------------------------------------------------------
+       * ESQUERDA
+       * ------------------------------------------------------
+       */
+
       case "left":
         score *=
           clamp(
-            Math.abs(yaw) /
-              0.16,
+            Math.max(
+              0,
+              -yaw
+            ) / 0.16,
             0,
             1
           );
 
         break;
+
+      /*
+       * ------------------------------------------------------
+       * DIREITA
+       * ------------------------------------------------------
+       */
 
       case "right":
         score *=
           clamp(
-            Math.abs(yaw) /
-              0.16,
+            Math.max(
+              0,
+              yaw
+            ) / 0.16,
             0,
             1
           );
 
         break;
+
+      /*
+       * ------------------------------------------------------
+       * CIMA
+       * ------------------------------------------------------
+       */
 
       case "up":
         score *=
           clamp(
-            Math.abs(pitch) /
-              0.08,
+            Math.max(
+              0,
+              -pitch
+            ) / 0.08,
             0,
             1
           );
 
         break;
+
+      /*
+       * ------------------------------------------------------
+       * BAIXO
+       * ------------------------------------------------------
+       */
 
       case "down":
         score *=
           clamp(
-            Math.abs(pitch) /
-              0.08,
+            Math.max(
+              0,
+              pitch
+            ) / 0.08,
             0,
             1
           );
 
         break;
+
+      /*
+       * ------------------------------------------------------
+       * ESQUERDA + CIMA
+       * ------------------------------------------------------
+       */
 
       case "left_up":
         score *=
           clamp(
-            Math.abs(yaw) /
-              0.12,
+            Math.max(
+              0,
+              -yaw
+            ) / 0.12,
             0,
             1
           );
 
         score *=
           clamp(
-            Math.abs(pitch) /
-              0.06,
+            Math.max(
+              0,
+              -pitch
+            ) / 0.06,
             0,
             1
           );
 
         break;
+
+      /*
+       * ------------------------------------------------------
+       * DIREITA + CIMA
+       * ------------------------------------------------------
+       */
 
       case "right_up":
         score *=
           clamp(
-            Math.abs(yaw) /
-              0.12,
+            Math.max(
+              0,
+              yaw
+            ) / 0.12,
             0,
             1
           );
 
         score *=
           clamp(
-            Math.abs(pitch) /
-              0.06,
+            Math.max(
+              0,
+              -pitch
+            ) / 0.06,
             0,
             1
           );
 
         break;
+
+      /*
+       * ------------------------------------------------------
+       * ESQUERDA + BAIXO
+       * ------------------------------------------------------
+       */
 
       case "left_down":
         score *=
           clamp(
-            Math.abs(yaw) /
-              0.12,
+            Math.max(
+              0,
+              -yaw
+            ) / 0.12,
             0,
             1
           );
 
         score *=
           clamp(
-            Math.abs(pitch) /
-              0.06,
+            Math.max(
+              0,
+              pitch
+            ) / 0.06,
             0,
             1
           );
 
         break;
+
+      /*
+       * ------------------------------------------------------
+       * DIREITA + BAIXO
+       * ------------------------------------------------------
+       */
 
       case "right_down":
         score *=
           clamp(
-            Math.abs(yaw) /
-              0.12,
+            Math.max(
+              0,
+              yaw
+            ) / 0.12,
             0,
             1
           );
 
         score *=
           clamp(
-            Math.abs(pitch) /
-              0.06,
+            Math.max(
+              0,
+              pitch
+            ) / 0.06,
             0,
             1
           );
 
         break;
+
+      /*
+       * ------------------------------------------------------
+       * SORRISO
+       * ------------------------------------------------------
+       */
 
       case "smile":
         score =
@@ -1373,13 +1578,13 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * CAPTURE DE POSIÇÃO
-   * ----------------------------------------------------------
+   * ==========================================================
+   * CAPTURA DA POSIÇÃO
+   * ==========================================================
    *
-   * Guardamos apenas métricas.
-   * Não enviamos frames da câmera.
-   * ----------------------------------------------------------
+   * Guardamos métricas.
+   * Não enviamos frames nem vídeo.
+   * ==========================================================
    */
 
   function capturePosition(
@@ -1463,9 +1668,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * LOOP
-   * ----------------------------------------------------------
+   * ==========================================================
+   * LOOP DE PROCESSAMENTO
+   * ==========================================================
    */
 
   async function processFrame(
@@ -1516,7 +1721,10 @@
 
       stop();
 
-      emit("onError", error);
+      emit(
+        "onError",
+        error
+      );
 
       return;
     }
@@ -1565,7 +1773,8 @@
       "onProgress",
       {
         current:
-          currentPositionIndex + 1,
+          currentPositionIndex +
+          1,
 
         total:
           POSITIONS.length,
@@ -1593,11 +1802,18 @@
       currentPositionStartedAt =
         now;
 
-      setStatus(
+      const retry =
         getRetryInstruction(
           position.id
-        ),
+        );
+
+      setStatus(
+        retry,
         "warning"
+      );
+
+      speakInstruction(
+        retry
       );
     }
 
@@ -1627,7 +1843,8 @@
         "onPosition",
         {
           completed:
-            currentPositionIndex + 1,
+            currentPositionIndex +
+            1,
 
           total:
             POSITIONS.length,
@@ -1655,6 +1872,19 @@
         setStatus(
           next.instruction,
           "info"
+        );
+
+        speakInstruction(
+          next.instruction
+        );
+      } else {
+        setStatus(
+          "As dez posições foram concluídas. A finalizar a análise.",
+          "success"
+        );
+
+        speakInstruction(
+          "As dez posições foram concluídas. A finalizar a análise."
         );
       }
     }
@@ -1723,9 +1953,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * RESULTADO
-   * ----------------------------------------------------------
+   * ==========================================================
+   * RESULTADO FINAL
+   * ==========================================================
    */
 
   function calculateFinalResult() {
@@ -1864,9 +2094,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * FINALIZAÇÃO
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   async function finish() {
@@ -1880,6 +2110,8 @@
       animationFrame = null;
     }
 
+    stopSpeech();
+
     const result =
       calculateFinalResult();
 
@@ -1892,16 +2124,16 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * ENVIO PARA O BACKEND
-   * ----------------------------------------------------------
+   * ==========================================================
    *
-   * O endpoint atual espera:
+   * Endpoint atual:
    *
    * POST /api/clients/:id/facial-preflight
    *
    * Não enviamos imagem nem vídeo.
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   async function submitToBackend({
@@ -1929,7 +2161,8 @@
         {
           method: "POST",
 
-          credentials: "include",
+          credentials:
+            "include",
 
           headers: {
             "Content-Type":
@@ -1938,13 +2171,15 @@
 
           body:
             JSON.stringify({
-              consentAccepted: true,
+              consentAccepted:
+                true,
 
               positions:
                 capturedPositions,
 
               passportMatch:
-                passportMatch || null
+                passportMatch ||
+                null
             })
         }
       );
@@ -1979,9 +2214,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * API PÚBLICA
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   async function initialize({
@@ -2038,9 +2273,19 @@
     clientId = null
   } = {}) {
     if (!initialized) {
+      if (!video) {
+        throw new Error(
+          "O motor facial ainda não foi inicializado."
+        );
+      }
+
       await initialize({
-        videoElement: video,
-        clientId
+        videoElement:
+          video,
+
+        clientId,
+
+        ...callbacks
       });
     }
 
@@ -2055,6 +2300,8 @@
 
     stableFrames = 0;
 
+    lastDetectionAt = 0;
+
     currentPositionStartedAt =
       Date.now();
 
@@ -2068,6 +2315,14 @@
     setStatus(
       first.instruction,
       "info"
+    );
+
+    /*
+     * Primeira instrução por voz.
+     */
+
+    speakInstruction(
+      first.instruction
     );
 
     emit(
@@ -2106,6 +2361,8 @@
       animationFrame = null;
     }
 
+    stopSpeech();
+
     stopCamera();
 
     stableFrames = 0;
@@ -2125,8 +2382,7 @@
 
     stableFrames = 0;
 
-    currentPositionStartedAt =
-      0;
+    currentPositionStartedAt = 0;
 
     setStatus(
       "Verificação reiniciada.",
@@ -2154,9 +2410,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * EXPOSIÇÃO GLOBAL
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   window.TravelFacialPreflight = {
@@ -2181,6 +2437,8 @@
     constants: {
       MEDIAPIPE_VERSION,
 
+      AUDIO_LANGUAGE,
+
       POSITIONS,
 
       CONFIG
@@ -2188,12 +2446,16 @@
   };
 
   /*
-   * Limpeza quando a página é fechada.
+   * ==========================================================
+   * LIMPEZA
+   * ==========================================================
    */
 
   window.addEventListener(
     "beforeunload",
     () => {
+      stopSpeech();
+
       stopCamera();
 
       if (
