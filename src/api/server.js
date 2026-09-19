@@ -272,7 +272,41 @@ function createApp({
    * STATIC FRONTEND
    * =========================================================
    */
+  /*
+   * =========================================================
+   * MEDIA PIPE LOCAL
+   * =========================================================
+   *
+   * O pacote é instalado pelo npm durante o deploy.
+   *
+   * Expomos apenas os ficheiros públicos necessários
+   * para o navegador executar o Face Landmarker.
+   *
+   * Não expomos a aplicação Node nem outros ficheiros
+   * do node_modules.
+   * =========================================================
+   */
 
+  const mediaPipeDirectory =
+    path.join(
+      __dirname,
+      "../../node_modules/@mediapipe/tasks-vision"
+    );
+
+  app.use(
+    "/mediapipe",
+    express.static(
+      mediaPipeDirectory,
+      {
+        index: false,
+
+        maxAge:
+          config.isProduction
+            ? "1d"
+            : 0
+      }
+    )
+  );
   const publicDirectory =
     path.join(
       __dirname,
