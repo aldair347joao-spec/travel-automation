@@ -7,7 +7,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node tests/simulation.js",
-    "prepare-models": "node scripts/prepare-face-models.js"
+    "prepare-models": "node scripts/prepare-face-models.js",
+    "postinstall": "node scripts/prepare-face-models.js"
   },
   "engines": {
     "node": ">=20"
