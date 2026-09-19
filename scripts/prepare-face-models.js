@@ -51,7 +51,9 @@ function copyFile(
   source,
   target
 ) {
-  if (!fs.existsSync(source)) {
+  if (
+    !fs.existsSync(source)
+  ) {
     throw new Error(
       "Ficheiro necessário não encontrado:\n" +
       source
@@ -123,12 +125,12 @@ function findBrowserLibrary() {
   const candidates = [
     path.join(
       sourceDist,
-      "face-api.js"
+      "face-api.min.js"
     ),
 
     path.join(
       sourceDist,
-      "face-api.min.js"
+      "face-api.js"
     )
   ];
 
@@ -143,7 +145,7 @@ function findBrowserLibrary() {
   }
 
   throw new Error(
-    "A biblioteca browser do FaceAPI não foi encontrada.\n" +
+    "A biblioteca browser do FaceAPI não foi encontrada.\n\n" +
     "Foram procurados:\n" +
     candidates.join("\n")
   );
@@ -210,14 +212,30 @@ function prepareFaceModels() {
   );
 
   console.log(
-    "[FACE API] A preparar biblioteca browser..."
+    "[FACE API] Biblioteca encontrada:"
   );
 
+  console.log(
+    "          " +
+    path.relative(
+      projectRoot,
+      browserLibrary
+    )
+  );
+
+  /*
+   * O frontend espera exatamente:
+   *
+   * /face-api/face-api.min.js
+   *
+   * Independentemente de o pacote instalado
+   * trazer face-api.js ou face-api.min.js.
+   */
   copyFile(
     browserLibrary,
     path.join(
       targetFaceApi,
-      "face-api.js"
+      "face-api.min.js"
     )
   );
 
@@ -283,7 +301,7 @@ function prepareFaceModels() {
   );
 
   console.log(
-    "          /face-api/face-api.js"
+    "          /face-api/face-api.min.js"
   );
 
   console.log(
@@ -310,7 +328,7 @@ function prepareFaceModels() {
     library:
       path.join(
         targetFaceApi,
-        "face-api.js"
+        "face-api.min.js"
       ),
 
     models:
