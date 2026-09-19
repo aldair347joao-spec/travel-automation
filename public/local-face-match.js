@@ -643,77 +643,111 @@
    */
 
   async function compare({
-    clientId,
-    videoElement
-  } = {}) {
+  clientId,
+  videoElement
+} = {}) {
+  try {
+    console.log(
+      "[LocalFaceMatch] 1/7 início da comparação",
+      {
+        clientId,
+        videoReadyState:
+          videoElement?.readyState,
+        videoWidth:
+          videoElement?.videoWidth,
+        videoHeight:
+          videoElement?.videoHeight
+      }
+    );
+
     if (!clientId) {
       throw new Error(
-        "clientId é obrigatório."
+        "LOCAL_FACE_MATCH: clientId não informado."
       );
     }
 
     if (!videoElement) {
       throw new Error(
-        "A câmera não está disponível para comparação facial."
+        "LOCAL_FACE_MATCH: elemento da câmera não encontrado."
       );
     }
 
+    /*
+     * 1 — modelos
+     */
     await initialize();
 
+    console.log(
+      "[LocalFaceMatch] 2/7 modelos carregados"
+    );
+
     /*
-     * Primeiro geramos o descritor
-     * da fotografia do passaporte.
+     * 2 — passaporte
      */
     const passport =
       await createPassportDescriptor(
         clientId
       );
 
+    console.log(
+      "[LocalFaceMatch] 3/7 rosto do passaporte detectado",
+      {
+        detectionScore:
+          passport.detectionScore
+      }
+    );
+
     /*
-     * Depois capturamos várias amostras
-     * do rosto vivo.
+     * 3 — verificar câmera
+     */
+    if (
+      videoElement.readyState <
+      HTMLMediaElement.HAVE_CURRENT_DATA
+    ) {
+      throw new Error(
+        "LOCAL_FACE_MATCH: a câmera ainda não possui imagem disponível."
+      );
+    }
+
+    if (
+      !videoElement.videoWidth ||
+      !videoElement.videoHeight
+    ) {
+      throw new Error(
+        "LOCAL_FACE_MATCH: a câmera está ativa mas não possui resolução de vídeo."
+      );
+    }
+
+    console.log(
+      "[LocalFaceMatch] 4/7 câmera pronta"
+    );
+
+    /*
+     * 4 — amostras
      */
     const liveSamples =
       await collectLiveSamples(
         videoElement
       );
 
+    console.log(
+      "[LocalFaceMatch] 5/7 amostras capturadas",
+      {
+        count:
+          liveSamples.length
+      }
+    );
+
     if (
       !liveSamples.length
     ) {
-      return {
-        attempted: true,
-
-        matched: false,
-
-        reason:
-          "live_face_not_detected",
-
-        passportFaceDetected:
-          true,
-
-        liveFaceDetected:
-          false,
-
-        distance:
-          null,
-
-        similarityScore:
-          0,
-
-        similarityPercent:
-          0,
-
-        threshold:
-          CONFIG.MAX_DISTANCE,
-
-        method:
-          "browser-local"
-      };
+      throw new Error(
+        "LOCAL_FACE_MATCH: nenhum rosto foi detectado na câmera."
+      );
     }
 
     /*
-     * Comparamos cada amostra.
+     * 5 — comparar
      */
     const comparisons =
       [];
@@ -736,17 +770,24 @@
       });
     }
 
+    console.log(
+      "[LocalFaceMatch] 6/7 comparações concluídas",
+      comparisons
+    );
+
+    if (
+      !comparisons.length
+    ) {
+      throw new Error(
+        "LOCAL_FACE_MATCH: não foi possível comparar os descritores."
+      );
+    }
+
     /*
-     * Escolhemos a menor distância.
-     *
-     * Isso evita que uma única amostra
-     * momentaneamente ruim destrua o teste.
+     * Menor distância = maior semelhança.
      */
     comparisons.sort(
-      (
-        a,
-        b
-      ) =>
+      (a, b) =>
         a.distance -
         b.distance
     );
@@ -754,17 +795,13 @@
     const best =
       comparisons[0];
 
-    /*
-     * Exigimos pelo menos uma amostra
-     * dentro do limite.
-     */
     const matched =
       comparisons.some(
         item =>
           item.matched === true
       );
 
-    return {
+    const result = {
       attempted: true,
 
       matched,
@@ -810,7 +847,31 @@
       checkedAt:
         new Date().toISOString()
     };
+
+    console.log(
+      "[LocalFaceMatch] 7/7 RESULTADO FINAL",
+      result
+    );
+
+    return result;
+
+  } catch (error) {
+
+    console.error(
+      "[LocalFaceMatch] FALHA EXATA",
+      error
+    );
+
+    /*
+     * Não esconder o motivo verdadeiro.
+     */
+    throw new Error(
+      error?.message ||
+      String(error) ||
+      "LOCAL_FACE_MATCH: falha desconhecida."
+    );
   }
+}
 
   /*
    * ==========================================================
