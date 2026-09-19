@@ -1940,7 +1940,9 @@ function getAlternativesForPosition(
             char
           ] || []
       ) {
-        alternatives.add(item);
+        alternatives.add(
+          item
+        );
       }
     }
 
@@ -1949,6 +1951,65 @@ function getAlternativesForPosition(
     ];
   }
 
+  /*
+   * =======================================================
+   * TD3 — CAMPOS ALFANUMÉRICOS
+   * =======================================================
+   *
+   * Número do passaporte:
+   *   0..8
+   *
+   * Número pessoal:
+   *   28..41
+   *
+   * Estes campos podem legitimamente conter letras,
+   * números e <.
+   *
+   * Por isso NÃO podemos simplesmente transformar
+   * letras em números ou números em letras.
+   *
+   * Geramos apenas ambiguidades OCR plausíveis.
+   */
+  if (
+    (
+      index >= 0 &&
+      index <= 8
+    ) ||
+    (
+      index >= 28 &&
+      index <= 41
+    )
+  ) {
+    for (
+      const item of
+        DIGIT_ALTERNATIVES[
+          char
+        ] || []
+    ) {
+      alternatives.add(
+        item
+      );
+    }
+
+    for (
+      const item of
+        LETTER_ALTERNATIVES[
+          char
+        ] || []
+    ) {
+      alternatives.add(
+        item
+      );
+    }
+
+    return [
+      ...alternatives
+    ];
+  }
+
+  /*
+   * Check digits.
+   */
   const numeric =
     index === 9 ||
     (
@@ -1971,7 +2032,9 @@ function getAlternativesForPosition(
           char
         ] || []
     ) {
-      alternatives.add(item);
+      alternatives.add(
+        item
+      );
     }
 
     return [
@@ -1979,6 +2042,9 @@ function getAlternativesForPosition(
     ];
   }
 
+  /*
+   * Nacionalidade.
+   */
   if (
     index >= 10 &&
     index <= 12
@@ -1989,7 +2055,9 @@ function getAlternativesForPosition(
           char
         ] || []
     ) {
-      alternatives.add(item);
+      alternatives.add(
+        item
+      );
     }
 
     return [
@@ -1997,6 +2065,9 @@ function getAlternativesForPosition(
     ];
   }
 
+  /*
+   * Sexo.
+   */
   if (
     index === 20
   ) {
@@ -2019,7 +2090,517 @@ function getAlternativesForPosition(
     ...alternatives
   ];
 }
+/*
+ * =========================================================
+ * RECUPERAÇÃO MATEMÁTICA DOS CAMPOS ALFANUMÉRICOS TD3
+ * =========================================================
+ *
+ * Corrige erros OCR nos campos:
+ *
+ *   0..8   número do passaporte
+ *   28..41 número pessoal
+ *
+ * A correção só é aceita quando o check digit ICAO
+ * correspondente confirma o campo.
+ *
+ * Isto permite corrigir automaticamente:
+ *
+ *   O <-> 0
+ *   I <-> 1
+ *   L <-> 1
+ *   Z <-> 2
+ *   E <-> 3
+ *   A <-> 4
+ *   S <-> 5
+ *   G <-> 6
+ *   T <-> 7
+ *   B <-> 8
+ *
+ * sem assumir que o campo original é numérico.
+ */
+function recoverTd3AlphanumericCandidates(
+  line2,
+  maxCandidates = 64
+) {
+  if (
+    !line2 ||
+    line2.length !== 44
+  ) {
+    return [];
+  }
 
+  const original =
+    line2.split("");
+
+  /*
+   * -------------------------------------------------------
+   * Campos protegidos pelos check digits
+   * -------------------------------------------------------
+   */
+  const fields = [
+    {
+      name:
+        "passportNumber",
+
+      start:
+        0,
+
+      end:
+        8,
+
+      checkIndex:
+        9
+    },
+
+    {
+      name:
+        "personalNumber",
+
+      start:
+        28,
+
+      end:
+        41,
+
+      checkIndex:
+        42
+    }
+  ];
+
+  /*
+   * -------------------------------------------------------
+   * Posições que realmente possuem alternativas OCR.
+   * -------------------------------------------------------
+   */
+  const positions = [];
+
+  for (
+    const field of fields
+  ) {
+    for (
+      let index =
+        field.start;
+      index <=
+        field.end;
+      index += 1
+    ) {
+      const alternatives =
+        getAlternativesForPosition(
+          original,
+          index,
+          2
+        );
+
+      if (
+        alternatives.length >
+        1
+      ) {
+        positions.push({
+          field,
+          index,
+          alternatives
+        });
+      }
+    }
+  }
+
+  const candidates =
+    new Map();
+
+  /*
+   * -------------------------------------------------------
+   * Função que verifica um candidato completo.
+   * -------------------------------------------------------
+   */
+  function evaluate(
+    chars,
+    changes
+  ) {
+    const passportNumber =
+      chars.slice(
+        0,
+        9
+      ).join("");
+
+    const personalNumber =
+      chars.slice(
+        28,
+        42
+      ).join("");
+
+    const passportCheck =
+      calculateMrzCheckDigit(
+        passportNumber
+      );
+
+    const personalCheck =
+      calculateMrzCheckDigit(
+        personalNumber
+      );
+
+    if (
+      passportCheck === null ||
+      personalCheck === null
+    ) {
+      return;
+    }
+
+    /*
+     * O check digit é reconstruído a partir
+     * do campo que acabou de ser validado.
+     */
+    chars[9] =
+      passportCheck;
+
+    chars[42] =
+      personalCheck;
+
+    /*
+     * O composite TD3 usa:
+     *
+     * 1-10
+     * 14-20
+     * 22-43
+     *
+     * em índices JS:
+     *
+     * 0..9
+     * 13..19
+     * 21..42
+     */
+    const compositeData =
+      chars
+        .slice(0, 10)
+        .concat(
+          chars.slice(13, 20)
+        )
+        .concat(
+          chars.slice(21, 43)
+        )
+        .join("");
+
+    const compositeCheck =
+      calculateMrzCheckDigit(
+        compositeData
+      );
+
+    if (
+      compositeCheck === null
+    ) {
+      return;
+    }
+
+    chars[43] =
+      compositeCheck;
+
+    const candidate =
+      chars.join("");
+
+    /*
+     * Revalidação completa dos três campos.
+     */
+    if (
+      calculateMrzCheckDigit(
+        candidate.slice(0, 9)
+      ) !==
+      candidate[9]
+    ) {
+      return;
+    }
+
+    if (
+      calculateMrzCheckDigit(
+        candidate.slice(28, 42)
+      ) !==
+      candidate[42]
+    ) {
+      return;
+    }
+
+    const rebuiltComposite =
+      calculateMrzCheckDigit(
+        candidate
+          .slice(0, 10)
+          .concat(
+            candidate.slice(13, 20)
+          )
+          .concat(
+            candidate.slice(21, 43)
+          )
+      );
+
+    if (
+      rebuiltComposite !==
+      candidate[43]
+    ) {
+      return;
+    }
+
+    /*
+     * Quanto menos alterações OCR,
+     * mais confiável o candidato.
+     */
+    const key =
+      candidate;
+
+    const existing =
+      candidates.get(key);
+
+    const changeCount =
+      Number(
+        changes || 0
+      );
+
+    if (
+      !existing ||
+      changeCount <
+        existing.changeCount
+    ) {
+      candidates.set(
+        key,
+        {
+          line:
+            candidate,
+
+          changeCount,
+
+          recoveredPassportNumber:
+            candidate.slice(
+              0,
+              9
+            ),
+
+          recoveredPassportCheckDigit:
+            candidate[9],
+
+          recoveredPersonalNumber:
+            candidate.slice(
+              28,
+              42
+            ),
+
+          recoveredPersonalCheckDigit:
+            candidate[42],
+
+          recoveredCompositeCheckDigit:
+            candidate[43]
+        }
+      );
+    }
+  }
+
+  /*
+   * -------------------------------------------------------
+   * Primeiro candidato:
+   * OCR original, sem alterações.
+   * -------------------------------------------------------
+   */
+  evaluate(
+    original.slice(),
+    0
+  );
+
+  /*
+   * -------------------------------------------------------
+   * Uma alteração.
+   * -------------------------------------------------------
+   */
+  for (
+    const position of positions
+  ) {
+    for (
+      const alternative of
+        position.alternatives
+    ) {
+      if (
+        alternative ===
+        original[
+          position.index
+        ]
+      ) {
+        continue;
+      }
+
+      const chars =
+        original.slice();
+
+      chars[
+        position.index
+      ] =
+        alternative;
+
+      evaluate(
+        chars,
+        1
+      );
+
+      if (
+        candidates.size >=
+        maxCandidates
+      ) {
+        break;
+      }
+    }
+
+    if (
+      candidates.size >=
+      maxCandidates
+    ) {
+      break;
+    }
+  }
+
+  /*
+   * -------------------------------------------------------
+   * Duas alterações.
+   *
+   * Este nível cobre, por exemplo:
+   *
+   *   1 erro no número do passaporte
+   *   +
+   *   1 erro no número pessoal
+   *
+   * ou dois erros no mesmo campo.
+   * -------------------------------------------------------
+   */
+  if (
+    candidates.size <
+    maxCandidates
+  ) {
+    for (
+      let first =
+        0;
+      first <
+        positions.length;
+      first += 1
+    ) {
+      const positionA =
+        positions[first];
+
+      for (
+        let second =
+          first + 1;
+        second <
+          positions.length;
+        second += 1
+      ) {
+        const positionB =
+          positions[second];
+
+        /*
+         * Evita combinar duas posições
+         * iguais por segurança.
+         */
+        if (
+          positionA.index ===
+            positionB.index
+        ) {
+          continue;
+        }
+
+        for (
+          const alternativeA of
+            positionA.alternatives
+        ) {
+          if (
+            alternativeA ===
+            original[
+              positionA.index
+            ]
+          ) {
+            continue;
+          }
+
+          for (
+            const alternativeB of
+              positionB.alternatives
+          ) {
+            if (
+              alternativeB ===
+              original[
+                positionB.index
+              ]
+            ) {
+              continue;
+            }
+
+            const chars =
+              original.slice();
+
+            chars[
+              positionA.index
+            ] =
+              alternativeA;
+
+            chars[
+              positionB.index
+            ] =
+              alternativeB;
+
+            evaluate(
+              chars,
+              2
+            );
+
+            if (
+              candidates.size >=
+              maxCandidates
+            ) {
+              break;
+            }
+          }
+
+          if (
+            candidates.size >=
+            maxCandidates
+          ) {
+            break;
+          }
+        }
+
+        if (
+          candidates.size >=
+          maxCandidates
+        ) {
+          break;
+        }
+      }
+
+      if (
+        candidates.size >=
+        maxCandidates
+      ) {
+        break;
+      }
+    }
+  }
+
+  /*
+   * -------------------------------------------------------
+   * Ordenação:
+   *
+   * 0 alterações
+   * 1 alteração
+   * 2 alterações
+   * -------------------------------------------------------
+   */
+  return [
+    ...candidates.values()
+  ]
+    .sort(
+      (a, b) =>
+        Number(
+          a.changeCount || 0
+        ) -
+        Number(
+          b.changeCount || 0
+        )
+    )
+    .slice(
+      0,
+      maxCandidates
+    );
+}
 /*
  * =========================================================
  * EXPANSÃO MRZ
@@ -2060,6 +2641,42 @@ function expandMrzLine(
   if (
     lineNumber === 2
   ) {
+        /*
+     * -----------------------------------------------------
+     * CAMPOS ALFANUMÉRICOS
+     * -----------------------------------------------------
+     *
+     * Recupera automaticamente erros OCR no:
+     *
+     *   - número do passaporte;
+     *   - número pessoal;
+     *
+     * usando os check digits ICAO.
+     */
+    const alphanumericVariants =
+      recoverTd3AlphanumericCandidates(
+        normalized,
+        Math.min(
+          64,
+          maxVariants
+        )
+      );
+
+    for (
+      const recovered of
+        alphanumericVariants
+    ) {
+      variants.push(
+        recovered.line
+      );
+
+      if (
+        variants.length >=
+        maxVariants
+      ) {
+        break;
+      }
+    }
     /*
      * DOB
      */
@@ -3083,7 +3700,7 @@ const line2Variants =
   expandMrzLine(
     pair.line2,
     2,
-    32
+    64
   );
       const first =
         line1Variants.length
@@ -3106,7 +3723,69 @@ const line2Variants =
       ) {
         for (
           const line2 of second
-        ) {
+        ) 
+                    const passportCheckMatched =
+            line2.length === 44 &&
+            calculateMrzCheckDigit(
+              line2.slice(
+                0,
+                9
+              )
+            ) ===
+              line2[9];
+
+          const personalCheckMatched =
+            line2.length === 44 &&
+            calculateMrzCheckDigit(
+              line2.slice(
+                28,
+                42
+              )
+            ) ===
+              line2[42];
+
+          const compositeData =
+            line2.length === 44
+              ? line2
+                  .slice(0, 10)
+                  .concat(
+                    line2.slice(
+                      13,
+                      20
+                    )
+                  )
+                  .concat(
+                    line2.slice(
+                      21,
+                      43
+                    )
+                  )
+              : "";
+
+          const compositeCheckMatched =
+            line2.length === 44 &&
+            calculateMrzCheckDigit(
+              compositeData
+            ) ===
+              line2[43];
+
+          const checkDigitBonus =
+            (
+              passportCheckMatched
+                ? 35
+                : 0
+            ) +
+            (
+              personalCheckMatched
+                ? 35
+                : 0
+            ) +
+            (
+              compositeCheckMatched
+                ? 50
+                : 0
+            );
+
           candidates.push({
             line1,
 
@@ -3126,7 +3805,14 @@ const line2Variants =
               scoreMrzLine(
                 line2,
                 2
-              ),
+              ) +
+              checkDigitBonus,
+
+            passportCheckMatched,
+
+            personalCheckMatched,
+
+            compositeCheckMatched,
 
             expanded:
               line1 !==
@@ -3134,7 +3820,6 @@ const line2Variants =
               line2 !==
                 pair.line2
           });
-        }
       }
 
       candidates.sort(
