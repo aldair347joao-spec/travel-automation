@@ -3689,19 +3689,20 @@ class PassportOcrService {
     for (
       const pair of pairs
     ) {
-      const line1Variants =
-  expandMrzLine(
-    pair.line1,
-    1,
-    16
-  );
+            const line1Variants =
+        expandMrzLine(
+          pair.line1,
+          1,
+          16
+        );
 
-const line2Variants =
-  expandMrzLine(
-    pair.line2,
-    2,
-    64
-  );
+      const line2Variants =
+        expandMrzLine(
+          pair.line2,
+          2,
+          64
+        );
+
       const first =
         line1Variants.length
           ? line1Variants
@@ -3723,8 +3724,8 @@ const line2Variants =
       ) {
         for (
           const line2 of second
-        ) 
-                    const passportCheckMatched =
+        ) {
+          const passportCheckMatched =
             line2.length === 44 &&
             calculateMrzCheckDigit(
               line2.slice(
@@ -3747,7 +3748,10 @@ const line2Variants =
           const compositeData =
             line2.length === 44
               ? line2
-                  .slice(0, 10)
+                  .slice(
+                    0,
+                    10
+                  )
                   .concat(
                     line2.slice(
                       13,
@@ -3820,6 +3824,7 @@ const line2Variants =
               line2 !==
                 pair.line2
           });
+        }
       }
 
       candidates.sort(
@@ -3831,12 +3836,13 @@ const line2Variants =
             a.score || 0
           )
       );
-     expandedPairs.push(
-  ...candidates.slice(
-    0,
-    40
-  )
-); 
+
+      expandedPairs.push(
+        ...candidates.slice(
+          0,
+          40
+        )
+      );
     }
 
     /*
