@@ -29,7 +29,8 @@
 
 (() => {
   "use strict";
-
+const MEDIAPIPE_VERSION =
+  "0.10.35";
   const MEDIAPIPE_MODULE =
   "/mediapipe/vision_bundle.mjs";
 
