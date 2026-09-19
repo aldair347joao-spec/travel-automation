@@ -267,6 +267,228 @@ function createApp({
     "/api/admin",
     createAdminRouter()
   );
+    /*
+   * =========================================================
+   * MEDIA PIPE FACE LANDMARKER MODEL
+   * =========================================================
+   *
+   * O navegador não busca o modelo diretamente no Google
+   * Storage.
+   *
+   * O servidor faz o download do modelo e entrega-o pelo
+   * próprio domínio da aplicação.
+   *
+   * Isso evita problemas de CORS, rede, bloqueios do
+   * navegador e diferenças entre dispositivos móveis.
+   *
+   * O modelo é mantido em memória depois do primeiro
+   * carregamento para evitar downloads repetidos.
+   * =========================================================
+   */
+
+  const FACE_LANDMARKER_MODEL_URL =
+    "https://storage.googleapis.com/" +
+    "mediapipe-models/" +
+    "face_landmarker/" +
+    "face_landmarker/" +
+    "float16/" +
+    "1/" +
+    "face_landmarker.task";
+
+  let faceLandmarkerModelCache =
+    null;
+
+  let faceLandmarkerModelPromise =
+    null;
+
+  app.get(
+    "/mediapipe-model/face_landmarker.task",
+    async (
+      req,
+      res
+    ) => {
+      try {
+        /*
+         * ---------------------------------------------------
+         * CACHE EM MEMÓRIA
+         * ---------------------------------------------------
+         */
+
+        if (
+          faceLandmarkerModelCache
+        ) {
+          res.setHeader(
+            "Content-Type",
+            "application/octet-stream"
+          );
+
+          res.setHeader(
+            "Content-Length",
+            String(
+              faceLandmarkerModelCache.length
+            )
+          );
+
+          res.setHeader(
+            "Cache-Control",
+            "public, max-age=86400"
+          );
+
+          return res.end(
+            faceLandmarkerModelCache
+          );
+        }
+
+        /*
+         * ---------------------------------------------------
+         * EVITAR DOWNLOAD DUPLICADO
+         * ---------------------------------------------------
+         */
+
+        if (
+          !faceLandmarkerModelPromise
+        ) {
+          faceLandmarkerModelPromise =
+            (async () => {
+              const controller =
+                new AbortController();
+
+              const timeout =
+                setTimeout(
+                  () =>
+                    controller.abort(),
+                  60000
+                );
+
+              try {
+                logger.info(
+                  "Downloading MediaPipe Face Landmarker model"
+                );
+
+                const response =
+                  await fetch(
+                    FACE_LANDMARKER_MODEL_URL,
+                    {
+                      method:
+                        "GET",
+
+                      signal:
+                        controller.signal
+                    }
+                  );
+
+                if (
+                  !response.ok
+                ) {
+                  throw new Error(
+                    `MediaPipe model HTTP ${response.status}`
+                  );
+                }
+
+                const arrayBuffer =
+                  await response.arrayBuffer();
+
+                const buffer =
+                  Buffer.from(
+                    arrayBuffer
+                  );
+
+                if (
+                  !buffer.length
+                ) {
+                  throw new Error(
+                    "MediaPipe model is empty"
+                  );
+                }
+
+                /*
+                 * O modelo Face Landmarker
+                 * normalmente possui vários MB.
+                 *
+                 * Uma resposta extremamente pequena
+                 * indica que recebemos algo inválido.
+                 */
+
+                if (
+                  buffer.length <
+                  100000
+                ) {
+                  throw new Error(
+                    `MediaPipe model is unexpectedly small: ${buffer.length} bytes`
+                  );
+                }
+
+                faceLandmarkerModelCache =
+                  buffer;
+
+                logger.info(
+                  "MediaPipe Face Landmarker model loaded",
+                  {
+                    bytes:
+                      buffer.length
+                  }
+                );
+
+                return buffer;
+
+              } finally {
+                clearTimeout(
+                  timeout
+                );
+              }
+            })().catch(
+              error => {
+                faceLandmarkerModelPromise =
+                  null;
+
+                throw error;
+              }
+            );
+        }
+
+        const model =
+          await faceLandmarkerModelPromise;
+
+        res.setHeader(
+          "Content-Type",
+          "application/octet-stream"
+        );
+
+        res.setHeader(
+          "Content-Length",
+          String(
+            model.length
+          )
+        );
+
+        res.setHeader(
+          "Cache-Control",
+          "public, max-age=86400"
+        );
+
+        return res.end(
+          model
+        );
+
+      } catch (error) {
+        logger.error(
+          "Failed to serve MediaPipe Face Landmarker model",
+          {
+            error:
+              error?.message ||
+              String(error)
+          }
+        );
+
+        return res.status(502).json({
+          success: false,
+
+          error:
+            "Não foi possível carregar o modelo facial no servidor."
+        });
+      }
+    }
+  );
   /*
    * =========================================================
    * STATIC FRONTEND
