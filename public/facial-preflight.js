@@ -390,7 +390,7 @@ const WASM_PATH =
   }
 }
 
-    async function createLandmarker() {
+     async function createLandmarker() {
     const vision =
       await loadMediaPipe();
 
@@ -398,45 +398,241 @@ const WASM_PATH =
       FaceLandmarker
     } = vision;
 
-    /*
-     * ========================================================
-     * MEDIA PIPE WASM — NON-SIMD
-     * ========================================================
-     *
-     * Alguns dispositivos Android conseguem carregar o
-     * JavaScript do MediaPipe mas falham ao compilar o
-     * runtime WebAssembly SIMD.
-     *
-     * Por isso usamos explicitamente a variante NON-SIMD.
-     *
-     * Isto continua sendo processamento 100% local.
-     * ========================================================
-     */
+    const wasmLoaderPath =
+      `${WASM_PATH}/vision_wasm_nosimd_internal.js`;
 
-    const fileset = {
-      wasmLoaderPath:
-        `${WASM_PATH}/vision_wasm_nosimd_internal.js`,
-
-      wasmBinaryPath:
-        `${WASM_PATH}/vision_wasm_nosimd_internal.wasm`
-    };
+    const wasmBinaryPath =
+      `${WASM_PATH}/vision_wasm_nosimd_internal.wasm`;
 
     console.log(
-      "[FacialPreflight] WASM NON-SIMD selecionado:",
-      fileset
+      "[FacialPreflight] Verificando assets MediaPipe..."
     );
 
     /*
      * ========================================================
-     * PRIMEIRA TENTATIVA — CPU
-     * ========================================================
-     *
-     * Para o primeiro teste vamos usar CPU diretamente.
-     *
-     * Isso evita adicionar uma segunda variável de falha
-     * relacionada ao delegate GPU.
+     * TESTE 1 — LOADER WASM
      * ========================================================
      */
+
+    try {
+      const loaderResponse =
+        await fetch(
+          wasmLoaderPath,
+          {
+            cache: "no-store"
+          }
+        );
+
+      console.log(
+        "[FacialPreflight] WASM loader:",
+        {
+          url:
+            wasmLoaderPath,
+
+          status:
+            loaderResponse.status,
+
+          ok:
+            loaderResponse.ok,
+
+          contentType:
+            loaderResponse.headers.get(
+              "content-type"
+            )
+        }
+      );
+
+      if (!loaderResponse.ok) {
+        throw new Error(
+          `WASM loader HTTP ${loaderResponse.status}`
+        );
+      }
+
+    } catch (error) {
+      console.error(
+        "[FacialPreflight] FALHA NO WASM LOADER",
+        error
+      );
+
+      throw new Error(
+        `Não foi possível carregar o loader WASM: ${error.message}`
+      );
+    }
+
+    /*
+     * ========================================================
+     * TESTE 2 — BINÁRIO WASM
+     * ========================================================
+     */
+
+    try {
+      const wasmResponse =
+        await fetch(
+          wasmBinaryPath,
+          {
+            cache: "no-store"
+          }
+        );
+
+      const contentType =
+        wasmResponse.headers.get(
+          "content-type"
+        );
+
+      const contentLength =
+        wasmResponse.headers.get(
+          "content-length"
+        );
+
+      console.log(
+        "[FacialPreflight] WASM binary:",
+        {
+          url:
+            wasmBinaryPath,
+
+          status:
+            wasmResponse.status,
+
+          ok:
+            wasmResponse.ok,
+
+          contentType,
+
+          contentLength
+        }
+      );
+
+      if (!wasmResponse.ok) {
+        throw new Error(
+          `WASM binary HTTP ${wasmResponse.status}`
+        );
+      }
+
+      const wasmBuffer =
+        await wasmResponse.arrayBuffer();
+
+      console.log(
+        "[FacialPreflight] WASM binary recebido:",
+        {
+          bytes:
+            wasmBuffer.byteLength,
+
+          contentType
+        }
+      );
+
+      if (
+        wasmBuffer.byteLength <
+        1000000
+      ) {
+        throw new Error(
+          `WASM demasiado pequeno: ${wasmBuffer.byteLength} bytes`
+        );
+      }
+
+    } catch (error) {
+      console.error(
+        "[FacialPreflight] FALHA NO WASM BINARY",
+        error
+      );
+
+      throw new Error(
+        `Não foi possível carregar o binário WASM: ${error.message}`
+      );
+    }
+
+    /*
+     * ========================================================
+     * TESTE 3 — MODELO FACE LANDMARKER
+     * ========================================================
+     */
+
+    try {
+      const modelResponse =
+        await fetch(
+          MODEL_PATH,
+          {
+            cache: "no-store"
+          }
+        );
+
+      console.log(
+        "[FacialPreflight] Modelo Face Landmarker:",
+        {
+          url:
+            MODEL_PATH,
+
+          status:
+            modelResponse.status,
+
+          ok:
+            modelResponse.ok,
+
+          contentType:
+            modelResponse.headers.get(
+              "content-type"
+            ),
+
+          contentLength:
+            modelResponse.headers.get(
+              "content-length"
+            )
+        }
+      );
+
+      if (!modelResponse.ok) {
+        throw new Error(
+          `Modelo HTTP ${modelResponse.status}`
+        );
+      }
+
+      const modelBuffer =
+        await modelResponse.arrayBuffer();
+
+      console.log(
+        "[FacialPreflight] Modelo recebido:",
+        {
+          bytes:
+            modelBuffer.byteLength
+        }
+      );
+
+      if (
+        modelBuffer.byteLength <
+        100000
+      ) {
+        throw new Error(
+          `Modelo demasiado pequeno: ${modelBuffer.byteLength} bytes`
+        );
+      }
+
+    } catch (error) {
+      console.error(
+        "[FacialPreflight] FALHA NO MODELO",
+        error
+      );
+
+      throw new Error(
+        `Não foi possível carregar o modelo facial: ${error.message}`
+      );
+    }
+
+    /*
+     * ========================================================
+     * MEDIA PIPE
+     * ========================================================
+     */
+
+    const fileset = {
+      wasmLoaderPath,
+
+      wasmBinaryPath
+    };
+
+    console.log(
+      "[FacialPreflight] Criando Face Landmarker:",
+      fileset
+    );
 
     try {
       faceLandmarker =
@@ -475,22 +671,37 @@ const WASM_PATH =
         );
 
       console.log(
-        "[FacialPreflight] Face Landmarker criado com WASM NON-SIMD + CPU."
+        "[FacialPreflight] Face Landmarker iniciado com sucesso."
       );
 
       return faceLandmarker;
 
     } catch (error) {
       console.error(
-        "[FacialPreflight] Falha ao criar Face Landmarker.",
-        error
+        "[FacialPreflight] ERRO REAL DO FACELANDMARKER",
+        {
+          name:
+            error?.name,
+
+          message:
+            error?.message,
+
+          stack:
+            error?.stack,
+
+          error
+        }
       );
 
       throw new Error(
-        "O motor facial local não conseguiu iniciar o WebAssembly. Verifique o carregamento dos ficheiros MediaPipe."
+        `Falha ao iniciar Face Landmarker: ${
+          error?.message ||
+          error?.name ||
+          "erro desconhecido"
+        }`
       );
     }
-  }
+  } 
   /*
    * ==========================================================
    * CÂMERA
