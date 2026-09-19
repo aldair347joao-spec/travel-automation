@@ -1591,79 +1591,311 @@ function buildPairsFromOcrText(
 
   const pairs = [];
 
+  const rawLines =
+    Array.isArray(
+      candidates.rawLines
+    )
+      ? candidates.rawLines
+      : [];
+
+  /*
+   * =========================================================
+   * PARES DIRETOS
+   * =========================================================
+   *
+   * Uma MRZ TD3 tem duas linhas consecutivas.
+   *
+   * Primeiro tentamos preservar a relação original
+   * encontrada pelo OCR:
+   *
+   *     linha 1
+   *     linha 2
+   *
+   * Não fazemos imediatamente:
+   *
+   *     linha1 A × linha2 A/B/C/D
+   *
+   * porque isso cria combinações artificiais.
+   */
+
+  for (
+    let index = 0;
+    index < rawLines.length - 1;
+    index += 1
+  ) {
+    const rawLine1 =
+      rawLines[index];
+
+    const rawLine2 =
+      rawLines[index + 1];
+
+    const line1Candidates =
+      new Set();
+
+    const line2Candidates =
+      new Set();
+
+    addLikelyLineCandidates(
+      line1Candidates,
+      rawLine1,
+      1
+    );
+
+    addLikelyLineCandidates(
+      line2Candidates,
+      rawLine2,
+      2
+    );
+
+    for (
+      const line1 of line1Candidates
+    ) {
+      for (
+        const line2 of line2Candidates
+      ) {
+        const score =
+          scoreMrzLine(
+            line1,
+            1
+          ) +
+          scoreMrzLine(
+            line2,
+            2
+          );
+
+        if (
+          score < 45
+        ) {
+          continue;
+        }
+
+        pairs.push({
+          line1,
+          line2,
+
+          source,
+
+          confidence:
+            Number.isFinite(
+              Number(confidence)
+            )
+              ? Number(confidence)
+              : null,
+
+          score,
+
+          pairing:
+            "adjacent_ocr_lines"
+        });
+      }
+    }
+  }
+
+  /*
+   * =========================================================
+   * PARES EXTRAÍDOS PELO ALGORITMO EXISTENTE
+   * =========================================================
+   *
+   * Só usamos o cruzamento de candidatos como FALLBACK.
+   *
+   * Isto é importante para fotografias em que o OCR:
+   *
+   * - quebra uma linha;
+   * - junta as duas linhas;
+   * - coloca texto extra entre elas;
+   * - ou perde a separação visual da MRZ.
+   *
+   * Portanto não eliminamos a capacidade de recuperação.
+   */
+
   const firstCandidates =
     candidates.first.slice(
       0,
-      20
+      12
     );
 
   const secondCandidates =
     candidates.second.slice(
       0,
-      20
+      12
     );
 
-  for (
-    const line1 of firstCandidates
+  /*
+   * Se já conseguimos pares diretos suficientes,
+   * não precisamos fabricar dezenas de combinações.
+   */
+  const hasGoodDirectPair =
+    pairs.some(
+      pair =>
+        Number(
+          pair.score || 0
+        ) >= 75
+    );
+
+  if (
+    !hasGoodDirectPair
   ) {
     for (
-      const line2 of secondCandidates
+      const line1 of firstCandidates
     ) {
-      const score =
-        scoreMrzLine(
-          line1,
-          1
-        ) +
-        scoreMrzLine(
-          line2,
-          2
-        );
-
-      if (
-        score < 45
+      for (
+        const line2 of secondCandidates
       ) {
-        continue;
+        const score =
+          scoreMrzLine(
+            line1,
+            1
+          ) +
+          scoreMrzLine(
+            line2,
+            2
+          );
+
+        if (
+          score < 45
+        ) {
+          continue;
+        }
+
+        pairs.push({
+          line1,
+          line2,
+
+          source,
+
+          confidence:
+            Number.isFinite(
+              Number(confidence)
+            )
+              ? Number(confidence)
+              : null,
+
+          score,
+
+          pairing:
+            "fallback_candidate_cross"
+        });
       }
-
-      pairs.push({
-        line1,
-        line2,
-
-        source,
-
-        confidence:
-          Number.isFinite(
-            Number(confidence)
-          )
-            ? Number(confidence)
-            : null,
-
-        score
-      });
     }
   }
 
-  pairs.sort(
-    (a, b) =>
+  /*
+   * =========================================================
+   * DEDUPLICAÇÃO
+   * =========================================================
+   */
+
+  const uniquePairs =
+    new Map();
+
+  for (
+    const pair of pairs
+  ) {
+    const key =
+      `${pair.line1}|${pair.line2}`;
+
+    const existing =
+      uniquePairs.get(
+        key
+      );
+
+    if (
+      !existing ||
       Number(
-        b.score || 0
-      ) -
-      Number(
-        a.score || 0
-      )
+        pair.score || 0
+      ) >
+        Number(
+          existing.score || 0
+        )
+    ) {
+      uniquePairs.set(
+        key,
+        pair
+      );
+    }
+  }
+
+  const finalPairs =
+    [
+      ...uniquePairs.values()
+    ];
+
+  /*
+   * =========================================================
+   * ORDENAÇÃO
+   * =========================================================
+   *
+   * Preferimos:
+   *
+   * 1. maior score;
+   * 2. maior confiança;
+   * 3. pares que vieram diretamente
+   *    de linhas consecutivas do OCR.
+   */
+
+  finalPairs.sort(
+    (a, b) => {
+      const scoreA =
+        Number(
+          a.score || 0
+        );
+
+      const scoreB =
+        Number(
+          b.score || 0
+        );
+
+      if (
+        scoreB !== scoreA
+      ) {
+        return (
+          scoreB -
+          scoreA
+        );
+      }
+
+      const directA =
+        a.pairing ===
+        "adjacent_ocr_lines"
+          ? 1
+          : 0;
+
+      const directB =
+        b.pairing ===
+        "adjacent_ocr_lines"
+          ? 1
+          : 0;
+
+      if (
+        directB !== directA
+      ) {
+        return (
+          directB -
+          directA
+        );
+      }
+
+      return (
+        Number(
+          b.confidence || 0
+        ) -
+        Number(
+          a.confidence || 0
+        )
+      );
+    }
   );
 
   return {
     candidates,
 
     pairs:
-      pairs.slice(
+      finalPairs.slice(
         0,
-        30
+        20
       )
   };
 }
-
 /*
  * =========================================================
  * ALTERNATIVAS
@@ -2841,19 +3073,18 @@ class PassportOcrService {
       const pair of pairs
     ) {
       const line1Variants =
-        expandMrzLine(
-          pair.line1,
-          1,
-          48
-        );
+  expandMrzLine(
+    pair.line1,
+    1,
+    16
+  );
 
-      const line2Variants =
-        expandMrzLine(
-          pair.line2,
-          2,
-          96
-        );
-
+const line2Variants =
+  expandMrzLine(
+    pair.line2,
+    2,
+    32
+  );
       const first =
         line1Variants.length
           ? line1Variants
@@ -2915,13 +3146,12 @@ class PassportOcrService {
             a.score || 0
           )
       );
-
-      expandedPairs.push(
-        ...candidates.slice(
-          0,
-          80
-        )
-      );
+     expandedPairs.push(
+  ...candidates.slice(
+    0,
+    40
+  )
+); 
     }
 
     /*
@@ -3068,7 +3298,8 @@ class PassportOcrService {
               Boolean(
                 pair.expanded
               ),
-
+              pairing:
+  pair.pairing || null,
             /*
              * DOB
              */
