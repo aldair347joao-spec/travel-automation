@@ -85,6 +85,68 @@ const LETTER_ALTERNATIVES = {
 
 /*
  * =========================================================
+ * CONFUSÕES OCR ADICIONAIS
+ * =========================================================
+ *
+ * Estas NÃO são substituições automáticas.
+ *
+ * São apenas possibilidades que o recuperador poderá
+ * testar. Um carácter só será aceite no resultado final
+ * se os check digits ICAO confirmarem a combinação.
+ */
+const MRZ_OCR_CONFUSIONS = {
+  O: ["0"],
+  Q: ["0"],
+  D: ["0"],
+
+  I: ["1"],
+  L: ["1"],
+
+  Z: ["2"],
+  E: ["3"],
+  A: ["4"],
+  S: ["5"],
+  G: ["6"],
+  T: ["7"],
+  B: ["8"],
+
+  C: ["G"],
+  G: ["C"],
+
+  U: ["V"],
+  V: ["U"],
+
+  R: ["P"],
+  P: ["R"],
+
+  N: ["H"],
+  H: ["N"],
+
+  Y: ["V"],
+
+  F: ["E"],
+  E: ["F"],
+
+  K: ["X"],
+  X: ["K"],
+
+  J: ["I"],
+  M: ["N"],
+  W: ["V"],
+
+  "0": ["O"],
+  "1": ["I", "L"],
+  "2": ["Z"],
+  "3": ["E"],
+  "4": ["A"],
+  "5": ["S"],
+  "6": ["G"],
+  "7": ["T"],
+  "8": ["B"]
+};
+
+/*
+ * =========================================================
  * NORMALIZAÇÃO
  * =========================================================
  */
@@ -1970,7 +2032,7 @@ function getAlternativesForPosition(
    *
    * Geramos apenas ambiguidades OCR plausíveis.
    */
-  if (
+    if (
     (
       index >= 0 &&
       index <= 8
@@ -1980,6 +2042,20 @@ function getAlternativesForPosition(
       index <= 41
     )
   ) {
+    /*
+     * Confusões OCR tradicionais:
+     *
+     * O <-> 0
+     * I <-> 1
+     * L <-> 1
+     * Z <-> 2
+     * E <-> 3
+     * A <-> 4
+     * S <-> 5
+     * G <-> 6
+     * T <-> 7
+     * B <-> 8
+     */
     for (
       const item of
         DIGIT_ALTERNATIVES[
@@ -1994,6 +2070,25 @@ function getAlternativesForPosition(
     for (
       const item of
         LETTER_ALTERNATIVES[
+          char
+        ] || []
+    ) {
+      alternatives.add(
+        item
+      );
+    }
+
+    /*
+     * Confusões adicionais encontradas
+     * frequentemente em OCR.
+     *
+     * Importante:
+     * nenhuma delas será aceita sem
+     * confirmação matemática do MRZ.
+     */
+    for (
+      const item of
+        MRZ_OCR_CONFUSIONS[
           char
         ] || []
     ) {
@@ -2399,7 +2494,86 @@ function recoverTd3AlphanumericCandidates(
     original.slice(),
     0
   );
+  /*
+   * -------------------------------------------------------
+   * RECUPERAÇÃO UNIVERSAL DE UMA POSIÇÃO
+   * -------------------------------------------------------
+   *
+   * Um passaporte válido pode ter qualquer combinação
+   * alfanumérica legal no número do documento.
+   *
+   * Portanto não devemos depender apenas de:
+   *
+   * O -> 0
+   * I -> 1
+   * etc.
+   *
+   * Testamos todos os caracteres permitidos pela ICAO
+   * em cada posição protegida por check digit.
+   *
+   * A combinação somente entra como candidata quando
+   * os check digits confirmam matematicamente o resultado.
+   */
 
+  const legalMrzCharacters =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<";
+
+  for (
+    const field of
+      fields
+  ) {
+    for (
+      let index =
+        field.start;
+      index <=
+        field.end;
+      index += 1
+    ) {
+      for (
+        const alternative of
+          legalMrzCharacters
+      ) {
+        if (
+          alternative ===
+          original[index]
+        ) {
+          continue;
+        }
+
+        const chars =
+          original.slice();
+
+        chars[index] =
+          alternative;
+
+        evaluate(
+          chars,
+          1
+        );
+
+        if (
+          candidates.size >=
+          maxCandidates
+        ) {
+          break;
+        }
+      }
+
+      if (
+        candidates.size >=
+        maxCandidates
+      ) {
+        break;
+      }
+    }
+
+    if (
+      candidates.size >=
+      maxCandidates
+    ) {
+      break;
+    }
+  }
   /*
    * -------------------------------------------------------
    * Uma alteração.
