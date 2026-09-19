@@ -755,6 +755,20 @@ function compareCountryField(
 }
 
 class PassportValidationService {
+  detectPassportType({
+    declaredType,
+    ocrText,
+    documentType,
+    issuingCountry
+  } = {}) {
+    return detectPassportType({
+      declaredType,
+      ocrText,
+      documentType,
+      issuingCountry
+    });
+  }
+
   validateMrz({
     line1,
     line2
