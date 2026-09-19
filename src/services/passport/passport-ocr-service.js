@@ -10,19 +10,6 @@ const DEFAULT_LANGUAGE =
 const MRZ_WHITELIST =
   "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<";
 
-/*
- * =========================================================
- * ESTRATÉGIA OCR
- * =========================================================
- *
- * MRZ primeiro.
- *
- * A validação final continua no
- * PassportValidationService.
- *
- * O OCR apenas encontra candidatos.
- */
-
 const PRIMARY_MRZ_PASSES = [
   {
     name: "mrz_primary_block",
@@ -192,6 +179,20 @@ function normalizeFirstMrzLine(value) {
  * =========================================================
  * SEGUNDA LINHA TD3
  * =========================================================
+ *
+ * TD3:
+ *
+ * 0..8   passport number
+ * 9      passport number check
+ * 10..12 nationality
+ * 13..18 DOB YYMMDD
+ * 19     DOB check
+ * 20     sex
+ * 21..26 expiry YYMMDD
+ * 27     expiry check
+ * 28..41 personal number
+ * 42     personal number check
+ * 43     composite check
  */
 
 function normalizeSecondMrzLine(value) {
@@ -219,12 +220,6 @@ function normalizeSecondMrzLine(value) {
       correctLetter(chars[i]);
   }
 
-  /*
-   * DOB.
-   *
-   * Mantemos a normalização numérica porque
-   * o validador final exige YYMMDD.
-   */
   for (
     let i = 13;
     i <= 19 && i < chars.length;
@@ -273,12 +268,8 @@ function normalizeSecondMrzLine(value) {
 
 /*
  * =========================================================
- * ICAO — FUNÇÕES LOCAIS DE CHECK DIGIT
+ * ICAO CHECK DIGIT
  * =========================================================
- *
- * Estas funções NÃO substituem a validação oficial.
- *
- * Servem apenas para recuperar candidatos OCR.
  */
 
 function mrzCharacterValue(char) {
@@ -341,7 +332,7 @@ function calculateMrzCheckDigit(value) {
 
 /*
  * =========================================================
- * DATA MRZ
+ * DATAS
  * =========================================================
  */
 
@@ -378,12 +369,6 @@ function isRealCalendarDate(
     return false;
   }
 
-  /*
-   * Verificação real do calendário.
-   *
-   * Usamos 2000 + YY porque o objetivo aqui
-   * é verificar mês/dia e anos bissextos.
-   */
   const year =
     2000 + Number(yy);
 
@@ -406,9 +391,7 @@ function isRealCalendarDate(
   );
 }
 
-function isPlausibleBirthDate(
-  value
-) {
+function isPlausibleBirthDate(value) {
   if (
     !/^\d{6}$/.test(value)
   ) {
@@ -434,15 +417,6 @@ function isPlausibleBirthDate(
     return false;
   }
 
-  /*
-   * Verificação de idade.
-   *
-   * O YY da MRZ pode representar 19xx ou 20xx.
-   *
-   * Aqui só rejeitamos datas que não possam
-   * corresponder a uma pessoa viva em termos
-   * razoáveis.
-   */
   const currentYear =
     new Date()
       .getUTCFullYear();
@@ -469,33 +443,24 @@ function isPlausibleBirthDate(
   );
 }
 
+function isPlausibleExpiryDate(value) {
+  if (
+    !/^\d{6}$/.test(value)
+  ) {
+    return false;
+  }
+
+  return isRealCalendarDate(
+    value.slice(0, 2),
+    value.slice(2, 4),
+    value.slice(4, 6)
+  );
+}
+
 /*
  * =========================================================
  * RECUPERAÇÃO DA DOB
  * =========================================================
- *
- * Este é o principal ajuste desta versão.
- *
- * Se o OCR ler:
- *
- * 900532
- *
- * em vez de:
- *
- * 900302
- *
- * a expansão genérica antiga poderia nunca
- * chegar à posição errada da data.
- *
- * Agora pesquisamos especificamente a DOB.
- *
- * Não aceitamos simplesmente "qualquer data".
- *
- * O candidato precisa:
- *
- * 1. ser uma data real;
- * 2. ser plausível como nascimento;
- * 3. possuir check digit ICAO correto.
  */
 
 function recoverBirthDateCandidates(
@@ -510,10 +475,7 @@ function recoverBirthDateCandidates(
   }
 
   const observed =
-    line2.slice(
-      13,
-      19
-    );
+    line2.slice(13, 19);
 
   const observedCheck =
     line2[19];
@@ -528,12 +490,6 @@ function recoverBirthDateCandidates(
 
   const candidates = [];
 
-  /*
-   * Distância máxima de 2 caracteres.
-   *
-   * Isto corrige erros OCR reais sem permitir
-   * uma explosão combinatória.
-   */
   for (
     let index = 0;
     index < 6;
@@ -592,16 +548,6 @@ function recoverBirthDateCandidates(
     }
   }
 
-  /*
-   * Se uma posição de DOB e o check digit
-   * também foram lidos incorretamente,
-   * tentamos novamente aceitando qualquer
-   * check digit, mas continuamos a exigir
-   * uma data real.
-   *
-   * O PassportValidationService fará a
-   * confirmação final do check digit.
-   */
   if (
     candidates.length === 0
   ) {
@@ -673,12 +619,6 @@ function recoverBirthDateCandidates(
     }
   }
 
-  /*
-   * Distância 2.
-   *
-   * Só é usada quando não encontramos
-   * nenhuma solução com uma única alteração.
-   */
   if (
     candidates.length === 0
   ) {
@@ -727,10 +667,6 @@ function recoverBirthDateCandidates(
                 date
               );
 
-            /*
-             * Para distância 2, damos prioridade
-             * ao check digit observado.
-             */
             if (
               expectedCheck !==
               observedCheck
@@ -778,9 +714,6 @@ function recoverBirthDateCandidates(
     }
   }
 
-  /*
-   * Remover duplicados.
-   */
   const seen =
     new Set();
 
@@ -823,30 +756,15 @@ function applyBirthDateCandidates(
     const chars =
       line2.split("");
 
-    chars[13] =
-      candidate.date[0];
+    for (
+      let offset = 0;
+      offset < 6;
+      offset += 1
+    ) {
+      chars[13 + offset] =
+        candidate.date[offset];
+    }
 
-    chars[14] =
-      candidate.date[1];
-
-    chars[15] =
-      candidate.date[2];
-
-    chars[16] =
-      candidate.date[3];
-
-    chars[17] =
-      candidate.date[4];
-
-    chars[18] =
-      candidate.date[5];
-
-    /*
-     * Se sabemos qual é o check digit ICAO
-     * da data, colocamos o valor calculado.
-     *
-     * Isto não é uma aprovação do passaporte.
-     */
     chars[19] =
       candidate.checkDigit;
 
@@ -862,6 +780,370 @@ function applyBirthDateCandidates(
 
       recoveryDistance:
         candidate.distance
+    });
+  }
+
+  return variants;
+}
+
+/*
+ * =========================================================
+ * RECUPERAÇÃO DA EXPIRY DATE
+ * =========================================================
+ *
+ * A MRZ continua YYMMDD.
+ *
+ * Não usamos aqui a ordem visual da data impressa
+ * no passaporte.
+ */
+
+function recoverExpiryDateCandidates(
+  line2,
+  maxCandidates = 80
+) {
+  if (
+    !line2 ||
+    line2.length !== 44
+  ) {
+    return [];
+  }
+
+  const observed =
+    line2.slice(21, 27);
+
+  const observedCheck =
+    line2[27];
+
+  if (
+    !/^[0-9]{6}$/.test(
+      observed
+    )
+  ) {
+    return [];
+  }
+
+  const candidates = [];
+
+  function addCandidate(
+    date,
+    distance,
+    requireObservedCheck
+  ) {
+    if (
+      !isPlausibleExpiryDate(
+        date
+      )
+    ) {
+      return;
+    }
+
+    const expectedCheck =
+      calculateMrzCheckDigit(
+        date
+      );
+
+    if (
+      requireObservedCheck &&
+      expectedCheck !==
+        observedCheck
+    ) {
+      return;
+    }
+
+    candidates.push({
+      date,
+      checkDigit:
+        expectedCheck,
+
+      distance,
+
+      checkMatched:
+        expectedCheck ===
+        observedCheck
+    });
+  }
+
+  /*
+   * Primeiro:
+   * uma alteração + check digit observado.
+   */
+  for (
+    let index = 0;
+    index < 6;
+    index += 1
+  ) {
+    const original =
+      observed[index];
+
+    for (
+      let digit = 0;
+      digit <= 9;
+      digit += 1
+    ) {
+      const value =
+        String(digit);
+
+      if (
+        value === original
+      ) {
+        continue;
+      }
+
+      const chars =
+        observed.split("");
+
+      chars[index] =
+        value;
+
+      addCandidate(
+        chars.join(""),
+        1,
+        true
+      );
+
+      if (
+        candidates.length >=
+        maxCandidates
+      ) {
+        break;
+      }
+    }
+
+    if (
+      candidates.length >=
+      maxCandidates
+    ) {
+      break;
+    }
+  }
+
+  /*
+   * Segundo:
+   * uma alteração, mas permitindo que
+   * o check digit original também esteja errado.
+   */
+  if (
+    candidates.length === 0
+  ) {
+    for (
+      let index = 0;
+      index < 6;
+      index += 1
+    ) {
+      const original =
+        observed[index];
+
+      for (
+        let digit = 0;
+        digit <= 9;
+        digit += 1
+      ) {
+        const value =
+          String(digit);
+
+        if (
+          value === original
+        ) {
+          continue;
+        }
+
+        const chars =
+          observed.split("");
+
+        chars[index] =
+          value;
+
+        addCandidate(
+          chars.join(""),
+          1,
+          false
+        );
+
+        if (
+          candidates.length >=
+          maxCandidates
+        ) {
+          break;
+        }
+      }
+
+      if (
+        candidates.length >=
+        maxCandidates
+      ) {
+        break;
+      }
+    }
+  }
+
+  /*
+   * Terceiro:
+   * duas alterações, mantendo o check digit
+   * observado.
+   */
+  if (
+    candidates.length === 0
+  ) {
+    for (
+      let first = 0;
+      first < 6;
+      first += 1
+    ) {
+      for (
+        let second = first + 1;
+        second < 6;
+        second += 1
+      ) {
+        for (
+          let digitA = 0;
+          digitA <= 9;
+          digitA += 1
+        ) {
+          for (
+            let digitB = 0;
+            digitB <= 9;
+            digitB += 1
+          ) {
+            const chars =
+              observed.split("");
+
+            chars[first] =
+              String(digitA);
+
+            chars[second] =
+              String(digitB);
+
+            addCandidate(
+              chars.join(""),
+              2,
+              true
+            );
+
+            if (
+              candidates.length >=
+              maxCandidates
+            ) {
+              break;
+            }
+          }
+
+          if (
+            candidates.length >=
+            maxCandidates
+          ) {
+            break;
+          }
+        }
+
+        if (
+          candidates.length >=
+          maxCandidates
+        ) {
+          break;
+        }
+      }
+
+      if (
+        candidates.length >=
+        maxCandidates
+      ) {
+        break;
+      }
+    }
+  }
+
+  const seen =
+    new Set();
+
+  return candidates
+    .sort((a, b) => {
+      if (
+        Boolean(
+          b.checkMatched
+        ) !==
+        Boolean(
+          a.checkMatched
+        )
+      ) {
+        return b.checkMatched
+          ? 1
+          : -1;
+      }
+
+      return (
+        Number(
+          a.distance || 99
+        ) -
+        Number(
+          b.distance || 99
+        )
+      );
+    })
+    .filter(candidate => {
+      const key =
+        `${candidate.date}|${candidate.checkDigit}`;
+
+      if (
+        seen.has(key)
+      ) {
+        return false;
+      }
+
+      seen.add(key);
+
+      return true;
+    })
+    .slice(
+      0,
+      maxCandidates
+    );
+}
+
+function applyExpiryDateCandidates(
+  line2,
+  maxCandidates = 80
+) {
+  const recovered =
+    recoverExpiryDateCandidates(
+      line2,
+      maxCandidates
+    );
+
+  const variants = [];
+
+  for (
+    const candidate of recovered
+  ) {
+    const chars =
+      line2.split("");
+
+    for (
+      let offset = 0;
+      offset < 6;
+      offset += 1
+    ) {
+      chars[21 + offset] =
+        candidate.date[offset];
+    }
+
+    chars[27] =
+      candidate.checkDigit;
+
+    variants.push({
+      line:
+        chars.join(""),
+
+      recoveredExpiryDate:
+        candidate.date,
+
+      recoveredExpiryCheckDigit:
+        candidate.checkDigit,
+
+      expiryRecoveryDistance:
+        candidate.distance,
+
+      expiryCheckMatched:
+        candidate.checkMatched
     });
   }
 
@@ -912,9 +1194,7 @@ function scoreMrzLine(
     }
 
     if (
-      /^P<[A-Z<]{3}/.test(
-        line
-      )
+      /^P<[A-Z<]{3}/.test(line)
     ) {
       score += 10;
     }
@@ -936,33 +1216,23 @@ function scoreMrzLine(
     }
 
     if (
-      /^.{10}[A-Z]{3}/.test(
-        line
-      )
+      /^.{10}[A-Z]{3}/.test(line)
     ) {
       score += 5;
     }
 
     if (
-      /^.{20}[MF<]/.test(
-        line
-      )
+      /^.{20}[MF<]/.test(line)
     ) {
       score += 5;
     }
 
     if (
-      /^.{28}[A-Z0-9<]+$/.test(
-        line
-      )
+      /^.{28}[A-Z0-9<]+$/.test(line)
     ) {
       score += 3;
     }
 
-    /*
-     * Uma DOB semanticamente possível recebe
-     * pequena prioridade.
-     */
     const birthDate =
       line.slice(
         13,
@@ -976,6 +1246,20 @@ function scoreMrzLine(
     ) {
       score += 8;
     }
+
+    const expiryDate =
+      line.slice(
+        21,
+        27
+      );
+
+    if (
+      isPlausibleExpiryDate(
+        expiryDate
+      )
+    ) {
+      score += 8;
+    }
   }
 
   return score;
@@ -983,7 +1267,7 @@ function scoreMrzLine(
 
 /*
  * =========================================================
- * JANELAS DE 44 CARACTERES
+ * JANELAS DE 44
  * =========================================================
  */
 
@@ -1071,12 +1355,6 @@ function add44Window(
   }
 }
 
-/*
- * =========================================================
- * CANDIDATOS DE LINHA
- * =========================================================
- */
-
 function addLikelyLineCandidates(
   set,
   value,
@@ -1113,7 +1391,7 @@ function addLikelyLineCandidates(
 
 /*
  * =========================================================
- * EXTRAÇÃO DA MRZ
+ * EXTRAÇÃO MRZ
  * =========================================================
  */
 
@@ -1388,7 +1666,7 @@ function buildPairsFromOcrText(
 
 /*
  * =========================================================
- * EXPANSÃO INTELIGENTE
+ * ALTERNATIVAS
  * =========================================================
  */
 
@@ -1430,9 +1708,7 @@ function getAlternativesForPosition(
             char
           ] || []
       ) {
-        alternatives.add(
-          item
-        );
+        alternatives.add(item);
       }
     }
 
@@ -1463,9 +1739,7 @@ function getAlternativesForPosition(
           char
         ] || []
     ) {
-      alternatives.add(
-        item
-      );
+      alternatives.add(item);
     }
 
     return [
@@ -1483,9 +1757,7 @@ function getAlternativesForPosition(
           char
         ] || []
     ) {
-      alternatives.add(
-        item
-      );
+      alternatives.add(item);
     }
 
     return [
@@ -1501,17 +1773,9 @@ function getAlternativesForPosition(
       char !== "F" &&
       char !== "<"
     ) {
-      alternatives.add(
-        "<"
-      );
-
-      alternatives.add(
-        "M"
-      );
-
-      alternatives.add(
-        "F"
-      );
+      alternatives.add("<");
+      alternatives.add("M");
+      alternatives.add("F");
     }
 
     return [
@@ -1528,14 +1792,6 @@ function getAlternativesForPosition(
  * =========================================================
  * EXPANSÃO MRZ
  * =========================================================
- *
- * ALTERAÇÃO PRINCIPAL:
- *
- * A DOB recebe prioridade absoluta.
- *
- * Não deixamos as primeiras 8 ambiguidades
- * do número do passaporte consumirem a
- * capacidade de recuperação da data.
  */
 
 function expandMrzLine(
@@ -1564,14 +1820,17 @@ function expandMrzLine(
   ];
 
   /*
-   * =======================================================
-   * SEGUNDA LINHA — RECUPERAÇÃO DIRECIONADA DA DOB
-   * =======================================================
+   * -------------------------------------------------------
+   * SEGUNDA LINHA
+   * -------------------------------------------------------
    */
 
   if (
     lineNumber === 2
   ) {
+    /*
+     * DOB
+     */
     const birthDateVariants =
       applyBirthDateCandidates(
         normalized,
@@ -1581,10 +1840,6 @@ function expandMrzLine(
         )
       );
 
-    /*
-     * A DOB recuperada vem imediatamente
-     * depois do candidato original.
-     */
     for (
       const recovered of
         birthDateVariants
@@ -1595,30 +1850,61 @@ function expandMrzLine(
     }
 
     /*
-     * Também tentamos alternativas OCR
-     * diretamente nas posições da DOB.
+     * EXPIRY DATE
      *
-     * Isto cobre O/0, I/1, B/8, etc.
+     * NOVO:
+     * recuperação dedicada da validade.
      */
-    let dateVariants = [
-      normalized
-    ];
+    const expiryDateVariants =
+      applyExpiryDateCandidates(
+        normalized,
+        Math.min(
+          80,
+          maxVariants
+        )
+      );
 
-    const datePositions = [
+    for (
+      const recovered of
+        expiryDateVariants
+    ) {
+      variants.push(
+        recovered.line
+      );
+    }
+
+    /*
+     * Expansão OCR direta das duas datas.
+     *
+     * Não incluímos os check digits 19/27 aqui
+     * porque os recuperadores dedicados já tratam
+     * esses campos.
+     */
+    const directedDatePositions = [
       13,
       14,
       15,
       16,
       17,
       18,
-      19
+
+      21,
+      22,
+      23,
+      24,
+      25,
+      26
+    ];
+
+    let dateVariants = [
+      normalized
     ];
 
     for (
-      const index of datePositions
+      const index of
+        directedDatePositions
     ) {
-      const next =
-        [];
+      const next = [];
 
       for (
         const current of
@@ -1697,9 +1983,9 @@ function expandMrzLine(
   }
 
   /*
-   * =======================================================
+   * -------------------------------------------------------
    * EXPANSÃO GERAL
-   * =======================================================
+   * -------------------------------------------------------
    */
 
   const positions = [];
@@ -1710,7 +1996,8 @@ function expandMrzLine(
     index += 1
   ) {
     /*
-     * DOB já recebeu tratamento dedicado.
+     * DOB e EXPIRY DATE já possuem recuperação
+     * dedicada.
      */
     if (
       lineNumber === 2 &&
@@ -1718,6 +2005,10 @@ function expandMrzLine(
         (
           index >= 13 &&
           index <= 19
+        ) ||
+        (
+          index >= 21 &&
+          index <= 27
         )
       )
     ) {
@@ -1742,8 +2033,8 @@ function expandMrzLine(
   }
 
   /*
-   * A expansão geral continua limitada
-   * para proteger o desempenho.
+   * Limitamos a expansão geral para preservar
+   * desempenho.
    */
   const limitedPositions =
     positions.slice(
@@ -1755,8 +2046,7 @@ function expandMrzLine(
     const position of
       limitedPositions
   ) {
-    const next =
-      [];
+    const next = [];
 
     for (
       const current of
@@ -1897,6 +2187,9 @@ async function createPreprocessedVariants(
     width &&
     height
   ) {
+    /*
+     * MRZ principal.
+     */
     const primaryRatio =
       0.34;
 
@@ -1990,6 +2283,9 @@ async function createPreprocessedVariants(
         1
     });
 
+    /*
+     * MRZ fallback maior.
+     */
     const fallbackRatio =
       0.48;
 
@@ -2076,7 +2372,7 @@ async function createPreprocessedVariants(
 
 /*
  * =========================================================
- * SERVIÇO
+ * SERVIÇO OCR
  * =========================================================
  */
 
@@ -2105,6 +2401,7 @@ class PassportOcrService {
           ) {
             this.logger({
               ...message,
+
               ocrPass:
                 pass.name
             });
@@ -2257,7 +2554,7 @@ class PassportOcrService {
 
     /*
      * =====================================================
-     * FASE 1 — MRZ PRINCIPAL
+     * FASE 1 — MRZ
      * =====================================================
      */
 
@@ -2773,7 +3070,7 @@ class PassportOcrService {
               ),
 
             /*
-             * Diagnóstico específico da DOB.
+             * DOB
              */
             ocrBirthDate:
               pair.line2
@@ -2791,6 +3088,30 @@ class PassportOcrService {
             recoveredBirthCandidates:
               pair.line2
                 ? recoverBirthDateCandidates(
+                    pair.line2,
+                    10
+                  )
+                : [],
+
+            /*
+             * EXPIRY DATE
+             */
+            ocrExpiryDate:
+              pair.line2
+                ? pair.line2.slice(
+                    21,
+                    27
+                  )
+                : null,
+
+            ocrExpiryCheckDigit:
+              pair.line2
+                ? pair.line2[27]
+                : null,
+
+            recoveredExpiryCandidates:
+              pair.line2
+                ? recoverExpiryDateCandidates(
                     pair.line2,
                     10
                   )
