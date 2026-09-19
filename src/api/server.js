@@ -49,6 +49,8 @@ const createSystemRouter =
 
 const config =
   require("../config/environment");
+const logger =
+  require("../utils/logger");
 
 function createApp({
   supervisor
