@@ -160,9 +160,298 @@ function normalizeDateCandidate(value) {
     return `${match[1]}-${match[2]}-${match[3]}`;
   }
 
+  /*
+   * Passaportes usam frequentemente a data visual
+   * no formato:
+   *
+   * 15 AUG 2030
+   * 15-AUG-2030
+   * 15 AUGUST 2030
+   *
+   * Isto é apenas a data VISUAL.
+   * A MRZ continuará sempre em YYMMDD.
+   */
+  match =
+    raw.match(
+      /\b(\d{1,2})[\s\-\/,]+([A-Za-z]{3,9})[\s\-\/,]+(\d{4})\b/i
+    );
+
+  if (match) {
+    const day =
+      String(match[1]).padStart(2, "0");
+
+    const monthName =
+      String(match[2])
+        .trim()
+        .toUpperCase()
+        .slice(0, 3);
+
+    const year =
+      match[3];
+
+    const months = {
+      JAN: "01",
+      FEB: "02",
+      MAR: "03",
+      APR: "04",
+      MAY: "05",
+      JUN: "06",
+      JUL: "07",
+      AUG: "08",
+      SEP: "09",
+      OCT: "10",
+      NOV: "11",
+      DEC: "12"
+    };
+
+    const month =
+      months[monthName];
+
+    if (!month) {
+      return null;
+    }
+
+    const date =
+      new Date(
+        Date.UTC(
+          Number(year),
+          Number(month) - 1,
+          Number(day)
+        )
+      );
+
+    if (
+      date.getUTCFullYear() !==
+        Number(year) ||
+      date.getUTCMonth() !==
+        Number(month) - 1 ||
+      date.getUTCDate() !==
+        Number(day)
+    ) {
+      return null;
+    }
+
+    return `${year}-${month}-${day}`;
+  }
+
   return null;
 }
+function visualDateToMrzDate(value) {
+  const match =
+    String(value || "")
+      .trim()
+      .match(
+        /^(\d{4})-(\d{2})-(\d{2})$/
+      );
 
+  if (!match) {
+    return null;
+  }
+
+  const year = match[1];
+  const month = match[2];
+  const day = match[3];
+
+  const date =
+    new Date(
+      Date.UTC(
+        Number(year),
+        Number(month) - 1,
+        Number(day)
+      )
+    );
+
+  if (
+    date.getUTCFullYear() !==
+      Number(year) ||
+    date.getUTCMonth() !==
+      Number(month) - 1 ||
+    date.getUTCDate() !==
+      Number(day)
+  ) {
+    return null;
+  }
+
+  return (
+    year.slice(-2) +
+    month +
+    day
+  );
+}
+
+function calculateMrzCheckDigit(
+  value
+) {
+  const weights = [
+    7,
+    3,
+    1
+  ];
+
+  let sum = 0;
+
+  const normalized =
+    String(value || "")
+      .toUpperCase();
+
+  for (
+    let index = 0;
+    index < normalized.length;
+    index += 1
+  ) {
+    const char =
+      normalized[index];
+
+    let numericValue;
+
+    if (
+      char >= "0" &&
+      char <= "9"
+    ) {
+      numericValue =
+        Number(char);
+    } else if (
+      char >= "A" &&
+      char <= "Z"
+    ) {
+      numericValue =
+        char.charCodeAt(0) - 55;
+    } else if (
+      char === "<"
+    ) {
+      numericValue = 0;
+    } else {
+      return null;
+    }
+
+    sum +=
+      numericValue *
+      weights[
+        index % 3
+      ];
+  }
+
+  return String(
+    sum % 10
+  );
+}
+
+function rebuildTd3CompositeCheckDigit(
+  line2
+) {
+  const normalized =
+    String(line2 || "")
+      .replace(/\s/g, "")
+      .toUpperCase();
+
+  if (
+    normalized.length !== 44
+  ) {
+    return null;
+  }
+
+  const compositeInput =
+    normalized.slice(0, 10) +
+    normalized.slice(13, 20) +
+    normalized.slice(21, 43);
+
+  return calculateMrzCheckDigit(
+    compositeInput
+  );
+}
+
+function recoverMrzWithVisualExpiry(
+  pair,
+  visualExpiryDate
+) {
+  if (
+    !pair ||
+    !pair.line1 ||
+    !pair.line2
+  ) {
+    return null;
+  }
+
+  const line1 =
+    String(pair.line1)
+      .replace(/\s/g, "")
+      .toUpperCase();
+
+  let line2 =
+    String(pair.line2)
+      .replace(/\s/g, "")
+      .toUpperCase();
+
+  if (
+    line1.length !== 44 ||
+    line2.length !== 44
+  ) {
+    return null;
+  }
+
+  const mrzExpiry =
+    visualDateToMrzDate(
+      visualExpiryDate
+    );
+
+  if (!mrzExpiry) {
+    return null;
+  }
+
+  /*
+   * TD3:
+   *
+   * posições 22-27 = YYMMDD
+   * posição 28     = check digit
+   * posição 44     = composite check digit
+   *
+   * Índices JS:
+   * 21-26
+   * 27
+   * 43
+   */
+  line2 =
+    line2.slice(0, 21) +
+    mrzExpiry +
+    "<" +
+    line2.slice(28);
+
+  const expiryCheckDigit =
+    calculateMrzCheckDigit(
+      mrzExpiry
+    );
+
+  if (
+    expiryCheckDigit === null
+  ) {
+    return null;
+  }
+
+  line2 =
+    line2.slice(0, 27) +
+    expiryCheckDigit +
+    line2.slice(28);
+
+  const compositeCheckDigit =
+    rebuildTd3CompositeCheckDigit(
+      line2
+    );
+
+  if (
+    compositeCheckDigit === null
+  ) {
+    return null;
+  }
+
+  line2 =
+    line2.slice(0, 43) +
+    compositeCheckDigit;
+
+  return {
+    line1,
+    line2
+  };
+}
 function extractVisualPassportFields(
   ocrText
 ) {
@@ -775,9 +1064,11 @@ function buildMrzFailureIssues(
  * check digits.
  * =========================================================
  */
-
 function findValidMrz(
-  ocrResult
+  ocrResult,
+  {
+    visualExpiryDate = null
+  } = {}
 ) {
   const pairs =
     Array.isArray(
@@ -821,14 +1112,82 @@ function findValidMrz(
         validation:
           result
       });
-    } else {
-      invalidCandidates.push({
-        pair,
 
-        validation:
-          result
-      });
+      continue;
     }
+
+    /*
+     * Se a MRZ falhou especificamente na validade,
+     * tentamos reconstruir SOMENTE a parte da validade
+     * usando a data visual do passaporte.
+     *
+     * A MRZ reconstruída volta a passar pela validação
+     * completa. Portanto não existe bypass de segurança.
+     */
+    const expiryFailed =
+      result?.data?.checks?.expiryDate === false ||
+      Array.isArray(result?.errors) &&
+        result.errors.some(
+          error =>
+            /expiry|expir|validade/i.test(
+              String(error)
+            )
+        );
+
+    if (
+      visualExpiryDate &&
+      expiryFailed
+    ) {
+      const recovered =
+        recoverMrzWithVisualExpiry(
+          pair,
+          visualExpiryDate
+        );
+
+      if (recovered) {
+        const recoveredResult =
+          validation.validateMrz({
+            line1:
+              recovered.line1,
+
+            line2:
+              recovered.line2
+          });
+
+        if (
+          recoveredResult.success &&
+          recoveredResult.passed &&
+          recoveredResult.data
+        ) {
+          validCandidates.push({
+            pair: {
+              ...pair,
+
+              line1:
+                recovered.line1,
+
+              line2:
+                recovered.line2,
+
+              recoverySource:
+                "visual_passport_expiry"
+            },
+
+            validation:
+              recoveredResult
+          });
+
+          continue;
+        }
+      }
+    }
+
+    invalidCandidates.push({
+      pair,
+
+      validation:
+        result
+    });
   }
 
   if (
@@ -854,12 +1213,6 @@ function findValidMrz(
     };
   }
 
-  /*
-   * Primeiro preferimos candidatos estruturalmente
-   * melhores.
-   *
-   * Depois usamos a confiança do OCR.
-   */
   validCandidates.sort(
     (a, b) => {
       const scoreA =
@@ -1180,9 +1533,13 @@ router.post(
        */
 
       const validMrz =
-        findValidMrz(
-          ocrResult
-        );
+  findValidMrz(
+    ocrResult,
+    {
+      visualExpiryDate:
+        visualPassportData.passportExpiryDate
+    }
+  );
 
       if (
         !validMrz.valid
@@ -1744,9 +2101,13 @@ router.post(
        */
 
       const validMrz =
-        findValidMrz(
-          ocrResult
-        );
+  findValidMrz(
+    ocrResult,
+    {
+      visualExpiryDate:
+        visualPassportData.passportExpiryDate
+    }
+  );
 
       if (
         !validMrz.valid
