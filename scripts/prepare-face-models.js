@@ -40,51 +40,30 @@ const targetFaceApi =
     "face-api"
   );
 
-const requiredModelFiles = [
+const requiredManifests = [
   "tiny_face_detector_model-weights_manifest.json",
-  "tiny_face_detector_model.bin",
-
   "face_landmark_68_model-weights_manifest.json",
-  "face_landmark_68_model.bin",
-
   "face_expression_model-weights_manifest.json",
-  "face_expression_model.bin",
-
-  "face_recognition_model-weights_manifest.json",
-  "face_recognition_model.bin"
+  "face_recognition_model-weights_manifest.json"
 ];
-
-const requiredLibraryFiles = [
-  "face-api.min.js"
-];
-
-function fail(message) {
-  console.error("");
-  console.error(
-    "============================================================"
-  );
-  console.error(
-    "[FACE API] ERRO NO PREPARO DO MOTOR FACIAL"
-  );
-  console.error(
-    "============================================================"
-  );
-  console.error(message);
-  console.error("");
-
-  process.exit(1);
-}
 
 function copyFile(
   source,
-  target,
-  label
+  target
 ) {
   if (!fs.existsSync(source)) {
-    fail(
-      `${label} não encontrado:\n${source}`
+    throw new Error(
+      "Ficheiro necessário não encontrado:\n" +
+      source
     );
   }
+
+  fs.mkdirSync(
+    path.dirname(target),
+    {
+      recursive: true
+    }
+  );
 
   fs.copyFileSync(
     source,
@@ -92,18 +71,95 @@ function copyFile(
   );
 
   console.log(
-    `[FACE API] OK: ${path.basename(target)}`
+    "[FACE API] OK: " +
+    path.relative(
+      projectRoot,
+      target
+    )
   );
 }
 
-function prepare() {
+function readManifest(
+  manifestPath
+) {
+  let parsed;
+
+  try {
+    parsed = JSON.parse(
+      fs.readFileSync(
+        manifestPath,
+        "utf8"
+      )
+    );
+  } catch (error) {
+    throw new Error(
+      "Não foi possível ler o manifest facial:\n" +
+      manifestPath +
+      "\n" +
+      (
+        error?.message ||
+        String(error)
+      )
+    );
+  }
+
+  if (
+    !Array.isArray(parsed) ||
+    !parsed[0] ||
+    !Array.isArray(
+      parsed[0].paths
+    )
+  ) {
+    throw new Error(
+      "Manifest facial inválido ou sem paths:\n" +
+      manifestPath
+    );
+  }
+
+  return parsed[0].paths;
+}
+
+function findBrowserLibrary() {
+  const candidates = [
+    path.join(
+      sourceDist,
+      "face-api.js"
+    ),
+
+    path.join(
+      sourceDist,
+      "face-api.min.js"
+    )
+  ];
+
+  for (
+    const candidate of candidates
+  ) {
+    if (
+      fs.existsSync(candidate)
+    ) {
+      return candidate;
+    }
+  }
+
+  throw new Error(
+    "A biblioteca browser do FaceAPI não foi encontrada.\n" +
+    "Foram procurados:\n" +
+    candidates.join("\n")
+  );
+}
+
+function prepareFaceModels() {
   console.log("");
+
   console.log(
     "============================================================"
   );
+
   console.log(
     "[FACE API] PREPARANDO MOTOR FACIAL LOCAL"
   );
+
   console.log(
     "============================================================"
   );
@@ -111,39 +167,33 @@ function prepare() {
   if (
     !fs.existsSync(faceApiRoot)
   ) {
-    fail(
+    throw new Error(
       "O pacote @vladmandic/face-api não foi encontrado.\n\n" +
       "Local esperado:\n" +
-      faceApiRoot +
-      "\n\n" +
-      "Verifique se npm install foi executado corretamente."
-    );
-  }
-
-  if (
-    !fs.existsSync(sourceModels)
-  ) {
-    fail(
-      "A pasta de modelos do FaceAPI não foi encontrada:\n" +
-      sourceModels
+      faceApiRoot
     );
   }
 
   if (
     !fs.existsSync(sourceDist)
   ) {
-    fail(
+    throw new Error(
       "A pasta dist do FaceAPI não foi encontrada:\n" +
       sourceDist
     );
   }
 
-  fs.mkdirSync(
-    targetModels,
-    {
-      recursive: true
-    }
-  );
+  if (
+    !fs.existsSync(sourceModels)
+  ) {
+    throw new Error(
+      "A pasta model do FaceAPI não foi encontrada:\n" +
+      sourceModels
+    );
+  }
+
+  const browserLibrary =
+    findBrowserLibrary();
 
   fs.mkdirSync(
     targetFaceApi,
@@ -152,78 +202,153 @@ function prepare() {
     }
   );
 
+  fs.mkdirSync(
+    targetModels,
+    {
+      recursive: true
+    }
+  );
+
   console.log(
-    "[FACE API] A preparar biblioteca..."
+    "[FACE API] A preparar biblioteca browser..."
+  );
+
+  copyFile(
+    browserLibrary,
+    path.join(
+      targetFaceApi,
+      "face-api.js"
+    )
+  );
+
+  console.log(
+    "[FACE API] A preparar manifests e pesos..."
   );
 
   for (
-    const file of requiredLibraryFiles
+    const manifestName of requiredManifests
   ) {
-    copyFile(
-      path.join(
-        sourceDist,
-        file
-      ),
-      path.join(
-        targetFaceApi,
-        file
-      ),
-      "Biblioteca FaceAPI"
-    );
-  }
-
-  console.log(
-    "[FACE API] A preparar modelos..."
-  );
-
-  for (
-    const file of requiredModelFiles
-  ) {
-    copyFile(
+    const manifestSource =
       path.join(
         sourceModels,
-        file
-      ),
+        manifestName
+      );
+
+    const manifestTarget =
       path.join(
         targetModels,
-        file
-      ),
-      "Modelo facial"
+        manifestName
+      );
+
+    copyFile(
+      manifestSource,
+      manifestTarget
     );
+
+    const shardPaths =
+      readManifest(
+        manifestSource
+      );
+
+    for (
+      const shard of shardPaths
+    ) {
+      if (
+        typeof shard !== "string" ||
+        !shard.trim()
+      ) {
+        throw new Error(
+          "O manifest contém um shard inválido:\n" +
+          manifestSource
+        );
+      }
+
+      copyFile(
+        path.join(
+          sourceModels,
+          shard
+        ),
+        path.join(
+          targetModels,
+          shard
+        )
+      );
+    }
   }
 
   console.log("");
+
   console.log(
     "[FACE API] Biblioteca:"
   );
+
   console.log(
-    "          /face-api/face-api.min.js"
+    "          /face-api/face-api.js"
   );
 
   console.log(
     "[FACE API] Modelos:"
   );
+
   console.log(
     "          /models/"
   );
 
   console.log("");
+
   console.log(
     "[FACE API] MOTOR FACIAL LOCAL PREPARADO COM SUCESSO."
   );
+
   console.log(
     "============================================================"
   );
+
   console.log("");
+
+  return {
+    library:
+      path.join(
+        targetFaceApi,
+        "face-api.js"
+      ),
+
+    models:
+      targetModels
+  };
 }
 
-try {
-  prepare();
-} catch (error) {
-  fail(
-    error &&
-    error.message
-      ? error.message
-      : String(error)
-  );
+module.exports =
+  prepareFaceModels;
+
+if (
+  require.main === module
+) {
+  try {
+    prepareFaceModels();
+
+  } catch (error) {
+    console.error("");
+
+    console.error(
+      "============================================================"
+    );
+
+    console.error(
+      "[FACE API] ERRO NO PREPARO DO MOTOR FACIAL"
+    );
+
+    console.error(
+      "============================================================"
+    );
+
+    console.error(
+      error?.message ||
+      String(error)
+    );
+
+    console.error("");
+
+    process.exit(1);
+  }
 }
