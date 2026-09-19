@@ -390,25 +390,52 @@ const WASM_PATH =
   }
 }
 
-  async function createLandmarker() {
+    async function createLandmarker() {
     const vision =
       await loadMediaPipe();
 
     const {
-      FaceLandmarker,
-      FilesetResolver
+      FaceLandmarker
     } = vision;
 
-    const fileset =
-      await FilesetResolver.forVisionTasks(
-        WASM_PATH
-      );
+    /*
+     * ========================================================
+     * MEDIA PIPE WASM — NON-SIMD
+     * ========================================================
+     *
+     * Alguns dispositivos Android conseguem carregar o
+     * JavaScript do MediaPipe mas falham ao compilar o
+     * runtime WebAssembly SIMD.
+     *
+     * Por isso usamos explicitamente a variante NON-SIMD.
+     *
+     * Isto continua sendo processamento 100% local.
+     * ========================================================
+     */
+
+    const fileset = {
+      wasmLoaderPath:
+        `${WASM_PATH}/vision_wasm_nosimd_internal.js`,
+
+      wasmBinaryPath:
+        `${WASM_PATH}/vision_wasm_nosimd_internal.wasm`
+    };
+
+    console.log(
+      "[FacialPreflight] WASM NON-SIMD selecionado:",
+      fileset
+    );
 
     /*
-     * Primeiro GPU.
+     * ========================================================
+     * PRIMEIRA TENTATIVA — CPU
+     * ========================================================
      *
-     * Caso o dispositivo não consiga
-     * inicializar GPU, usamos CPU.
+     * Para o primeiro teste vamos usar CPU diretamente.
+     *
+     * Isso evita adicionar uma segunda variável de falha
+     * relacionada ao delegate GPU.
+     * ========================================================
      */
 
     try {
@@ -420,10 +447,12 @@ const WASM_PATH =
               modelAssetPath:
                 MODEL_PATH,
 
-              delegate: "GPU"
+              delegate:
+                "CPU"
             },
 
-            runningMode: "VIDEO",
+            runningMode:
+              "VIDEO",
 
             numFaces:
               CONFIG.maxFaces,
@@ -444,49 +473,24 @@ const WASM_PATH =
               true
           }
         );
-    } catch (gpuError) {
-      console.warn(
-        "[FacialPreflight] GPU indisponível; usando CPU.",
-        gpuError
+
+      console.log(
+        "[FacialPreflight] Face Landmarker criado com WASM NON-SIMD + CPU."
       );
 
-      faceLandmarker =
-        await FaceLandmarker.createFromOptions(
-          fileset,
-          {
-            baseOptions: {
-              modelAssetPath:
-                MODEL_PATH,
+      return faceLandmarker;
 
-              delegate: "CPU"
-            },
+    } catch (error) {
+      console.error(
+        "[FacialPreflight] Falha ao criar Face Landmarker.",
+        error
+      );
 
-            runningMode: "VIDEO",
-
-            numFaces:
-              CONFIG.maxFaces,
-
-            minFaceDetectionConfidence:
-              0.55,
-
-            minFacePresenceConfidence:
-              0.55,
-
-            minTrackingConfidence:
-              0.55,
-
-            outputFaceBlendshapes:
-              true,
-
-            outputFacialTransformationMatrixes:
-              true
-          }
-        );
+      throw new Error(
+        "O motor facial local não conseguiu iniciar o WebAssembly. Verifique o carregamento dos ficheiros MediaPipe."
+      );
     }
-
-    return faceLandmarker;
   }
-
   /*
    * ==========================================================
    * CÂMERA
