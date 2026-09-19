@@ -536,40 +536,249 @@ function recoverBirthDateCandidates(
     return [];
   }
 
+  /*
+   * TD3:
+   *
+   * posição 14-19 = YYMMDD
+   * posição 20    = check digit
+   *
+   * Em JavaScript:
+   *
+   * 13-18 = DOB
+   * 19    = check digit
+   */
+
   const observed =
     line2.slice(13, 19);
 
   const observedCheck =
     line2[19];
 
-  if (
-    !/^[0-9]{6}$/.test(
-      observed
-    )
-  ) {
+  if (!observed) {
     return [];
   }
 
-  const candidates = [];
+  /*
+   * OCR pode transformar números em letras.
+   *
+   * Aqui normalizamos apenas as equivalências
+   * que fazem sentido para uma posição numérica.
+   *
+   * Não fazemos substituição cega.
+   */
+  const digitAlternatives = {
+    "0": ["0"],
+    "1": ["1"],
+    "2": ["2"],
+    "3": ["3"],
+    "4": ["4"],
+    "5": ["5"],
+    "6": ["6"],
+    "7": ["7"],
+    "8": ["8"],
+    "9": ["9"],
 
+    O: ["0"],
+    Q: ["0"],
+    D: ["0"],
+
+    I: ["1"],
+    L: ["1"],
+
+    Z: ["2"],
+
+    E: ["3"],
+
+    A: ["4"],
+
+    S: ["5"],
+
+    G: ["6"],
+
+    T: ["7"],
+
+    B: ["8"]
+  };
+
+  /*
+   * Para cada posição, mantemos apenas os dígitos
+   * plausíveis derivados do OCR.
+   *
+   * Se o OCR reconheceu corretamente um dígito,
+   * ele continua sendo a primeira opção.
+   */
+  const positionOptions =
+    observed
+      .split("")
+      .map(char => {
+        const options =
+          digitAlternatives[
+            char
+          ] || [];
+
+        const result =
+          new Set();
+
+        /*
+         * Se já é número, preservamos o original.
+         */
+        if (/^\d$/.test(char)) {
+          result.add(char);
+        }
+
+        /*
+         * Adiciona as equivalências OCR.
+         */
+        for (
+          const value of options
+        ) {
+          if (/^\d$/.test(value)) {
+            result.add(value);
+          }
+        }
+
+        /*
+         * Segurança:
+         * se o OCR produziu um carácter desconhecido,
+         * permitimos todos os dígitos.
+         *
+         * Isso evita depender de uma tabela fechada
+         * de erros OCR.
+         */
+        if (
+          result.size === 0
+        ) {
+          for (
+            let digit = 0;
+            digit <= 9;
+            digit += 1
+          ) {
+            result.add(
+              String(digit)
+            );
+          }
+        }
+
+        return [
+          ...result
+        ];
+      });
+
+  const candidates =
+    new Map();
+
+  function addCandidate(
+    date,
+    distance
+  ) {
+    if (
+      !/^\d{6}$/.test(date)
+    ) {
+      return;
+    }
+
+    if (
+      !isPlausibleBirthDate(
+        date
+      )
+    ) {
+      return;
+    }
+
+    /*
+     * O check digit da DOB é calculado
+     * novamente a partir da data candidata.
+     *
+     * Isto é fundamental:
+     *
+     * o OCR pode ter errado simultaneamente
+     * a data E o check digit.
+     */
+    const calculatedCheck =
+      calculateMrzCheckDigit(
+        date
+      );
+
+    if (
+      !/^\d$/.test(
+        String(calculatedCheck || "")
+      )
+    ) {
+      return;
+    }
+
+    const key =
+      date;
+
+    const existing =
+      candidates.get(key);
+
+    const item = {
+      date,
+      checkDigit:
+        calculatedCheck,
+      distance,
+      checkMatched:
+        calculatedCheck ===
+        observedCheck
+    };
+
+    if (
+      !existing ||
+      distance <
+        existing.distance ||
+      (
+        distance ===
+          existing.distance &&
+        item.checkMatched &&
+        !existing.checkMatched
+      )
+    ) {
+      candidates.set(
+        key,
+        item
+      );
+    }
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * 1. DOB original
+   * ---------------------------------------------------------
+   *
+   * Mesmo que o check digit observado esteja errado,
+   * a data original pode estar correta.
+   */
+  if (
+    /^\d{6}$/.test(
+      observed
+    )
+  ) {
+    addCandidate(
+      observed,
+      0
+    );
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * 2. Uma alteração
+   * ---------------------------------------------------------
+   *
+   * Usa as alternativas OCR conhecidas.
+   */
   for (
     let index = 0;
     index < 6;
     index += 1
   ) {
-    const original =
-      observed[index];
-
     for (
-      let digit = 0;
-      digit <= 9;
-      digit += 1
+      const digit of
+        positionOptions[index]
     ) {
-      const value =
-        String(digit);
-
       if (
-        value === original
+        digit ===
+        observed[index]
       ) {
         continue;
       }
@@ -578,59 +787,145 @@ function recoverBirthDateCandidates(
         observed.split("");
 
       chars[index] =
-        value;
+        digit;
 
-      const date =
-        chars.join("");
-
-      if (
-        !isPlausibleBirthDate(
-          date
-        )
-      ) {
-        continue;
-      }
-
-      const expectedCheck =
-        calculateMrzCheckDigit(
-          date
-        );
-
-      if (
-        expectedCheck ===
-        observedCheck
-      ) {
-        candidates.push({
-          date,
-          checkDigit:
-            expectedCheck,
-          distance: 1
-        });
-      }
+      addCandidate(
+        chars.join(""),
+        1
+      );
     }
   }
 
-  if (
-    candidates.length === 0
+  /*
+   * ---------------------------------------------------------
+   * 3. Duas alterações
+   * ---------------------------------------------------------
+   *
+   * Isto cobre casos em que o OCR errou dois caracteres
+   * da DOB.
+   */
+  for (
+    let first = 0;
+    first < 6;
+    first += 1
   ) {
+    for (
+      let second =
+        first + 1;
+      second < 6;
+      second += 1
+    ) {
+      for (
+        const firstDigit of
+          positionOptions[first]
+      ) {
+        if (
+          firstDigit ===
+          observed[first]
+        ) {
+          continue;
+        }
+
+        for (
+          const secondDigit of
+            positionOptions[second]
+        ) {
+          if (
+            secondDigit ===
+            observed[second]
+          ) {
+            continue;
+          }
+
+          const chars =
+            observed.split("");
+
+          chars[first] =
+            firstDigit;
+
+          chars[second] =
+            secondDigit;
+
+          addCandidate(
+            chars.join(""),
+            2
+          );
+
+          if (
+            candidates.size >=
+            maxCandidates * 4
+          ) {
+            break;
+          }
+        }
+
+        if (
+          candidates.size >=
+          maxCandidates * 4
+        ) {
+          break;
+        }
+      }
+
+      if (
+        candidates.size >=
+        maxCandidates * 4
+      ) {
+        break;
+      }
+    }
+
+    if (
+      candidates.size >=
+      maxCandidates * 4
+    ) {
+      break;
+    }
+  }
+
+  /*
+   * ---------------------------------------------------------
+   * 4. Se ainda não encontrámos uma DOB plausível,
+   *    fazemos recuperação numérica controlada.
+   *
+   * Não fazemos 1 milhão de combinações.
+   *
+   * Primeiro utilizamos as posições que o OCR marcou
+   * como suspeitas.
+   * ---------------------------------------------------------
+   */
+
+  if (
+    candidates.size === 0
+  ) {
+    const allDigits =
+      [
+        "0",
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9"
+      ];
+
+    /*
+     * Uma posição de cada vez.
+     */
     for (
       let index = 0;
       index < 6;
       index += 1
     ) {
-      const original =
-        observed[index];
-
       for (
-        let digit = 0;
-        digit <= 9;
-        digit += 1
+        const digit of allDigits
       ) {
-        const value =
-          String(digit);
-
         if (
-          value === original
+          digit ===
+          observed[index]
         ) {
           continue;
         }
@@ -639,167 +934,75 @@ function recoverBirthDateCandidates(
           observed.split("");
 
         chars[index] =
-          value;
+          digit;
 
-        const date =
-          chars.join("");
+        addCandidate(
+          chars.join(""),
+          1
+        );
+      }
+    }
+  }
 
+  /*
+   * ---------------------------------------------------------
+   * Ordenação
+   * ---------------------------------------------------------
+   *
+   * 1. check digit observado coincide
+   * 2. menor número de alterações
+   * 3. data
+   */
+  return [
+    ...candidates.values()
+  ]
+    .sort(
+      (a, b) => {
         if (
-          !isPlausibleBirthDate(
-            date
+          Boolean(
+            b.checkMatched
+          ) !==
+          Boolean(
+            a.checkMatched
           )
         ) {
-          continue;
+          return b.checkMatched
+            ? 1
+            : -1;
         }
 
-        const expectedCheck =
-          calculateMrzCheckDigit(
-            date
+        if (
+          Number(
+            a.distance || 99
+          ) !==
+          Number(
+            b.distance || 99
+          )
+        ) {
+          return (
+            Number(
+              a.distance || 99
+            ) -
+            Number(
+              b.distance || 99
+            )
           );
-
-        candidates.push({
-          date,
-          checkDigit:
-            expectedCheck,
-          distance: 1
-        });
-
-        if (
-          candidates.length >=
-          maxCandidates
-        ) {
-          break;
-        }
-      }
-
-      if (
-        candidates.length >=
-        maxCandidates
-      ) {
-        break;
-      }
-    }
-  }
-
-  if (
-    candidates.length === 0
-  ) {
-    for (
-      let first = 0;
-      first < 6;
-      first += 1
-    ) {
-      for (
-        let second = first + 1;
-        second < 6;
-        second += 1
-      ) {
-        for (
-          let digitA = 0;
-          digitA <= 9;
-          digitA += 1
-        ) {
-          for (
-            let digitB = 0;
-            digitB <= 9;
-            digitB += 1
-          ) {
-            const chars =
-              observed.split("");
-
-            chars[first] =
-              String(digitA);
-
-            chars[second] =
-              String(digitB);
-
-            const date =
-              chars.join("");
-
-            if (
-              !isPlausibleBirthDate(
-                date
-              )
-            ) {
-              continue;
-            }
-
-            const expectedCheck =
-              calculateMrzCheckDigit(
-                date
-              );
-
-            if (
-              expectedCheck !==
-              observedCheck
-            ) {
-              continue;
-            }
-
-            candidates.push({
-              date,
-              checkDigit:
-                expectedCheck,
-              distance: 2
-            });
-
-            if (
-              candidates.length >=
-              maxCandidates
-            ) {
-              break;
-            }
-          }
-
-          if (
-            candidates.length >=
-            maxCandidates
-          ) {
-            break;
-          }
         }
 
-        if (
-          candidates.length >=
-          maxCandidates
-        ) {
-          break;
-        }
+        return String(
+          a.date
+        ).localeCompare(
+          String(
+            b.date
+          )
+        );
       }
-
-      if (
-        candidates.length >=
-        maxCandidates
-      ) {
-        break;
-      }
-    }
-  }
-
-  const seen =
-    new Set();
-
-  return candidates
-    .filter(candidate => {
-      const key =
-        `${candidate.date}|${candidate.checkDigit}`;
-
-      if (
-        seen.has(key)
-      ) {
-        return false;
-      }
-
-      seen.add(key);
-
-      return true;
-    })
+    )
     .slice(
       0,
       maxCandidates
     );
 }
-
 function applyBirthDateCandidates(
   line2,
   maxCandidates = 80
