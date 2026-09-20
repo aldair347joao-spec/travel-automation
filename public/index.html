@@ -2,7 +2,11 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
 
   <meta
     name="theme-color"
@@ -20,7 +24,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
   <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
     rel="stylesheet"
   >
 
@@ -31,7 +35,7 @@
 <body>
 
   <!-- =========================================================
-       BACKGROUND
+       FUNDO
   ========================================================== -->
 
   <div
@@ -46,7 +50,7 @@
 
 
   <!-- =========================================================
-       APPLICATION
+       APLICAÇÃO
   ========================================================== -->
 
   <section
@@ -55,7 +59,7 @@
   >
 
     <!-- =======================================================
-         TOPBAR
+         TOPO
     ======================================================== -->
 
     <header class="topbar">
@@ -122,14 +126,14 @@
 
 
     <!-- =======================================================
-         MAIN
+         CONTEÚDO PRINCIPAL
     ======================================================== -->
 
     <main class="main-container">
 
 
       <!-- =====================================================
-           HERO
+           ABERTURA DA OPERAÇÃO
       ====================================================== -->
 
       <section class="operations-hero">
@@ -149,7 +153,9 @@
 
 
           <p>
-            Documento, identidade e candidatura num único fluxo.
+            Um processo organizado por etapas,
+            desde o passaporte até ao acompanhamento
+            administrativo.
           </p>
 
 
@@ -159,7 +165,7 @@
               href="#documentsSection"
               class="hero-button primary"
             >
-              Começar pelo passaporte
+              Iniciar preparação
               <span>→</span>
             </a>
 
@@ -168,8 +174,8 @@
               href="#workflow"
               class="hero-button secondary"
             >
-              Ver etapas
-              <span>→</span>
+              Ver percurso
+              <span>↓</span>
             </a>
 
           </div>
@@ -183,7 +189,9 @@
 
           <div class="flight-card-header">
 
-            <span>ROTA</span>
+            <span>
+              PERCURSO
+            </span>
 
             <span class="status-pill">
               <i></i>
@@ -197,7 +205,9 @@
 
             <div class="route-point">
 
-              <strong>ANGOLA</strong>
+              <strong>
+                ANGOLA
+              </strong>
 
               <span>
                 Origem
@@ -211,7 +221,7 @@
               <div class="route-progress"></div>
 
               <span class="route-plane">
-                ✈
+                <span></span>
               </span>
 
             </div>
@@ -219,7 +229,9 @@
 
             <div class="route-point right">
 
-              <strong>PORTUGAL</strong>
+              <strong>
+                PORTUGAL
+              </strong>
 
               <span>
                 Destino
@@ -233,7 +245,7 @@
           <div class="flight-card-footer">
 
             <span>
-              ESTADO
+              OPERAÇÃO
             </span>
 
             <strong>
@@ -248,17 +260,14 @@
 
 
       <!-- =====================================================
-           WORKFLOW
+           PERCURSO DAS ETAPAS
       ====================================================== -->
 
       <section
         id="workflow"
         class="system-pipeline"
-        aria-label="Etapas da preparação"
+        aria-label="Percurso da preparação"
       >
-
-
-        <!-- 01 -->
 
         <div class="pipeline-item active">
 
@@ -266,15 +275,23 @@
             01
           </div>
 
-          <div class="pipeline-icon">
-            <span class="document-icon"></span>
+          <div class="pipeline-marker">
+            <span class="pipeline-marker-core"></span>
           </div>
 
           <div class="pipeline-copy">
 
+            <span class="pipeline-label">
+              DOCUMENTO
+            </span>
+
             <strong>
               Passaporte
             </strong>
+
+            <small>
+              Leitura e validação
+            </small>
 
           </div>
 
@@ -288,10 +305,10 @@
         </div>
 
 
-        <div class="pipeline-connector"></div>
+        <div class="pipeline-connector">
+          <span></span>
+        </div>
 
-
-        <!-- 02 -->
 
         <div class="pipeline-item">
 
@@ -299,15 +316,23 @@
             02
           </div>
 
-          <div class="pipeline-icon">
-            <span class="face-icon"></span>
+          <div class="pipeline-marker">
+            <span class="pipeline-marker-core"></span>
           </div>
 
           <div class="pipeline-copy">
 
+            <span class="pipeline-label">
+              IDENTIDADE
+            </span>
+
             <strong>
-              Identidade
+              Verificação facial
             </strong>
+
+            <small>
+              Preparação biométrica
+            </small>
 
           </div>
 
@@ -318,10 +343,10 @@
         </div>
 
 
-        <div class="pipeline-connector"></div>
+        <div class="pipeline-connector">
+          <span></span>
+        </div>
 
-
-        <!-- 03 -->
 
         <div class="pipeline-item">
 
@@ -329,15 +354,23 @@
             03
           </div>
 
-          <div class="pipeline-icon">
-            <span class="document-icon"></span>
+          <div class="pipeline-marker">
+            <span class="pipeline-marker-core"></span>
           </div>
 
           <div class="pipeline-copy">
 
+            <span class="pipeline-label">
+              VIAGEM
+            </span>
+
             <strong>
               Candidatura
             </strong>
+
+            <small>
+              Dados e preferências
+            </small>
 
           </div>
 
@@ -351,10 +384,10 @@
         </div>
 
 
-        <div class="pipeline-connector"></div>
+        <div class="pipeline-connector">
+          <span></span>
+        </div>
 
-
-        <!-- 04 -->
 
         <div class="pipeline-item">
 
@@ -362,15 +395,23 @@
             04
           </div>
 
-          <div class="pipeline-icon">
-            <span class="radar-icon"></span>
+          <div class="pipeline-marker">
+            <span class="pipeline-marker-core"></span>
           </div>
 
           <div class="pipeline-copy">
 
+            <span class="pipeline-label">
+              PROCESSO
+            </span>
+
             <strong>
               Administração
             </strong>
+
+            <small>
+              Acompanhamento
+            </small>
 
           </div>
 
@@ -387,16 +428,15 @@
 
 
       <!-- =====================================================
-           RESUMO
+           RESUMO OPERACIONAL
       ====================================================== -->
 
       <section class="stats-grid">
 
-
         <article class="stat-card">
 
-          <div class="stat-icon blue">
-            <span class="person-icon"></span>
+          <div class="stat-index">
+            01
           </div>
 
           <div class="stat-content">
@@ -410,7 +450,7 @@
             </strong>
 
             <small>
-              Perfis
+              Perfis registados
             </small>
 
           </div>
@@ -420,8 +460,8 @@
 
         <article class="stat-card">
 
-          <div class="stat-icon cyan">
-            <span class="document-icon"></span>
+          <div class="stat-index">
+            02
           </div>
 
           <div class="stat-content">
@@ -435,7 +475,7 @@
             </strong>
 
             <small>
-              Processos
+              Processos iniciados
             </small>
 
           </div>
@@ -445,14 +485,14 @@
 
         <article class="stat-card">
 
-          <div class="stat-icon green">
-            <span class="check-icon"></span>
+          <div class="stat-index">
+            03
           </div>
 
           <div class="stat-content">
 
             <span>
-              PRONTOS
+              PREPARADOS
             </span>
 
             <strong id="preparedCount">
@@ -460,7 +500,7 @@
             </strong>
 
             <small>
-              Administração
+              Prontos para administração
             </small>
 
           </div>
@@ -470,8 +510,8 @@
 
         <article class="stat-card">
 
-          <div class="stat-icon orange">
-            <span class="radar-icon"></span>
+          <div class="stat-index">
+            04
           </div>
 
           <div class="stat-content">
@@ -485,7 +525,7 @@
             </strong>
 
             <small>
-              Autorizados
+              Processos em acompanhamento
             </small>
 
           </div>
@@ -496,7 +536,7 @@
 
 
       <!-- =====================================================
-           DASHBOARD
+           OPERAÇÃO
       ====================================================== -->
 
       <section class="dashboard-grid">
@@ -505,39 +545,45 @@
 
 
           <!-- =================================================
-               01 — PASSAPORTE
+               ETAPA 01 — PASSAPORTE
           ================================================== -->
 
           <section
             id="documentsSection"
-            class="panel documents-panel"
+            class="panel documents-panel stage-panel stage-passport"
           >
 
+            <div class="stage-header">
 
-            <!-- CABEÇALHO -->
+              <div class="stage-heading">
 
-            <div class="panel-header">
+                <div class="stage-heading-top">
 
-              <div class="panel-heading">
+                  <span class="stage-number">
+                    01
+                  </span>
 
-                <span class="section-number">
-                  01
-                </span>
+                  <span class="stage-kicker">
+                    DOCUMENTO
+                  </span>
 
-                <span class="panel-eyebrow">
-                  DOCUMENTO
-                </span>
+                </div>
 
                 <h2>
                   Passaporte
                 </h2>
+
+                <p>
+                  O documento é lido, validado e usado
+                  para criar o perfil do viajante.
+                </p>
 
               </div>
 
 
               <span
                 id="passportPanelStatus"
-                class="panel-status blue"
+                class="stage-status pending"
               >
                 AGUARDANDO
               </span>
@@ -545,7 +591,7 @@
             </div>
 
 
-            <!-- PERFIL -->
+            <!-- VIAJANTE -->
 
             <div class="passport-client-bar">
 
@@ -562,7 +608,7 @@
                 </div>
 
 
-                <div>
+                <div class="selected-client-copy">
 
                   <span>
                     VIAJANTE
@@ -573,7 +619,7 @@
                   </strong>
 
                   <small id="selectedClientPassport">
-                    Perfil criado após validação
+                    O perfil será criado após a validação
                   </small>
 
                 </div>
@@ -581,10 +627,10 @@
               </div>
 
 
-              <label class="field">
+              <label class="field client-selector-field">
 
                 <span>
-                  Viajante
+                  Perfil existente
                 </span>
 
                 <select id="passportClientSelect">
@@ -600,41 +646,25 @@
             </div>
 
 
-            <!-- =================================================
-                 ÁREA DO DOCUMENTO
-            ================================================== -->
+            <!-- DOCUMENTO -->
 
-            <div class="passport-upload-layout">
-
-
-              <!-- DOCUMENTO -->
+            <div class="passport-workspace">
 
               <div class="passport-upload-card">
 
-
-                <div class="passport-upload-header">
-
-                  <div>
-
-                    <span class="panel-eyebrow">
-                      DOCUMENTO DE VIAGEM
-                    </span>
-
-                    <h3>
-                      Enviar passaporte
-                    </h3>
-
-                  </div>
-
-
-                  <span class="passport-upload-limit">
-                    JPEG · PNG · 2 MB
-                  </span>
-
+                <div class="workspace-label">
+                  DOCUMENTO DE VIAGEM
                 </div>
 
+                <h3>
+                  Adicionar passaporte
+                </h3>
 
-                <!-- DROPZONE -->
+                <p class="workspace-description">
+                  Selecione a fotografia da página principal
+                  do passaporte.
+                </p>
+
 
                 <div
                   id="passportDropzone"
@@ -649,18 +679,23 @@
                   >
 
 
-                  <div class="passport-dropzone-icon">
-                    <span class="document-icon"></span>
+                  <div class="passport-document-mark">
+
+                    <span class="passport-mark-cover"></span>
+
+                    <span class="passport-mark-line one"></span>
+                    <span class="passport-mark-line two"></span>
+                    <span class="passport-mark-line three"></span>
+
                   </div>
 
 
                   <strong>
-                    Fotografe ou selecione o passaporte
+                    Selecionar fotografia
                   </strong>
 
-
                   <span>
-                    Página principal do documento
+                    JPEG ou PNG · máximo 2 MB
                   </span>
 
 
@@ -669,7 +704,7 @@
                     class="secondary-button"
                     type="button"
                   >
-                    Selecionar imagem
+                    Escolher documento
                   </button>
 
 
@@ -690,9 +725,15 @@
 
                   <div class="passport-preview-header">
 
-                    <strong>
-                      Documento
-                    </strong>
+                    <div>
+                      <span>
+                        DOCUMENTO
+                      </span>
+
+                      <strong>
+                        Pré-visualização
+                      </strong>
+                    </div>
 
 
                     <button
@@ -720,11 +761,9 @@
                 </div>
 
 
-                <!-- AÇÃO -->
-
                 <button
                   id="passportUploadButton"
-                  class="primary-button"
+                  class="primary-button passport-analyze-button"
                   type="button"
                   disabled
                 >
@@ -735,19 +774,16 @@
               </div>
 
 
-              <!-- =================================================
-                   RESULTADO
-              ================================================== -->
+              <!-- LEITURA -->
 
               <div class="passport-validation-card">
 
-
-                <div class="passport-validation-header">
+                <div class="validation-heading">
 
                   <div>
 
                     <span>
-                      LEITURA DO DOCUMENTO
+                      LEITURA
                     </span>
 
                     <h3 id="passportResultTitle">
@@ -759,7 +795,7 @@
 
                   <span
                     id="passportValidationBadge"
-                    class="panel-status blue"
+                    class="stage-status pending"
                   >
                     PENDENTE
                   </span>
@@ -767,34 +803,30 @@
                 </div>
 
 
-                <!-- ESTADO -->
-
                 <div
                   id="passportResultState"
                   class="passport-result-state pending"
                 >
 
-                  <div class="result-state-icon">
-                    ID
+                  <div class="result-document-symbol">
+                    <span></span>
                   </div>
 
 
                   <div>
 
                     <strong>
-                      Documento ainda não analisado
+                      Nenhuma leitura iniciada
                     </strong>
 
                     <span>
-                      O resultado da leitura aparecerá aqui.
+                      O estado da validação aparecerá aqui.
                     </span>
 
                   </div>
 
                 </div>
 
-
-                <!-- ERROS -->
 
                 <div
                   id="passportIssues"
@@ -803,8 +835,6 @@
                 ></div>
 
 
-                <!-- DADOS -->
-
                 <div
                   id="passportExtractedData"
                   class="passport-extracted-data"
@@ -812,116 +842,53 @@
                 >
 
                   <div>
-
-                    <span>
-                      TIPO
-                    </span>
-
-                    <strong id="passportExtractedType">
-                      —
-                    </strong>
-
+                    <span>TIPO</span>
+                    <strong id="passportExtractedType">—</strong>
                   </div>
 
-
                   <div>
-
-                    <span>
-                      MRZ
-                    </span>
-
-                    <strong id="passportExtractedMrz">
-                      —
-                    </strong>
-
+                    <span>MRZ</span>
+                    <strong id="passportExtractedMrz">—</strong>
                   </div>
 
-
                   <div>
-
-                    <span>
-                      DADOS
-                    </span>
-
-                    <strong id="passportExtractedMatch">
-                      —
-                    </strong>
-
+                    <span>DADOS</span>
+                    <strong id="passportExtractedMatch">—</strong>
                   </div>
 
-
                   <div>
-
-                    <span>
-                      VALIDADE
-                    </span>
-
-                    <strong id="passportExtractedExpiry">
-                      —
-                    </strong>
-
+                    <span>VALIDADE</span>
+                    <strong id="passportExtractedExpiry">—</strong>
                   </div>
 
                 </div>
 
 
-                <!-- CHECKLIST -->
-
                 <div class="passport-check-list">
 
-
                   <div id="passportCheckFile">
-
                     <i>○</i>
-
-                    <span>
-                      Documento
-                    </span>
-
+                    <span>Documento recebido</span>
                   </div>
-
 
                   <div id="passportCheckMrz">
-
                     <i>○</i>
-
-                    <span>
-                      MRZ
-                    </span>
-
+                    <span>MRZ identificada</span>
                   </div>
-
 
                   <div id="passportCheckMatch">
-
                     <i>○</i>
-
-                    <span>
-                      Dados
-                    </span>
-
+                    <span>Dados conferidos</span>
                   </div>
-
 
                   <div id="passportCheckExpiry">
-
                     <i>○</i>
-
-                    <span>
-                      Validade
-                    </span>
-
+                    <span>Validade confirmada</span>
                   </div>
 
-
                   <div id="passportCheckStorage">
-
                     <i>○</i>
-
-                    <span>
-                      Registo
-                    </span>
-
+                    <span>Perfil registado</span>
                   </div>
 
                 </div>
@@ -931,22 +898,26 @@
             </div>
 
 
-            <!-- =================================================
-                 BLOQUEIO DA IDENTIDADE
-            ================================================== -->
+            <!-- BLOQUEIO -->
 
             <div
               id="identityGateMessage"
               class="identity-gate-message"
             >
 
-              <div>
-                !
+              <div class="gate-mark">
+                <span></span>
               </div>
 
-              <span>
-                Valide o passaporte para continuar.
-              </span>
+              <div>
+                <strong>
+                  Próxima etapa bloqueada
+                </strong>
+
+                <span>
+                  Valide o passaporte para preparar a identidade.
+                </span>
+              </div>
 
             </div>
 
@@ -954,40 +925,44 @@
 
 
           <!-- =================================================
-               PERFIL
+               PERFIL DO VIAJANTE
           ================================================== -->
 
           <section
             id="clientSection"
-            class="panel client-panel"
+            class="panel client-panel stage-panel stage-profile"
           >
 
+            <div class="stage-header">
 
-            <div class="panel-header">
+              <div class="stage-heading">
 
-              <div class="panel-heading">
+                <div class="stage-heading-top">
 
-                <span class="section-number">
-                  01
-                </span>
+                  <span class="stage-number">
+                    01
+                  </span>
 
-                <span class="panel-eyebrow">
-                  PERFIL
-                </span>
+                  <span class="stage-kicker">
+                    REGISTO
+                  </span>
+
+                </div>
 
                 <h2>
                   Perfil do viajante
                 </h2>
 
+                <p>
+                  Os dados identificados no passaporte
+                  ficam associados ao viajante.
+                </p>
+
               </div>
 
 
-              <span class="panel-status">
-
-                <i></i>
-
-                Automático
-
+              <span class="stage-status automatic">
+                AUTOMÁTICO
               </span>
 
             </div>
@@ -998,295 +973,204 @@
               class="form"
             >
 
+              <div class="profile-form-layout">
 
-              <!-- DADOS PESSOAIS -->
+                <div class="profile-data-column">
 
-              <div class="form-section-title">
-
-                <span>
-                  Dados pessoais
-                </span>
-
-                <small>
-                  Extraídos do passaporte
-                </small>
-
-              </div>
-
-
-              <div class="form-grid">
-
-
-                <label class="field">
-
-                  <span>
-                    Nome completo
-                  </span>
-
-                  <input
-                    id="clientFullName"
-                    name="fullName"
-                    type="text"
-                    placeholder="Nome completo"
-                    autocomplete="name"
-                  >
-
-                </label>
-
-
-                <label class="field">
-
-                  <span>
-                    Email
-                  </span>
-
-                  <input
-                    id="clientEmail"
-                    name="email"
-                    type="email"
-                    placeholder="cliente@email.com"
-                    autocomplete="email"
-                  >
-
-                </label>
-
-
-                <label class="field">
-
-                  <span>
-                    Telefone
-                  </span>
-
-                  <input
-                    id="clientPhone"
-                    name="phone"
-                    type="tel"
-                    placeholder="+244 9xx xxx xxx"
-                    autocomplete="tel"
-                  >
-
-                </label>
-
-
-                <label class="field">
-
-                  <span>
-                    Data de nascimento
-                  </span>
-
-                  <input
-                    id="clientDateOfBirth"
-                    name="dateOfBirth"
-                    type="date"
-                  >
-
-                </label>
-
-
-                <label class="field">
-
-                  <span>
-                    Nacionalidade
-                  </span>
-
-                  <input
-                    id="clientNationality"
-                    name="nationality"
-                    type="text"
-                    placeholder="Angolana"
-                  >
-
-                </label>
-
-
-                <label class="field">
-
-                  <span>
-                    Género
-                  </span>
-
-                  <select
-                    id="clientGender"
-                    name="gender"
-                  >
-
-                    <option value="">
-                      Selecionar
-                    </option>
-
-                    <option value="male">
-                      Masculino
-                    </option>
-
-                    <option value="female">
-                      Feminino
-                    </option>
-
-                    <option value="other">
-                      Outro
-                    </option>
-
-                  </select>
-
-                </label>
-
-              </div>
-
-
-              <!-- DOCUMENTO -->
-
-              <div class="form-section-title passport-title">
-
-                <span>
-                  Passaporte
-                </span>
-
-                <small>
-                  Dados do documento
-                </small>
-
-              </div>
-
-
-              <div class="passport-layout">
-
-
-                <div class="passport-fields">
-
-
-                  <label class="field">
-
+                  <div class="form-section-title">
                     <span>
-                      Número
+                      Dados pessoais
                     </span>
-
-                    <input
-                      id="clientPassportNumber"
-                      name="passportNumber"
-                      type="text"
-                      autocomplete="off"
-                    >
-
-                  </label>
+                  </div>
 
 
-                  <label class="field">
+                  <div class="form-grid">
 
+                    <label class="field full">
+                      <span>Nome completo</span>
+
+                      <input
+                        id="clientFullName"
+                        name="fullName"
+                        type="text"
+                        autocomplete="name"
+                      >
+                    </label>
+
+
+                    <label class="field">
+                      <span>Email</span>
+
+                      <input
+                        id="clientEmail"
+                        name="email"
+                        type="email"
+                        autocomplete="email"
+                      >
+                    </label>
+
+
+                    <label class="field">
+                      <span>Telefone</span>
+
+                      <input
+                        id="clientPhone"
+                        name="phone"
+                        type="tel"
+                        autocomplete="tel"
+                      >
+                    </label>
+
+
+                    <label class="field">
+                      <span>Data de nascimento</span>
+
+                      <input
+                        id="clientDateOfBirth"
+                        name="dateOfBirth"
+                        type="date"
+                      >
+                    </label>
+
+
+                    <label class="field">
+                      <span>Nacionalidade</span>
+
+                      <input
+                        id="clientNationality"
+                        name="nationality"
+                        type="text"
+                      >
+                    </label>
+
+
+                    <label class="field">
+                      <span>Sexo</span>
+
+                      <input
+                        id="clientGender"
+                        name="gender"
+                        type="text"
+                      >
+                    </label>
+
+                  </div>
+
+
+                  <div class="form-section-title passport-fields-title">
                     <span>
-                      Emissão
+                      Documento
                     </span>
-
-                    <input
-                      id="clientPassportIssueDate"
-                      name="passportIssueDate"
-                      type="date"
-                    >
-
-                  </label>
+                  </div>
 
 
-                  <label class="field">
+                  <div class="form-grid">
 
-                    <span>
-                      Validade
-                    </span>
+                    <label class="field">
+                      <span>Número</span>
 
-                    <input
-                      id="clientPassportExpiryDate"
-                      name="passportExpiryDate"
-                      type="date"
-                    >
-
-                  </label>
+                      <input
+                        id="clientPassportNumber"
+                        name="passportNumber"
+                        type="text"
+                      >
+                    </label>
 
 
-                  <label class="field">
+                    <label class="field">
+                      <span>País emissor</span>
 
-                    <span>
-                      País emissor
-                    </span>
+                      <input
+                        id="clientPassportCountry"
+                        name="passportCountry"
+                        type="text"
+                        placeholder="AGO"
+                      >
+                    </label>
 
-                    <input
-                      id="clientPassportCountry"
-                      name="passportCountry"
-                      type="text"
-                      placeholder="AGO"
-                      autocomplete="off"
-                    >
 
-                  </label>
+                    <label class="field">
+                      <span>Emissão</span>
+
+                      <input
+                        id="clientPassportIssueDate"
+                        name="passportIssueDate"
+                        type="date"
+                      >
+                    </label>
+
+
+                    <label class="field">
+                      <span>Validade</span>
+
+                      <input
+                        id="clientPassportExpiryDate"
+                        name="passportExpiryDate"
+                        type="date"
+                      >
+                    </label>
+
+                  </div>
 
                 </div>
 
 
                 <!-- ESTADO DO PERFIL -->
 
-                <div
+                <aside
                   id="passportReadiness"
                   class="passport-readiness"
                 >
 
-                  <div class="passport-icon">
-                    <span class="document-icon"></span>
+                  <div class="readiness-document-mark">
+                    <span></span>
                   </div>
 
+                  <span class="readiness-eyebrow">
+                    PERFIL
+                  </span>
 
                   <strong>
-                    Perfil automático
+                    Perfil criado a partir do documento
                   </strong>
 
-
                   <p>
-                    Criado a partir do passaporte validado.
+                    O sistema usa os dados validados
+                    do passaporte.
                   </p>
 
 
                   <div class="readiness-checks">
 
-
                     <div id="passportCheckData">
-
-                      <span>
-                        ○
-                      </span>
-
-                      <span>
-                        Dados extraídos
-                      </span>
-
+                      <span>○</span>
+                      <span>Dados extraídos</span>
                     </div>
 
-
                     <div id="passportCheckReady">
-
-                      <span>
-                        ○
-                      </span>
-
-                      <span>
-                        Perfil pronto
-                      </span>
-
+                      <span>○</span>
+                      <span>Perfil pronto</span>
                     </div>
 
                   </div>
 
 
                   <div class="document-note">
-                    Sem preenchimento manual.
+                    Email e telefone permanecem disponíveis
+                    para preenchimento quando necessário.
                   </div>
 
-                </div>
+                </aside>
 
               </div>
 
 
-              <!-- IDENTIDADE -->
+              <!-- PREPARAÇÃO DA IDENTIDADE -->
 
               <div class="facial-consent-card">
 
-                <div class="consent-icon">
-                  <span class="face-icon"></span>
+                <div class="facial-consent-mark">
+                  <span class="facial-eye"></span>
                 </div>
 
 
@@ -1298,15 +1182,15 @@
                     type="checkbox"
                   >
 
-
                   <span>
 
                     <strong>
-                      Preparar identidade
+                      Preparar verificação facial
                     </strong>
 
                     <small>
-                      Verificação facial em 10 posições.
+                      A etapa facial utiliza dez posições
+                      para preparar o viajante.
                     </small>
 
                   </span>
@@ -1319,7 +1203,7 @@
               <div class="form-footer">
 
                 <span class="form-hint">
-                  Perfil gerado pelo documento.
+                  O perfil é preenchido a partir do passaporte validado.
                 </span>
 
 
@@ -1347,46 +1231,48 @@
 
 
           <!-- =================================================
-               02 — IDENTIDADE
+               ETAPA 02 — IDENTIDADE
           ================================================== -->
 
           <section
             id="applicationSection"
-            class="panel application-panel"
+            class="panel application-panel stage-panel stage-identity"
           >
 
+            <div class="stage-header">
 
-            <div class="panel-header">
+              <div class="stage-heading">
 
-              <div class="panel-heading">
+                <div class="stage-heading-top">
 
-                <span class="section-number">
-                  02
-                </span>
+                  <span class="stage-number">
+                    02
+                  </span>
 
-                <span class="panel-eyebrow">
-                  IDENTIDADE
-                </span>
+                  <span class="stage-kicker">
+                    IDENTIDADE
+                  </span>
+
+                </div>
 
                 <h2>
-                  Confirmação de identidade
+                  Verificação facial
                 </h2>
+
+                <p>
+                  Preparação biométrica do viajante
+                  antes da candidatura.
+                </p>
 
               </div>
 
 
-              <span class="panel-status blue">
-
-                <i></i>
-
-                Aguardando
-
+              <span class="stage-status waiting">
+                AGUARDANDO
               </span>
 
             </div>
 
-
-            <!-- MOTOR FACIAL -->
 
             <div
               id="facialPreflightMount"
@@ -1394,7 +1280,20 @@
             ></div>
 
 
-            <div class="identity-client-selector">
+            <div class="identity-stage-row">
+
+              <div class="identity-stage-description">
+
+                <span>
+                  VIAJANTE
+                </span>
+
+                <strong>
+                  Selecione o viajante preparado
+                </strong>
+
+              </div>
+
 
               <label class="field">
 
@@ -1418,55 +1317,84 @@
             </div>
 
 
-            <!-- =================================================
-                 03 — CANDIDATURA
-            ================================================== -->
+            <div class="identity-next-step">
 
-            <div class="application-stage">
+              <div class="next-step-line"></div>
+
+              <span>
+                Após a preparação facial, avance para os dados da viagem.
+              </span>
+
+            </div>
+
+          </section>
 
 
-              <div class="stage-divider">
+          <!-- =================================================
+               ETAPA 03 — VIAGEM
+          ================================================== -->
 
-                <span>
-                  03
-                </span>
+          <section
+            id="travelApplicationSection"
+            class="panel travel-application-panel stage-panel"
+          >
 
-                <div>
+            <div class="stage-header">
 
-                  <strong>
-                    Candidatura
-                  </strong>
+              <div class="stage-heading">
 
-                  <small>
-                    Dados para o processo.
-                  </small>
+                <div class="stage-heading-top">
+
+                  <span class="stage-number">
+                    03
+                  </span>
+
+                  <span class="stage-kicker">
+                    VIAGEM
+                  </span>
 
                 </div>
 
+                <h2>
+                  Candidatura
+                </h2>
+
+                <p>
+                  Defina o processo de viagem,
+                  o centro e o período pretendido.
+                </p>
+
               </div>
 
+
+              <span class="stage-status waiting">
+                AGUARDANDO
+              </span>
+
+            </div>
+
+
+            <div class="application-stage">
 
               <form
                 id="applicationForm"
                 class="form"
               >
 
-
                 <div class="form-section-title">
 
                   <span>
-                    Dados da candidatura
+                    Dados da viagem
                   </span>
 
                   <small>
-                    Informação necessária
+                    Informação necessária para o processo
                   </small>
 
                 </div>
 
 
                 <div class="form-grid">
-
 
                   <label class="field full">
 
@@ -1583,10 +1511,10 @@
                   </label>
 
 
-                  <label class="field full">
+                  <label class="field">
 
                     <span>
-                      Horário
+                      Horário preferido
                     </span>
 
                     <input
@@ -1600,23 +1528,25 @@
                 </div>
 
 
-                <!-- ÁREA DINÂMICA -->
-
                 <div class="application-information-card">
 
-                  <div class="application-information-icon">
-                    <span class="check-icon"></span>
+                  <div class="application-route-mark">
+                    <span></span>
                   </div>
-
 
                   <div>
 
+                    <span>
+                      PERCURSO
+                    </span>
+
                     <strong>
-                      Submissão administrativa
+                      Angola → Portugal
                     </strong>
 
                     <p>
-                      Após o envio, o processo aguarda administração.
+                      As preferências serão usadas
+                      para preparar o processo.
                     </p>
 
                   </div>
@@ -1633,13 +1563,12 @@
                     </span>
 
                     <strong>
-                      Submeter
-                      <b>→</b>
-                      Administração
+                      Enviar para administração
                     </strong>
 
                     <small>
-                      A automação só será liberada pelo administrador.
+                      A automação só poderá avançar
+                      depois da liberação administrativa.
                     </small>
 
                   </div>
@@ -1651,7 +1580,7 @@
                     type="submit"
                     disabled
                   >
-                    Submeter candidatura
+                    Enviar candidatura
                     <span>→</span>
                   </button>
 
@@ -1665,35 +1594,43 @@
 
 
           <!-- =================================================
-               04 — ACOMPANHAMENTO
+               ETAPA 04 — PROCESSO
           ================================================== -->
 
           <section
             id="verificationSection"
-            class="panel applications-panel"
+            class="panel applications-panel process-panel stage-panel"
           >
 
+            <div class="stage-header">
 
-            <div class="panel-header">
+              <div class="stage-heading">
 
-              <div class="panel-heading">
+                <div class="stage-heading-top">
 
-                <span class="section-number">
-                  04
-                </span>
+                  <span class="stage-number">
+                    04
+                  </span>
 
-                <span class="panel-eyebrow">
-                  PROCESSO
-                </span>
+                  <span class="stage-kicker">
+                    PROCESSO
+                  </span>
+
+                </div>
 
                 <h2>
-                  Estado do processo
+                  Estado da viagem
                 </h2>
+
+                <p>
+                  Acompanhe o estado do processo depois
+                  da submissão administrativa.
+                </p>
 
               </div>
 
 
-              <span class="panel-counter">
+              <span class="process-count">
 
                 <strong id="applicationProcessCount">
                   0
@@ -1706,7 +1643,30 @@
             </div>
 
 
-            <div class="verification-overview-main">
+            <div class="process-control-header">
+
+              <div>
+
+                <span>
+                  CONTROLO OPERACIONAL
+                </span>
+
+                <strong>
+                  Acompanhamento
+                </strong>
+
+              </div>
+
+              <div class="process-control-line">
+                <span></span>
+              </div>
+
+            </div>
+
+
+            <div
+              class="verification-overview-main"
+            >
 
               <div
                 id="applicationsList"
@@ -1715,18 +1675,19 @@
 
                 <div class="empty-state">
 
-                  <div class="empty-icon">
-                    <span class="radar-icon"></span>
+                  <div class="empty-process-mark">
+                    <span></span>
                   </div>
 
 
                   <strong>
-                    Nenhum processo
+                    Nenhum processo submetido
                   </strong>
 
 
                   <p>
-                    Os processos submetidos aparecerão aqui.
+                    O estado da viagem aparecerá aqui
+                    depois da candidatura.
                   </p>
 
                 </div>
@@ -1735,19 +1696,24 @@
 
             </div>
 
+
+            <!-- BOTÃO INSERIDO PELO FACIAL-PREFLIGHT-UI -->
+
           </section>
 
         </div>
 
 
         <!-- =====================================================
-             SIDEBAR
+             COLUNA DE CONTROLO
         ====================================================== -->
 
         <aside class="dashboard-sidebar">
 
 
-          <!-- PROGRESSO -->
+          <!-- =================================================
+               MAPA DA VIAGEM
+          ================================================== -->
 
           <section class="side-panel readiness-panel">
 
@@ -1756,11 +1722,11 @@
               <div>
 
                 <span>
-                  PROGRESSO
+                  OPERAÇÃO
                 </span>
 
                 <h3>
-                  Preparação
+                  Estado da viagem
                 </h3>
 
               </div>
@@ -1773,11 +1739,24 @@
             </div>
 
 
-            <div class="readiness-score">
+            <div class="journey-progress">
 
-              <div class="score-ring">
+              <div class="journey-progress-head">
 
-                <div class="score-ring-inner">
+                <div>
+
+                  <span>
+                    PREPARAÇÃO
+                  </span>
+
+                  <strong id="readinessLabel">
+                    Aguardando dados
+                  </strong>
+
+                </div>
+
+
+                <div class="journey-score">
 
                   <strong id="readinessScore">
                     0
@@ -1792,78 +1771,135 @@
               </div>
 
 
-              <div class="score-copy">
+              <div class="journey-progress-track">
 
-                <strong id="readinessLabel">
-                  Aguardando dados
-                </strong>
-
-                <span>
-                  Estado atual
-                </span>
+                <span></span>
 
               </div>
 
             </div>
 
 
-            <div class="readiness-list">
+            <div class="journey-stages">
 
+              <div
+                class="journey-stage"
+                data-stage="passport"
+              >
 
-              <div>
+                <div class="journey-stage-marker">
+                  01
+                </div>
 
-                <span class="readiness-dot"></span>
+                <div class="journey-stage-copy">
 
-                <span>
-                  Passaporte
-                </span>
+                  <strong>
+                    Passaporte
+                  </strong>
 
-                <strong id="readinessPassport">
+                  <span>
+                    Documento
+                  </span>
+
+                </div>
+
+                <strong
+                  id="readinessPassport"
+                  class="journey-stage-value"
+                >
                   0%
                 </strong>
 
               </div>
 
 
-              <div>
+              <div
+                class="journey-stage"
+                data-stage="identity"
+              >
 
-                <span class="readiness-dot"></span>
+                <div class="journey-stage-marker">
+                  02
+                </div>
 
-                <span>
-                  Identidade
-                </span>
+                <div class="journey-stage-copy">
 
-                <strong id="readinessClient">
+                  <strong>
+                    Identidade
+                  </strong>
+
+                  <span>
+                    Biometria
+                  </span>
+
+                </div>
+
+                <strong
+                  id="readinessClient"
+                  class="journey-stage-value"
+                >
                   0%
                 </strong>
 
               </div>
 
 
-              <div>
+              <div
+                class="journey-stage"
+                data-stage="application"
+              >
 
-                <span class="readiness-dot"></span>
+                <div class="journey-stage-marker">
+                  03
+                </div>
 
-                <span>
-                  Candidatura
-                </span>
+                <div class="journey-stage-copy">
 
-                <strong id="readinessApplication">
+                  <strong>
+                    Viagem
+                  </strong>
+
+                  <span>
+                    Candidatura
+                  </span>
+
+                </div>
+
+                <strong
+                  id="readinessApplication"
+                  class="journey-stage-value"
+                >
                   0%
                 </strong>
 
               </div>
 
 
-              <div>
+              <div
+                class="journey-stage"
+                data-stage="operation"
+              >
 
-                <span class="readiness-dot"></span>
+                <div class="journey-stage-marker">
+                  04
+                </div>
 
-                <span>
-                  Administração
-                </span>
+                <div class="journey-stage-copy">
 
-                <strong id="readinessOperation">
+                  <strong>
+                    Processo
+                  </strong>
+
+                  <span>
+                    Administração
+                  </span>
+
+                </div>
+
+                <strong
+                  id="readinessOperation"
+                  class="journey-stage-value"
+                >
                   0%
                 </strong>
 
@@ -1874,7 +1910,9 @@
           </section>
 
 
-          <!-- ATIVIDADE -->
+          <!-- =================================================
+               ÚLTIMOS MOVIMENTOS
+          ================================================== -->
 
           <section class="side-panel activity-panel">
 
@@ -1883,11 +1921,11 @@
               <div>
 
                 <span>
-                  ATIVIDADE
+                  MOVIMENTOS
                 </span>
 
                 <h3>
-                  Atualizações
+                  Últimas atualizações
                 </h3>
 
               </div>
@@ -1902,10 +1940,9 @@
               class="activity-feed"
             >
 
-
               <div class="activity-item">
 
-                <div class="activity-marker blue"></div>
+                <div class="activity-marker active"></div>
 
                 <div>
 
@@ -1952,7 +1989,7 @@
                   </strong>
 
                   <span>
-                    Aguardando validação
+                    Aguardando preparação
                   </span>
 
                 </div>
@@ -1967,11 +2004,11 @@
                 <div>
 
                   <strong>
-                    Administração
+                    Processo
                   </strong>
 
                   <span>
-                    Aguardar submissão
+                    Aguardar candidatura
                   </span>
 
                 </div>
@@ -1983,7 +2020,9 @@
           </section>
 
 
-          <!-- SISTEMA -->
+          <!-- =================================================
+               CONTROLO DA OPERAÇÃO
+          ================================================== -->
 
           <section class="side-panel bot-panel">
 
@@ -1992,11 +2031,11 @@
               <div>
 
                 <span>
-                  SISTEMA
+                  CONTROLO
                 </span>
 
                 <h3>
-                  Estado
+                  Operação
                 </h3>
 
               </div>
@@ -2004,16 +2043,13 @@
             </div>
 
 
-            <!-- 01 -->
+            <div class="operation-control-card">
 
-            <div class="bot-status-card">
+              <div class="operation-control-top">
 
-              <div class="bot-status-top">
-
-                <div class="bot-symbol">
+                <div class="operation-control-number">
                   01
                 </div>
-
 
                 <div>
 
@@ -2022,18 +2058,17 @@
                   </strong>
 
                   <span>
-                    Documento e perfil
+                    Documento e identidade
                   </span>
 
                 </div>
-
 
                 <i id="bot1Indicator"></i>
 
               </div>
 
 
-              <div class="bot-progress">
+              <div class="operation-progress">
                 <span id="bot1Progress"></span>
               </div>
 
@@ -2045,57 +2080,50 @@
             </div>
 
 
-            <!-- 02 -->
+            <div class="operation-control-card">
 
-            <div class="bot-status-card">
+              <div class="operation-control-top">
 
-              <div class="bot-status-top">
-
-                <div class="bot-symbol">
+                <div class="operation-control-number">
                   02
                 </div>
-
 
                 <div>
 
                   <strong>
-                    Acompanhamento
+                    Processo
                   </strong>
 
                   <span>
-                    Processo
+                    Candidatura e acompanhamento
                   </span>
 
                 </div>
-
 
                 <i id="bot2Indicator"></i>
 
               </div>
 
 
-              <div class="bot-progress">
+              <div class="operation-progress">
                 <span id="bot2Progress"></span>
               </div>
 
 
               <small id="bot2LastAction">
-                Bloqueado até liberação administrativa
+                Aguarda liberação administrativa
               </small>
 
             </div>
 
 
-            <!-- 03 -->
+            <div class="operation-control-card">
 
-            <div class="bot-status-card">
+              <div class="operation-control-top">
 
-              <div class="bot-status-top">
-
-                <div class="bot-symbol">
+                <div class="operation-control-number">
                   03
                 </div>
-
 
                 <div>
 
@@ -2104,18 +2132,17 @@
                   </strong>
 
                   <span>
-                    Estado geral
+                    Estado geral da operação
                   </span>
 
                 </div>
-
 
                 <i id="supervisorIndicator"></i>
 
               </div>
 
 
-              <div class="bot-progress">
+              <div class="operation-progress">
                 <span id="supervisorProgress"></span>
               </div>
 
@@ -2129,26 +2156,31 @@
           </section>
 
 
-          <!-- SEGURANÇA -->
+          <!-- =================================================
+               ASSINATURA OPERACIONAL
+          ================================================== -->
 
-          <section class="security-card">
+          <section class="operation-signature">
 
-            <div class="security-icon">
-              <span class="check-icon"></span>
-            </div>
+            <div class="signature-route">
 
+              <span>AGO</span>
 
-            <div>
+              <i></i>
 
-              <strong>
-                Processo protegido
-              </strong>
-
-              <span>
-                Dados sensíveis tratados pelo sistema.
-              </span>
+              <span>PRT</span>
 
             </div>
+
+
+            <strong>
+              DOCUMENTO → IDENTIDADE → VIAGEM → PROCESSO
+            </strong>
+
+
+            <small>
+              Travel Automation
+            </small>
 
           </section>
 
