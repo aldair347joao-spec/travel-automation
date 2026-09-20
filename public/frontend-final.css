@@ -3,20 +3,15 @@
    FINAL PRODUCT VISUAL LAYER
    ============================================================
 
-   Camada visual FINAL da aplicação.
+   Esta camada é propositalmente colocada no FINAL do arquivo.
+   Não altera IDs, JS, OCR, câmera, áudio ou backend.
 
-   IMPORTANTE:
-   - NÃO depende de workflow.js
-   - NÃO altera IDs funcionais
-   - NÃO altera OCR/MRZ
-   - NÃO altera câmera
-   - NÃO altera áudio
-   - NÃO altera backend/API
-   - NÃO altera o fluxo funcional do projeto
-
-   Objetivo:
-   transformar a interface ativa num produto premium,
-   limpo, consistente e com identidade própria.
+   Objetivos:
+   - unificar identidade visual
+   - eliminar conflitos tipográficos
+   - melhorar hierarquia
+   - transformar a interface em produto final
+   - preservar o HTML/JS existente
    ============================================================ */
 
 
@@ -27,7 +22,6 @@
 :root {
   --ta-final-bg: #06101b;
   --ta-final-bg-2: #081522;
-
   --ta-final-surface: #0c1825;
   --ta-final-surface-2: #101f2e;
   --ta-final-surface-3: #132536;
@@ -72,7 +66,6 @@ html {
 
 body {
   min-height: 100vh;
-  overflow-x: hidden;
 
   color: var(--ta-final-text);
 
@@ -227,6 +220,7 @@ body {
 
 .topbar-center {
   color: var(--ta-final-muted);
+
   font-size: 10px;
 }
 
@@ -259,8 +253,12 @@ body {
 
 .icon-button:hover {
   border-color: var(--ta-final-border-strong);
+
   color: var(--ta-final-text);
-  background: rgba(50, 184, 255, .08);
+
+  background:
+    rgba(50, 184, 255, .08);
+
   transform: translateY(-1px);
 }
 
@@ -302,11 +300,11 @@ body {
 
   width: min(1380px, calc(100% - 48px));
 
-  margin: 0 auto;
+  margin:
+    0 auto;
 
-  padding: 34px 0 90px;
-
-  min-width: 0;
+  padding:
+    34px 0 90px;
 }
 
 
@@ -329,14 +327,16 @@ body {
 
   align-items: center;
 
-  padding: 58px;
+  padding:
+    58px 58px 56px;
 
   overflow: hidden;
 
   border:
     1px solid rgba(102, 184, 226, .14);
 
-  border-radius: 30px;
+  border-radius:
+    30px;
 
   background:
     radial-gradient(
@@ -401,8 +401,6 @@ body {
   z-index: 2;
 
   max-width: 700px;
-
-  min-width: 0;
 }
 
 .hero-eyebrow {
@@ -466,7 +464,8 @@ body {
 .operations-hero p {
   max-width: 650px;
 
-  margin: 24px 0 0;
+  margin:
+    24px 0 0;
 
   color: var(--ta-final-text-soft);
 
@@ -477,6 +476,7 @@ body {
 
 .operations-hero p strong {
   color: var(--ta-final-text);
+
   font-weight: 800;
 }
 
@@ -498,7 +498,8 @@ body {
 
   gap: 10px;
 
-  padding: 0 18px;
+  padding:
+    0 18px;
 
   border-radius: 13px;
 
@@ -626,7 +627,8 @@ body {
   align-items: center;
   gap: 7px;
 
-  padding: 7px 10px;
+  padding:
+    7px 10px;
 
   border:
     1px solid rgba(53, 217, 145, .16);
@@ -662,14 +664,15 @@ body {
 
   grid-template-columns:
     auto
-    minmax(40px, 1fr)
+    1fr
     auto;
 
   align-items: center;
 
   gap: 15px;
 
-  margin: 34px 0;
+  margin:
+    34px 0;
 }
 
 .route-point strong {
@@ -801,9 +804,11 @@ body {
 
   align-items: center;
 
-  margin: 22px 0;
+  margin:
+    22px 0;
 
-  padding: 15px;
+  padding:
+    15px;
 
   border:
     1px solid var(--ta-final-border);
@@ -838,7 +843,8 @@ body {
 
   min-height: 68px;
 
-  padding: 10px 12px;
+  padding:
+    10px 12px;
 
   border:
     1px solid transparent;
@@ -857,6 +863,9 @@ body {
 
   background:
     rgba(50, 184, 255, .06);
+
+  box-shadow:
+    0 0 0 1px rgba(50, 184, 255, .04);
 }
 
 .pipeline-item.completed {
@@ -932,20 +941,18 @@ body {
   min-width: 0;
 }
 
-.pipeline-copy strong,
-.pipeline-copy span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .pipeline-copy strong {
   display: block;
+
+  overflow: hidden;
 
   color: var(--ta-final-text);
 
   font-size: 10px;
   font-weight: 800;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .pipeline-copy span {
@@ -953,9 +960,14 @@ body {
 
   margin-top: 3px;
 
+  overflow: hidden;
+
   color: var(--ta-final-muted);
 
   font-size: 8px;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .pipeline-state {
@@ -988,7 +1000,8 @@ body {
 
   gap: 12px;
 
-  margin: 18px 0 26px;
+  margin:
+    18px 0 26px;
 }
 
 .stat-card {
@@ -999,7 +1012,8 @@ body {
 
   gap: 13px;
 
-  padding: 16px;
+  padding:
+    16px;
 
   border:
     1px solid var(--ta-final-border);
@@ -1031,17 +1045,23 @@ body {
 .stat-icon.blue,
 .stat-icon.cyan {
   color: var(--ta-final-blue);
-  background: rgba(50, 184, 255, .07);
+
+  background:
+    rgba(50, 184, 255, .07);
 }
 
 .stat-icon.green {
   color: var(--ta-final-green);
-  background: rgba(53, 217, 145, .07);
+
+  background:
+    rgba(53, 217, 145, .07);
 }
 
 .stat-icon.orange {
   color: var(--ta-final-orange);
-  background: rgba(255, 176, 74, .07);
+
+  background:
+    rgba(255, 176, 74, .07);
 }
 
 .stat-content {
@@ -1096,8 +1116,6 @@ body {
     minmax(0, 1fr);
 
   gap: 22px;
-
-  min-width: 0;
 }
 
 .dashboard-main {
@@ -1110,8 +1128,6 @@ body {
    ============================================================ */
 
 .panel {
-  min-width: 0;
-
   border:
     1px solid var(--ta-final-border) !important;
 
@@ -1137,27 +1153,14 @@ body {
 }
 
 .panel-header {
-  min-width: 0;
-
   padding-bottom: 20px;
 
   border-bottom:
     1px solid rgba(148, 190, 220, .08);
-
-  display: flex;
-  align-items: flex-start;
-  gap: 18px;
-
-  position: relative;
-}
-
-.panel-header > * {
-  min-width: 0;
 }
 
 .panel-heading {
   min-width: 0;
-  flex: 1 1 auto;
 }
 
 .panel-heading h2 {
@@ -1177,8 +1180,6 @@ body {
   line-height: 1.1;
 
   letter-spacing: -.035em;
-
-  overflow-wrap: anywhere;
 }
 
 .panel-heading p {
@@ -1192,8 +1193,6 @@ body {
   font-size: 11px !important;
 
   line-height: 1.7 !important;
-
-  overflow-wrap: anywhere;
 }
 
 .panel-eyebrow {
@@ -1206,8 +1205,6 @@ body {
 }
 
 .section-number {
-  flex: 0 0 auto;
-
   color:
     var(--ta-final-muted-2) !important;
 
@@ -1219,12 +1216,6 @@ body {
 }
 
 .panel-status {
-  flex: 0 0 auto;
-
-  margin-left: auto;
-
-  white-space: nowrap;
-
   border:
     1px solid rgba(50, 184, 255, .18) !important;
 
@@ -1247,8 +1238,6 @@ body {
    ============================================================ */
 
 .selected-client-card {
-  min-width: 0;
-
   border:
     1px solid var(--ta-final-border) !important;
 
@@ -1283,13 +1272,6 @@ body {
    13. FORMULÁRIOS
    ============================================================ */
 
-.field,
-.form-group,
-.form-field {
-  min-width: 0;
-  max-width: 100%;
-}
-
 .field > span,
 .field label,
 .form-section-title {
@@ -1301,17 +1283,12 @@ body {
   font-weight: 800;
 
   letter-spacing: .04em;
-
-  overflow-wrap: anywhere;
 }
 
 .field input,
 .field select,
 .field textarea,
 .frontend-field select {
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
   min-height: 46px;
 
   border:
@@ -1357,75 +1334,33 @@ body {
 
 
 /* ============================================================
-   14. PASSAPORTE — IDENTIDADE PRÓPRIA
+   14. PASSAPORTE — PROTAGONISTA
    ============================================================ */
 
 .passport-client-bar {
-  min-width: 0;
   margin-bottom: 18px;
 }
 
 .passport-upload-layout {
-  min-width: 0;
-
-  display: grid;
-
-  grid-template-columns:
-    minmax(0, 1.05fr)
-    minmax(300px, .95fr);
-
   gap: 18px;
-
-  align-items: stretch;
 }
 
 .passport-upload-card,
 .passport-validation-card {
-  min-width: 0;
-
-  position: relative;
-
-  overflow: hidden;
-
   border:
     1px solid var(--ta-final-border) !important;
 
   border-radius:
-    20px !important;
+    18px !important;
 
   background:
-    linear-gradient(
-      145deg,
-      rgba(14, 31, 45, .96),
-      rgba(7, 17, 27, .98)
-    ) !important;
+    rgba(255, 255, 255, .025) !important;
 
   box-shadow:
     none !important;
 }
 
-.passport-upload-card::before,
-.passport-validation-card::before {
-  content: "";
-
-  position: absolute;
-
-  inset: 0;
-
-  pointer-events: none;
-
-  background:
-    radial-gradient(
-      circle at 0% 0%,
-      rgba(50, 184, 255, .08),
-      transparent 32%
-    );
-}
-
 .passport-upload-header {
-  position: relative;
-  z-index: 1;
-
   border-bottom:
     1px solid rgba(148, 190, 220, .07);
 }
@@ -1436,13 +1371,10 @@ body {
 }
 
 .passport-dropzone {
-  position: relative;
-  z-index: 1;
-
-  min-height: 235px;
+  min-height: 220px;
 
   border:
-    1px dashed rgba(50, 184, 255, .25) !important;
+    1px dashed rgba(50, 184, 255, .24) !important;
 
   border-radius:
     17px !important;
@@ -1450,7 +1382,7 @@ body {
   background:
     radial-gradient(
       circle at center,
-      rgba(50, 184, 255, .065),
+      rgba(50, 184, 255, .06),
       transparent 65%
     ) !important;
 
@@ -1465,7 +1397,7 @@ body {
 
 .passport-dropzone:hover {
   border-color:
-    rgba(50, 184, 255, .52) !important;
+    rgba(50, 184, 255, .50) !important;
 
   background:
     rgba(50, 184, 255, .07) !important;
@@ -1474,75 +1406,15 @@ body {
     translateY(-1px);
 }
 
-
-/* documento proprietário */
 .passport-dropzone-icon {
-  position: relative;
-
-  width: 58px;
-  height: 68px;
-
-  display: grid;
-  place-items: center;
-
-  margin-bottom: 16px;
-
-  color: transparent !important;
-
-  border:
-    1px solid rgba(73, 217, 238, .35);
-
-  border-radius:
-    9px;
+  color:
+    var(--ta-final-blue) !important;
 
   background:
-    linear-gradient(
-      145deg,
-      rgba(50, 184, 255, .12),
-      rgba(50, 184, 255, .025)
-    ) !important;
-
-  box-shadow:
-    0 18px 40px rgba(0, 0, 0, .18);
-}
-
-.passport-dropzone-icon::before {
-  content: "";
-
-  position: absolute;
-
-  inset: 9px 10px;
-
-  border:
-    1px solid rgba(73, 217, 238, .70);
-
-  border-radius: 4px;
-}
-
-.passport-dropzone-icon::after {
-  content: "TRAVEL";
-
-  position: absolute;
-
-  left: 13px;
-  right: 13px;
-  bottom: 13px;
-
-  color:
-    rgba(73, 217, 238, .80);
-
-  font-size: 6px;
-  font-weight: 900;
-
-  letter-spacing: .12em;
-
-  text-align: center;
+    rgba(50, 184, 255, .08) !important;
 }
 
 .passport-preview {
-  position: relative;
-  z-index: 1;
-
   border:
     1px solid var(--ta-final-border) !important;
 
@@ -1551,8 +1423,6 @@ body {
 
   background:
     #08121d !important;
-
-  overflow: hidden;
 }
 
 .passport-preview-image-wrap {
@@ -1570,10 +1440,8 @@ body {
 }
 
 .passport-result-state {
-  min-width: 0;
-
   border-radius:
-    14px !important;
+    13px !important;
 
   background:
     rgba(255, 255, 255, .025) !important;
@@ -1583,8 +1451,6 @@ body {
 }
 
 .passport-extracted-data {
-  min-width: 0;
-
   border:
     1px solid rgba(148, 190, 220, .08) !important;
 
@@ -1603,64 +1469,7 @@ body {
     var(--ta-final-muted) !important;
 }
 
-.passport-check-list > div,
-.passport-check-list > li {
-  min-width: 0;
-
-  min-height: 38px;
-
-  display: flex;
-  align-items: center;
-
-  gap: 11px;
-
-  border-bottom:
-    1px solid rgba(148, 190, 220, .06);
-}
-
-.passport-check-list i {
-  width: 22px;
-  height: 22px;
-
-  flex: 0 0 22px;
-
-  display: grid;
-  place-items: center;
-
-  color: transparent !important;
-
-  border:
-    1px solid rgba(148, 190, 220, .16);
-
-  border-radius: 7px;
-
-  background:
-    rgba(255, 255, 255, .025);
-
-  font-style: normal;
-
-  position: relative;
-}
-
-.passport-check-list i::after {
-  content: "";
-
-  width: 6px;
-  height: 3px;
-
-  border-left:
-    1.5px solid var(--ta-final-muted);
-
-  border-bottom:
-    1.5px solid var(--ta-final-muted);
-
-  transform:
-    rotate(-45deg);
-}
-
 .identity-gate-message {
-  min-width: 0;
-
   border:
     1px solid rgba(50, 184, 255, .14) !important;
 
@@ -1674,142 +1483,9 @@ body {
     rgba(50, 184, 255, .045) !important;
 }
 
-.identity-gate-message > div {
-  width: 34px;
-  height: 34px;
-
-  display: grid;
-  place-items: center;
-
-  flex: 0 0 34px;
-
-  color: transparent !important;
-
-  border:
-    1px solid rgba(50, 184, 255, .28);
-
-  border-radius: 10px;
-
-  background:
-    rgba(50, 184, 255, .07);
-
-  position: relative;
-}
-
-.identity-gate-message > div::before {
-  content: "";
-
-  width: 11px;
-  height: 11px;
-
-  border:
-    1px solid var(--ta-final-blue);
-
-  border-radius: 50%;
-
-  box-shadow:
-    0 0 0 4px rgba(50, 184, 255, .07);
-}
-
 
 /* ============================================================
-   15. PERFIL DO VIAJANTE — IDENTIDADE DIGITAL
-   ============================================================ */
-
-#clientSection {
-  position: relative;
-  min-width: 0;
-  overflow: hidden;
-}
-
-#clientSection::before {
-  content: "";
-
-  position: absolute;
-
-  left: 0;
-  top: 0;
-  bottom: 0;
-
-  width: 3px;
-
-  border-radius:
-    20px 0 0 20px;
-
-  background:
-    linear-gradient(
-      180deg,
-      var(--ta-final-green),
-      rgba(53, 217, 145, 0)
-    );
-
-  opacity: .65;
-}
-
-#clientSection .panel-header {
-  padding-bottom: 24px;
-
-  border-bottom-color:
-    rgba(53, 217, 145, .10);
-}
-
-#clientSection .panel-eyebrow {
-  color:
-    var(--ta-final-green) !important;
-}
-
-#clientSection .section-number {
-  color:
-    var(--ta-final-green) !important;
-
-  border-color:
-    rgba(53, 217, 145, .18);
-}
-
-#clientSection .panel-heading p {
-  max-width: 650px;
-}
-
-#clientSection .panel-body,
-#clientSection .client-form,
-#clientSection .form-grid,
-#clientSection .form-section {
-  min-width: 0;
-  max-width: 100%;
-}
-
-#clientSection .field {
-  min-width: 0;
-}
-
-#clientSection input,
-#clientSection select,
-#clientSection textarea {
-  min-width: 0;
-  max-width: 100%;
-}
-
-#clientSection .field input,
-#clientSection .field select,
-#clientSection .field textarea {
-  border-radius: 13px;
-}
-
-#clientSection .selected-client-card {
-  border-color:
-    rgba(53, 217, 145, .13) !important;
-
-  background:
-    linear-gradient(
-      135deg,
-      rgba(53, 217, 145, .055),
-      rgba(255, 255, 255, .02)
-    ) !important;
-}
-
-
-/* ============================================================
-   16. BUTTONS
+   15. BUTTONS
    ============================================================ */
 
 .primary-button,
@@ -1833,6 +1509,7 @@ button.primary-button {
     ) !important;
 
   font-size: 10px;
+
   font-weight: 900;
 
   box-shadow:
@@ -1884,14 +1561,11 @@ button.primary-button {
 
 
 /* ============================================================
-   17. IDENTITY / CAMERA BASE
+   16. IDENTITY / CAMERA
    ============================================================ */
 
 .workflow-stage-mount,
 .facial-preflight-mount {
-  width: 100%;
-  min-width: 0;
-
   color:
     var(--ta-final-text);
 }
@@ -1905,8 +1579,6 @@ button.primary-button {
 .face-capture-panel,
 .identity-panel,
 .facial-panel {
-  min-width: 0;
-
   border:
     1px solid var(--ta-final-border) !important;
 
@@ -1940,1063 +1612,53 @@ button.primary-button {
 
 
 /* ============================================================
-   18. FACIAL PREFLIGHT — SALA BIOMÉTRICA
+   17. READINESS
    ============================================================ */
 
-.facial-preflight-mount {
-  position: relative;
-}
-
-.identity-center {
-  --identity-bg: #040b11;
-  --identity-panel: #091721;
-  --identity-line: rgba(120, 204, 232, .12);
-  --identity-accent: #48d7f1;
-
-  color:
-    var(--ta-final-text);
-
-  min-width: 0;
-}
-
-.identity-center .identity-main {
-  width:
-    min(1480px, calc(100% - 36px));
-
-  margin:
-    0 auto;
-
-  min-width: 0;
-}
-
-.identity-center .identity-heading {
-  min-width: 0;
-
-  align-items:
-    flex-end;
-
-  gap: 24px;
-}
-
-.identity-center .identity-heading-copy {
-  min-width: 0;
-  max-width: 820px;
-}
-
-.identity-center .identity-heading-copy h1 {
-  max-width: 780px;
-
-  font-size:
-    clamp(30px, 4vw, 58px);
-
-  letter-spacing:
-    -.055em;
-
-  overflow-wrap:
-    anywhere;
-}
-
-.identity-center .identity-heading-copy p {
-  max-width: 650px;
-
-  color:
-    #9db5c3;
-
-  line-height:
-    1.7;
-}
-
-.identity-center .identity-client {
-  flex:
-    0 1 300px;
-
-  min-width:
-    0;
-
+.passport-readiness {
   border:
-    1px solid var(--identity-line);
+    1px solid var(--ta-final-border) !important;
 
   border-radius:
-    18px;
+    17px !important;
 
   background:
-    rgba(255,255,255,.025);
-}
+    rgba(255, 255, 255, .025) !important;
 
-.identity-center .identity-workspace {
-  min-width: 0;
-
-  gap: 20px;
-}
-
-.identity-center .identity-camera-column,
-.identity-center .identity-control-column {
-  min-width: 0;
-}
-
-.identity-center .identity-camera-shell,
-.identity-center .identity-progress-card,
-.identity-center .identity-instruction,
-.identity-center .identity-quality,
-.identity-center .identity-position-list,
-.identity-center .identity-vfs-note {
-  min-width: 0;
-
-  border-color:
-    var(--identity-line);
-
-  box-shadow:
-    0 22px 70px rgba(0,0,0,.16);
-}
-
-.identity-center .identity-camera-shell {
-  overflow: hidden;
-}
-
-.identity-center .identity-camera-header {
-  padding:
-    15px 18px;
-}
-
-.identity-center .identity-camera {
-  min-height:
-    440px;
-}
-
-.identity-center .identity-face-oval {
-  border-color:
-    rgba(72,215,241,.72);
-
-  box-shadow:
-    0 0 0 999px rgba(1,7,11,.36),
-    0 0 50px rgba(72,215,241,.08);
-}
-
-.identity-center .identity-camera-status {
-  gap:
-    7px;
-
-  flex-wrap:
-    wrap;
-}
-
-.identity-center .identity-status-chip {
-  border-color:
-    rgba(154,204,232,.11);
-
-  background:
-    rgba(2,10,15,.72);
-}
-
-.identity-center .identity-position-row {
-  min-width: 0;
-
-  border-radius:
-    12px;
-}
-
-.identity-center .identity-position-row > div:nth-child(2) {
-  min-width: 0;
-}
-
-.identity-center .identity-position-row > div:nth-child(2) span {
-  overflow-wrap:
-    anywhere;
-}
-
-.identity-center .identity-position-row > i {
   color:
-    transparent;
-
-  position:
-    relative;
+    var(--ta-final-text-soft) !important;
 }
 
-.identity-center .identity-position-row > i::after {
-  content: "";
+.readiness-checks {
+  color:
+    var(--ta-final-muted) !important;
+}
 
-  position: absolute;
+.document-note {
+  color:
+    var(--ta-final-muted) !important;
+}
 
-  width:
-    6px;
-
-  height:
-    6px;
-
-  right:
-    2px;
-
-  top:
-    50%;
-
+.facial-consent-card {
   border:
-    1px solid #617986;
+    1px solid rgba(50, 184, 255, .13) !important;
 
   border-radius:
-    50%;
-
-  transform:
-    translateY(-50%);
-}
-
-
-/* botão de iniciar reconhecimento */
-
-.identity-center .identity-primary-button,
-.identity-center .identity-dashboard-launch {
-  position:
-    relative;
-
-  overflow:
-    hidden;
-}
-
-.identity-center .identity-primary-button::before,
-.identity-center .identity-dashboard-launch::before {
-  content: "";
-
-  position: absolute;
-
-  inset: 0;
+    17px !important;
 
   background:
-    linear-gradient(
-      100deg,
-      transparent 20%,
-      rgba(255,255,255,.14),
-      transparent 80%
-    );
+    rgba(50, 184, 255, .035) !important;
 
-  transform:
-    translateX(-110%);
-
-  transition:
-    transform 500ms ease;
-}
-
-.identity-center .identity-primary-button:hover::before,
-.identity-center .identity-dashboard-launch:hover::before {
-  transform:
-    translateX(110%);
+  color:
+    var(--ta-final-text-soft) !important;
 }
 
 
 /* ============================================================
-   19. BOTÃO DE RECONHECIMENTO FACIAL
-   ============================================================ */
-
-.identity-dashboard-launch {
-  width: 100%;
-  min-height: 82px;
-
-  display: grid;
-
-  grid-template-columns:
-    48px
-    minmax(0, 1fr)
-    auto;
-
-  align-items: center;
-
-  gap: 14px;
-
-  margin-top: 18px;
-
-  padding: 14px 16px;
-
-  border:
-    1px solid rgba(56,199,255,.20);
-
-  border-radius:
-    18px;
-
-  color:
-    var(--ta-final-text);
-
-  background:
-    linear-gradient(
-      135deg,
-      rgba(56,199,255,.09),
-      rgba(255,255,255,.025)
-    );
-
-  box-shadow:
-    0 16px 45px rgba(0,0,0,.15);
-
-  cursor:
-    pointer;
-
-  text-align:
-    left;
-
-  transition:
-    transform .2s ease,
-    border-color .2s ease,
-    background .2s ease;
-}
-
-.identity-dashboard-launch:hover {
-  transform:
-    translateY(-2px);
-
-  border-color:
-    rgba(56,199,255,.42);
-
-  background:
-    linear-gradient(
-      135deg,
-      rgba(56,199,255,.14),
-      rgba(255,255,255,.035)
-    );
-}
-
-.identity-launch-icon {
-  width: 46px;
-  height: 46px;
-
-  display: grid;
-  place-items: center;
-
-  border:
-    1px solid rgba(66,214,154,.30);
-
-  border-radius:
-    14px;
-
-  color:
-    transparent !important;
-
-  background:
-    rgba(66,214,154,.06);
-
-  position:
-    relative;
-}
-
-.identity-launch-icon::before {
-  content: "";
-
-  width: 17px;
-  height: 17px;
-
-  border:
-    1.5px solid var(--ta-final-green);
-
-  border-radius:
-    50%;
-}
-
-.identity-launch-icon::after {
-  content: "";
-
-  position: absolute;
-
-  width: 5px;
-  height: 5px;
-
-  border-radius:
-    50%;
-
-  background:
-    var(--ta-final-green);
-}
-
-.identity-dashboard-launch strong,
-.identity-dashboard-launch small {
-  display: block;
-}
-
-.identity-dashboard-launch strong {
-  font-size:
-    13px;
-}
-
-.identity-dashboard-launch small {
-  margin-top:
-    4px;
-
-  color:
-    var(--ta-final-muted);
-
-  font-size:
-    10px;
-}
-
-.identity-dashboard-launch > b {
-  color:
-    var(--ta-final-blue);
-
-  font-size:
-    18px;
-}
-
-
-/* ============================================================
-   20. ESTADO DA PREPARAÇÃO
-   ============================================================ */
-
-.readiness-panel {
-  min-width: 0;
-
-  overflow: hidden;
-
-  border-radius:
-    22px !important;
-
-  background:
-    linear-gradient(
-      145deg,
-      rgba(10,24,35,.98),
-      rgba(6,15,23,.98)
-    ) !important;
-}
-
-.readiness-panel .side-panel-header {
-  min-width: 0;
-
-  display: flex;
-  align-items: flex-start;
-
-  gap: 12px;
-}
-
-.readiness-panel .side-panel-header > div {
-  min-width: 0;
-}
-
-.readiness-score {
-  position: relative;
-
-  display: grid;
-
-  grid-template-columns:
-    88px
-    minmax(0,1fr);
-
-  align-items: center;
-
-  gap: 16px;
-
-  padding:
-    18px 0 20px;
-
-  min-width: 0;
-}
-
-.score-ring {
-  width: 88px;
-  height: 88px;
-
-  display: grid;
-  place-items: center;
-
-  border-radius: 50%;
-
-  background:
-    conic-gradient(
-      var(--ta-final-blue)
-      calc(var(--readiness, 0) * 1%),
-      rgba(255,255,255,.07) 0
-    );
-
-  position: relative;
-}
-
-.score-ring::before {
-  content: "";
-
-  position: absolute;
-
-  inset:
-    7px;
-
-  border-radius:
-    50%;
-
-  background:
-    #08141e;
-}
-
-.score-ring-inner {
-  position:
-    relative;
-
-  z-index:
-    1;
-
-  text-align:
-    center;
-}
-
-.score-ring-inner strong {
-  color:
-    var(--ta-final-text);
-
-  font-size:
-    24px;
-
-  letter-spacing:
-    -.05em;
-}
-
-.score-copy {
-  min-width: 0;
-}
-
-.score-copy strong,
-.score-copy span {
-  display:
-    block;
-
-  overflow-wrap:
-    anywhere;
-}
-
-.score-copy strong {
-  color:
-    var(--ta-final-text);
-
-  font-size:
-    14px;
-}
-
-.score-copy span {
-  margin-top:
-    5px;
-
-  color:
-    var(--ta-final-muted);
-
-  font-size:
-    10px;
-}
-
-.readiness-list {
-  display:
-    grid;
-
-  gap:
-    0;
-
-  border-top:
-    1px solid rgba(154,204,232,.07);
-}
-
-.readiness-list > div {
-  min-width: 0;
-
-  display: grid;
-
-  grid-template-columns:
-    8px
-    minmax(0,1fr)
-    auto;
-
-  align-items:
-    center;
-
-  gap:
-    10px;
-
-  min-height:
-    42px;
-
-  border-bottom:
-    1px solid rgba(154,204,232,.06);
-}
-
-.readiness-list > div > span:nth-child(2) {
-  min-width: 0;
-
-  color:
-    var(--ta-final-text-soft);
-
-  font-size:
-    10px;
-
-  overflow-wrap:
-    anywhere;
-}
-
-.readiness-list strong {
-  color:
-    var(--ta-final-text);
-
-  font-size:
-    10px;
-}
-
-.readiness-dot {
-  width:
-    7px !important;
-
-  height:
-    7px;
-
-  border-radius:
-    50%;
-
-  background:
-    #3b5260;
-
-  box-shadow:
-    0 0 0 4px rgba(59,82,96,.08);
-}
-
-
-/* ============================================================
-   21. ATUALIZAÇÕES — TIMELINE
-   ============================================================ */
-
-.activity-panel {
-  min-width:
-    0;
-
-  overflow:
-    hidden;
-
-  border-radius:
-    22px !important;
-}
-
-.activity-panel .side-panel-header {
-  min-width:
-    0;
-}
-
-.activity-feed {
-  position:
-    relative;
-
-  padding:
-    4px 0 4px 4px;
-
-  min-width:
-    0;
-}
-
-.activity-feed::before {
-  content: "";
-
-  position:
-    absolute;
-
-  left:
-    8px;
-
-  top:
-    14px;
-
-  bottom:
-    14px;
-
-  width:
-    1px;
-
-  background:
-    linear-gradient(
-      180deg,
-      rgba(56,199,255,.30),
-      rgba(154,204,232,.05)
-    );
-}
-
-.activity-item {
-  position:
-    relative;
-
-  display:
-    grid;
-
-  grid-template-columns:
-    10px
-    minmax(0,1fr);
-
-  gap:
-    13px;
-
-  padding:
-    11px 0;
-
-  min-width:
-    0;
-}
-
-.activity-item > div:last-child {
-  min-width:
-    0;
-}
-
-.activity-marker {
-  position:
-    relative;
-
-  z-index:
-    1;
-
-  width:
-    9px;
-
-  height:
-    9px;
-
-  margin-top:
-    4px;
-
-  border:
-    2px solid #07121b;
-
-  border-radius:
-    50%;
-
-  background:
-    #3c5664;
-
-  box-shadow:
-    0 0 0 1px rgba(154,204,232,.15);
-}
-
-.activity-marker.blue {
-  background:
-    var(--ta-final-blue);
-
-  box-shadow:
-    0 0 0 4px rgba(56,199,255,.08);
-}
-
-.activity-item strong,
-.activity-item span {
-  display:
-    block;
-
-  overflow-wrap:
-    anywhere;
-}
-
-.activity-item strong {
-  color:
-    var(--ta-final-text);
-
-  font-size:
-    10px;
-}
-
-.activity-item span {
-  margin-top:
-    3px;
-
-  color:
-    var(--ta-final-muted);
-
-  font-size:
-    9px;
-
-  line-height:
-    1.45;
-}
-
-
-/* ============================================================
-   22. ESTADO DO PROCESSO
-   ============================================================ */
-
-.bot-panel {
-  min-width:
-    0;
-
-  overflow:
-    hidden;
-
-  border-radius:
-    22px !important;
-}
-
-.bot-panel .side-panel-header {
-  min-width:
-    0;
-}
-
-.bot-status-card {
-  position:
-    relative;
-
-  min-width:
-    0;
-
-  margin-top:
-    10px;
-
-  padding:
-    13px;
-
-  border:
-    1px solid rgba(154,204,232,.08);
-
-  border-radius:
-    15px;
-
-  background:
-    rgba(255,255,255,.022);
-
-  transition:
-    border-color .2s ease,
-    transform .2s ease,
-    background .2s ease;
-}
-
-.bot-status-card:hover {
-  transform:
-    translateY(-1px);
-
-  border-color:
-    rgba(56,199,255,.18);
-
-  background:
-    rgba(56,199,255,.035);
-}
-
-.bot-status-top {
-  display:
-    grid;
-
-  grid-template-columns:
-    32px
-    minmax(0,1fr)
-    8px;
-
-  align-items:
-    center;
-
-  gap:
-    10px;
-
-  min-width:
-    0;
-}
-
-.bot-status-top > div:nth-child(2) {
-  min-width:
-    0;
-}
-
-.bot-symbol {
-  width:
-    32px;
-
-  height:
-    32px;
-
-  display:
-    grid;
-
-  place-items:
-    center;
-
-  border:
-    1px solid rgba(56,199,255,.18);
-
-  border-radius:
-    9px;
-
-  color:
-    var(--ta-final-blue);
-
-  background:
-    rgba(56,199,255,.06);
-
-  font-size:
-    8px;
-
-  font-weight:
-    900;
-}
-
-.bot-status-top strong,
-.bot-status-top span {
-  display:
-    block;
-
-  overflow-wrap:
-    anywhere;
-}
-
-.bot-status-top strong {
-  color:
-    var(--ta-final-text);
-
-  font-size:
-    10px;
-}
-
-.bot-status-top span {
-  margin-top:
-    3px;
-
-  color:
-    var(--ta-final-muted);
-
-  font-size:
-    8px;
-}
-
-.bot-status-top > i {
-  width:
-    7px;
-
-  height:
-    7px;
-
-  border-radius:
-    50%;
-
-  background:
-    #465c68;
-
-  box-shadow:
-    0 0 0 4px rgba(70,92,104,.08);
-}
-
-.bot-progress {
-  height:
-    3px !important;
-
-  margin:
-    12px 0 8px !important;
-
-  overflow:
-    hidden;
-
-  border-radius:
-    99px;
-
-  background:
-    rgba(255,255,255,.06) !important;
-}
-
-.bot-progress span {
-  display:
-    block;
-
-  height:
-    100%;
-
-  border-radius:
-    inherit;
-
-  background:
-    linear-gradient(
-      90deg,
-      var(--ta-final-blue),
-      var(--ta-final-cyan)
-    );
-
-  transition:
-    width .4s ease;
-}
-
-.bot-status-card small {
-  display:
-    block;
-
-  color:
-    var(--ta-final-muted);
-
-  font-size:
-    8px;
-
-  line-height:
-    1.45;
-
-  overflow-wrap:
-    anywhere;
-}
-
-
-/* ============================================================
-   23. ACOMPANHAMENTO / CANDIDATURA
-   ============================================================ */
-
-#applicationSection,
-#verificationSection {
-  min-width:
-    0;
-
-  max-width:
-    100%;
-
-  overflow:
-    hidden;
-}
-
-#applicationSection .panel-header,
-#verificationSection .panel-header {
-  margin-bottom:
-    4px;
-}
-
-#applicationSection .field,
-#verificationSection .field {
-  min-width:
-    0;
-}
-
-#applicationSection .field input,
-#applicationSection .field select,
-#applicationSection .field textarea,
-#verificationSection input,
-#verificationSection select,
-#verificationSection textarea {
-  width:
-    100%;
-
-  max-width:
-    100%;
-
-  min-width:
-    0;
-}
-
-#applicationSection::before {
-  content: "";
-
-  position:
-    absolute;
-
-  left:
-    0;
-
-  top:
-    0;
-
-  width:
-    3px;
-
-  height:
-    100%;
-
-  border-radius:
-    22px 0 0 22px;
-
-  background:
-    linear-gradient(
-      180deg,
-      var(--ta-final-blue),
-      transparent
-    );
-
-  opacity:
-    .7;
-}
-
-
-/* ============================================================
-   24. PREFERÊNCIAS DE VIAGEM
+   18. PREFERÊNCIAS DE VIAGEM
    ============================================================ */
 
 .frontend-final-preferences {
-  min-width:
-    0;
-
   border:
     1px solid var(--ta-final-border) !important;
 
@@ -3006,17 +1668,12 @@ button.primary-button {
   background:
     linear-gradient(
       145deg,
-      rgba(14,29,43,.96),
-      rgba(8,19,30,.97)
+      rgba(14, 29, 43, .96),
+      rgba(8, 19, 30, .97)
     ) !important;
 
   box-shadow:
     var(--ta-final-shadow-soft) !important;
-}
-
-.frontend-final-preferences-header {
-  min-width:
-    0;
 }
 
 .frontend-final-preferences-header span,
@@ -3035,11 +1692,6 @@ button.primary-button {
     var(--ta-final-muted);
 }
 
-.frontend-field {
-  min-width:
-    0;
-}
-
 .frontend-field > span,
 .frontend-final-weekdays > span {
   color:
@@ -3047,33 +1699,27 @@ button.primary-button {
 }
 
 .frontend-field select {
-  width:
-    100%;
-
-  max-width:
-    100%;
-
   color:
     var(--ta-final-text) !important;
 
   background:
-    rgba(255,255,255,.035) !important;
+    rgba(255, 255, 255, .035) !important;
 }
 
 .frontend-final-day span {
   border-color:
-    rgba(148,190,220,.12) !important;
+    rgba(148, 190, 220, .12) !important;
 
   color:
     var(--ta-final-muted) !important;
 
   background:
-    rgba(255,255,255,.025) !important;
+    rgba(255, 255, 255, .025) !important;
 }
 
 .frontend-final-day:hover span {
   border-color:
-    rgba(50,184,255,.28) !important;
+    rgba(50, 184, 255, .28) !important;
 }
 
 .frontend-final-day input:checked + span {
@@ -3091,15 +1737,15 @@ button.primary-button {
     ) !important;
 
   box-shadow:
-    0 10px 25px rgba(50,184,255,.16) !important;
+    0 10px 25px rgba(50, 184, 255, .16) !important;
 }
 
 .frontend-final-summary {
   border-color:
-    rgba(148,190,220,.08) !important;
+    rgba(148, 190, 220, .08) !important;
 
   background:
-    rgba(255,255,255,.025) !important;
+    rgba(255, 255, 255, .025) !important;
 
   color:
     var(--ta-final-muted) !important;
@@ -3112,15 +1758,12 @@ button.primary-button {
 
 
 /* ============================================================
-   25. ADMIN WAITING
+   19. ADMIN WAITING
    ============================================================ */
 
 .frontend-final-admin-waiting {
-  min-width:
-    0;
-
   border:
-    1px solid rgba(50,184,255,.14) !important;
+    1px solid rgba(50, 184, 255, .14) !important;
 
   border-radius:
     20px !important;
@@ -3128,8 +1771,8 @@ button.primary-button {
   background:
     linear-gradient(
       145deg,
-      rgba(13,31,47,.96),
-      rgba(8,19,30,.97)
+      rgba(13, 31, 47, .96),
+      rgba(8, 19, 30, .97)
     ) !important;
 
   box-shadow:
@@ -3138,13 +1781,13 @@ button.primary-button {
 
 .frontend-final-status-icon {
   border:
-    1px solid rgba(50,184,255,.13);
+    1px solid rgba(50, 184, 255, .13);
 
   color:
     var(--ta-final-blue);
 
   background:
-    rgba(50,184,255,.06);
+    rgba(50, 184, 255, .06);
 }
 
 .frontend-final-status-icon.success {
@@ -3152,12 +1795,7 @@ button.primary-button {
     var(--ta-final-green);
 
   background:
-    rgba(53,217,145,.07);
-}
-
-.frontend-final-status-copy {
-  min-width:
-    0;
+    rgba(53, 217, 145, .07);
 }
 
 .frontend-final-status-copy > span {
@@ -3168,18 +1806,12 @@ button.primary-button {
 .frontend-final-status-copy > strong {
   color:
     var(--ta-final-text);
-
-  overflow-wrap:
-    anywhere;
 }
 
 .frontend-final-status-copy > small,
 .frontend-final-state-row {
   color:
     var(--ta-final-muted);
-
-  overflow-wrap:
-    anywhere;
 }
 
 .frontend-final-status-badge.pending {
@@ -3187,7 +1819,7 @@ button.primary-button {
     var(--ta-final-orange);
 
   background:
-    rgba(255,176,74,.08);
+    rgba(255, 176, 74, .08);
 }
 
 .frontend-final-status-badge.active,
@@ -3196,18 +1828,15 @@ button.primary-button {
     var(--ta-final-green);
 
   background:
-    rgba(53,217,145,.08);
+    rgba(53, 217, 145, .08);
 }
 
 
 /* ============================================================
-   26. PAYMENT
+   20. PAYMENT
    ============================================================ */
 
 .frontend-final-payment {
-  min-width:
-    0;
-
   border:
     1px solid var(--ta-final-border) !important;
 
@@ -3217,18 +1846,12 @@ button.primary-button {
   background:
     linear-gradient(
       145deg,
-      rgba(14,29,43,.96),
-      rgba(8,19,30,.97)
+      rgba(14, 29, 43, .96),
+      rgba(8, 19, 30, .97)
     ) !important;
 
   box-shadow:
     var(--ta-final-shadow-soft) !important;
-}
-
-.frontend-final-payment-header,
-.frontend-final-payment-grid {
-  min-width:
-    0;
 }
 
 .frontend-final-payment-header strong,
@@ -3242,17 +1865,14 @@ button.primary-button {
 .frontend-final-payment-grid span {
   color:
     var(--ta-final-muted) !important;
-
-  overflow-wrap:
-    anywhere;
 }
 
 .frontend-final-payment-grid > div {
   border-color:
-    rgba(148,190,220,.08) !important;
+    rgba(148, 190, 220, .08) !important;
 
   background:
-    rgba(255,255,255,.025) !important;
+    rgba(255, 255, 255, .025) !important;
 }
 
 .frontend-final-confirmation-link {
@@ -3269,7 +1889,29 @@ button.primary-button {
 
 
 /* ============================================================
-   27. MICRO ICON SYSTEM
+   21. RAW SYSTEM TEXT / STATUS CLEANUP
+   ============================================================ */
+
+.pipeline-state {
+  color:
+    var(--ta-final-muted) !important;
+}
+
+.application-actions button.admin-gated,
+button.admin-gated {
+  border:
+    1px solid rgba(255, 176, 74, .22) !important;
+
+  color:
+    var(--ta-final-orange) !important;
+
+  background:
+    rgba(255, 176, 74, .06) !important;
+}
+
+
+/* ============================================================
+   22. MICRO ICON SYSTEM
    ============================================================ */
 
 .document-icon,
@@ -3277,30 +1919,21 @@ button.primary-button {
 .radar-icon,
 .person-icon,
 .check-icon {
-  position:
-    relative;
+  position: relative;
 
-  display:
-    inline-block;
+  display: inline-block;
 
-  width:
-    17px;
+  width: 17px;
+  height: 17px;
 
-  height:
-    17px;
-
-  color:
-    currentColor;
+  color: currentColor;
 }
 
-
 /* documento */
-
 .document-icon::before {
   content: "";
 
-  position:
-    absolute;
+  position: absolute;
 
   inset:
     2px 3px 1px;
@@ -3308,30 +1941,21 @@ button.primary-button {
   border:
     1.5px solid currentColor;
 
-  border-radius:
-    3px;
+  border-radius: 3px;
 }
 
 .document-icon::after {
   content: "";
 
-  position:
-    absolute;
+  position: absolute;
 
-  width:
-    5px;
+  width: 5px;
+  height: 1.5px;
 
-  height:
-    1.5px;
+  left: 6px;
+  top: 7px;
 
-  left:
-    6px;
-
-  top:
-    7px;
-
-  border-radius:
-    2px;
+  border-radius: 2px;
 
   background:
     currentColor;
@@ -3340,98 +1964,68 @@ button.primary-button {
     0 4px 0 currentColor;
 }
 
-
-/* rosto / identidade */
-
+/* pessoa / identidade */
 .face-icon::before {
   content: "";
 
-  position:
-    absolute;
+  position: absolute;
 
-  width:
-    8px;
+  width: 8px;
+  height: 8px;
 
-  height:
-    8px;
-
-  left:
-    4.5px;
-
-  top:
-    1px;
+  left: 4.5px;
+  top: 1px;
 
   border:
     1.5px solid currentColor;
 
-  border-radius:
-    50%;
+  border-radius: 50%;
 }
 
 .face-icon::after {
   content: "";
 
-  position:
-    absolute;
+  position: absolute;
 
-  width:
-    13px;
+  width: 13px;
+  height: 7px;
 
-  height:
-    7px;
-
-  left:
-    2px;
-
-  bottom:
-    1px;
+  left: 2px;
+  bottom: 1px;
 
   border:
     1.5px solid currentColor;
 
-  border-bottom:
-    0;
+  border-bottom: 0;
 
   border-radius:
     9px 9px 0 0;
 }
 
-
 /* radar */
-
 .radar-icon::before {
   content: "";
 
-  position:
-    absolute;
+  position: absolute;
 
-  inset:
-    2px;
+  inset: 2px;
 
   border:
     1.5px solid currentColor;
 
-  border-radius:
-    50%;
+  border-radius: 50%;
 }
 
 .radar-icon::after {
   content: "";
 
-  position:
-    absolute;
+  position: absolute;
 
-  width:
-    7px;
+  width: 7px;
+  height: 1.5px;
 
-  height:
-    1.5px;
-
-  left:
-    8px;
-
-  top:
-    8px;
+  left: 8px;
+  top: 8px;
 
   transform:
     rotate(-45deg);
@@ -3446,82 +2040,55 @@ button.primary-button {
     0 0 5px currentColor;
 }
 
-
 /* pessoa */
-
 .person-icon::before {
   content: "";
 
-  position:
-    absolute;
+  position: absolute;
 
-  width:
-    7px;
+  width: 7px;
+  height: 7px;
 
-  height:
-    7px;
-
-  left:
-    5px;
-
-  top:
-    1px;
+  left: 5px;
+  top: 1px;
 
   border:
     1.5px solid currentColor;
 
-  border-radius:
-    50%;
+  border-radius: 50%;
 }
 
 .person-icon::after {
   content: "";
 
-  position:
-    absolute;
+  position: absolute;
 
-  width:
-    13px;
+  width: 13px;
+  height: 7px;
 
-  height:
-    7px;
-
-  left:
-    2px;
-
-  bottom:
-    1px;
+  left: 2px;
+  bottom: 1px;
 
   border:
     1.5px solid currentColor;
 
-  border-bottom:
-    0;
+  border-bottom: 0;
 
   border-radius:
     8px 8px 0 0;
 }
 
-
 /* check */
-
 .check-icon::before {
   content: "";
 
-  position:
-    absolute;
+  position: absolute;
 
-  width:
-    8px;
+  width: 8px;
+  height: 4px;
 
-  height:
-    4px;
-
-  left:
-    4px;
-
-  top:
-    5px;
+  left: 4px;
+  top: 5px;
 
   border-left:
     1.7px solid currentColor;
@@ -3535,108 +2102,81 @@ button.primary-button {
 
 
 /* ============================================================
-   28. CONTENÇÃO CONTRA TEXTO ENCOSTADO À DIREITA
+   23. HIERARQUIA DA CANDIDATURA
    ============================================================ */
 
-.panel,
-.side-panel,
-.panel-header,
-.side-panel-header,
-.panel-header > *,
-.side-panel-header > *,
-.passport-upload-layout,
-.passport-client-bar,
-.readiness-score,
-.bot-status-top,
-.activity-item,
-.frontend-final-preferences,
-.frontend-final-admin-waiting,
-.frontend-final-payment {
-  min-width:
-    0;
-
-  max-width:
-    100%;
+.application-panel {
+  position: relative;
 }
 
-.panel-header > div,
-.side-panel-header > div,
-.activity-item > div:last-child,
-.bot-status-top > div:nth-child(2),
-.score-copy {
-  min-width:
-    0;
-}
+.application-panel::before {
+  content: "";
 
-.panel-header h1,
-.panel-header h2,
-.panel-header h3,
-.panel-header p,
-.side-panel h3,
-.side-panel span,
-.side-panel strong,
-.side-panel small {
-  overflow-wrap:
-    anywhere;
+  position: absolute;
+
+  left: 0;
+  top: 0;
+
+  width: 3px;
+  height: 100%;
+
+  border-radius:
+    20px 0 0 20px;
+
+  background:
+    linear-gradient(
+      180deg,
+      var(--ta-final-blue),
+      transparent
+    );
+
+  opacity: .7;
 }
 
 
 /* ============================================================
-   29. FOOTER
+   24. FOOTER / FINAL PAGE AREA
    ============================================================ */
 
 .main-container::after {
   content:
     "TRAVEL AUTOMATION  ·  PREPARAÇÃO INTELIGENTE DE VIAGENS";
 
-  display:
-    block;
+  display: block;
 
-  margin-top:
-    56px;
-
-  padding-top:
-    24px;
+  margin-top: 56px;
+  padding-top: 24px;
 
   border-top:
-    1px solid rgba(148,190,220,.08);
+    1px solid rgba(148, 190, 220, .08);
 
   color:
     var(--ta-final-muted-2);
 
-  font-size:
-    8px;
+  font-size: 8px;
+  font-weight: 800;
 
-  font-weight:
-    800;
+  letter-spacing: .14em;
 
-  letter-spacing:
-    .14em;
-
-  text-align:
-    center;
+  text-align: center;
 }
 
 
 /* ============================================================
-   30. SCROLLBAR
+   25. SCROLLBAR
    ============================================================ */
 
 * {
-  scrollbar-width:
-    thin;
+  scrollbar-width: thin;
 
   scrollbar-color:
-    rgba(84,143,178,.35)
+    rgba(84, 143, 178, .35)
     transparent;
 }
 
 *::-webkit-scrollbar {
-  width:
-    7px;
-
-  height:
-    7px;
+  width: 7px;
+  height: 7px;
 }
 
 *::-webkit-scrollbar-track {
@@ -3645,21 +2185,20 @@ button.primary-button {
 }
 
 *::-webkit-scrollbar-thumb {
-  border-radius:
-    999px;
+  border-radius: 999px;
 
   background:
-    rgba(84,143,178,.30);
+    rgba(84, 143, 178, .30);
 }
 
 *::-webkit-scrollbar-thumb:hover {
   background:
-    rgba(50,184,255,.45);
+    rgba(50, 184, 255, .45);
 }
 
 
 /* ============================================================
-   31. RESPONSIVIDADE — TABLET
+   26. TABLET
    ============================================================ */
 
 @media (max-width: 1100px) {
@@ -3691,70 +2230,27 @@ button.primary-button {
     grid-template-columns:
       repeat(2, minmax(0, 1fr));
 
-    gap:
-      8px;
+    gap: 8px;
   }
 
   .pipeline-connector {
-    display:
-      none;
-  }
-
-  .passport-upload-layout {
-    grid-template-columns:
-      1fr;
-  }
-
-  .panel-header {
-    flex-wrap:
-      wrap;
-  }
-
-  .panel-status {
-    margin-left:
-      0;
-
-    margin-top:
-      4px;
-  }
-
-  .identity-center .identity-heading {
-    align-items:
-      flex-start;
-
-    flex-direction:
-      column;
-  }
-
-  .identity-center .identity-client {
-    width:
-      100%;
-
-    flex-basis:
-      auto;
-  }
-
-  .identity-center .identity-workspace {
-    grid-template-columns:
-      1fr !important;
+    display: none;
   }
 }
 
 
 /* ============================================================
-   32. MOBILE
+   27. MOBILE
    ============================================================ */
 
 @media (max-width: 760px) {
 
   .topbar {
-    min-height:
-      64px;
+    min-height: 64px;
   }
 
   .topbar-center {
-    display:
-      none;
+    display: none;
   }
 
   .user-chip {
@@ -3763,8 +2259,7 @@ button.primary-button {
   }
 
   .user-chip > div:last-child {
-    display:
-      none;
+    display: none;
   }
 
   .main-container {
@@ -3876,9 +2371,6 @@ button.primary-button {
   .panel-header {
     padding-bottom:
       16px;
-
-    gap:
-      12px;
   }
 
   .panel-heading h2 {
@@ -3886,71 +2378,21 @@ button.primary-button {
       26px !important;
   }
 
-  .panel-heading p {
-    max-width:
-      100%;
-  }
-
   .passport-dropzone {
     min-height:
       190px;
-  }
-
-  .readiness-score {
-    grid-template-columns:
-      72px minmax(0,1fr);
-  }
-
-  .score-ring {
-    width:
-      72px;
-
-    height:
-      72px;
-  }
-
-  .identity-dashboard-launch {
-    grid-template-columns:
-      42px minmax(0,1fr) 18px;
-
-    min-height:
-      70px;
-  }
-
-  .identity-launch-icon {
-    width:
-      40px;
-
-    height:
-      40px;
-  }
-
-  .identity-center .identity-main {
-    width:
-      min(100% - 22px, 1480px);
-  }
-
-  .identity-center .identity-camera {
-    min-height:
-      300px;
-  }
-
-  .identity-center .identity-heading-copy h1 {
-    font-size:
-      34px;
   }
 }
 
 
 /* ============================================================
-   33. SMALL MOBILE
+   28. SMALL MOBILE
    ============================================================ */
 
 @media (max-width: 480px) {
 
   .brand-copy span {
-    display:
-      none;
+    display: none;
   }
 
   .topbar-brand {
@@ -4037,55 +2479,16 @@ button.primary-button {
     border-radius:
       17px !important;
   }
-
-  .readiness-score {
-    grid-template-columns:
-      64px minmax(0,1fr);
-
-    gap:
-      11px;
-  }
-
-  .score-ring {
-    width:
-      64px;
-
-    height:
-      64px;
-  }
-
-  .score-ring-inner strong {
-    font-size:
-      19px;
-  }
-
-  .identity-dashboard-launch {
-    gap:
-      10px;
-
-    padding:
-      12px;
-  }
-
-  .identity-dashboard-launch strong {
-    font-size:
-      11px;
-  }
-
-  .identity-dashboard-launch small {
-    font-size:
-      8px;
-  }
 }
 
 
 /* ============================================================
-   34. ACCESSIBILITY
+   29. ACCESSIBILITY / REDUCED MOTION
    ============================================================ */
 
 :focus-visible {
   outline:
-    2px solid rgba(50,184,255,.65);
+    2px solid rgba(50, 184, 255, .65);
 
   outline-offset:
     3px;
