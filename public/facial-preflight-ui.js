@@ -1,25 +1,27 @@
 /*
  * ============================================================
  * TRAVEL AUTOMATION
- * RECONHECIMENTO FACIAL — FULL SCREEN
+ * RECONHECIMENTO FACIAL — CAPTURE STATION
  * ============================================================
  *
- * Interface de captura biométrica.
+ * Interface visual da captura facial.
  *
- * O motor facial continua em:
+ * O motor biométrico continua em:
  * /public/facial-preflight.js
  *
- * Esta interface NÃO:
- * - lista os 10 movimentos;
- * - mostra bolinhas;
- * - repete instruções longas;
- * - controla a lógica biométrica;
- * - simula reconhecimento.
+ * Esta camada NÃO executa reconhecimento facial.
+ * Apenas apresenta visualmente o estado fornecido pelo motor.
  *
- * A câmera é iniciada automaticamente quando o utilizador
- * entra nesta experiência através do botão de reconhecimento.
- *
- * O áudio do motor continua responsável pelas orientações.
+ * Conceito:
+ * - câmera como elemento principal;
+ * - enquadramento interrompido;
+ * - vermelho = rosto fora das condições;
+ * - âmbar = ajuste necessário;
+ * - verde = posição adequada;
+ * - uma única orientação por vez;
+ * - nenhuma lista das 10 posições;
+ * - nenhuma sequência de bolinhas;
+ * - nenhuma explicação repetitiva.
  * ============================================================
  */
 
@@ -31,63 +33,63 @@
   const POSITIONS = [
     {
       id: "frontal",
-      number: "01",
       title: "OLHE PARA A CÂMERA",
-      instruction: "Mantenha o rosto de frente para a câmera."
+      instruction:
+        "Mantenha o rosto de frente para a câmera."
     },
     {
       id: "left",
-      number: "02",
       title: "VIRE PARA A ESQUERDA",
-      instruction: "Vire lentamente o rosto para a esquerda."
+      instruction:
+        "Vire lentamente o rosto para a esquerda."
     },
     {
       id: "right",
-      number: "03",
       title: "VIRE PARA A DIREITA",
-      instruction: "Vire lentamente o rosto para a direita."
+      instruction:
+        "Vire lentamente o rosto para a direita."
     },
     {
       id: "up",
-      number: "04",
       title: "OLHE PARA CIMA",
-      instruction: "Levante lentamente o rosto."
+      instruction:
+        "Levante lentamente o rosto."
     },
     {
       id: "down",
-      number: "05",
       title: "OLHE PARA BAIXO",
-      instruction: "Baixe lentamente o rosto."
+      instruction:
+        "Baixe lentamente o rosto."
     },
     {
       id: "left_up",
-      number: "06",
       title: "ESQUERDA E CIMA",
-      instruction: "Vire para a esquerda e olhe para cima."
+      instruction:
+        "Vire para a esquerda e olhe para cima."
     },
     {
       id: "right_up",
-      number: "07",
       title: "DIREITA E CIMA",
-      instruction: "Vire para a direita e olhe para cima."
+      instruction:
+        "Vire para a direita e olhe para cima."
     },
     {
       id: "left_down",
-      number: "08",
       title: "ESQUERDA E BAIXO",
-      instruction: "Vire para a esquerda e olhe para baixo."
+      instruction:
+        "Vire para a esquerda e olhe para baixo."
     },
     {
       id: "right_down",
-      number: "09",
       title: "DIREITA E BAIXO",
-      instruction: "Vire para a direita e olhe para baixo."
+      instruction:
+        "Vire para a direita e olhe para baixo."
     },
     {
       id: "smile",
-      number: "10",
       title: "SORRIA",
-      instruction: "Olhe para a câmera e sorria naturalmente."
+      instruction:
+        "Olhe para a câmera e sorria naturalmente."
     }
   ];
 
@@ -99,13 +101,12 @@
   let completed = false;
 
   let activePositionIndex = 0;
-
-  const completedPositions = new Set();
+  let lastFrameState = "waiting";
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * CLIENTE
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function normalizeClient(client) {
@@ -124,6 +125,7 @@
 
     return {
       id: String(id),
+
       name:
         client.fullName ||
         client.name ||
@@ -142,15 +144,18 @@
     for (const id of ids) {
       const select = $(id);
 
-      if (!select?.value) {
+      if (!select || !select.value) {
         continue;
       }
 
       const option =
-        select.options?.[select.selectedIndex];
+        select.options?.[
+          select.selectedIndex
+        ];
 
       return normalizeClient({
         id: select.value,
+
         name:
           option?.textContent?.trim() ||
           "Viajante"
@@ -170,9 +175,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * INTERFACE FULL SCREEN
-   * ----------------------------------------------------------
+   * ==========================================================
+   * INTERFACE
+   * ==========================================================
    */
 
   function createOverlay() {
@@ -181,25 +186,39 @@
       return overlay;
     }
 
-    overlay = document.createElement("section");
+    overlay =
+      document.createElement("section");
 
-    overlay.id = "identityCenter";
+    overlay.id =
+      "identityCenter";
 
     overlay.className =
       "identity-center identity-fullscreen hidden";
 
     overlay.innerHTML = `
-      <div class="identity-atmosphere">
-        <div class="identity-light identity-light-a"></div>
-        <div class="identity-light identity-light-b"></div>
+      <div class="identity-world">
+
+        <div class="identity-world-grid"></div>
+
+        <div class="identity-world-glow identity-world-glow-a"></div>
+        <div class="identity-world-glow identity-world-glow-b"></div>
+
+        <div class="identity-route-mark">
+          <span>ANGOLA</span>
+          <i></i>
+          <span>PORTUGAL</span>
+        </div>
+
       </div>
+
 
       <header class="identity-topbar">
 
         <div class="identity-brand">
 
           <div class="identity-brand-mark">
-            TA
+            <span>T</span>
+            <span>A</span>
           </div>
 
           <div class="identity-brand-copy">
@@ -208,16 +227,17 @@
             </strong>
 
             <span>
-              IDENTIFICAÇÃO DO VIAJANTE
+              PREPARAÇÃO DE VIAGEM
             </span>
           </div>
 
         </div>
 
-        <div class="identity-traveller">
+
+        <div class="identity-session">
 
           <span>
-            VIAJANTE
+            IDENTIFICAÇÃO
           </span>
 
           <strong id="identityClientName">
@@ -225,6 +245,7 @@
           </strong>
 
         </div>
+
 
         <button
           id="identityClose"
@@ -241,7 +262,7 @@
 
       <main class="identity-capture">
 
-        <div class="identity-camera-stage">
+        <section class="identity-camera-stage">
 
           <div class="identity-camera">
 
@@ -252,60 +273,81 @@
               muted
             ></video>
 
-            <div class="identity-video-depth"></div>
+
+            <div class="identity-camera-vignette"></div>
+
 
             <div
-              class="identity-face-guide"
+              class="identity-face-frame"
+              id="identityFaceFrame"
               aria-hidden="true"
             >
 
-              <span class="identity-corner tl"></span>
-              <span class="identity-corner tr"></span>
-              <span class="identity-corner bl"></span>
-              <span class="identity-corner br"></span>
+              <span class="identity-frame-corner tl"></span>
+              <span class="identity-frame-corner tr"></span>
+              <span class="identity-frame-corner bl"></span>
+              <span class="identity-frame-corner br"></span>
 
-              <span class="identity-axis vertical"></span>
-              <span class="identity-axis horizontal"></span>
+              <span class="identity-frame-tick tick-top"></span>
+              <span class="identity-frame-tick tick-bottom"></span>
+              <span class="identity-frame-tick tick-left"></span>
+              <span class="identity-frame-tick tick-right"></span>
 
-              <span class="identity-scan-line"></span>
+              <span class="identity-frame-center"></span>
+
+              <span class="identity-frame-scan"></span>
 
             </div>
 
 
             <div
-              class="identity-camera-state"
               id="identityCameraState"
+              class="identity-camera-state"
             >
               PREPARANDO CÂMERA
             </div>
 
 
             <div
-              class="identity-camera-message"
               id="identityCameraMessage"
+              class="identity-camera-message"
             >
               POSICIONE O ROSTO
             </div>
 
 
-            <div class="identity-capture-footer">
+            <div class="identity-camera-footer">
 
-              <div class="identity-condition">
+              <div
+                class="identity-condition"
+                id="identityConditionFace"
+              >
                 <i id="identityFaceIndicator"></i>
+
                 <span id="identityFaceText">
-                  DETECÇÃO
+                  ROSTO
                 </span>
               </div>
 
-              <div class="identity-condition">
+
+              <div
+                class="identity-condition"
+                id="identityConditionLight"
+              >
                 <i id="identityLightIndicator"></i>
+
                 <span id="identityLightText">
-                  ILUMINAÇÃO
+                  LUZ
                 </span>
               </div>
 
-              <div class="identity-condition">
+
+              <div
+                class="identity-condition"
+                id="identityConditionFrame"
+              >
                 <i id="identityFrameIndicator"></i>
+
                 <span id="identityFrameText">
                   ENQUADRAMENTO
                 </span>
@@ -316,22 +358,35 @@
           </div>
 
 
-          <div class="identity-camera-meta">
+          <div class="identity-camera-bottom">
 
-            <div>
-              <span>CAPTURA BIOMÉTRICA</span>
+            <div class="identity-capture-label">
+
+              <span>
+                CAPTURA
+              </span>
+
               <strong id="identityCaptureState">
                 AGUARDANDO
               </strong>
+
             </div>
 
-            <div class="identity-progress">
 
-              <span
-                id="identityProgressPercent"
-              >
-                0%
-              </span>
+            <div class="identity-progress-area">
+
+              <div class="identity-progress-number">
+
+                <strong id="identityProgressPercent">
+                  0%
+                </strong>
+
+                <span>
+                  PREPARAÇÃO
+                </span>
+
+              </div>
+
 
               <div class="identity-progress-track">
                 <span
@@ -343,64 +398,86 @@
 
           </div>
 
-        </div>
+        </section>
 
 
         <section class="identity-guidance">
 
-          <div class="identity-guidance-label">
-            ORIENTAÇÃO DO SISTEMA
-          </div>
+          <div class="identity-guidance-line"></div>
 
-          <div
-            class="identity-guidance-command"
-            id="facialPreflightStepName"
-          >
-            PREPARE-SE
-          </div>
 
-          <div
-            class="identity-guidance-status"
-            id="facialPreflightStatus"
-          >
-            A preparar o reconhecimento.
-          </div>
+          <div class="identity-guidance-content">
 
-          <div class="identity-guidance-state">
-
-            <span
-              id="identityQualityValue"
-            >
-              —
+            <span class="identity-guidance-kicker">
+              ORIENTAÇÃO DO SISTEMA
             </span>
 
-            <div class="identity-quality-track">
-              <span
-                id="identityQualityBar"
-              ></span>
+
+            <h1
+              id="facialPreflightStepName"
+            >
+              PREPARE-SE
+            </h1>
+
+
+            <p
+              id="facialPreflightStatus"
+            >
+              A preparar o reconhecimento.
+            </p>
+
+
+            <div class="identity-quality">
+
+              <div class="identity-quality-top">
+
+                <span>
+                  QUALIDADE DA CAPTURA
+                </span>
+
+                <strong
+                  id="identityQualityValue"
+                >
+                  —
+                </strong>
+
+              </div>
+
+
+              <div class="identity-quality-track">
+
+                <span
+                  id="identityQualityBar"
+                ></span>
+
+              </div>
+
+
+              <small
+                id="identityQualityText"
+              >
+                Aguardando captura
+              </small>
+
             </div>
 
-            <small
-              id="identityQualityText"
+
+            <div
+              id="facialPreflightInstruction"
+              class="identity-hidden"
             >
-              Aguardando captura
-            </small>
+              Siga a orientação do sistema.
+            </div>
+
+
+            <span
+              id="identityCurrentNumber"
+              class="identity-hidden"
+            >
+              01
+            </span>
 
           </div>
-
-          <div
-            id="facialPreflightInstruction"
-            class="identity-hidden-instruction"
-          >
-            Siga a orientação de voz.
-          </div>
-
-          <span
-            id="identityCurrentNumber"
-            class="identity-hidden-number"
-          >
-            01
-          </span>
 
         </section>
 
@@ -409,15 +486,29 @@
 
       <footer class="identity-footer">
 
-        <span>
-          ANGOLA
-        </span>
+        <div class="identity-footer-left">
 
-        <div class="identity-footer-line"></div>
+          <span>
+            TA
+          </span>
 
-        <span>
-          PREPARAÇÃO DE VIAGEM
-        </span>
+          <strong>
+            IDENTIFICAÇÃO DO VIAJANTE
+          </strong>
+
+        </div>
+
+
+        <div class="identity-footer-center">
+          DOCUMENTO → IDENTIDADE → VIAGEM
+        </div>
+
+
+        <div class="identity-footer-right">
+          <span id="identityFooterStatus">
+            SISTEMA PRONTO
+          </span>
+        </div>
 
       </footer>
 
@@ -430,6 +521,7 @@
       >
         Iniciar
       </button>
+
 
       <button
         id="facialPreflightStop"
@@ -445,9 +537,12 @@
         class="identity-result"
         hidden
       ></section>
+
     `;
 
-    document.body.appendChild(overlay);
+    document.body.appendChild(
+      overlay
+    );
 
     bindEvents();
 
@@ -455,9 +550,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * EVENTOS
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function bindEvents() {
@@ -466,10 +561,6 @@
       closeIdentityCenter
     );
 
-    /*
-     * Mantemos os botões existentes por compatibilidade.
-     * O fluxo normal NÃO depende deles.
-     */
     $("facialPreflightStart")?.addEventListener(
       "click",
       startPreflight
@@ -482,60 +573,66 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * ABRIR
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
-  async function openIdentityCenter(client = null) {
+  async function openIdentityCenter(
+    client = null
+  ) {
     const target =
       normalizeClient(client) ||
       getClientFromSelection();
 
     if (!target) {
-      if (typeof window.showToast === "function") {
+      if (
+        typeof window.showToast ===
+        "function"
+      ) {
         window.showToast(
           "Selecione primeiro um viajante.",
           "error"
         );
       } else {
-        alert("Selecione primeiro um viajante.");
+        alert(
+          "Selecione primeiro um viajante."
+        );
       }
 
       return;
     }
 
-    selectedClient = target;
+    selectedClient =
+      target;
 
     createOverlay();
 
-    overlay.classList.remove("hidden");
-    overlay.classList.add("is-open");
+    overlay.classList.remove(
+      "hidden"
+    );
 
-    document.body.classList.add("identity-open");
+    requestAnimationFrame(() => {
+      overlay.classList.add(
+        "is-open"
+      );
+    });
+
+    document.body.classList.add(
+      "identity-open"
+    );
 
     updateClientIdentity();
 
     resetInterface();
 
-    /*
-     * IMPORTANTE:
-     *
-     * O reconhecimento começa imediatamente.
-     *
-     * openIdentityCenter() é chamado pelo clique do
-     * utilizador. O startPreflight() continua no mesmo
-     * fluxo de interação para permitir que o motor facial
-     * ative também o áudio orientador.
-     */
-
     await startPreflight();
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * FECHAR
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function closeIdentityCenter() {
@@ -544,7 +641,9 @@
     }
 
     try {
-      window.TravelFacialPreflight?.stop();
+      window
+        .TravelFacialPreflight
+        ?.stop();
     } catch (error) {
       console.warn(
         "[IdentityCenter] stop",
@@ -554,46 +653,58 @@
 
     running = false;
 
+    overlay.classList.remove(
+      "is-open"
+    );
+
+    window.setTimeout(() => {
+      overlay.classList.add(
+        "hidden"
+      );
+    }, 240);
+
+    document.body.classList.remove(
+      "identity-open"
+    );
+
     setCameraState(false);
-
-    overlay.classList.remove("is-open");
-    overlay.classList.add("hidden");
-
-    document.body.classList.remove("identity-open");
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * CLIENTE
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function updateClientIdentity() {
-    if (!selectedClient) {
+    const name =
+      $("identityClientName");
+
+    if (!name) {
       return;
     }
 
-    const name = $("identityClientName");
-
-    if (name) {
-      name.textContent =
-        selectedClient.name;
-    }
+    name.textContent =
+      selectedClient?.name ||
+      "Viajante";
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * RESET
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function resetInterface() {
     completed = false;
     saving = false;
 
-    completedPositions.clear();
-
     activePositionIndex = 0;
+    lastFrameState = "waiting";
+
+    setFrameState(
+      "waiting"
+    );
 
     setCameraState(false);
 
@@ -602,8 +713,8 @@
     );
 
     setInstruction(
-      "POSICIONE O ROSTO",
-      "Siga a orientação de voz do sistema."
+      "PREPARE-SE",
+      "Siga a orientação do sistema."
     );
 
     setStatus(
@@ -611,13 +722,18 @@
     );
 
     updateProgress({
-      current: 0,
+      completed: 0,
       total: 10
     });
 
     updateQuality(null);
 
-    const result = $("identityResult");
+    setFooterStatus(
+      "SISTEMA PRONTO"
+    );
+
+    const result =
+      $("identityResult");
 
     if (result) {
       result.hidden = true;
@@ -626,9 +742,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * ESTADO DA CÂMERA
-   * ----------------------------------------------------------
+   * ==========================================================
+   * CÂMERA
+   * ==========================================================
    */
 
   function setCameraState(active) {
@@ -650,6 +766,12 @@
           ? "CÂMERA ATIVA"
           : "PREPARANDO CÂMERA";
     }
+
+    if (active) {
+      setFooterStatus(
+        "CAPTURA ATIVA"
+      );
+    }
   }
 
   function setCaptureState(state) {
@@ -662,10 +784,114 @@
     }
   }
 
+  function setFooterStatus(
+    text
+  ) {
+    const element =
+      $("identityFooterStatus");
+
+    if (element) {
+      element.textContent =
+        text || "";
+    }
+  }
+
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
+   * ENQUADRAMENTO
+   * ==========================================================
+   */
+
+  function setFrameState(
+    state
+  ) {
+    const frame =
+      $("identityFaceFrame");
+
+    if (!frame) {
+      return;
+    }
+
+    const normalized =
+      state || "waiting";
+
+    frame.classList.remove(
+      "state-waiting",
+      "state-danger",
+      "state-warning",
+      "state-ready",
+      "state-captured"
+    );
+
+    frame.classList.add(
+      `state-${normalized}`
+    );
+
+    lastFrameState =
+      normalized;
+
+    if (
+      normalized ===
+      "danger"
+    ) {
+      setCameraMessage(
+        "AJUSTE O ROSTO"
+      );
+    }
+
+    if (
+      normalized ===
+      "warning"
+    ) {
+      setCameraMessage(
+        "CENTRALIZE O ROSTO"
+      );
+    }
+
+    if (
+      normalized ===
+      "ready"
+    ) {
+      setCameraMessage(
+        "MANTENHA A POSIÇÃO"
+      );
+    }
+
+    if (
+      normalized ===
+      "captured"
+    ) {
+      setCameraMessage(
+        "CAPTURADO"
+      );
+    }
+
+    if (
+      normalized ===
+      "waiting"
+    ) {
+      setCameraMessage(
+        "POSICIONE O ROSTO"
+      );
+    }
+  }
+
+  function setCameraMessage(
+    message
+  ) {
+    const element =
+      $("identityCameraMessage");
+
+    if (element) {
+      element.textContent =
+        message || "";
+    }
+  }
+
+  /*
+   * ==========================================================
    * ORIENTAÇÃO
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function setInstruction(
@@ -690,46 +916,43 @@
     }
   }
 
-  /*
-   * ----------------------------------------------------------
-   * STATUS
-   * ----------------------------------------------------------
-   */
-
-  function setStatus(message) {
-    const status =
+  function setStatus(
+    message
+  ) {
+    const element =
       $("facialPreflightStatus");
 
-    if (status) {
-      status.textContent =
+    if (element) {
+      element.textContent =
         message || "";
     }
-
-    /*
-     * Não substituímos a orientação principal por
-     * mensagens técnicas.
-     *
-     * O motor continua enviando status para o painel
-     * inferior.
-     */
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * PROGRESSO
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
-  function updateProgress(progress) {
+  function updateProgress(
+    progress
+  ) {
     if (!progress) {
       return;
     }
 
     const current =
-      Number(progress.current || 0);
+      Number(
+        progress.completed ??
+        progress.current ??
+        0
+      );
 
     const total =
-      Number(progress.total || 10);
+      Number(
+        progress.total ||
+        10
+      );
 
     const safeCurrent =
       Math.max(
@@ -742,7 +965,10 @@
 
     const percent =
       total > 0
-        ? (safeCurrent / total) * 100
+        ? (
+            safeCurrent /
+            total
+          ) * 100
         : 0;
 
     const bar =
@@ -772,33 +998,52 @@
         );
 
       if (index >= 0) {
-        activePositionIndex = index;
+        activePositionIndex =
+          index;
       }
+    }
+
+    if (
+      Number.isFinite(
+        Number(
+          progress.currentPositionIndex
+        )
+      )
+    ) {
+      activePositionIndex =
+        Number(
+          progress.currentPositionIndex
+        );
     }
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * QUALIDADE
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
-  function updateQuality(value) {
-    const numeric =
-      Number(value);
+  function updateQuality(
+    value
+  ) {
+    const valueElement =
+      $("identityQualityValue");
 
-    if (!Number.isFinite(numeric)) {
-      const valueElement =
-        $("identityQualityValue");
+    const textElement =
+      $("identityQualityText");
 
-      const textElement =
-        $("identityQualityText");
+    const bar =
+      $("identityQualityBar");
 
-      const bar =
-        $("identityQualityBar");
-
+    if (
+      value == null ||
+      !Number.isFinite(
+        Number(value)
+      )
+    ) {
       if (valueElement) {
-        valueElement.textContent = "—";
+        valueElement.textContent =
+          "—";
       }
 
       if (textElement) {
@@ -807,11 +1052,15 @@
       }
 
       if (bar) {
-        bar.style.width = "0%";
+        bar.style.width =
+          "0%";
       }
 
       return;
     }
+
+    const numeric =
+      Number(value);
 
     const percent =
       Math.max(
@@ -826,15 +1075,6 @@
         )
       );
 
-    const valueElement =
-      $("identityQualityValue");
-
-    const textElement =
-      $("identityQualityText");
-
-    const bar =
-      $("identityQualityBar");
-
     if (valueElement) {
       valueElement.textContent =
         `${percent}%`;
@@ -842,11 +1082,13 @@
 
     if (textElement) {
       textElement.textContent =
-        percent >= 75
-          ? "Condições adequadas"
-          : percent >= 50
-            ? "Ajuste o enquadramento"
-            : "A procurar condições adequadas";
+        percent >= 80
+          ? "Condições excelentes"
+          : percent >= 65
+            ? "Condições adequadas"
+            : percent >= 45
+              ? "Ajuste o enquadramento"
+              : "A procurar condições adequadas";
     }
 
     if (bar) {
@@ -856,9 +1098,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * INDICADORES
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function indicator(
@@ -868,24 +1110,26 @@
     okText,
     badText
   ) {
-    const indicator =
+    const indicatorElement =
       $(indicatorId);
 
     const text =
       $(textId);
 
-    if (!indicator) {
+    if (!indicatorElement) {
       return;
     }
 
-    indicator.classList.remove(
+    indicatorElement.classList.remove(
       "ok",
       "bad",
       "waiting"
     );
 
     if (state === true) {
-      indicator.classList.add("ok");
+      indicatorElement.classList.add(
+        "ok"
+      );
 
       if (text) {
         text.textContent =
@@ -896,7 +1140,9 @@
     }
 
     if (state === false) {
-      indicator.classList.add("bad");
+      indicatorElement.classList.add(
+        "bad"
+      );
 
       if (text) {
         text.textContent =
@@ -906,10 +1152,14 @@
       return;
     }
 
-    indicator.classList.add("waiting");
+    indicatorElement.classList.add(
+      "waiting"
+    );
   }
 
-  function setAnalysis(analysis) {
+  function setAnalysis(
+    analysis
+  ) {
     if (!analysis) {
       indicator(
         "identityFaceIndicator",
@@ -923,8 +1173,8 @@
         "identityLightIndicator",
         "identityLightText",
         null,
-        "ILUMINAÇÃO OK",
-        "ILUMINAÇÃO"
+        "LUZ OK",
+        "LUZ"
       );
 
       indicator(
@@ -935,69 +1185,125 @@
         "ENQUADRAMENTO"
       );
 
+      setFrameState(
+        "waiting"
+      );
+
       return;
     }
+
+    const faceDetected =
+      analysis.faceDetected ===
+      true ||
+      Boolean(
+        analysis.detectionScore ||
+        analysis.detection
+      );
 
     indicator(
       "identityFaceIndicator",
       "identityFaceText",
-      analysis.faceDetected === true,
+      faceDetected,
       "ROSTO DETECTADO",
       "ROSTO NÃO DETECTADO"
     );
 
     const brightness =
       Number(
-        analysis.quality?.brightnessScore ||
-        analysis.brightnessScore ||
+        analysis.brightnessScore ??
+        analysis.quality?.brightnessScore ??
         0
       );
+
+    const lightOkay =
+      brightness >=
+      0.55;
 
     indicator(
       "identityLightIndicator",
       "identityLightText",
-      brightness >= 0.55,
-      "ILUMINAÇÃO OK",
-      "MELHORE A ILUMINAÇÃO"
+      lightOkay,
+      "LUZ OK",
+      "MELHORE A LUZ"
     );
 
-    const area =
+    const sizeScore =
       Number(
-        analysis.faceArea ||
-        analysis.boundingBox?.area ||
+        analysis.faceSizeScore ??
+        analysis.quality?.faceSizeScore ??
         0
       );
 
-    const framed =
-      area === 0 ||
-      (
-        area >= 0.08 &&
-        area <= 0.72
+    const positionScore =
+      Number(
+        analysis.score ??
+        0
       );
+
+    const scoreOkay =
+      positionScore >=
+      0.66;
+
+    let frameState =
+      "danger";
+
+    if (!faceDetected) {
+      frameState =
+        "danger";
+    } else if (
+      !lightOkay ||
+      sizeScore < 0.55
+    ) {
+      frameState =
+        "warning";
+    } else if (
+      scoreOkay
+    ) {
+      frameState =
+        "ready";
+    } else {
+      frameState =
+        "warning";
+    }
+
+    setFrameState(
+      frameState
+    );
 
     indicator(
       "identityFrameIndicator",
       "identityFrameText",
-      framed,
+      frameState ===
+        "ready",
       "ENQUADRAMENTO OK",
-      "AJUSTE O ROSTO"
+      frameState ===
+        "danger"
+        ? "AJUSTE O ROSTO"
+        : "CENTRALIZE"
     );
 
+    const qualityScore =
+      Number(
+        analysis.score ??
+        analysis.quality?.score ??
+        0
+      );
+
     if (
-      analysis.quality?.score != null
+      Number.isFinite(
+        qualityScore
+      )
     ) {
       updateQuality(
-        Number(
-          analysis.quality.score
-        )
+        qualityScore
       );
     }
   }
 
   /*
-   * ----------------------------------------------------------
-   * INICIAR
-   * ----------------------------------------------------------
+   * ==========================================================
+   * INICIAR MOTOR
+   * ==========================================================
    */
 
   async function startPreflight() {
@@ -1025,11 +1331,17 @@
       "INICIALIZANDO"
     );
 
-    setCameraState(false);
+    setCameraState(
+      false
+    );
+
+    setFrameState(
+      "waiting"
+    );
 
     setInstruction(
       "PREPARE-SE",
-      "Siga apenas a orientação de voz."
+      "Siga a orientação do sistema."
     );
 
     try {
@@ -1042,121 +1354,109 @@
         );
       }
 
-      /*
-       * O motor já contém:
-       * - FaceAPI;
-       * - modelos locais;
-       * - câmera;
-       * - áudio;
-       * - sequência;
-       * - análise;
-       * - backend.
-       *
-       * Não duplicamos nenhuma dessas funções aqui.
-       */
+      const callbacks = {
+        onStatus:
+          payload => {
+            handleEngineStatus(
+              payload
+            );
+          },
+
+        onProgress:
+          payload => {
+            updateProgress(
+              payload
+            );
+
+            if (
+              payload?.evaluation
+            ) {
+              setAnalysis(
+                payload.evaluation
+              );
+            }
+          },
+
+        onPosition:
+          payload => {
+            handlePosition(
+              payload
+            );
+          },
+
+        onComplete:
+          async result => {
+            await handleComplete(
+              result
+            );
+          },
+
+        onError:
+          error => {
+            handleEngineError(
+              error
+            );
+          }
+      };
 
       if (
         typeof engine.initialize ===
         "function"
       ) {
         await engine.initialize({
-          videoElement: video,
-          clientId: selectedClient.id,
+          videoElement:
+            video,
 
-          onStatus: payload => {
-            handleEngineStatus(
-              payload
-            );
-          },
+          clientId:
+            selectedClient.id,
 
-          onProgress: payload => {
-            updateProgress(
-              payload
-            );
-          },
-
-          onPosition: payload => {
-            handlePosition(
-              payload
-            );
-          },
-
-          onComplete: async result => {
-            await handleComplete(
-              result
-            );
-          },
-
-          onError: error => {
-            handleEngineError(
-              error
-            );
-          }
+          ...callbacks
         });
       }
-
-      /*
-       * start() é chamado dentro do fluxo do clique
-       * que abriu esta tela.
-       *
-       * Portanto o motor consegue iniciar também o
-       * speechSynthesis sem uma segunda ação.
-       */
 
       await engine.start({
         clientId:
           selectedClient.id,
 
-        videoElement: video,
+        videoElement:
+          video,
 
-        onStatus: payload => {
-          handleEngineStatus(
-            payload
-          );
-        },
-
-        onProgress: payload => {
-          updateProgress(
-            payload
-          );
-        },
-
-        onPosition: payload => {
-          handlePosition(
-            payload
-          );
-        },
-
-        onComplete: async result => {
-          await handleComplete(
-            result
-          );
-        },
-
-        onError: error => {
-          handleEngineError(
-            error
-          );
-        }
+        ...callbacks
       });
 
-      setCameraState(true);
+      setCameraState(
+        true
+      );
 
       setCaptureState(
         "CAPTURA ATIVA"
       );
 
+      setFrameState(
+        "waiting"
+      );
+
+      setFooterStatus(
+        "CAPTURA ATIVA"
+      );
+
       setStatus(
-        "Siga a orientação de voz."
+        "Aguardando o seu posicionamento."
       );
 
     } catch (error) {
       running = false;
 
-      setCameraState(false);
+      setCameraState(
+        false
+      );
 
       setCaptureState(
         "CÂMERA NÃO INICIADA"
+      );
+
+      setFooterStatus(
+        "ATENÇÃO"
       );
 
       handleEngineError(
@@ -1166,18 +1466,21 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * STATUS DO MOTOR
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
-  function handleEngineStatus(payload) {
+  function handleEngineStatus(
+    payload
+  ) {
     if (!payload) {
       return;
     }
 
     const message =
-      typeof payload === "string"
+      typeof payload ===
+      "string"
         ? payload
         : payload.message;
 
@@ -1189,11 +1492,6 @@
       String(message)
         .toLowerCase();
 
-    /*
-     * Status técnicos não substituem a orientação
-     * principal.
-     */
-
     if (
       normalized.includes(
         "câmera ativa"
@@ -1202,7 +1500,9 @@
         "camera ativa"
       )
     ) {
-      setCameraState(true);
+      setCameraState(
+        true
+      );
 
       setCaptureState(
         "CAPTURA ATIVA"
@@ -1216,10 +1516,16 @@
         "posicione o rosto"
       )
     ) {
-      setCameraState(true);
+      setCameraState(
+        true
+      );
 
       setCaptureState(
         "AGUARDANDO ROSTO"
+      );
+
+      setFrameState(
+        "danger"
       );
 
       setStatus(
@@ -1234,11 +1540,44 @@
         "uma pessoa"
       )
     ) {
+      setFrameState(
+        "danger"
+      );
+
       setStatus(
         "Mantenha apenas o viajante diante da câmera."
       );
 
       return;
+    }
+
+    if (
+      normalized.includes(
+        "perfeito"
+      )
+    ) {
+      setFrameState(
+        "ready"
+      );
+
+      setStatus(
+        "Mantenha a posição."
+      );
+
+      return;
+    }
+
+    if (
+      normalized.includes(
+        "iluminação"
+      ) ||
+      normalized.includes(
+        "iluminacao"
+      )
+    ) {
+      setFrameState(
+        "warning"
+      );
     }
 
     setStatus(
@@ -1247,12 +1586,14 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * POSIÇÃO
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
-  function handlePosition(payload) {
+  function handlePosition(
+    payload
+  ) {
     if (!payload) {
       return;
     }
@@ -1272,9 +1613,9 @@
         POSITIONS.findIndex(
           position =>
             position.id ===
-            payload.position ||
-            position.title ===
-            payload.position
+              payload.position?.id ||
+            position.id ===
+              payload.position
         );
     }
 
@@ -1295,12 +1636,45 @@
       return;
     }
 
-    /*
-     * Apenas uma instrução curta.
-     *
-     * O texto completo fica escondido e serve apenas
-     * como compatibilidade/apoio ao motor.
-     */
+    if (
+      payload.completed ===
+      true
+    ) {
+      setFrameState(
+        "captured"
+      );
+
+      setCaptureState(
+        "CAPTURADO"
+      );
+
+      setFooterStatus(
+        "POSIÇÃO CAPTURADA"
+      );
+
+      window.setTimeout(
+        () => {
+          if (
+            running
+          ) {
+            setFrameState(
+              "waiting"
+            );
+
+            setCaptureState(
+              "A CAPTURAR"
+            );
+
+            setFooterStatus(
+              "CAPTURA ATIVA"
+            );
+          }
+        },
+        420
+      );
+
+      return;
+    }
 
     setInstruction(
       position.title,
@@ -1311,23 +1685,39 @@
       "A CAPTURAR"
     );
 
+    setFrameState(
+      "waiting"
+    );
+
     setStatus(
-      "Siga a orientação de voz."
+      "Aguardando o posicionamento."
     );
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * ERRO
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
-  function handleEngineError(error) {
+  function handleEngineError(
+    error
+  ) {
     running = false;
 
-    setCameraState(false);
+    setCameraState(
+      false
+    );
+
+    setFrameState(
+      "danger"
+    );
 
     setCaptureState(
+      "ATENÇÃO"
+    );
+
+    setFooterStatus(
       "ATENÇÃO"
     );
 
@@ -1338,14 +1728,16 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * PARAR
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function stopPreflight() {
     try {
-      window.TravelFacialPreflight?.stop();
+      window
+        .TravelFacialPreflight
+        ?.stop();
     } catch (error) {
       console.warn(
         "[IdentityCenter] stop",
@@ -1355,9 +1747,19 @@
 
     running = false;
 
-    setCameraState(false);
+    setCameraState(
+      false
+    );
+
+    setFrameState(
+      "waiting"
+    );
 
     setCaptureState(
+      "INTERROMPIDO"
+    );
+
+    setFooterStatus(
       "INTERROMPIDO"
     );
 
@@ -1367,20 +1769,31 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * CONCLUSÃO
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
-  async function handleComplete(result) {
+  async function handleComplete(
+    result
+  ) {
     running = false;
 
     completed =
       Boolean(
-        result?.passed
+        result?.passed ??
+        result?.success
       );
 
-    setCameraState(false);
+    setCameraState(
+      false
+    );
+
+    setFrameState(
+      completed
+        ? "captured"
+        : "danger"
+    );
 
     setCaptureState(
       completed
@@ -1388,8 +1801,18 @@
         : "CAPTURA INCOMPLETA"
     );
 
+    setFooterStatus(
+      completed
+        ? "IDENTIDADE CAPTURADA"
+        : "REPETIR CAPTURA"
+    );
+
     updateProgress({
-      current: completed ? 10 : 0,
+      completed:
+        completed
+          ? 10
+          : 0,
+
       total: 10
     });
 
@@ -1405,7 +1828,7 @@
     } else {
       setInstruction(
         "REPITA A CAPTURA",
-        "Siga novamente a orientação de voz."
+        "Siga novamente a orientação do sistema."
       );
 
       setStatus(
@@ -1419,12 +1842,14 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * GUARDAR RESULTADO
-   * ----------------------------------------------------------
+   * ==========================================================
+   * GUARDAR
+   * ==========================================================
    */
 
-  async function saveResult(result) {
+  async function saveResult(
+    result
+  ) {
     const applicationForm =
       $("applicationForm");
 
@@ -1448,7 +1873,13 @@
       null
     );
 
-    if (!result?.passed) {
+    const passed =
+      Boolean(
+        result?.passed ??
+        result?.success
+      );
+
+    if (!passed) {
       if (applicationForm) {
         applicationForm.dataset
           .facialPreflight =
@@ -1473,11 +1904,8 @@
         );
       }
 
-      let localFaceMatch = null;
-
-      /*
-       * Comparação facial com a fotografia do passaporte.
-       */
+      let localFaceMatch =
+        null;
 
       if (
         window.TravelLocalFaceMatch &&
@@ -1491,6 +1919,10 @@
 
         setCaptureState(
           "COMPARANDO"
+        );
+
+        setFooterStatus(
+          "A COMPARAR"
         );
 
         setStatus(
@@ -1521,8 +1953,16 @@
           localFaceMatch.matched !==
           true
         ) {
+          setFrameState(
+            "danger"
+          );
+
           setCaptureState(
             "NÃO COMPATÍVEL"
+          );
+
+          setFooterStatus(
+            "NÃO CONFIRMADA"
           );
 
           setInstruction(
@@ -1540,6 +1980,7 @@
             {
               ...result,
               passed: false,
+              success: false,
               localFaceMatch
             },
             null
@@ -1577,12 +2018,24 @@
           "passed";
       }
 
+      setFrameState(
+        "captured"
+      );
+
       setCaptureState(
         "IDENTIDADE CONFIRMADA"
       );
 
+      setFooterStatus(
+        "IDENTIDADE CONFIRMADA"
+      );
+
       showResult(
-        result,
+        {
+          ...result,
+          passed: true,
+          success: true
+        },
         data
       );
 
@@ -1593,7 +2046,15 @@
           "failed";
       }
 
+      setFrameState(
+        "danger"
+      );
+
       setCaptureState(
+        "NÃO REGISTADA"
+      );
+
+      setFooterStatus(
         "NÃO REGISTADA"
       );
 
@@ -1608,9 +2069,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * RESULTADO
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function showResult(
@@ -1626,22 +2087,17 @@
 
     const passed =
       Boolean(
-        result?.passed
+        result?.passed ??
+        result?.success
       );
 
     const score =
       Math.round(
         Number(
-          result?.score || 0
+          result?.score ||
+          0
         ) * 100
       );
-
-    const issues =
-      Array.isArray(
-        result?.issues
-      )
-        ? result.issues
-        : [];
 
     box.hidden = false;
 
@@ -1680,7 +2136,7 @@
           <p>
             ${
               passed
-                ? "A identidade foi preparada para a próxima etapa da viagem."
+                ? "A identidade foi preparada para a próxima etapa."
                 : "A captura não reuniu as condições necessárias."
             }
           </p>
@@ -1691,22 +2147,6 @@
                 <div class="identity-result-score">
                   <strong>${score}%</strong>
                   <span>resultado da análise</span>
-                </div>
-              `
-              : ""
-          }
-
-          ${
-            issues.length
-              ? `
-                <div class="identity-result-issues">
-                  ${issues
-                    .slice(0, 5)
-                    .map(
-                      issue =>
-                        `<span>${escapeHtml(issue)}</span>`
-                    )
-                    .join("")}
                 </div>
               `
               : ""
@@ -1758,6 +2198,7 @@
               });
           }
         );
+
     } else {
       $("identityRetryButton")
         ?.addEventListener(
@@ -1782,9 +2223,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
-   * BOTÃO EXTERNO
-   * ----------------------------------------------------------
+   * ==========================================================
+   * BOTÕES EXTERNOS
+   * ==========================================================
    */
 
   function attachLaunchButtons() {
@@ -1805,7 +2246,8 @@
         const clientId =
           button.dataset.clientId;
 
-        let client = null;
+        let client =
+          null;
 
         if (
           clientId &&
@@ -1839,9 +2281,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * BOTÃO DO DASHBOARD
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function createDashboardButton() {
@@ -1852,7 +2294,9 @@
       return;
     }
 
-    if ($("identityLaunchButton")) {
+    if (
+      $("identityLaunchButton")
+    ) {
       return;
     }
 
@@ -1880,25 +2324,32 @@
       "identity-dashboard-launch";
 
     button.innerHTML = `
-      <span class="identity-launch-icon">
-        <span></span>
+      <span class="identity-launch-mark">
+
+        <span class="identity-launch-corner tl"></span>
+        <span class="identity-launch-corner tr"></span>
+        <span class="identity-launch-corner bl"></span>
+        <span class="identity-launch-corner br"></span>
+
+        <span class="identity-launch-face"></span>
+
       </span>
 
       <span class="identity-launch-copy">
 
         <strong>
-          Reconhecimento Facial
+          Preparar identidade
         </strong>
 
         <small>
-          Preparar identidade
+          Captura facial do viajante
         </small>
 
       </span>
 
-      <b>
+      <span class="identity-launch-arrow">
         →
-      </b>
+      </span>
     `;
 
     button.addEventListener(
@@ -1906,11 +2357,6 @@
       event => {
         event.preventDefault();
 
-        /*
-         * O clique já é a entrada na captura.
-         *
-         * Não existe um segundo "Iniciar".
-         */
         openIdentityCenter();
       }
     );
@@ -1921,9 +2367,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * SELEÇÃO
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function attachClientSelection() {
@@ -1935,21 +2381,9 @@
 
         if (
           id ===
-          "applicationClient"
-        ) {
-          selectedClient =
-            getClientFromSelection();
-        }
-
-        if (
+          "applicationClient" ||
           id ===
-          "identityClient"
-        ) {
-          selectedClient =
-            getClientFromSelection();
-        }
-
-        if (
+          "identityClient" ||
           id ===
           "passportClientSelect"
         ) {
@@ -1961,9 +2395,9 @@
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * INICIALIZAÇÃO
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   function initialize() {
@@ -1971,16 +2405,16 @@
 
     attachClientSelection();
 
-    setTimeout(
+    window.setTimeout(
       createDashboardButton,
       600
     );
   }
 
   /*
-   * ----------------------------------------------------------
+   * ==========================================================
    * API
-   * ----------------------------------------------------------
+   * ==========================================================
    */
 
   window.TravelIdentityCenter = {
