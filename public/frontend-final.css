@@ -1135,44 +1135,33 @@ button {
    ============================================================ */
 
 .stats-grid {
-
   display: grid;
-
-  grid-template-columns:
-    repeat(4, 1fr);
-
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
-
-  margin:
-    16px 0 23px;
-
-  padding: 6px;
-
-  border:
-    1px solid var(--ta-line);
-
-  border-radius:
-    var(--ta-radius-lg);
-
+  margin: 16px 0 23px;
+  padding: 0;
+  border: 1px solid var(--ta-line);
+  border-radius: var(--ta-radius-lg);
+  overflow: hidden;
   background:
-    rgba(7, 18, 28, .72);
+    linear-gradient(
+      145deg,
+      rgba(9, 23, 34, .98),
+      rgba(5, 14, 22, .99)
+    );
+  box-shadow: var(--ta-shadow-soft);
 }
 
 .stat-card {
-
   min-height: 72px;
-
   display: flex;
-
   align-items: center;
-
   gap: 12px;
-
-  padding:
-    11px 15px;
-
-  border-right:
-    1px solid var(--ta-line-soft);
+  padding: 13px 16px;
+  border: 0;
+  border-right: 1px solid var(--ta-line-soft);
+  background: transparent !important;
+  color: var(--ta-text);
 }
 
 .stat-card:last-child {
@@ -1180,32 +1169,21 @@ button {
 }
 
 .stat-index {
-
   width: 29px;
   height: 29px;
-
   display: grid;
-
   place-items: center;
-
   flex: 0 0 auto;
 
-  border:
-    1px solid var(--ta-line);
-
+  border: 1px solid var(--ta-line);
   border-radius: 8px;
 
-  color:
-    var(--ta-muted);
+  color: var(--ta-muted);
+  background: rgba(57, 186, 255, .025) !important;
 
-  background:
-    rgba(255, 255, 255, .018);
-
-  font-family:
-    "JetBrains Mono",
-    monospace;
-
-  font-size: 6px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9px;
+  line-height: 1;
 }
 
 .stat-content {
@@ -1213,27 +1191,19 @@ button {
 }
 
 .stat-content span {
-
   display: block;
-
-  color:
-    var(--ta-muted);
-
-  font-size: 6px;
-
+  color: var(--ta-muted);
+  font-size: 8px;
   font-weight: 900;
-
   letter-spacing: .12em;
+  line-height: 1.2;
 }
 
 .stat-content strong {
-
   display: block;
+  margin-top: 4px;
 
-  margin-top: 3px;
-
-  color:
-    var(--ta-text);
+  color: var(--ta-text);
 
   font-family:
     "Plus Jakarta Sans",
@@ -1241,23 +1211,16 @@ button {
     sans-serif;
 
   font-size: 17px;
-
   line-height: 1;
 }
 
 .stat-content small {
-
   display: block;
-
-  margin-top: 4px;
-
-  color:
-    var(--ta-muted-2);
-
-  font-size: 7px;
+  margin-top: 5px;
+  color: var(--ta-muted-2);
+  font-size: 8px;
+  line-height: 1.25;
 }
-
-
 /* ============================================================
    10. LAYOUT PRINCIPAL
    ============================================================ */
