@@ -1,17 +1,32 @@
 /* ============================================================
    TRAVEL AUTOMATION
-   FINAL PRODUCT VISUAL LAYER
+   FRONTEND FINAL — VISUAL SYSTEM
    ============================================================
 
-   Esta camada é propositalmente colocada no FINAL do arquivo.
-   Não altera IDs, JS, OCR, câmera, áudio ou backend.
+   Este arquivo é a ÚNICA camada final de produto.
 
-   Objetivos:
-   - unificar identidade visual
-   - eliminar conflitos tipográficos
-   - melhorar hierarquia
-   - transformar a interface em produto final
-   - preservar o HTML/JS existente
+   PRINCÍPIOS
+   - não altera HTML
+   - não altera IDs
+   - não altera JS
+   - não altera OCR
+   - não altera câmera
+   - não altera áudio
+   - não cria uma nova arquitetura visual
+   - elimina aparência genérica de SaaS/dashboard
+   - mantém os seletores existentes do frontend
+   - cria uma linguagem própria para preparação de viagens
+
+   FLUXO VISUAL
+
+   DOCUMENTO
+        ↓
+   IDENTIDADE
+        ↓
+   VIAGEM
+        ↓
+   PROCESSAMENTO
+
    ============================================================ */
 
 
@@ -20,72 +35,92 @@
    ============================================================ */
 
 :root {
-  --ta-final-bg: #06101b;
-  --ta-final-bg-2: #081522;
-  --ta-final-surface: #0c1825;
-  --ta-final-surface-2: #101f2e;
-  --ta-final-surface-3: #132536;
+  --ta-bg: #050c13;
+  --ta-bg-2: #07131e;
+  --ta-surface: #0a1825;
+  --ta-surface-2: #0d1d2b;
+  --ta-surface-3: #112536;
 
-  --ta-final-border: rgba(148, 190, 220, .13);
-  --ta-final-border-strong: rgba(74, 181, 255, .25);
+  --ta-line: rgba(150, 194, 221, .12);
+  --ta-line-soft: rgba(150, 194, 221, .075);
+  --ta-line-strong: rgba(52, 185, 255, .28);
 
-  --ta-final-text: #f5f8fb;
-  --ta-final-text-soft: #c5d1dc;
-  --ta-final-muted: #7f92a4;
-  --ta-final-muted-2: #627487;
+  --ta-text: #f4f8fb;
+  --ta-text-soft: #c4d1db;
+  --ta-muted: #8094a5;
+  --ta-muted-2: #5f7384;
 
-  --ta-final-blue: #32b8ff;
-  --ta-final-blue-2: #087dd1;
-  --ta-final-cyan: #49d9ee;
+  --ta-blue: #36baff;
+  --ta-cyan: #55d9ed;
+  --ta-green: #3bd994;
+  --ta-orange: #ffb453;
+  --ta-red: #ff6872;
 
-  --ta-final-green: #35d991;
-  --ta-final-orange: #ffb04a;
-  --ta-final-red: #ff6470;
+  --ta-radius-xl: 28px;
+  --ta-radius-lg: 21px;
+  --ta-radius-md: 16px;
+  --ta-radius-sm: 11px;
 
-  --ta-final-shadow:
-    0 24px 70px rgba(0, 0, 0, .28);
+  --ta-shadow:
+    0 30px 90px rgba(0, 0, 0, .24);
 
-  --ta-final-shadow-soft:
-    0 14px 40px rgba(0, 0, 0, .18);
+  --ta-shadow-soft:
+    0 15px 45px rgba(0, 0, 0, .16);
 
-  --ta-final-radius: 22px;
-  --ta-final-radius-sm: 14px;
-
-  --ta-final-ease:
+  --ta-ease:
     cubic-bezier(.22, .61, .36, 1);
 }
 
 
 /* ============================================================
-   02. GLOBAL PRODUCT SURFACE
+   02. BASE
    ============================================================ */
 
 html {
-  background: var(--ta-final-bg);
+  background: var(--ta-bg);
 }
 
 body {
   min-height: 100vh;
 
-  color: var(--ta-final-text);
+  color: var(--ta-text);
 
   background:
     radial-gradient(
-      circle at 82% 5%,
-      rgba(50, 184, 255, .10),
-      transparent 26%
+      circle at 82% 3%,
+      rgba(54, 186, 255, .085),
+      transparent 27%
     ),
     radial-gradient(
-      circle at 10% 42%,
-      rgba(73, 217, 238, .055),
-      transparent 24%
+      circle at 8% 48%,
+      rgba(85, 217, 237, .035),
+      transparent 25%
     ),
     linear-gradient(
       145deg,
-      #050c14 0%,
-      #07121d 45%,
-      #091724 100%
+      #040a11 0%,
+      #07121d 48%,
+      #091825 100%
     );
+
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  color: #04101a;
+  background: var(--ta-cyan);
 }
 
 
@@ -100,20 +135,20 @@ body {
 .background-sky {
   background:
     radial-gradient(
-      circle at 78% 8%,
-      rgba(50, 184, 255, .13),
-      transparent 25%
+      circle at 80% 7%,
+      rgba(54, 186, 255, .10),
+      transparent 28%
     ),
     radial-gradient(
-      circle at 12% 74%,
-      rgba(73, 217, 238, .055),
-      transparent 27%
+      circle at 13% 75%,
+      rgba(85, 217, 237, .035),
+      transparent 28%
     ),
     linear-gradient(
       145deg,
-      #050c14,
+      #040a11,
       #07131f 55%,
-      #091724
+      #091825
     );
 }
 
@@ -121,26 +156,26 @@ body {
   background:
     linear-gradient(
       180deg,
-      rgba(3, 10, 17, .12),
-      rgba(3, 10, 17, .45)
+      rgba(3, 9, 15, .10),
+      rgba(3, 9, 15, .48)
     );
 }
 
 .background-grid {
-  opacity: .12;
+  opacity: .075;
 
   background-image:
     linear-gradient(
-      rgba(73, 180, 230, .12) 1px,
+      rgba(82, 167, 207, .11) 1px,
       transparent 1px
     ),
     linear-gradient(
       90deg,
-      rgba(73, 180, 230, .12) 1px,
+      rgba(82, 167, 207, .11) 1px,
       transparent 1px
     );
 
-  background-size: 54px 54px;
+  background-size: 58px 58px;
 
   mask-image:
     linear-gradient(
@@ -151,7 +186,7 @@ body {
 }
 
 .background-airplane {
-  opacity: .035;
+  opacity: .018;
 }
 
 
@@ -164,62 +199,96 @@ body {
   top: 0;
   z-index: 100;
 
-  min-height: 76px;
+  min-height: 72px;
 
   border-bottom:
-    1px solid rgba(148, 190, 220, .10);
+    1px solid var(--ta-line-soft);
 
   background:
-    rgba(5, 12, 20, .78);
+    rgba(4, 11, 18, .82);
 
   box-shadow:
-    0 10px 40px rgba(0, 0, 0, .12);
+    0 12px 38px rgba(0, 0, 0, .12);
 
   backdrop-filter: blur(22px);
   -webkit-backdrop-filter: blur(22px);
 }
 
 .topbar-brand {
-  gap: 13px;
+  gap: 12px;
 }
 
 .brand-mark.small {
+  position: relative;
+
   width: 38px;
   height: 38px;
 
   border:
-    1px solid rgba(50, 184, 255, .30);
+    1px solid rgba(54, 186, 255, .27);
 
   border-radius: 12px;
 
   background:
     linear-gradient(
       145deg,
-      rgba(50, 184, 255, .20),
-      rgba(8, 125, 209, .08)
+      rgba(54, 186, 255, .16),
+      rgba(54, 186, 255, .035)
     );
 
-  color: var(--ta-final-blue);
+  color: var(--ta-blue);
 
   box-shadow:
-    0 0 30px rgba(50, 184, 255, .08);
+    0 0 28px rgba(54, 186, 255, .07);
+}
+
+.brand-mark.small::before,
+.brand-mark.small::after {
+  content: "";
+
+  position: absolute;
+
+  background: currentColor;
+}
+
+.brand-mark.small::before {
+  width: 15px;
+  height: 1px;
+
+  left: 11px;
+  top: 18px;
+
+  box-shadow:
+    0 -5px 0 rgba(54, 186, 255, .45),
+    0 5px 0 rgba(54, 186, 255, .45);
+}
+
+.brand-mark.small::after {
+  width: 5px;
+  height: 5px;
+
+  left: 10px;
+  top: 16px;
+
+  border-radius: 50%;
 }
 
 .brand-copy strong {
-  color: var(--ta-final-text);
+  color: var(--ta-text);
 
   font-size: 11px;
+  font-weight: 900;
   letter-spacing: .08em;
 }
 
 .brand-copy span {
-  color: var(--ta-final-muted);
+  color: var(--ta-muted);
 
   font-size: 9px;
 }
 
 .topbar-center {
-  color: var(--ta-final-muted);
+  color: var(--ta-muted);
 
   font-size: 10px;
 }
@@ -228,71 +297,116 @@ body {
   width: 7px;
   height: 7px;
 
-  background: var(--ta-final-green);
+  border-radius: 50%;
+
+  background: var(--ta-green);
 
   box-shadow:
-    0 0 0 4px rgba(53, 217, 145, .09),
-    0 0 16px rgba(53, 217, 145, .32);
+    0 0 0 4px rgba(59, 217, 148, .075),
+    0 0 15px rgba(59, 217, 148, .30);
 }
 
 .icon-button {
-  border:
-    1px solid var(--ta-final-border);
+  position: relative;
 
-  color: var(--ta-final-muted);
+  width: 38px;
+  height: 38px;
+
+  border:
+    1px solid var(--ta-line);
+
+  border-radius: 11px;
+
+  color: transparent !important;
 
   background:
-    rgba(255, 255, 255, .035);
+    rgba(255, 255, 255, .025);
 
   transition:
-    border-color 180ms var(--ta-final-ease),
-    color 180ms var(--ta-final-ease),
-    background 180ms var(--ta-final-ease),
-    transform 180ms var(--ta-final-ease);
+    border-color 180ms var(--ta-ease),
+    background 180ms var(--ta-ease),
+    transform 180ms var(--ta-ease);
+}
+
+.icon-button::before {
+  content: "";
+
+  position: absolute;
+
+  width: 14px;
+  height: 14px;
+
+  left: 11px;
+  top: 11px;
+
+  border:
+    1.4px solid var(--ta-muted);
+
+  border-right-color: transparent;
+
+  border-radius: 50%;
+}
+
+.icon-button::after {
+  content: "";
+
+  position: absolute;
+
+  width: 4px;
+  height: 4px;
+
+  left: 11px;
+  top: 10px;
+
+  border-left:
+    1.4px solid var(--ta-muted);
+
+  border-top:
+    1.4px solid var(--ta-muted);
+
+  transform: rotate(-18deg);
 }
 
 .icon-button:hover {
-  border-color: var(--ta-final-border-strong);
-
-  color: var(--ta-final-text);
+  border-color: var(--ta-line-strong);
 
   background:
-    rgba(50, 184, 255, .08);
+    rgba(54, 186, 255, .06);
 
   transform: translateY(-1px);
 }
 
 .user-chip {
   border:
-    1px solid var(--ta-final-border);
+    1px solid var(--ta-line);
 
   background:
-    rgba(255, 255, 255, .035);
+    rgba(255, 255, 255, .025);
 
-  color: var(--ta-final-text);
+  color: var(--ta-text);
 }
 
 .user-chip small {
-  color: var(--ta-final-muted);
+  color: var(--ta-muted);
 }
 
 .user-avatar {
   border:
-    1px solid rgba(50, 184, 255, .24);
+    1px solid rgba(54, 186, 255, .24);
 
   background:
     linear-gradient(
       145deg,
-      rgba(50, 184, 255, .17),
-      rgba(8, 125, 209, .08)
+      rgba(54, 186, 255, .16),
+      rgba(54, 186, 255, .04)
     );
 
-  color: var(--ta-final-blue);
+  color: var(--ta-blue);
 }
 
 
 /* ============================================================
-   05. MAIN CONTAINER
+   05. MAIN
    ============================================================ */
 
 .main-container {
@@ -300,11 +414,10 @@ body {
 
   width: min(1380px, calc(100% - 48px));
 
-  margin:
-    0 auto;
+  margin: 0 auto;
 
   padding:
-    34px 0 90px;
+    30px 0 82px;
 }
 
 
@@ -318,40 +431,40 @@ body {
   display: grid;
 
   grid-template-columns:
-    minmax(0, 1.25fr)
-    minmax(360px, .75fr);
+    minmax(0, 1.18fr)
+    minmax(340px, .82fr);
 
-  gap: 34px;
+  gap: 42px;
 
-  min-height: 420px;
+  min-height: 390px;
 
   align-items: center;
 
   padding:
-    58px 58px 56px;
+    52px 54px;
 
   overflow: hidden;
 
   border:
-    1px solid rgba(102, 184, 226, .14);
+    1px solid var(--ta-line);
 
   border-radius:
-    30px;
+    var(--ta-radius-xl);
 
   background:
     radial-gradient(
-      circle at 84% 18%,
-      rgba(50, 184, 255, .13),
-      transparent 32%
+      circle at 86% 17%,
+      rgba(54, 186, 255, .105),
+      transparent 31%
     ),
     linear-gradient(
       135deg,
-      rgba(13, 29, 44, .97),
-      rgba(7, 18, 29, .98)
+      rgba(13, 30, 45, .96),
+      rgba(7, 17, 27, .98)
     );
 
   box-shadow:
-    0 30px 100px rgba(0, 0, 0, .24);
+    var(--ta-shadow);
 
   isolation: isolate;
 }
@@ -362,15 +475,15 @@ body {
   position: absolute;
   inset: 0;
 
+  pointer-events: none;
+
   background:
     linear-gradient(
-      115deg,
+      112deg,
       transparent 0%,
-      rgba(50, 184, 255, .035) 50%,
+      rgba(54, 186, 255, .025) 48%,
       transparent 100%
     );
-
-  pointer-events: none;
 }
 
 .operations-hero::after {
@@ -378,20 +491,20 @@ body {
 
   position: absolute;
 
-  width: 420px;
-  height: 420px;
+  width: 430px;
+  height: 430px;
 
-  right: -220px;
-  bottom: -250px;
+  right: -245px;
+  bottom: -275px;
+
+  border:
+    1px solid rgba(54, 186, 255, .07);
 
   border-radius: 50%;
 
-  border:
-    1px solid rgba(50, 184, 255, .08);
-
   box-shadow:
-    0 0 0 70px rgba(50, 184, 255, .015),
-    0 0 0 140px rgba(50, 184, 255, .01);
+    0 0 0 70px rgba(54, 186, 255, .012),
+    0 0 0 140px rgba(54, 186, 255, .008);
 
   pointer-events: none;
 }
@@ -400,7 +513,7 @@ body {
   position: relative;
   z-index: 2;
 
-  max-width: 700px;
+  max-width: 720px;
 }
 
 .hero-eyebrow {
@@ -408,23 +521,24 @@ body {
   align-items: center;
   gap: 10px;
 
-  margin-bottom: 18px;
+  margin-bottom: 17px;
 
-  color: var(--ta-final-blue);
+  color: var(--ta-blue);
 
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 900;
+
   letter-spacing: .20em;
 }
 
 .hero-line {
-  width: 30px;
+  width: 29px;
   height: 1px;
 
   background:
     linear-gradient(
       90deg,
-      var(--ta-final-blue),
+      var(--ta-blue),
       transparent
     );
 }
@@ -434,7 +548,7 @@ body {
 
   margin: 0;
 
-  color: var(--ta-final-text);
+  color: var(--ta-text);
 
   font-family:
     "Plus Jakarta Sans",
@@ -442,11 +556,11 @@ body {
     sans-serif;
 
   font-size:
-    clamp(40px, 5vw, 66px);
+    clamp(38px, 5vw, 62px);
 
   font-weight: 800;
 
-  line-height: .98;
+  line-height: 1;
 
   letter-spacing: -.045em;
 }
@@ -456,26 +570,24 @@ body {
 
   margin-top: 5px;
 
-  color: var(--ta-final-blue);
-
-  font-weight: 800;
+  color: var(--ta-blue);
 }
 
 .operations-hero p {
-  max-width: 650px;
+  max-width: 620px;
 
   margin:
-    24px 0 0;
+    22px 0 0;
 
-  color: var(--ta-final-text-soft);
+  color: var(--ta-text-soft);
 
-  font-size: 14px;
+  font-size: 13px;
 
-  line-height: 1.8;
+  line-height: 1.75;
 }
 
 .operations-hero p strong {
-  color: var(--ta-final-text);
+  color: var(--ta-text);
 
   font-weight: 800;
 }
@@ -484,32 +596,32 @@ body {
   display: flex;
   flex-wrap: wrap;
 
-  gap: 11px;
+  gap: 10px;
 
-  margin-top: 30px;
+  margin-top: 27px;
 }
 
 .hero-button {
-  min-height: 48px;
+  min-height: 46px;
 
   display: inline-flex;
   align-items: center;
   justify-content: center;
 
-  gap: 10px;
+  gap: 9px;
 
   padding:
-    0 18px;
+    0 17px;
 
-  border-radius: 13px;
+  border-radius: 12px;
 
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 10px;
+  font-weight: 900;
 
   transition:
-    transform 180ms var(--ta-final-ease),
-    box-shadow 180ms var(--ta-final-ease),
-    border-color 180ms var(--ta-final-ease);
+    transform 180ms var(--ta-ease),
+    box-shadow 180ms var(--ta-ease),
+    border-color 180ms var(--ta-ease);
 }
 
 .hero-button:hover {
@@ -522,68 +634,65 @@ body {
   background:
     linear-gradient(
       135deg,
-      #49d9ee,
-      #32b8ff
+      var(--ta-cyan),
+      var(--ta-blue)
     );
 
   box-shadow:
-    0 12px 30px rgba(50, 184, 255, .20);
+    0 13px 30px rgba(54, 186, 255, .18);
 }
 
 .hero-button.secondary {
   border:
-    1px solid var(--ta-final-border);
+    1px solid var(--ta-line);
 
-  color: var(--ta-final-text-soft);
+  color: var(--ta-text-soft);
 
   background:
-    rgba(255, 255, 255, .035);
+    rgba(255, 255, 255, .025);
 }
 
 .hero-button.secondary:hover {
-  border-color:
-    rgba(50, 184, 255, .28);
-
-  color:
-    var(--ta-final-text);
+  border-color: var(--ta-line-strong);
 
   background:
-    rgba(50, 184, 255, .06);
+    rgba(54, 186, 255, .055);
 }
 
 
 /* ============================================================
-   07. FLIGHT CARD
+   07. ROUTE
    ============================================================ */
 
 .hero-flight-card {
   position: relative;
   z-index: 2;
 
-  min-height: 270px;
+  min-height: 255px;
 
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 
-  padding: 23px;
+  padding: 22px;
+
+  overflow: hidden;
 
   border:
-    1px solid rgba(116, 184, 220, .16);
+    1px solid rgba(124, 185, 217, .15);
 
-  border-radius: 22px;
+  border-radius:
+    var(--ta-radius-lg);
 
   background:
     linear-gradient(
       145deg,
-      rgba(19, 37, 54, .88),
-      rgba(10, 24, 38, .92)
+      rgba(18, 38, 55, .90),
+      rgba(8, 22, 34, .94)
     );
 
   box-shadow:
-    var(--ta-final-shadow);
-
-  overflow: hidden;
+    var(--ta-shadow-soft);
 }
 
 .hero-flight-card::before {
@@ -592,14 +701,14 @@ body {
   position: absolute;
   inset: 0;
 
+  pointer-events: none;
+
   background:
     linear-gradient(
-      120deg,
-      rgba(50, 184, 255, .05),
-      transparent 42%
+      125deg,
+      rgba(54, 186, 255, .045),
+      transparent 48%
     );
-
-  pointer-events: none;
 }
 
 .flight-card-header,
@@ -613,12 +722,11 @@ body {
   align-items: center;
   justify-content: space-between;
 
-  gap: 10px;
+  color: var(--ta-muted);
 
-  color: var(--ta-final-muted);
-
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 900;
+
   letter-spacing: .15em;
 }
 
@@ -628,33 +736,31 @@ body {
   gap: 7px;
 
   padding:
-    7px 10px;
+    6px 9px;
 
   border:
-    1px solid rgba(53, 217, 145, .16);
+    1px solid rgba(59, 217, 148, .15);
 
   border-radius: 999px;
 
-  color: var(--ta-final-green);
+  color: var(--ta-green);
 
   background:
-    rgba(53, 217, 145, .06);
+    rgba(59, 217, 148, .055);
 
   font-size: 7px;
-  letter-spacing: .08em;
 }
 
 .status-pill i {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 
   border-radius: 50%;
 
-  background:
-    var(--ta-final-green);
+  background: var(--ta-green);
 
   box-shadow:
-    0 0 10px rgba(53, 217, 145, .45);
+    0 0 9px rgba(59, 217, 148, .45);
 }
 
 .flight-route {
@@ -669,18 +775,18 @@ body {
 
   align-items: center;
 
-  gap: 15px;
+  gap: 14px;
 
   margin:
-    34px 0;
+    28px 0;
 }
 
 .route-point strong {
   display: block;
 
-  color: var(--ta-final-text);
+  color: var(--ta-text);
 
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 900;
 
   letter-spacing: .08em;
@@ -689,11 +795,11 @@ body {
 .route-point span {
   display: block;
 
-  margin-top: 5px;
+  margin-top: 4px;
 
-  color: var(--ta-final-muted);
+  color: var(--ta-muted);
 
-  font-size: 9px;
+  font-size: 8px;
 }
 
 .route-point.right {
@@ -706,7 +812,7 @@ body {
   height: 1px;
 
   background:
-    rgba(130, 177, 207, .18);
+    rgba(127, 173, 202, .17);
 }
 
 .route-progress {
@@ -720,12 +826,12 @@ body {
   background:
     linear-gradient(
       90deg,
-      var(--ta-final-blue),
-      var(--ta-final-cyan)
+      var(--ta-blue),
+      var(--ta-cyan)
     );
 
   box-shadow:
-    0 0 12px rgba(50, 184, 255, .32);
+    0 0 12px rgba(54, 186, 255, .28);
 }
 
 .route-plane {
@@ -734,58 +840,72 @@ body {
   left: 42%;
   top: 50%;
 
-  transform:
-    translate(-50%, -50%);
-
-  width: 28px;
-  height: 28px;
+  width: 24px;
+  height: 24px;
 
   display: grid;
   place-items: center;
 
+  color: transparent;
+
+  background:
+    #0b1c2b;
+
   border:
-    1px solid rgba(50, 184, 255, .18);
+    1px solid rgba(54, 186, 255, .20);
 
   border-radius: 50%;
 
-  color: var(--ta-final-blue);
+  transform:
+    translate(-50%, -50%);
+}
 
-  background:
-    #0c1b29;
+.route-plane::before {
+  content: "";
 
-  font-size: 11px;
+  width: 7px;
+  height: 7px;
+
+  border:
+    1px solid var(--ta-blue);
+
+  border-radius: 50%;
+
+  box-shadow:
+    0 0 10px rgba(54, 186, 255, .28);
 }
 
 .flight-card-footer {
-  padding-top: 15px;
+  padding-top: 14px;
 
   border-top:
-    1px solid rgba(148, 190, 220, .09);
+    1px solid var(--ta-line-soft);
 }
 
 .flight-card-footer span {
   display: block;
 
-  color: var(--ta-final-muted-2);
+  color: var(--ta-muted-2);
 
   font-size: 7px;
   font-weight: 900;
+
   letter-spacing: .14em;
 }
 
 .flight-card-footer strong {
   display: block;
 
-  margin-top: 6px;
+  margin-top: 5px;
 
-  color: var(--ta-final-text-soft);
+  color: var(--ta-text-soft);
 
-  font-size: 11px;
+  font-size: 10px;
 }
 
 
 /* ============================================================
-   08. JOURNEY PIPELINE
+   08. PROCESS PIPELINE
    ============================================================ */
 
 .system-pipeline {
@@ -795,40 +915,41 @@ body {
 
   grid-template-columns:
     minmax(0, 1fr)
-    28px
+    30px
     minmax(0, 1fr)
-    28px
+    30px
     minmax(0, 1fr)
-    28px
+    30px
     minmax(0, 1fr);
 
   align-items: center;
 
   margin:
-    22px 0;
+    20px 0;
 
   padding:
-    15px;
+    12px;
 
   border:
-    1px solid var(--ta-final-border);
+    1px solid var(--ta-line);
 
-  border-radius: 20px;
+  border-radius:
+    var(--ta-radius-lg);
 
   background:
-    rgba(10, 22, 34, .82);
+    rgba(8, 20, 31, .82);
 
   box-shadow:
-    var(--ta-final-shadow-soft);
+    var(--ta-shadow-soft);
 
-  backdrop-filter:
-    blur(14px);
+  backdrop-filter: blur(15px);
 }
 
 .pipeline-item {
   position: relative;
 
   min-width: 0;
+  min-height: 72px;
 
   display: grid;
 
@@ -839,9 +960,7 @@ body {
 
   align-items: center;
 
-  gap: 10px;
-
-  min-height: 68px;
+  gap: 11px;
 
   padding:
     10px 12px;
@@ -849,43 +968,41 @@ body {
   border:
     1px solid transparent;
 
-  border-radius: 14px;
+  border-radius:
+    var(--ta-radius-md);
 
   transition:
-    border-color 180ms var(--ta-final-ease),
-    background 180ms var(--ta-final-ease),
-    opacity 180ms var(--ta-final-ease);
+    background 180ms var(--ta-ease),
+    border-color 180ms var(--ta-ease),
+    opacity 180ms var(--ta-ease);
 }
 
 .pipeline-item.active {
   border-color:
-    rgba(50, 184, 255, .20);
+    rgba(54, 186, 255, .20);
 
   background:
-    rgba(50, 184, 255, .06);
-
-  box-shadow:
-    0 0 0 1px rgba(50, 184, 255, .04);
+    rgba(54, 186, 255, .055);
 }
 
 .pipeline-item.completed {
   border-color:
-    rgba(53, 217, 145, .14);
+    rgba(59, 217, 148, .15);
 
   background:
-    rgba(53, 217, 145, .045);
+    rgba(59, 217, 148, .04);
 }
 
 .pipeline-item.locked {
-  opacity: .42;
+  opacity: .43;
 }
 
 .pipeline-number {
   align-self: start;
 
-  padding-top: 3px;
+  padding-top: 4px;
 
-  color: var(--ta-final-muted-2);
+  color: var(--ta-muted-2);
 
   font-family:
     "JetBrains Mono",
@@ -896,8 +1013,8 @@ body {
 }
 
 .pipeline-icon {
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
 
   display: grid;
   place-items: center;
@@ -905,11 +1022,11 @@ body {
   flex: 0 0 auto;
 
   border:
-    1px solid rgba(148, 190, 220, .11);
+    1px solid rgba(150, 194, 221, .11);
 
   border-radius: 11px;
 
-  color: var(--ta-final-muted);
+  color: var(--ta-muted);
 
   background:
     rgba(255, 255, 255, .025);
@@ -917,24 +1034,22 @@ body {
 
 .pipeline-item.active .pipeline-icon {
   border-color:
-    rgba(50, 184, 255, .24);
+    rgba(54, 186, 255, .23);
 
-  color:
-    var(--ta-final-blue);
+  color: var(--ta-blue);
 
   background:
-    rgba(50, 184, 255, .08);
+    rgba(54, 186, 255, .065);
 }
 
 .pipeline-item.completed .pipeline-icon {
   border-color:
-    rgba(53, 217, 145, .20);
+    rgba(59, 217, 148, .20);
 
-  color:
-    var(--ta-final-green);
+  color: var(--ta-green);
 
   background:
-    rgba(53, 217, 145, .07);
+    rgba(59, 217, 148, .055);
 }
 
 .pipeline-copy {
@@ -944,30 +1059,28 @@ body {
 .pipeline-copy strong {
   display: block;
 
-  overflow: hidden;
-
-  color: var(--ta-final-text);
+  color: var(--ta-text);
 
   font-size: 10px;
-  font-weight: 800;
+  font-weight: 900;
 
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+
+  line-height: 1.25;
 }
 
 .pipeline-copy span {
   display: block;
 
-  margin-top: 3px;
+  margin-top: 5px;
 
-  overflow: hidden;
-
-  color: var(--ta-final-muted);
+  color: var(--ta-muted);
 
   font-size: 8px;
 
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  white-space: normal;
+
+  line-height: 1.4;
 }
 
 .pipeline-state {
@@ -975,6 +1088,8 @@ body {
 }
 
 .pipeline-connector {
+  position: relative;
+
   width: 100%;
   height: 1px;
 
@@ -982,26 +1097,66 @@ body {
     linear-gradient(
       90deg,
       transparent,
-      rgba(111, 164, 196, .22),
+      rgba(110, 164, 195, .25),
       transparent
     );
 }
 
+.pipeline-connector::after {
+  content: "";
+
+  position: absolute;
+
+  left: 50%;
+  top: 50%;
+
+  width: 4px;
+  height: 4px;
+
+  border:
+    1px solid rgba(110, 164, 195, .35);
+
+  border-radius: 50%;
+
+  background:
+    #0a1926;
+
+  transform:
+    translate(-50%, -50%);
+}
+
 
 /* ============================================================
-   09. STATISTICS
+   09. OPERATION SUMMARY
    ============================================================ */
 
 .stats-grid {
   display: grid;
 
   grid-template-columns:
-    repeat(4, minmax(0, 1fr));
+    1.15fr
+    1fr
+    1fr
+    1.15fr;
 
-  gap: 12px;
+  gap: 0;
 
   margin:
     18px 0 26px;
+
+  padding: 7px;
+
+  border:
+    1px solid var(--ta-line);
+
+  border-radius:
+    var(--ta-radius-lg);
+
+  background:
+    rgba(8, 20, 31, .76);
+
+  box-shadow:
+    var(--ta-shadow-soft);
 }
 
 .stat-card {
@@ -1010,58 +1165,73 @@ body {
   display: flex;
   align-items: center;
 
-  gap: 13px;
+  gap: 12px;
+
+  min-height: 74px;
 
   padding:
-    16px;
+    12px 15px;
 
   border:
-    1px solid var(--ta-final-border);
+    0;
 
-  border-radius: 17px;
+  border-right:
+    1px solid var(--ta-line-soft);
+
+  border-radius: 0;
 
   background:
-    rgba(11, 25, 38, .72);
+    transparent;
 
-  box-shadow:
-    0 12px 35px rgba(0, 0, 0, .12);
+  box-shadow: none;
+}
+
+.stat-card:last-child {
+  border-right: 0;
 }
 
 .stat-icon {
-  width: 38px;
-  height: 38px;
+  position: relative;
+
+  width: 36px;
+  height: 36px;
 
   display: grid;
   place-items: center;
 
   flex: 0 0 auto;
 
-  border-radius: 11px;
+  border:
+    1px solid rgba(150, 194, 221, .10);
+
+  border-radius: 10px;
+
+  color: var(--ta-muted);
 
   background:
-    rgba(255, 255, 255, .035);
+    rgba(255, 255, 255, .025);
 }
 
 .stat-icon.blue,
 .stat-icon.cyan {
-  color: var(--ta-final-blue);
+  color: var(--ta-blue);
 
   background:
-    rgba(50, 184, 255, .07);
+    rgba(54, 186, 255, .055);
 }
 
 .stat-icon.green {
-  color: var(--ta-final-green);
+  color: var(--ta-green);
 
   background:
-    rgba(53, 217, 145, .07);
+    rgba(59, 217, 148, .055);
 }
 
 .stat-icon.orange {
-  color: var(--ta-final-orange);
+  color: var(--ta-orange);
 
   background:
-    rgba(255, 176, 74, .07);
+    rgba(255, 180, 83, .055);
 }
 
 .stat-content {
@@ -1071,12 +1241,12 @@ body {
 .stat-content span {
   display: block;
 
-  color: var(--ta-final-muted);
+  color: var(--ta-muted);
 
   font-size: 7px;
   font-weight: 900;
 
-  letter-spacing: .10em;
+  letter-spacing: .11em;
 }
 
 .stat-content strong {
@@ -1084,29 +1254,32 @@ body {
 
   margin-top: 3px;
 
-  color: var(--ta-final-text);
+  color: var(--ta-text);
 
   font-family:
     "Plus Jakarta Sans",
     Inter,
     sans-serif;
 
-  font-size: 19px;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .stat-content small {
   display: block;
 
-  margin-top: 2px;
+  margin-top: 4px;
 
-  color: var(--ta-final-muted-2);
+  color: var(--ta-muted-2);
 
   font-size: 8px;
+
+  line-height: 1.3;
 }
 
 
 /* ============================================================
-   10. DASHBOARD STRUCTURE
+   10. DASHBOARD
    ============================================================ */
 
 .dashboard-grid {
@@ -1115,7 +1288,7 @@ body {
   grid-template-columns:
     minmax(0, 1fr);
 
-  gap: 22px;
+  gap: 20px;
 }
 
 .dashboard-main {
@@ -1128,24 +1301,26 @@ body {
    ============================================================ */
 
 .panel {
+  position: relative;
+
   border:
-    1px solid var(--ta-final-border) !important;
+    1px solid var(--ta-line) !important;
 
   border-radius:
-    var(--ta-final-radius) !important;
+    var(--ta-radius-xl) !important;
 
   color:
-    var(--ta-final-text);
+    var(--ta-text);
 
   background:
     linear-gradient(
       145deg,
-      rgba(14, 29, 43, .95),
-      rgba(8, 19, 30, .96)
+      rgba(13, 29, 43, .96),
+      rgba(7, 18, 28, .98)
     ) !important;
 
   box-shadow:
-    var(--ta-final-shadow-soft) !important;
+    var(--ta-shadow-soft) !important;
 }
 
 .panel + .panel {
@@ -1153,10 +1328,11 @@ body {
 }
 
 .panel-header {
-  padding-bottom: 20px;
+  padding-bottom:
+    20px;
 
   border-bottom:
-    1px solid rgba(148, 190, 220, .08);
+    1px solid var(--ta-line-soft);
 }
 
 .panel-heading {
@@ -1167,7 +1343,7 @@ body {
   margin-top: 6px !important;
 
   color:
-    var(--ta-final-text) !important;
+    var(--ta-text) !important;
 
   font-family:
     "Plus Jakarta Sans",
@@ -1177,151 +1353,156 @@ body {
   font-size:
     clamp(25px, 3vw, 34px) !important;
 
-  line-height: 1.1;
+  font-weight: 800;
+
+  line-height: 1.08;
 
   letter-spacing: -.035em;
 }
 
 .panel-heading p {
-  max-width: 720px;
+  max-width: 650px;
 
-  margin-top: 9px !important;
+  margin-top: 8px !important;
 
   color:
-    var(--ta-final-muted) !important;
+    var(--ta-muted) !important;
 
-  font-size: 11px !important;
+  font-size: 10px !important;
 
-  line-height: 1.7 !important;
+  line-height: 1.65 !important;
 }
 
 .panel-eyebrow {
   color:
-    var(--ta-final-blue) !important;
+    var(--ta-blue) !important;
 
   font-size: 8px !important;
+
+  font-weight: 900;
 
   letter-spacing: .16em;
 }
 
 .section-number {
   color:
-    var(--ta-final-muted-2) !important;
+    var(--ta-muted-2) !important;
 
   font-family:
     "JetBrains Mono",
     monospace;
 
-  font-size: 9px !important;
+  font-size: 8px !important;
 }
 
 .panel-status {
   border:
-    1px solid rgba(50, 184, 255, .18) !important;
+    1px solid rgba(54, 186, 255, .18) !important;
 
-  border-radius: 999px !important;
+  border-radius:
+    999px !important;
 
   color:
-    var(--ta-final-blue) !important;
+    var(--ta-blue) !important;
 
   background:
-    rgba(50, 184, 255, .06) !important;
+    rgba(54, 186, 255, .055) !important;
 
   font-size: 7px !important;
+
   font-weight: 900;
+
   letter-spacing: .10em;
 }
 
 
 /* ============================================================
-   12. SELECTED CLIENT
+   12. CLIENTE SELECIONADO
    ============================================================ */
 
 .selected-client-card {
   border:
-    1px solid var(--ta-final-border) !important;
+    1px solid var(--ta-line) !important;
 
   border-radius:
-    17px !important;
+    var(--ta-radius-md) !important;
 
   background:
     rgba(255, 255, 255, .025) !important;
 
   color:
-    var(--ta-final-text) !important;
+    var(--ta-text-soft) !important;
 }
 
-.selected-client-card.empty {
+.selected-client-card strong {
   color:
-    var(--ta-final-muted) !important;
+    var(--ta-text) !important;
 }
 
-.selected-client-avatar {
-  border:
-    1px solid rgba(50, 184, 255, .18) !important;
-
-  background:
-    rgba(50, 184, 255, .06) !important;
-
+.selected-client-card small,
+.selected-client-card span {
   color:
-    var(--ta-final-blue) !important;
+    var(--ta-muted) !important;
 }
 
 
 /* ============================================================
-   13. FORMULÁRIOS
+   13. CAMPOS
    ============================================================ */
 
-.field > span,
 .field label,
-.form-section-title {
+.field > label {
   color:
-    var(--ta-final-text-soft) !important;
+    var(--ta-muted) !important;
 
-  font-size: 9px !important;
+  font-size: 8px !important;
 
-  font-weight: 800;
+  font-weight: 900;
 
-  letter-spacing: .04em;
+  letter-spacing: .08em;
 }
 
 .field input,
 .field select,
-.field textarea,
-.frontend-field select {
-  min-height: 46px;
+.field textarea {
+  min-height: 44px;
 
   border:
-    1px solid rgba(148, 190, 220, .13) !important;
+    1px solid rgba(150, 194, 221, .12) !important;
 
-  border-radius: 12px !important;
+  border-radius:
+    11px !important;
 
   outline: none;
 
   color:
-    var(--ta-final-text) !important;
+    var(--ta-text) !important;
 
   background:
-    rgba(255, 255, 255, .035) !important;
+    rgba(255, 255, 255, .025) !important;
 
   box-shadow:
     none !important;
 }
 
+.field textarea {
+  min-height: 100px;
+}
+
 .field input::placeholder,
 .field textarea::placeholder {
   color:
-    var(--ta-final-muted-2);
+    var(--ta-muted-2);
 }
 
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
   border-color:
-    rgba(50, 184, 255, .45) !important;
+    rgba(54, 186, 255, .42) !important;
 
   box-shadow:
-    0 0 0 3px rgba(50, 184, 255, .07) !important;
+    0 0 0 3px rgba(54, 186, 255, .055) !important;
 }
 
 .field select option {
@@ -1334,27 +1515,37 @@ body {
 
 
 /* ============================================================
-   14. PASSAPORTE — PROTAGONISTA
+   14. PASSAPORTE
    ============================================================ */
 
 .passport-client-bar {
-  margin-bottom: 18px;
+  margin-bottom:
+    18px;
 }
 
 .passport-upload-layout {
-  gap: 18px;
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1.05fr)
+    minmax(300px, .95fr);
+
+  gap:
+    17px;
 }
 
 .passport-upload-card,
 .passport-validation-card {
+  min-width: 0;
+
   border:
-    1px solid var(--ta-final-border) !important;
+    1px solid var(--ta-line) !important;
 
   border-radius:
-    18px !important;
+    var(--ta-radius-lg) !important;
 
   background:
-    rgba(255, 255, 255, .025) !important;
+    rgba(255, 255, 255, .022) !important;
 
   box-shadow:
     none !important;
@@ -1362,45 +1553,63 @@ body {
 
 .passport-upload-header {
   border-bottom:
-    1px solid rgba(148, 190, 220, .07);
+    1px solid var(--ta-line-soft);
 }
 
 .passport-upload-limit {
   color:
-    var(--ta-final-blue) !important;
+    var(--ta-blue) !important;
 }
 
 .passport-dropzone {
-  min-height: 220px;
+  position: relative;
+
+  min-height: 235px;
 
   border:
-    1px dashed rgba(50, 184, 255, .24) !important;
+    1px dashed rgba(54, 186, 255, .23) !important;
 
   border-radius:
-    17px !important;
+    var(--ta-radius-md) !important;
 
   background:
     radial-gradient(
-      circle at center,
-      rgba(50, 184, 255, .06),
-      transparent 65%
+      circle at 50% 40%,
+      rgba(54, 186, 255, .055),
+      transparent 64%
     ) !important;
 
   color:
-    var(--ta-final-text-soft) !important;
+    var(--ta-text-soft) !important;
 
   transition:
-    border-color 180ms var(--ta-final-ease),
-    background 180ms var(--ta-final-ease),
-    transform 180ms var(--ta-final-ease);
+    border-color 180ms var(--ta-ease),
+    background 180ms var(--ta-ease),
+    transform 180ms var(--ta-ease);
+}
+
+.passport-dropzone::before {
+  content: "";
+
+  position: absolute;
+
+  inset: 12px;
+
+  border:
+    1px solid rgba(150, 194, 221, .045);
+
+  border-radius:
+    11px;
+
+  pointer-events: none;
 }
 
 .passport-dropzone:hover {
   border-color:
-    rgba(50, 184, 255, .50) !important;
+    rgba(54, 186, 255, .48) !important;
 
   background:
-    rgba(50, 184, 255, .07) !important;
+    rgba(54, 186, 255, .055) !important;
 
   transform:
     translateY(-1px);
@@ -1408,21 +1617,21 @@ body {
 
 .passport-dropzone-icon {
   color:
-    var(--ta-final-blue) !important;
+    var(--ta-blue) !important;
 
   background:
-    rgba(50, 184, 255, .08) !important;
+    rgba(54, 186, 255, .07) !important;
 }
 
 .passport-preview {
   border:
-    1px solid var(--ta-final-border) !important;
+    1px solid var(--ta-line) !important;
 
   border-radius:
-    17px !important;
+    var(--ta-radius-md) !important;
 
   background:
-    #08121d !important;
+    #07121d !important;
 }
 
 .passport-preview-image-wrap {
@@ -1432,7 +1641,7 @@ body {
 
 .passport-preview-header {
   color:
-    var(--ta-final-text-soft) !important;
+    var(--ta-text-soft) !important;
 }
 
 .passport-validation-card {
@@ -1440,478 +1649,164 @@ body {
 }
 
 .passport-result-state {
+  min-height: 74px;
+
+  border:
+    1px solid var(--ta-line-soft) !important;
+
   border-radius:
     13px !important;
 
   background:
-    rgba(255, 255, 255, .025) !important;
+    rgba(255, 255, 255, .022) !important;
 
   color:
-    var(--ta-final-muted) !important;
+    var(--ta-muted) !important;
 }
 
 .passport-extracted-data {
   border:
-    1px solid rgba(148, 190, 220, .08) !important;
+    1px solid var(--ta-line-soft) !important;
 
   border-radius:
     14px !important;
 
   background:
-    rgba(255, 255, 255, .025) !important;
+    rgba(255, 255, 255, .022) !important;
 
   color:
-    var(--ta-final-text-soft) !important;
+    var(--ta-text-soft) !important;
 }
 
 .passport-check-list {
   color:
-    var(--ta-final-muted) !important;
+    var(--ta-muted) !important;
+}
+
+.passport-check-list i {
+  position: relative;
+
+  width: 9px;
+  height: 9px;
+
+  display: inline-block;
+
+  color: transparent !important;
+
+  border:
+    1px solid rgba(59, 217, 148, .38);
+
+  border-radius: 50%;
+
+  background:
+    rgba(59, 217, 148, .055);
+}
+
+.passport-check-list i::after {
+  content: "";
+
+  position: absolute;
+
+  width: 4px;
+  height: 2px;
+
+  left: 2px;
+  top: 2px;
+
+  border-left:
+    1px solid var(--ta-green);
+
+  border-bottom:
+    1px solid var(--ta-green);
+
+  transform:
+    rotate(-45deg);
 }
 
 .identity-gate-message {
-  border:
-    1px solid rgba(50, 184, 255, .14) !important;
+  position: relative;
 
-  border-radius:
-    15px !important;
-
-  color:
-    var(--ta-final-text-soft) !important;
-
-  background:
-    rgba(50, 184, 255, .045) !important;
-}
-
-
-/* ============================================================
-   15. BUTTONS
-   ============================================================ */
-
-.primary-button,
-button.primary-button {
-  min-height: 46px;
+  padding-left:
+    45px !important;
 
   border:
-    0 !important;
+    1px solid rgba(54, 186, 255, .13) !important;
 
   border-radius:
-    12px !important;
+    14px !important;
 
   color:
-    #04101a !important;
+    var(--ta-text-soft) !important;
 
   background:
-    linear-gradient(
-      135deg,
-      #49d9ee,
-      #32b8ff
-    ) !important;
-
-  font-size: 10px;
-
-  font-weight: 900;
-
-  box-shadow:
-    0 12px 28px rgba(50, 184, 255, .16);
-
-  transition:
-    transform 180ms var(--ta-final-ease),
-    box-shadow 180ms var(--ta-final-ease),
-    filter 180ms var(--ta-final-ease);
+    rgba(54, 186, 255, .035) !important;
 }
 
-.primary-button:hover {
+.identity-gate-message > div:first-child {
+  position: absolute;
+
+  left: 15px;
+  top: 50%;
+
+  width: 21px;
+  height: 21px;
+
+  display: grid;
+  place-items: center;
+
+  color: transparent !important;
+
+  border:
+    1px solid rgba(54, 186, 255, .24);
+
+  border-radius: 7px;
+
+  background:
+    rgba(54, 186, 255, .055);
+
   transform:
-    translateY(-2px);
-
-  filter:
-    brightness(1.04);
-
-  box-shadow:
-    0 16px 35px rgba(50, 184, 255, .22);
+    translateY(-50%);
 }
 
-.secondary-button {
-  min-height: 46px;
+.identity-gate-message > div:first-child::before {
+  content: "";
+
+  width: 8px;
+  height: 7px;
 
   border:
-    1px solid var(--ta-final-border) !important;
+    1px solid var(--ta-blue);
 
   border-radius:
-    12px !important;
+    2px;
 
-  color:
-    var(--ta-final-text-soft) !important;
-
-  background:
-    rgba(255, 255, 255, .035) !important;
+  transform:
+    translateY(2px);
 }
 
-.secondary-button:hover {
-  border-color:
-    rgba(50, 184, 255, .30) !important;
+.identity-gate-message > div:first-child::after {
+  content: "";
 
-  color:
-    var(--ta-final-text) !important;
+  position: absolute;
 
-  background:
-    rgba(50, 184, 255, .06) !important;
+  width: 6px;
+  height: 6px;
+
+  left: 6px;
+  top: 4px;
+
+  border:
+    1px solid var(--ta-blue);
+
+  border-bottom: 0;
+
+  border-radius:
+    5px 5px 0 0;
 }
 
 
 /* ============================================================
-   16. IDENTITY / CAMERA
-   ============================================================ */
-
-.workflow-stage-mount,
-.facial-preflight-mount {
-  color:
-    var(--ta-final-text);
-}
-
-.workflow-stage-mount > *,
-.facial-preflight-mount > * {
-  max-width: 100%;
-}
-
-.camera-panel,
-.face-capture-panel,
-.identity-panel,
-.facial-panel {
-  border:
-    1px solid var(--ta-final-border) !important;
-
-  border-radius:
-    22px !important;
-
-  background:
-    #07111b !important;
-
-  box-shadow:
-    var(--ta-final-shadow) !important;
-}
-
-.camera-panel video,
-.face-capture-panel video,
-.identity-panel video,
-.facial-panel video {
-  border-radius:
-    17px;
-}
-
-.camera-frame,
-.face-frame {
-  border-color:
-    rgba(50, 184, 255, .65) !important;
-
-  box-shadow:
-    0 0 0 999px rgba(2, 8, 13, .20),
-    0 0 35px rgba(50, 184, 255, .10) !important;
-}
-
-
-/* ============================================================
-   17. READINESS
-   ============================================================ */
-
-.passport-readiness {
-  border:
-    1px solid var(--ta-final-border) !important;
-
-  border-radius:
-    17px !important;
-
-  background:
-    rgba(255, 255, 255, .025) !important;
-
-  color:
-    var(--ta-final-text-soft) !important;
-}
-
-.readiness-checks {
-  color:
-    var(--ta-final-muted) !important;
-}
-
-.document-note {
-  color:
-    var(--ta-final-muted) !important;
-}
-
-.facial-consent-card {
-  border:
-    1px solid rgba(50, 184, 255, .13) !important;
-
-  border-radius:
-    17px !important;
-
-  background:
-    rgba(50, 184, 255, .035) !important;
-
-  color:
-    var(--ta-final-text-soft) !important;
-}
-
-
-/* ============================================================
-   18. PREFERÊNCIAS DE VIAGEM
-   ============================================================ */
-
-.frontend-final-preferences {
-  border:
-    1px solid var(--ta-final-border) !important;
-
-  border-radius:
-    20px !important;
-
-  background:
-    linear-gradient(
-      145deg,
-      rgba(14, 29, 43, .96),
-      rgba(8, 19, 30, .97)
-    ) !important;
-
-  box-shadow:
-    var(--ta-final-shadow-soft) !important;
-}
-
-.frontend-final-preferences-header span,
-.frontend-final-preferences-header strong {
-  color:
-    var(--ta-final-text);
-}
-
-.frontend-final-preferences-header span {
-  color:
-    var(--ta-final-blue);
-}
-
-.frontend-final-preferences-header small {
-  color:
-    var(--ta-final-muted);
-}
-
-.frontend-field > span,
-.frontend-final-weekdays > span {
-  color:
-    var(--ta-final-muted) !important;
-}
-
-.frontend-field select {
-  color:
-    var(--ta-final-text) !important;
-
-  background:
-    rgba(255, 255, 255, .035) !important;
-}
-
-.frontend-final-day span {
-  border-color:
-    rgba(148, 190, 220, .12) !important;
-
-  color:
-    var(--ta-final-muted) !important;
-
-  background:
-    rgba(255, 255, 255, .025) !important;
-}
-
-.frontend-final-day:hover span {
-  border-color:
-    rgba(50, 184, 255, .28) !important;
-}
-
-.frontend-final-day input:checked + span {
-  border-color:
-    var(--ta-final-blue) !important;
-
-  color:
-    #03101a !important;
-
-  background:
-    linear-gradient(
-      135deg,
-      #49d9ee,
-      #32b8ff
-    ) !important;
-
-  box-shadow:
-    0 10px 25px rgba(50, 184, 255, .16) !important;
-}
-
-.frontend-final-summary {
-  border-color:
-    rgba(148, 190, 220, .08) !important;
-
-  background:
-    rgba(255, 255, 255, .025) !important;
-
-  color:
-    var(--ta-final-muted) !important;
-}
-
-.frontend-final-summary strong {
-  color:
-    var(--ta-final-text) !important;
-}
-
-
-/* ============================================================
-   19. ADMIN WAITING
-   ============================================================ */
-
-.frontend-final-admin-waiting {
-  border:
-    1px solid rgba(50, 184, 255, .14) !important;
-
-  border-radius:
-    20px !important;
-
-  background:
-    linear-gradient(
-      145deg,
-      rgba(13, 31, 47, .96),
-      rgba(8, 19, 30, .97)
-    ) !important;
-
-  box-shadow:
-    var(--ta-final-shadow-soft) !important;
-}
-
-.frontend-final-status-icon {
-  border:
-    1px solid rgba(50, 184, 255, .13);
-
-  color:
-    var(--ta-final-blue);
-
-  background:
-    rgba(50, 184, 255, .06);
-}
-
-.frontend-final-status-icon.success {
-  color:
-    var(--ta-final-green);
-
-  background:
-    rgba(53, 217, 145, .07);
-}
-
-.frontend-final-status-copy > span {
-  color:
-    var(--ta-final-blue);
-}
-
-.frontend-final-status-copy > strong {
-  color:
-    var(--ta-final-text);
-}
-
-.frontend-final-status-copy > small,
-.frontend-final-state-row {
-  color:
-    var(--ta-final-muted);
-}
-
-.frontend-final-status-badge.pending {
-  color:
-    var(--ta-final-orange);
-
-  background:
-    rgba(255, 176, 74, .08);
-}
-
-.frontend-final-status-badge.active,
-.frontend-final-status-badge.completed {
-  color:
-    var(--ta-final-green);
-
-  background:
-    rgba(53, 217, 145, .08);
-}
-
-
-/* ============================================================
-   20. PAYMENT
-   ============================================================ */
-
-.frontend-final-payment {
-  border:
-    1px solid var(--ta-final-border) !important;
-
-  border-radius:
-    20px !important;
-
-  background:
-    linear-gradient(
-      145deg,
-      rgba(14, 29, 43, .96),
-      rgba(8, 19, 30, .97)
-    ) !important;
-
-  box-shadow:
-    var(--ta-final-shadow-soft) !important;
-}
-
-.frontend-final-payment-header strong,
-.frontend-final-payment-grid strong {
-  color:
-    var(--ta-final-text) !important;
-}
-
-.frontend-final-payment-header span,
-.frontend-final-payment p,
-.frontend-final-payment-grid span {
-  color:
-    var(--ta-final-muted) !important;
-}
-
-.frontend-final-payment-grid > div {
-  border-color:
-    rgba(148, 190, 220, .08) !important;
-
-  background:
-    rgba(255, 255, 255, .025) !important;
-}
-
-.frontend-final-confirmation-link {
-  color:
-    #04101a !important;
-
-  background:
-    linear-gradient(
-      135deg,
-      #49d9ee,
-      #32b8ff
-    ) !important;
-}
-
-
-/* ============================================================
-   21. RAW SYSTEM TEXT / STATUS CLEANUP
-   ============================================================ */
-
-.pipeline-state {
-  color:
-    var(--ta-final-muted) !important;
-}
-
-.application-actions button.admin-gated,
-button.admin-gated {
-  border:
-    1px solid rgba(255, 176, 74, .22) !important;
-
-  color:
-    var(--ta-final-orange) !important;
-
-  background:
-    rgba(255, 176, 74, .06) !important;
-}
-
-
-/* ============================================================
-   22. MICRO ICON SYSTEM
+   15. ICON SYSTEM
    ============================================================ */
 
 .document-icon,
@@ -1923,25 +1818,38 @@ button.admin-gated {
 
   display: inline-block;
 
-  width: 17px;
-  height: 17px;
+  width: 19px;
+  height: 19px;
 
   color: currentColor;
 }
 
-/* documento */
+
+/* DOCUMENTO / PASSAPORTE */
+
+.document-icon {
+  border:
+    1.4px solid currentColor;
+
+  border-radius:
+    3px;
+}
+
 .document-icon::before {
   content: "";
 
   position: absolute;
 
-  inset:
-    2px 3px 1px;
+  width: 5px;
+  height: 7px;
+
+  left: 3px;
+  top: 4px;
 
   border:
-    1.5px solid currentColor;
+    1px solid currentColor;
 
-  border-radius: 3px;
+  border-radius: 1px;
 }
 
 .document-icon::after {
@@ -1950,21 +1858,21 @@ button.admin-gated {
   position: absolute;
 
   width: 5px;
-  height: 1.5px;
+  height: 1px;
 
-  left: 6px;
-  top: 7px;
+  right: 3px;
+  top: 5px;
 
-  border-radius: 2px;
-
-  background:
-    currentColor;
+  background: currentColor;
 
   box-shadow:
-    0 4px 0 currentColor;
+    0 3px 0 currentColor,
+    0 6px 0 currentColor;
 }
 
-/* pessoa / identidade */
+
+/* IDENTIDADE */
+
 .face-icon::before {
   content: "";
 
@@ -1973,11 +1881,11 @@ button.admin-gated {
   width: 8px;
   height: 8px;
 
-  left: 4.5px;
+  left: 5px;
   top: 1px;
 
   border:
-    1.5px solid currentColor;
+    1.3px solid currentColor;
 
   border-radius: 50%;
 }
@@ -1987,14 +1895,14 @@ button.admin-gated {
 
   position: absolute;
 
-  width: 13px;
+  width: 14px;
   height: 7px;
 
   left: 2px;
   bottom: 1px;
 
   border:
-    1.5px solid currentColor;
+    1.3px solid currentColor;
 
   border-bottom: 0;
 
@@ -2002,18 +1910,36 @@ button.admin-gated {
     9px 9px 0 0;
 }
 
-/* radar */
+
+/* PROCESSAMENTO */
+
+.radar-icon {
+  border:
+    1.3px solid currentColor;
+
+  border-radius: 50%;
+}
+
 .radar-icon::before {
   content: "";
 
   position: absolute;
 
-  inset: 2px;
+  width: 3px;
+  height: 3px;
 
-  border:
-    1.5px solid currentColor;
+  left: 7px;
+  top: 7px;
 
   border-radius: 50%;
+
+  background: currentColor;
+
+  box-shadow:
+    6px 0 0 currentColor,
+    -6px 0 0 currentColor,
+    0 6px 0 currentColor,
+    0 -6px 0 currentColor;
 }
 
 .radar-icon::after {
@@ -2022,10 +1948,10 @@ button.admin-gated {
   position: absolute;
 
   width: 7px;
-  height: 1.5px;
+  height: 1px;
 
   left: 8px;
-  top: 8px;
+  top: 9px;
 
   transform:
     rotate(-45deg);
@@ -2033,14 +1959,12 @@ button.admin-gated {
   transform-origin:
     left center;
 
-  background:
-    currentColor;
-
-  box-shadow:
-    0 0 5px currentColor;
+  background: currentColor;
 }
 
-/* pessoa */
+
+/* REGISTO */
+
 .person-icon::before {
   content: "";
 
@@ -2053,7 +1977,7 @@ button.admin-gated {
   top: 1px;
 
   border:
-    1.5px solid currentColor;
+    1.3px solid currentColor;
 
   border-radius: 50%;
 }
@@ -2063,38 +1987,104 @@ button.admin-gated {
 
   position: absolute;
 
-  width: 13px;
+  width: 14px;
   height: 7px;
 
   left: 2px;
   bottom: 1px;
 
   border:
-    1.5px solid currentColor;
+    1.3px solid currentColor;
 
   border-bottom: 0;
 
   border-radius:
-    8px 8px 0 0;
+    9px 9px 0 0;
 }
 
-/* check */
+
+/* VALIDAÇÃO */
+
+.check-icon {
+  border:
+    1.3px solid currentColor;
+
+  border-radius: 50%;
+}
+
 .check-icon::before {
   content: "";
 
   position: absolute;
 
-  width: 8px;
+  width: 7px;
   height: 4px;
 
-  left: 4px;
+  left: 5px;
   top: 5px;
 
   border-left:
-    1.7px solid currentColor;
+    1.5px solid currentColor;
 
   border-bottom:
-    1.7px solid currentColor;
+    1.5px solid currentColor;
+
+  transform:
+    rotate(-45deg);
+}
+
+
+/* RESULTADO DO PASSAPORTE */
+
+.result-state-icon {
+  position: relative;
+
+  width: 42px !important;
+  height: 42px !important;
+
+  display: grid;
+
+  place-items: center;
+
+  color: transparent !important;
+
+  border:
+    1px solid rgba(54, 186, 255, .20);
+
+  border-radius: 12px;
+
+  background:
+    rgba(54, 186, 255, .055);
+}
+
+.result-state-icon::before {
+  content: "";
+
+  width: 20px;
+  height: 14px;
+
+  border:
+    1.2px solid var(--ta-blue);
+
+  border-radius: 2px;
+}
+
+.result-state-icon::after {
+  content: "";
+
+  position: absolute;
+
+  width: 6px;
+  height: 4px;
+
+  left: 19px;
+  top: 19px;
+
+  border-left:
+    1px solid var(--ta-blue);
+
+  border-bottom:
+    1px solid var(--ta-blue);
 
   transform:
     rotate(-45deg);
@@ -2102,7 +2092,411 @@ button.admin-gated {
 
 
 /* ============================================================
-   23. HIERARQUIA DA CANDIDATURA
+   16. BUTTONS
+   ============================================================ */
+
+.primary-button,
+button.primary-button {
+  min-height: 46px;
+
+  border:
+    0 !important;
+
+  border-radius:
+    11px !important;
+
+  color:
+    #04101a !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--ta-cyan),
+      var(--ta-blue)
+    ) !important;
+
+  font-size: 10px;
+
+  font-weight: 900;
+
+  box-shadow:
+    0 12px 28px rgba(54, 186, 255, .15);
+
+  transition:
+    transform 180ms var(--ta-ease),
+    box-shadow 180ms var(--ta-ease),
+    filter 180ms var(--ta-ease);
+}
+
+.primary-button:hover {
+  transform:
+    translateY(-2px);
+
+  filter:
+    brightness(1.04);
+
+  box-shadow:
+    0 16px 35px rgba(54, 186, 255, .20);
+}
+
+.secondary-button {
+  min-height: 46px;
+
+  border:
+    1px solid var(--ta-line) !important;
+
+  border-radius:
+    11px !important;
+
+  color:
+    var(--ta-text-soft) !important;
+
+  background:
+    rgba(255, 255, 255, .025) !important;
+}
+
+.secondary-button:hover {
+  border-color:
+    var(--ta-line-strong) !important;
+
+  color:
+    var(--ta-text) !important;
+
+  background:
+    rgba(54, 186, 255, .05) !important;
+}
+
+
+/* ============================================================
+   17. IDENTITY / CAMERA
+   ============================================================ */
+
+.workflow-stage-mount,
+.facial-preflight-mount {
+  color:
+    var(--ta-text);
+}
+
+.workflow-stage-mount > *,
+.facial-preflight-mount > * {
+  max-width: 100%;
+}
+
+.camera-panel,
+.face-capture-panel,
+.identity-panel,
+.facial-panel {
+  border:
+    1px solid var(--ta-line) !important;
+
+  border-radius:
+    var(--ta-radius-lg) !important;
+
+  background:
+    #07111b !important;
+
+  box-shadow:
+    var(--ta-shadow) !important;
+}
+
+.camera-panel video,
+.face-capture-panel video,
+.identity-panel video,
+.facial-panel video {
+  border-radius:
+    var(--ta-radius-md);
+}
+
+.camera-frame,
+.face-frame {
+  border-color:
+    rgba(54, 186, 255, .65) !important;
+
+  box-shadow:
+    0 0 0 999px rgba(2, 8, 13, .20),
+    0 0 35px rgba(54, 186, 255, .10) !important;
+}
+
+
+/* ============================================================
+   18. READINESS
+   ============================================================ */
+
+.passport-readiness {
+  border:
+    1px solid var(--ta-line) !important;
+
+  border-radius:
+    var(--ta-radius-md) !important;
+
+  background:
+    rgba(255, 255, 255, .022) !important;
+
+  color:
+    var(--ta-text-soft) !important;
+}
+
+.readiness-checks {
+  color:
+    var(--ta-muted) !important;
+}
+
+.document-note {
+  color:
+    var(--ta-muted) !important;
+}
+
+.facial-consent-card {
+  border:
+    1px solid rgba(54, 186, 255, .13) !important;
+
+  border-radius:
+    var(--ta-radius-md) !important;
+
+  background:
+    rgba(54, 186, 255, .035) !important;
+
+  color:
+    var(--ta-text-soft) !important;
+}
+
+
+/* ============================================================
+   19. PREFERÊNCIAS DE VIAGEM
+   ============================================================ */
+
+.frontend-final-preferences {
+  border:
+    1px solid var(--ta-line) !important;
+
+  border-radius:
+    var(--ta-radius-lg) !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(13, 29, 43, .96),
+      rgba(7, 18, 28, .98)
+    ) !important;
+
+  box-shadow:
+    var(--ta-shadow-soft) !important;
+}
+
+.frontend-final-preferences-header span,
+.frontend-final-preferences-header strong {
+  color:
+    var(--ta-text);
+}
+
+.frontend-final-preferences-header span {
+  color:
+    var(--ta-blue);
+}
+
+.frontend-final-preferences-header small {
+  color:
+    var(--ta-muted);
+}
+
+.frontend-field > span,
+.frontend-final-weekdays > span {
+  color:
+    var(--ta-muted) !important;
+}
+
+.frontend-field select {
+  color:
+    var(--ta-text) !important;
+
+  background:
+    rgba(255, 255, 255, .025) !important;
+}
+
+.frontend-final-day span {
+  border-color:
+    rgba(150, 194, 221, .11) !important;
+
+  color:
+    var(--ta-muted) !important;
+
+  background:
+    rgba(255, 255, 255, .025) !important;
+}
+
+.frontend-final-day:hover span {
+  border-color:
+    rgba(54, 186, 255, .27) !important;
+}
+
+.frontend-final-day input:checked + span {
+  border-color:
+    var(--ta-blue) !important;
+
+  color:
+    #03101a !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--ta-cyan),
+      var(--ta-blue)
+    ) !important;
+
+  box-shadow:
+    0 10px 25px rgba(54, 186, 255, .14) !important;
+}
+
+.frontend-final-summary {
+  border-color:
+    var(--ta-line-soft) !important;
+
+  background:
+    rgba(255, 255, 255, .022) !important;
+
+  color:
+    var(--ta-muted) !important;
+}
+
+.frontend-final-summary strong {
+  color:
+    var(--ta-text) !important;
+}
+
+
+/* ============================================================
+   20. ADMINISTRAÇÃO
+   ============================================================ */
+
+.frontend-final-admin-waiting {
+  border:
+    1px solid rgba(54, 186, 255, .14) !important;
+
+  border-radius:
+    var(--ta-radius-lg) !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(13, 31, 47, .96),
+      rgba(7, 18, 28, .98)
+    ) !important;
+
+  box-shadow:
+    var(--ta-shadow-soft) !important;
+}
+
+.frontend-final-status-icon {
+  border:
+    1px solid rgba(54, 186, 255, .13);
+
+  color:
+    var(--ta-blue);
+
+  background:
+    rgba(54, 186, 255, .055);
+}
+
+.frontend-final-status-icon.success {
+  color:
+    var(--ta-green);
+
+  background:
+    rgba(59, 217, 148, .065);
+}
+
+.frontend-final-status-copy > span {
+  color:
+    var(--ta-blue);
+}
+
+.frontend-final-status-copy > strong {
+  color:
+    var(--ta-text);
+}
+
+.frontend-final-status-copy > small,
+.frontend-final-state-row {
+  color:
+    var(--ta-muted);
+}
+
+.frontend-final-status-badge.pending {
+  color:
+    var(--ta-orange);
+
+  background:
+    rgba(255, 180, 83, .07);
+}
+
+.frontend-final-status-badge.active,
+.frontend-final-status-badge.completed {
+  color:
+    var(--ta-green);
+
+  background:
+    rgba(59, 217, 148, .07);
+}
+
+
+/* ============================================================
+   21. PAGAMENTO
+   ============================================================ */
+
+.frontend-final-payment {
+  border:
+    1px solid var(--ta-line) !important;
+
+  border-radius:
+    var(--ta-radius-lg) !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(13, 29, 43, .96),
+      rgba(7, 18, 28, .98)
+    ) !important;
+
+  box-shadow:
+    var(--ta-shadow-soft) !important;
+}
+
+.frontend-final-payment-header strong,
+.frontend-final-payment-grid strong {
+  color:
+    var(--ta-text) !important;
+}
+
+.frontend-final-payment-header span,
+.frontend-final-payment p,
+.frontend-final-payment-grid span {
+  color:
+    var(--ta-muted) !important;
+}
+
+.frontend-final-payment-grid > div {
+  border-color:
+    var(--ta-line-soft) !important;
+
+  background:
+    rgba(255, 255, 255, .022) !important;
+}
+
+.frontend-final-confirmation-link {
+  color:
+    #04101a !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--ta-cyan),
+      var(--ta-blue)
+    ) !important;
+}
+
+
+/* ============================================================
+   22. APPLICATION
    ============================================================ */
 
 .application-panel {
@@ -2117,7 +2511,7 @@ button.admin-gated {
   left: 0;
   top: 0;
 
-  width: 3px;
+  width: 2px;
   height: 100%;
 
   border-radius:
@@ -2126,51 +2520,143 @@ button.admin-gated {
   background:
     linear-gradient(
       180deg,
-      var(--ta-final-blue),
+      var(--ta-blue),
       transparent
     );
 
-  opacity: .7;
+  opacity: .55;
+}
+
+.application-actions button.admin-gated,
+button.admin-gated {
+  border:
+    1px solid rgba(255, 180, 83, .20) !important;
+
+  color:
+    var(--ta-orange) !important;
+
+  background:
+    rgba(255, 180, 83, .05) !important;
 }
 
 
 /* ============================================================
-   24. FOOTER / FINAL PAGE AREA
+   23. CLEANUP DE GLIFOS GENÉRICOS
+   ============================================================ */
+
+/*
+   Mantemos o texto/DOM para não interferir no JS.
+   Visualmente, os símbolos genéricos deixam de dominar a interface.
+*/
+
+.passport-preview button,
+.passport-preview .close,
+.preview-close {
+  color: transparent !important;
+}
+
+.passport-preview button::before,
+.passport-preview .close::before,
+.preview-close::before {
+  content: "";
+
+  position: absolute;
+
+  width: 13px;
+  height: 1px;
+
+  background:
+    var(--ta-muted);
+
+  transform:
+    rotate(45deg);
+}
+
+.passport-preview button::after,
+.passport-preview .close::after,
+.preview-close::after {
+  content: "";
+
+  position: absolute;
+
+  width: 13px;
+  height: 1px;
+
+  background:
+    var(--ta-muted);
+
+  transform:
+    rotate(-45deg);
+}
+
+
+/* ============================================================
+   24. TEXTOS OPERACIONAIS
+   ============================================================ */
+
+.document-note,
+.passport-upload-limit,
+.readiness-checks,
+.pipeline-copy span,
+.frontend-final-status-copy > small {
+  line-height:
+    1.5;
+}
+
+.status-label,
+.eyebrow,
+.panel-eyebrow {
+  text-transform:
+    uppercase;
+}
+
+
+/* ============================================================
+   25. FOOTER
    ============================================================ */
 
 .main-container::after {
   content:
-    "TRAVEL AUTOMATION  ·  PREPARAÇÃO INTELIGENTE DE VIAGENS";
+    "ANGOLA  →  PORTUGAL   ·   DOCUMENTO   ·   IDENTIDADE   ·   VIAGEM   ·   PROCESSAMENTO";
 
   display: block;
 
-  margin-top: 56px;
-  padding-top: 24px;
+  margin-top:
+    48px;
+
+  padding-top:
+    22px;
 
   border-top:
-    1px solid rgba(148, 190, 220, .08);
+    1px solid var(--ta-line-soft);
 
   color:
-    var(--ta-final-muted-2);
+    var(--ta-muted-2);
 
-  font-size: 8px;
-  font-weight: 800;
+  font-size:
+    7px;
 
-  letter-spacing: .14em;
+  font-weight:
+    800;
 
-  text-align: center;
+  letter-spacing:
+    .15em;
+
+  text-align:
+    center;
 }
 
 
 /* ============================================================
-   25. SCROLLBAR
+   26. SCROLLBAR
    ============================================================ */
 
 * {
-  scrollbar-width: thin;
+  scrollbar-width:
+    thin;
 
   scrollbar-color:
-    rgba(84, 143, 178, .35)
+    rgba(84, 143, 178, .32)
     transparent;
 }
 
@@ -2185,20 +2671,21 @@ button.admin-gated {
 }
 
 *::-webkit-scrollbar-thumb {
-  border-radius: 999px;
+  border-radius:
+    999px;
 
   background:
-    rgba(84, 143, 178, .30);
+    rgba(84, 143, 178, .28);
 }
 
 *::-webkit-scrollbar-thumb:hover {
   background:
-    rgba(50, 184, 255, .45);
+    rgba(54, 186, 255, .42);
 }
 
 
 /* ============================================================
-   26. TABLET
+   27. TABLET
    ============================================================ */
 
 @media (max-width: 1100px) {
@@ -2218,39 +2705,61 @@ button.admin-gated {
 
   .hero-flight-card {
     min-height:
-      230px;
-  }
-
-  .stats-grid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+      225px;
   }
 
   .system-pipeline {
     grid-template-columns:
       repeat(2, minmax(0, 1fr));
 
-    gap: 8px;
+    gap:
+      8px;
   }
 
   .pipeline-connector {
-    display: none;
+    display:
+      none;
+  }
+
+  .stats-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    gap:
+      0;
+  }
+
+  .stat-card:nth-child(2) {
+    border-right:
+      0;
+  }
+
+  .stat-card:nth-child(-n + 2) {
+    border-bottom:
+      1px solid var(--ta-line-soft);
+  }
+
+  .passport-upload-layout {
+    grid-template-columns:
+      1fr;
   }
 }
 
 
 /* ============================================================
-   27. MOBILE
+   28. MOBILE
    ============================================================ */
 
 @media (max-width: 760px) {
 
   .topbar {
-    min-height: 64px;
+    min-height:
+      64px;
   }
 
   .topbar-center {
-    display: none;
+    display:
+      none;
   }
 
   .user-chip {
@@ -2259,7 +2768,8 @@ button.admin-gated {
   }
 
   .user-chip > div:last-child {
-    display: none;
+    display:
+      none;
   }
 
   .main-container {
@@ -2270,7 +2780,7 @@ button.admin-gated {
       18px;
 
     padding-bottom:
-      60px;
+      55px;
   }
 
   .operations-hero {
@@ -2278,18 +2788,18 @@ button.admin-gated {
       auto;
 
     padding:
-      32px 23px 24px;
+      31px 22px 23px;
 
     border-radius:
       23px;
 
     gap:
-      28px;
+      27px;
   }
 
   .operations-hero h1 {
     font-size:
-      clamp(35px, 11vw, 50px);
+      clamp(34px, 10vw, 48px);
   }
 
   .operations-hero p {
@@ -2315,10 +2825,10 @@ button.admin-gated {
 
   .hero-flight-card {
     min-height:
-      220px;
+      210px;
 
     padding:
-      19px;
+      18px;
   }
 
   .system-pipeline {
@@ -2326,36 +2836,40 @@ button.admin-gated {
       1fr;
 
     padding:
-      10px;
+      9px;
   }
 
   .pipeline-item {
     min-height:
-      62px;
+      64px;
+
+    padding:
+      9px 10px;
   }
 
   .stats-grid {
     grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+      1fr;
 
     gap:
-      8px;
+      0;
   }
 
-  .stat-card {
-    padding:
-      12px;
+  .stat-card,
+  .stat-card:nth-child(2) {
+    min-height:
+      65px;
 
-    gap:
-      9px;
+    border-right:
+      0;
+
+    border-bottom:
+      1px solid var(--ta-line-soft);
   }
 
-  .stat-icon {
-    width:
-      34px;
-
-    height:
-      34px;
+  .stat-card:last-child {
+    border-bottom:
+      0;
   }
 
   .stat-content strong {
@@ -2365,7 +2879,7 @@ button.admin-gated {
 
   .panel {
     border-radius:
-      18px !important;
+      19px !important;
   }
 
   .panel-header {
@@ -2380,19 +2894,25 @@ button.admin-gated {
 
   .passport-dropzone {
     min-height:
-      190px;
+      195px;
+  }
+
+  .passport-upload-layout {
+    gap:
+      13px;
   }
 }
 
 
 /* ============================================================
-   28. SMALL MOBILE
+   29. SMALL MOBILE
    ============================================================ */
 
 @media (max-width: 480px) {
 
   .brand-copy span {
-    display: none;
+    display:
+      none;
   }
 
   .topbar-brand {
@@ -2412,17 +2932,17 @@ button.admin-gated {
 
   .operations-hero {
     padding:
-      28px 18px 20px;
+      27px 18px 20px;
   }
 
   .operations-hero h1 {
     font-size:
-      34px;
+      33px;
   }
 
   .hero-flight-card {
     min-height:
-      200px;
+      195px;
 
     padding:
       16px;
@@ -2430,7 +2950,7 @@ button.admin-gated {
 
   .flight-route {
     gap:
-      9px;
+      8px;
   }
 
   .route-point strong {
@@ -2438,19 +2958,17 @@ button.admin-gated {
       12px;
   }
 
-  .stats-grid {
-    grid-template-columns:
-      1fr;
-  }
-
-  .stat-card {
-    min-height:
-      62px;
-  }
-
   .pipeline-item {
-    padding:
-      9px;
+    gap:
+      8px;
+  }
+
+  .pipeline-icon {
+    width:
+      34px;
+
+    height:
+      34px;
   }
 
   .pipeline-copy strong {
@@ -2479,16 +2997,27 @@ button.admin-gated {
     border-radius:
       17px !important;
   }
+
+  .main-container::after {
+    font-size:
+      6px;
+
+    letter-spacing:
+      .10em;
+
+    line-height:
+      1.7;
+  }
 }
 
 
 /* ============================================================
-   29. ACCESSIBILITY / REDUCED MOTION
+   30. ACCESSIBILITY
    ============================================================ */
 
 :focus-visible {
   outline:
-    2px solid rgba(50, 184, 255, .65);
+    2px solid rgba(54, 186, 255, .65);
 
   outline-offset:
     3px;
