@@ -1,556 +1,858 @@
 /*
- * ============================================================
- * TRAVEL AUTOMATION
- * FACIAL PREFLIGHT
- * ============================================================
- *
- * MOTOR FACIAL LOCAL
- *
- * FaceAPI:
- * /face-api/face-api.min.js
- *
- * Modelos:
- * /models
- *
- * Não utiliza:
- * - MediaPipe Face Landmarker
- * - MediaPipe WASM
- * - CDN para FaceAPI
- * - API externa de reconhecimento facial
- *
- * O processamento facial acontece localmente no navegador.
- * ============================================================
- */
+
+* ============================================================
+* TRAVEL AUTOMATION
+* FACIAL PREFLIGHT — MOTOR LOCAL
+* ============================================================
+* 
+* Responsabilidades:
+* 
+* - carregar FaceAPI local;
+* - carregar todos os modelos locais;
+* - ativar áudio orientado;
+* - abrir câmera frontal;
+* - detectar exatamente um rosto;
+* - verificar enquadramento;
+* - verificar iluminação;
+* - verificar estabilidade;
+* - orientar 10 posições;
+* - capturar cada posição;
+* - devolver resultado compatível com a UI atual;
+* - guardar resultado no backend.
+* 
+* NÃO usa CDN.
+* NÃO envia vídeo para API externa.
+* 
+* Arquivos esperados:
+* 
+* /face-api/face-api.min.js
+* /models/
+* 
+* ============================================================
+  */
 
 (() => {
-  "use strict";
+"use strict";
 
-  const FACE_API_SCRIPT_URL =
-    window.TRAVEL_FACE_API_SCRIPT_URL ||
-    "/face-api/face-api.min.js";
+const FACE_API_SCRIPT_URL =
+window.TRAVEL_FACE_API_SCRIPT_URL ||
+"/face-api/face-api.min.js";
 
-  const FACE_API_MODEL_URL =
-    window.TRAVEL_FACE_API_MODEL_URL ||
-    "/models";
+const FACE_API_MODEL_URL =
+window.TRAVEL_FACE_API_MODEL_URL ||
+"/models";
 
-  const AUDIO_LANGUAGE =
-    "pt-PT";
+const AUDIO_LANGUAGE =
+"pt-PT";
 
-  const POSITIONS = [
-    {
-      id: "frontal",
-      label:
-        "Olhe diretamente para a câmera",
-      instruction:
-        "Olhe diretamente para a câmera e mantenha o rosto parado."
-    },
-    {
-      id: "left",
-      label:
-        "Vire o rosto para a esquerda",
-      instruction:
-        "Vire lentamente o rosto para a esquerda."
-    },
-    {
-      id: "right",
-      label:
-        "Vire o rosto para a direita",
-      instruction:
-        "Vire lentamente o rosto para a direita."
-    },
-    {
-      id: "up",
-      label:
-        "Olhe para cima",
-      instruction:
-        "Levante lentamente o rosto e olhe para cima."
-    },
-    {
-      id: "down",
-      label:
-        "Olhe para baixo",
-      instruction:
-        "Baixe lentamente o rosto e olhe para baixo."
-    },
-    {
-      id: "left_up",
-      label:
-        "Esquerda e para cima",
-      instruction:
-        "Vire o rosto para a esquerda e olhe para cima."
-    },
-    {
-      id: "right_up",
-      label:
-        "Direita e para cima",
-      instruction:
-        "Vire o rosto para a direita e olhe para cima."
-    },
-    {
-      id: "left_down",
-      label:
-        "Esquerda e para baixo",
-      instruction:
-        "Vire o rosto para a esquerda e olhe para baixo."
-    },
-    {
-      id: "right_down",
-      label:
-        "Direita e para baixo",
-      instruction:
-        "Vire o rosto para a direita e olhe para baixo."
-    },
-    {
-      id: "smile",
-      label:
-        "Sorria",
-      instruction:
-        "Agora sorria e mantenha o sorriso por alguns segundos."
-    }
-  ];
+/*
 
-  const CONFIG = {
-    detectorInputSize:
-      320,
+* ==========================================================
+* POSIÇÕES
+* ==========================================================
+  */
 
-    detectorScoreThreshold:
-      0.5,
+const POSITIONS = [
+{
+id: "frontal",
+label: "Olhe diretamente para a câmera",
+instruction:
+"Olhe diretamente para a câmera e mantenha o rosto parado."
+},
 
-    minFaceArea:
-      0.04,
+{
+  id: "left",
+  label: "Vire o rosto para a esquerda",
+  instruction:
+    "Vire lentamente o rosto para a esquerda."
+},
 
-    maxFaceArea:
-      0.82,
+{
+  id: "right",
+  label: "Vire o rosto para a direita",
+  instruction:
+    "Vire lentamente o rosto para a direita."
+},
 
-    idealFaceAreaMin:
-      0.10,
+{
+  id: "up",
+  label: "Olhe para cima",
+  instruction:
+    "Levante lentamente o rosto e olhe para cima."
+},
 
-    idealFaceAreaMax:
-      0.60,
+{
+  id: "down",
+  label: "Olhe para baixo",
+  instruction:
+    "Baixe lentamente o rosto e olhe para baixo."
+},
 
-    minBrightness:
-      35,
+{
+  id: "left_up",
+  label: "Esquerda e para cima",
+  instruction:
+    "Vire o rosto para a esquerda e olhe para cima."
+},
 
-    maxBrightness:
-      235,
+{
+  id: "right_up",
+  label: "Direita e para cima",
+  instruction:
+    "Vire o rosto para a direita e olhe para cima."
+},
 
-    stableFramesRequired:
-      6,
+{
+  id: "left_down",
+  label: "Esquerda e para baixo",
+  instruction:
+    "Vire o rosto para a esquerda e olhe para baixo."
+},
 
-    detectionIntervalMs:
-      100,
+{
+  id: "right_down",
+  label: "Direita e para baixo",
+  instruction:
+    "Vire o rosto para a direita e olhe para baixo."
+},
 
-    positionScoreThreshold:
-      0.66,
+{
+  id: "smile",
+  label: "Sorria",
+  instruction:
+    "Agora sorria e mantenha o sorriso por alguns segundos."
+}
 
-    overallScoreThreshold:
-      0.68,
+];
 
-    smileThreshold:
-      0.50,
+/*
 
-    positionTimeoutMs:
-      12000,
+* ==========================================================
+* CONFIGURAÇÃO
+* ==========================================================
+  */
 
-    maxFaces:
-      1,
+const CONFIG = {
 
-    cameraWidth:
-      1280,
+detectorInputSize:
+  320,
 
-    cameraHeight:
-      720,
+detectorScoreThreshold:
+  0.45,
 
-    cameraFrameRate:
-      24
-  };
+minFaceArea:
+  0.045,
 
-  let faceApi = null;
+maxFaceArea:
+  0.78,
 
-  let faceApiPromise =
-    null;
+idealFaceAreaMin:
+  0.10,
 
-  let modelsPromise =
-    null;
+idealFaceAreaMax:
+  0.58,
 
-  let stream =
-    null;
+minBrightness:
+  35,
 
-  let videoElement =
-    null;
+maxBrightness:
+  235,
 
-  let canvasElement =
-    null;
+stableFramesRequired:
+  5,
 
-  let canvasContext =
-    null;
+detectionIntervalMs:
+  120,
 
-  let clientId =
-    null;
+positionScoreThreshold:
+  0.64,
 
-  let running =
-    false;
+overallScoreThreshold:
+  0.62,
 
-  let processing =
-    false;
+smileThreshold:
+  0.42,
 
-  let animationFrame =
-    null;
+positionTimeoutMs:
+  15000,
 
-  let lastDetectionAt =
-    0;
+maxFaces:
+  1,
 
-  let currentPositionIndex =
-    0;
+cameraWidth:
+  1280,
 
-  let stableFrames =
-    0;
+cameraHeight:
+  720,
 
-  let positionStartedAt =
-    0;
+cameraFrameRate:
+  24
 
-  let completedPositions =
-    [];
+};
 
-  let capturedPositions =
-    [];
+/*
 
-  let result =
-    null;
+* ==========================================================
+* ESTADO
+* ==========================================================
+  */
 
-  let callbacks =
-    {};
+let faceApi =
+null;
 
-  let initialized =
-    false;
+let faceApiPromise =
+null;
 
-  function safeCall(
+let modelsPromise =
+null;
+
+let stream =
+null;
+
+let videoElement =
+null;
+
+let canvasElement =
+null;
+
+let canvasContext =
+null;
+
+let clientId =
+null;
+
+let running =
+false;
+
+let processing =
+false;
+
+let animationFrame =
+null;
+
+let lastDetectionAt =
+0;
+
+let currentPositionIndex =
+0;
+
+let stableFrames =
+0;
+
+let positionStartedAt =
+0;
+
+let completedPositions =
+[];
+
+let capturedPositions =
+[];
+
+let result =
+null;
+
+let callbacks =
+{};
+
+let initialized =
+false;
+
+let preferredPortugueseVoice =
+null;
+
+let audioReady =
+false;
+
+let speaking =
+false;
+
+/*
+
+* ==========================================================
+* CALLBACKS
+* ==========================================================
+  */
+
+function safeCall(
+name,
+payload
+) {
+try {
+
+  if (
+    callbacks &&
+    typeof callbacks[name] ===
+      "function"
+  ) {
+
+    callbacks[name](
+      payload
+    );
+  }
+
+} catch (error) {
+
+  console.error(
+    "[FacialPreflight] callback error:",
     name,
-    payload
+    error
+  );
+}
+
+}
+
+function setStatus(
+message,
+type = "info",
+analysis = null
+) {
+
+safeCall(
+  "onStatus",
+  {
+    message:
+      String(
+        message || ""
+      ),
+
+    type,
+
+    analysis
+  }
+);
+
+}
+
+function emitError(
+message,
+error = null
+) {
+
+console.error(
+  "[FacialPreflight]",
+  message,
+  error || ""
+);
+
+safeCall(
+  "onError",
+  {
+    message:
+      String(
+        message || ""
+      ),
+
+    error
+  }
+);
+
+}
+
+/*
+
+* ==========================================================
+* UTILITÁRIOS
+* ==========================================================
+  */
+
+function clamp(
+value,
+min,
+max
+) {
+
+return Math.max(
+  min,
+  Math.min(
+    max,
+    Number(value) || 0
+  )
+);
+
+}
+
+function average(
+values
+) {
+
+if (
+  !Array.isArray(values) ||
+  !values.length
+) {
+  return 0;
+}
+
+return (
+  values.reduce(
+    (
+      total,
+      value
+    ) =>
+      total +
+      Number(
+        value || 0
+      ),
+    0
+  ) /
+  values.length
+);
+
+}
+
+function sleep(
+ms
+) {
+
+return new Promise(
+  resolve =>
+    setTimeout(
+      resolve,
+      ms
+    )
+);
+
+}
+
+/*
+
+* ==========================================================
+* ÁUDIO ORIENTADO
+* ==========================================================
+  */
+
+function selectPortugueseVoice() {
+
+if (
+  !(
+    "speechSynthesis" in
+    window
+  )
+) {
+  return null;
+}
+
+try {
+
+  const voices =
+    window.speechSynthesis
+      .getVoices();
+
+  if (
+    !voices ||
+    !voices.length
   ) {
-    try {
-      if (
-        callbacks &&
-        typeof callbacks[name] ===
-          "function"
-      ) {
-        callbacks[name](
-          payload
-        );
-      }
-    } catch (error) {
-      console.error(
-        "[FacialPreflight] callback error:",
-        name,
-        error
-      );
-    }
+    return null;
   }
 
-  function setStatus(
-    message,
-    type = "info"
+  return (
+
+    voices.find(
+      voice =>
+        /^pt-PT$/i.test(
+          voice.lang ||
+          ""
+        )
+    ) ||
+
+    voices.find(
+      voice =>
+        /^pt-PT/i.test(
+          voice.lang ||
+          ""
+        )
+    ) ||
+
+    voices.find(
+      voice =>
+        /^pt/i.test(
+          voice.lang ||
+          ""
+        )
+    ) ||
+
+    null
+  );
+
+} catch (_) {
+
+  return null;
+}
+
+}
+
+function preparePortugueseVoice() {
+
+preferredPortugueseVoice =
+  selectPortugueseVoice();
+
+if (
+  preferredPortugueseVoice
+) {
+  audioReady =
+    true;
+}
+
+try {
+
+  if (
+    "speechSynthesis" in
+    window
   ) {
-    safeCall(
-      "onStatus",
-      {
-        message: String(
-          message || ""
-        ),
-        type
-      }
-    );
-  }
 
-  function emitError(
-    message,
-    error = null
-  ) {
-    console.error(
-      "[FacialPreflight]",
-      message,
-      error || ""
-    );
+    window
+      .speechSynthesis
+      .addEventListener(
+        "voiceschanged",
+        () => {
 
-    safeCall(
-      "onError",
-      {
-        message,
-        error
-      }
-    );
-  }
-
-  function clamp(
-    value,
-    min,
-    max
-  ) {
-    return Math.max(
-      min,
-      Math.min(
-        max,
-        value
-      )
-    );
-  }
-
-  function average(
-    values
-  ) {
-    if (
-      !values ||
-      !values.length
-    ) {
-      return 0;
-    }
-
-    return (
-      values.reduce(
-        (
-          sum,
-          value
-        ) =>
-          sum +
-          Number(
-            value || 0
-          ),
-        0
-      ) /
-      values.length
-    );
-  }
-
-    let preferredPortugueseVoice =
-    null;
-
-  let audioPrimed =
-    false;
-
-  function selectPortugueseVoice() {
-    if (
-      !("speechSynthesis" in window)
-    ) {
-      return null;
-    }
-
-    try {
-      const voices =
-        window.speechSynthesis.getVoices();
-
-      if (
-        !voices ||
-        !voices.length
-      ) {
-        return null;
-      }
-
-      return (
-        voices.find(
-          voice =>
-            /^pt-PT$/i.test(
-              voice.lang || ""
-            )
-        ) ||
-        voices.find(
-          voice =>
-            /^pt-BR$/i.test(
-              voice.lang || ""
-            )
-        ) ||
-        voices.find(
-          voice =>
-            /^pt/i.test(
-              voice.lang || ""
-            )
-        ) ||
-        null
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function preparePortugueseVoice() {
-    preferredPortugueseVoice =
-      selectPortugueseVoice();
-
-    try {
-      if (
-        "speechSynthesis" in window
-      ) {
-        window.speechSynthesis.onvoiceschanged =
-          () => {
-            preferredPortugueseVoice =
-              selectPortugueseVoice();
-          };
-      }
-    } catch (_) {}
-  }
-
-  function speak(
-    text
-  ) {
-    if (
-      !text ||
-      !(
-        "speechSynthesis" in
-        window
-      ) ||
-      typeof SpeechSynthesisUtterance ===
-        "undefined"
-    ) {
-      return false;
-    }
-
-    try {
-      const synthesis =
-        window.speechSynthesis;
-
-      synthesis.cancel();
-
-      /*
-       * resume() é importante em alguns
-       * navegadores Android quando o
-       * mecanismo de voz fica suspenso.
-       */
-      try {
-        synthesis.resume();
-      } catch (_) {}
-
-      const utterance =
-        new SpeechSynthesisUtterance(
-          String(text)
-        );
-
-      utterance.lang =
-        AUDIO_LANGUAGE;
-
-      utterance.rate =
-        0.95;
-
-      utterance.pitch =
-        1;
-
-      utterance.volume =
-        1;
-
-      const voice =
-        preferredPortugueseVoice ||
-        selectPortugueseVoice();
-
-      if (voice) {
-        utterance.voice =
-          voice;
-      }
-
-      synthesis.speak(
-        utterance
-      );
-
-      audioPrimed =
-        true;
-
-      return true;
-    } catch (error) {
-      console.warn(
-        "[FacialPreflight] speech error",
-        error
-      );
-
-      return false;
-    }
-  }
-
-  function primeAudio(
-    firstInstruction
-  ) {
-    /*
-     * Esta função precisa ser chamada
-     * diretamente durante o clique do
-     * utilizador.
-     *
-     * Não existe campo de áudio.
-     * O primeiro comando de voz é também
-     * a ativação do mecanismo de áudio.
-     */
-    if (
-      !firstInstruction ||
-      !("speechSynthesis" in window)
-    ) {
-      return false;
-    }
-
-    preparePortugueseVoice();
-
-    const activated =
-      speak(
-        firstInstruction
-      );
-
-    if (activated) {
-      audioPrimed =
-        true;
-    }
-
-    return activated;
-  }
-
-  function stopSpeech() {
-    try {
-      if (
-        window.speechSynthesis
-      ) {
-        window.speechSynthesis.cancel();
-      }
-    } catch (_) {}
-  }
-
-  function getCurrentPosition() {
-    return (
-      POSITIONS[
-        currentPositionIndex
-      ] || null
-    );
-  }
-
-  /*
-   * ==========================================================
-   * FACE API LOCAL
-   * ==========================================================
-   */
-
-  async function loadFaceApi() {
-    if (
-      window.faceapi
-    ) {
-      faceApi =
-        window.faceapi;
-
-      return faceApi;
-    }
-
-    if (
-      faceApiPromise
-    ) {
-      return faceApiPromise;
-    }
-
-    faceApiPromise =
-      new Promise(
-        (
-          resolve,
-          reject
-        ) => {
-          const existing =
-            document.querySelector(
-              "script[data-travel-face-api]"
-            );
+          preferredPortugueseVoice =
+            selectPortugueseVoice();
 
           if (
-            existing &&
+            preferredPortugueseVoice
+          ) {
+
+            audioReady =
+              true;
+          }
+        },
+        {
+          once: false
+        }
+      );
+  }
+
+} catch (_) {}
+
+}
+
+/*
+
+* Fala imediatamente.
+* 
+* Esta função não espera nenhum Promise.
+* Isso é importante para Android.
+  */
+
+function speak(
+text,
+options = {}
+) {
+
+if (
+  !text ||
+  !(
+    "speechSynthesis" in
+    window
+  ) ||
+  typeof SpeechSynthesisUtterance ===
+    "undefined"
+) {
+
+  return false;
+}
+
+try {
+
+  const synthesis =
+    window.speechSynthesis;
+
+  const utterance =
+    new SpeechSynthesisUtterance(
+      String(text)
+    );
+
+  utterance.lang =
+    AUDIO_LANGUAGE;
+
+  utterance.rate =
+    Number(
+      options.rate || 0.94
+    );
+
+  utterance.pitch =
+    1;
+
+  utterance.volume =
+    1;
+
+  const voice =
+    preferredPortugueseVoice ||
+    selectPortugueseVoice();
+
+  if (voice) {
+
+    utterance.voice =
+      voice;
+  }
+
+  utterance.onstart =
+    () => {
+      speaking =
+        true;
+    };
+
+  utterance.onend =
+    () => {
+      speaking =
+        false;
+    };
+
+  utterance.onerror =
+    event => {
+
+      speaking =
+        false;
+
+      console.warn(
+        "[FacialPreflight] TTS error:",
+        event
+      );
+    };
+
+  /*
+   * Não cancelamos uma fala que acabou
+   * de começar se ela ainda estiver ativa.
+   *
+   * Para instruções novas, cancelamos
+   * explicitamente antes.
+   */
+
+  synthesis.cancel();
+
+  try {
+    synthesis.resume();
+  } catch (_) {}
+
+  synthesis.speak(
+    utterance
+  );
+
+  audioReady =
+    true;
+
+  return true;
+
+} catch (error) {
+
+  console.warn(
+    "[FacialPreflight] Não foi possível reproduzir orientação:",
+    error
+  );
+
+  return false;
+}
+
+}
+
+/*
+
+* Esta função é chamada no início de
+* initialize(), antes de qualquer await.
+  */
+
+function primeAudio() {
+
+preparePortugueseVoice();
+
+const first =
+  POSITIONS[0];
+
+if (!first) {
+  return false;
+}
+
+/*
+ * O primeiro speak acontece no contexto
+ * direto do clique que iniciou o processo.
+ */
+
+return speak(
+  first.instruction,
+  {
+    rate:
+      0.92
+  }
+);
+
+}
+
+function speakInstruction(
+text
+) {
+
+if (!text) {
+  return;
+}
+
+/*
+ * Se o áudio já foi ativado, as instruções
+ * seguintes podem ser reproduzidas normalmente.
+ */
+
+speak(
+  text,
+  {
+    rate:
+      0.94
+  }
+);
+
+}
+
+function stopSpeech() {
+
+try {
+
+  if (
+    window.speechSynthesis
+  ) {
+
+    window
+      .speechSynthesis
+      .cancel();
+
+    try {
+      window
+        .speechSynthesis
+        .resume();
+    } catch (_) {}
+  }
+
+} catch (_) {}
+
+speaking =
+  false;
+
+}
+
+/*
+
+* ==========================================================
+* FACE API
+* ==========================================================
+  */
+
+async function loadFaceApi() {
+
+if (
+  window.faceapi
+) {
+
+  faceApi =
+    window.faceapi;
+
+  return faceApi;
+}
+
+if (
+  faceApiPromise
+) {
+
+  return faceApiPromise;
+}
+
+faceApiPromise =
+  new Promise(
+    (
+      resolve,
+      reject
+    ) => {
+
+      const existing =
+        document.querySelector(
+          "script[data-travel-face-api]"
+        );
+
+      if (
+        existing
+      ) {
+
+        if (
+          window.faceapi
+        ) {
+
+          faceApi =
+            window.faceapi;
+
+          resolve(
+            faceApi
+          );
+
+          return;
+        }
+
+        existing.addEventListener(
+          "load",
+          () => {
+
+            if (
+              window.faceapi
+            ) {
+
+              faceApi =
+                window.faceapi;
+
+              resolve(
+                faceApi
+              );
+
+            } else {
+
+              reject(
+                new Error(
+                  "A biblioteca FaceAPI foi carregada, mas não ficou disponível."
+                )
+              );
+            }
+          },
+          {
+            once: true
+          }
+        );
+
+        existing.addEventListener(
+          "error",
+          () => {
+
+            reject(
+              new Error(
+                "Não foi possível carregar a biblioteca FaceAPI local."
+              )
+            );
+          },
+          {
+            once: true
+          }
+        );
+
+        return;
+      }
+
+      const script =
+        document.createElement(
+          "script"
+        );
+
+      script.src =
+        FACE_API_SCRIPT_URL;
+
+      script.async =
+        true;
+
+      script.defer =
+        true;
+
+      script.dataset.travelFaceApi =
+        "true";
+
+      script.onload =
+        () => {
+
+          if (
             window.faceapi
           ) {
+
             faceApi =
               window.faceapi;
 
@@ -558,2079 +860,2616 @@
               faceApi
             );
 
-            return;
-          }
+          } else {
 
-          const script =
-            document.createElement(
-              "script"
+            reject(
+              new Error(
+                "A biblioteca FaceAPI carregou, mas não ficou disponível."
+              )
             );
+          }
+        };
 
-          script.src =
-            FACE_API_SCRIPT_URL;
+      script.onerror =
+        () => {
 
-          script.async =
-            true;
-
-          script.defer =
-            true;
-
-          script.dataset.travelFaceApi =
-            "true";
-
-          script.onload =
-            () => {
-              if (
-                window.faceapi
-              ) {
-                faceApi =
-                  window.faceapi;
-
-                resolve(
-                  faceApi
-                );
-
-                return;
-              }
-
-              reject(
-                new Error(
-                  "A biblioteca FaceAPI foi carregada, mas não ficou disponível no navegador."
-                )
-              );
-            };
-
-          script.onerror =
-            () => {
-              reject(
-                new Error(
-                  "Não foi possível carregar a biblioteca FaceAPI local."
-                )
-              );
-            };
-
-          document.head.appendChild(
-            script
+          reject(
+            new Error(
+              "Não foi possível carregar /face-api/face-api.min.js."
+            )
           );
-        }
-      );
+        };
 
-    try {
-      return await faceApiPromise;
-    } catch (error) {
-      faceApiPromise =
-        null;
-
-      throw error;
-    }
-  }
-
-  /*
-   * ==========================================================
-   * MODELOS
-   * ==========================================================
-   */
-
-  async function verifyModelFile(
-    file
-  ) {
-    const response =
-      await fetch(
-        `${FACE_API_MODEL_URL}/${file}`,
-        {
-          method:
-            "GET",
-
-          cache:
-            "no-store"
-        }
-      );
-
-    if (
-      !response.ok
-    ) {
-      throw new Error(
-        `Modelo não encontrado: ${file} (HTTP ${response.status})`
+      document.head.appendChild(
+        script
       );
     }
+  );
+
+try {
+
+  return await faceApiPromise;
+
+} catch (error) {
+
+  faceApiPromise =
+    null;
+
+  throw error;
+}
+
+}
+
+/*
+
+* ==========================================================
+* MODELOS
+* ==========================================================
+  */
+
+async function verifyModel(
+filename
+) {
+
+const response =
+  await fetch(
+    `${FACE_API_MODEL_URL}/${filename}`,
+    {
+      cache:
+        "no-store"
+    }
+  );
+
+if (
+  !response.ok
+) {
+
+  throw new Error(
+    `Modelo facial ausente: ${filename} — HTTP ${response.status}`
+  );
+}
+
+return true;
+
+}
+
+async function loadModels() {
+
+if (
+  modelsPromise
+) {
+
+  return modelsPromise;
+}
+
+modelsPromise =
+  (async () => {
+
+    const api =
+      await loadFaceApi();
+
+    setStatus(
+      "A verificar o motor facial local...",
+      "info"
+    );
+
+    await verifyModel(
+      "tiny_face_detector_model-weights_manifest.json"
+    );
+
+    await verifyModel(
+      "face_landmark_68_model-weights_manifest.json"
+    );
+
+    await verifyModel(
+      "face_expression_model-weights_manifest.json"
+    );
+
+    await verifyModel(
+      "face_recognition_model-weights_manifest.json"
+    );
+
+    setStatus(
+      "A carregar o detector facial...",
+      "info"
+    );
+
+    await api.nets
+      .tinyFaceDetector
+      .loadFromUri(
+        FACE_API_MODEL_URL
+      );
+
+    setStatus(
+      "A carregar os pontos faciais...",
+      "info"
+    );
+
+    await api.nets
+      .faceLandmark68Net
+      .loadFromUri(
+        FACE_API_MODEL_URL
+      );
+
+    setStatus(
+      "A carregar a análise de expressão...",
+      "info"
+    );
+
+    await api.nets
+      .faceExpressionNet
+      .loadFromUri(
+        FACE_API_MODEL_URL
+      );
+
+    setStatus(
+      "A preparar o reconhecimento facial...",
+      "info"
+    );
+
+    await api.nets
+      .faceRecognitionNet
+      .loadFromUri(
+        FACE_API_MODEL_URL
+      );
+
+    console.info(
+      "[FacialPreflight] Motor facial local carregado."
+    );
 
     return true;
-  }
 
-  async function loadModels() {
-    if (
-      modelsPromise
-    ) {
-      return modelsPromise;
-    }
+  })();
 
-    modelsPromise =
-      (async () => {
-        const api =
-          await loadFaceApi();
+try {
 
-        setStatus(
-          "A verificar os modelos faciais locais...",
-          "info"
-        );
+  return await modelsPromise;
 
-        await verifyModelFile(
-          "tiny_face_detector_model-weights_manifest.json"
-        );
+} catch (error) {
 
-        await verifyModelFile(
-          "face_landmark_68_model-weights_manifest.json"
-        );
+  modelsPromise =
+    null;
 
-        await verifyModelFile(
-          "face_expression_model-weights_manifest.json"
-        );
+  emitError(
+    error?.message ||
+      "Não foi possível carregar os modelos faciais.",
+    error
+  );
 
-        await verifyModelFile(
-          "face_recognition_model-weights_manifest.json"
-        );
+  throw error;
+}
 
-        setStatus(
-          "A carregar o detector facial...",
-          "info"
-        );
+}
 
-        await api.nets
-          .tinyFaceDetector
-          .loadFromUri(
-            FACE_API_MODEL_URL
-          );
+/*
 
-        setStatus(
-          "A carregar os pontos faciais...",
-          "info"
-        );
+* ==========================================================
+* CANVAS / VÍDEO
+* ==========================================================
+  */
 
-        await api.nets
-          .faceLandmark68Net
-          .loadFromUri(
-            FACE_API_MODEL_URL
-          );
+function ensureCanvas() {
 
-        setStatus(
-          "A carregar a análise facial...",
-          "info"
-        );
+if (
+  !videoElement
+) {
+  return;
+}
 
-        await api.nets
-          .faceExpressionNet
-          .loadFromUri(
-            FACE_API_MODEL_URL
-          );
+if (
+  !canvasElement
+) {
 
-        setStatus(
-          "A preparar o reconhecimento facial...",
-          "info"
-        );
+  canvasElement =
+    document.createElement(
+      "canvas"
+    );
 
-        await api.nets
-          .faceRecognitionNet
-          .loadFromUri(
-            FACE_API_MODEL_URL
-          );
+  canvasContext =
+    canvasElement.getContext(
+      "2d",
+      {
+        willReadFrequently:
+          true
+      }
+    );
+}
 
-        console.info(
-          "[FacialPreflight] Todos os modelos faciais locais carregados."
-        );
+}
 
-        return true;
-      })();
+function getVideoSize() {
 
-    try {
-      return await modelsPromise;
-    } catch (error) {
-      modelsPromise =
-        null;
+return {
 
-      emitError(
-        error?.message ||
-          "Não foi possível carregar os modelos faciais locais.",
-        error
-      );
+  width:
+    Number(
+      videoElement?.videoWidth
+    ) ||
+    CONFIG.cameraWidth,
 
-      throw error;
-    }
-  }
+  height:
+    Number(
+      videoElement?.videoHeight
+    ) ||
+    CONFIG.cameraHeight
+};
 
-  /*
-   * ==========================================================
-   * CANVAS
-   * ==========================================================
-   */
+}
 
-  function ensureCanvas() {
-    if (
-      !videoElement
-    ) {
-      return;
-    }
+function calculateBrightness() {
 
-    if (
-      !canvasElement
-    ) {
-      canvasElement =
-        document.createElement(
-          "canvas"
-        );
+if (
+  !videoElement ||
+  !videoElement.videoWidth
+) {
 
-      canvasElement.width =
-        videoElement.videoWidth ||
-        CONFIG.cameraWidth;
+  return 128;
+}
 
-      canvasElement.height =
-        videoElement.videoHeight ||
-        CONFIG.cameraHeight;
+ensureCanvas();
 
-      canvasContext =
-        canvasElement.getContext(
-          "2d",
-          {
-            willReadFrequently:
-              true
-          }
-        );
-    }
-  }
+const size =
+  getVideoSize();
 
-  function getVideoSize() {
-    return {
-      width:
-        videoElement &&
-        videoElement.videoWidth
-          ? videoElement.videoWidth
-          : CONFIG.cameraWidth,
+const width =
+  160;
 
-      height:
-        videoElement &&
-        videoElement.videoHeight
-          ? videoElement.videoHeight
-          : CONFIG.cameraHeight
-    };
-  }
-
-  /*
-   * ==========================================================
-   * BRILHO
-   * ==========================================================
-   */
-
-  function calculateBrightness() {
-    if (
-      !videoElement ||
-      !canvasContext
-    ) {
-      return 128;
-    }
-
-    const size =
-      getVideoSize();
-
-    const width =
-      160;
-
-    const height =
-      Math.max(
-        90,
-        Math.round(
-          width *
-            (size.height /
-              size.width)
+const height =
+  Math.max(
+    90,
+    Math.round(
+      width *
+        (
+          size.height /
+          size.width
         )
-      );
+    )
+  );
 
-    canvasElement.width =
-      width;
+canvasElement.width =
+  width;
 
-    canvasElement.height =
-      height;
+canvasElement.height =
+  height;
 
-    canvasContext.drawImage(
-      videoElement,
+canvasContext.drawImage(
+  videoElement,
+  0,
+  0,
+  width,
+  height
+);
+
+const data =
+  canvasContext
+    .getImageData(
       0,
       0,
       width,
       height
-    );
+    )
+    .data;
 
-    const imageData =
-      canvasContext.getImageData(
-        0,
-        0,
-        width,
-        height
-      );
+let total =
+  0;
 
-    const data =
-      imageData.data;
+let count =
+  0;
 
-    let total =
-      0;
+for (
+  let i = 0;
+  i < data.length;
+  i += 16
+) {
 
-    let count =
-      0;
+  total +=
+    0.299 *
+      data[i] +
 
-    for (
-      let i = 0;
-      i < data.length;
-      i += 16
-    ) {
-      total +=
-        0.299 * data[i] +
-        0.587 *
-          data[i + 1] +
-        0.114 *
-          data[i + 2];
+    0.587 *
+      data[i + 1] +
 
-      count++;
-    }
+    0.114 *
+      data[i + 2];
 
-    return count
-      ? total / count
-      : 128;
-  }
+  count++;
+}
 
-  function brightnessScore(
-    brightness
-  ) {
-    if (
-      brightness <
-      CONFIG.minBrightness
-    ) {
-      return clamp(
-        brightness /
-          CONFIG.minBrightness,
-        0,
-        1
-      );
-    }
+return count
+  ? total / count
+  : 128;
 
-    if (
-      brightness >
+}
+
+function brightnessScore(
+brightness
+) {
+
+if (
+  brightness <
+  CONFIG.minBrightness
+) {
+
+  return clamp(
+    brightness /
+      CONFIG.minBrightness,
+    0,
+    1
+  );
+}
+
+if (
+  brightness >
+  CONFIG.maxBrightness
+) {
+
+  return clamp(
+    (
+      255 -
+      brightness
+    ) /
+    (
+      255 -
       CONFIG.maxBrightness
-    ) {
-      return clamp(
-        (255 -
-          brightness) /
-          (255 -
-            CONFIG.maxBrightness),
-        0,
-        1
-      );
-    }
+    ),
+    0,
+    1
+  );
+}
 
-    return 1;
-  }
+return 1;
 
-  /*
-   * ==========================================================
-   * GEOMETRIA FACIAL
-   * ==========================================================
-   */
+}
 
-  function distance(
-    a,
-    b
-  ) {
-    if (
-      !a ||
-      !b
-    ) {
-      return 0;
-    }
+/*
 
-    return Math.hypot(
-      b.x - a.x,
-      b.y - a.y
-    );
-  }
+* ==========================================================
+* GEOMETRIA
+* ==========================================================
+  */
 
-  function landmark(
+function distance(
+a,
+b
+) {
+
+if (
+  !a ||
+  !b
+) {
+
+  return 0;
+}
+
+return Math.hypot(
+  b.x - a.x,
+  b.y - a.y
+);
+
+}
+
+function landmark(
+landmarks,
+index
+) {
+
+return (
+  landmarks?.positions?.[index] ||
+  null
+);
+
+}
+
+function calculatePose(
+landmarks
+) {
+
+const nose =
+  landmark(
     landmarks,
-    index
-  ) {
-    if (
-      !landmarks ||
-      !landmarks.positions
-    ) {
-      return null;
-    }
-
-    return (
-      landmarks.positions[
-        index
-      ] || null
-    );
-  }
-
-  function calculatePose(
-    landmarks
-  ) {
-    const nose =
-      landmark(
-        landmarks,
-        30
-      );
-
-    const leftEye =
-      landmark(
-        landmarks,
-        36
-      );
-
-    const rightEye =
-      landmark(
-        landmarks,
-        45
-      );
-
-    const forehead =
-      landmark(
-        landmarks,
-        27
-      );
-
-    const chin =
-      landmark(
-        landmarks,
-        8
-      );
-
-    if (
-      !nose ||
-      !leftEye ||
-      !rightEye ||
-      !forehead ||
-      !chin
-    ) {
-      return {
-        yaw: 0,
-        pitch: 0,
-        roll: 0
-      };
-    }
-
-    const eyeCenterX =
-      (leftEye.x +
-        rightEye.x) /
-      2;
-
-    const eyeCenterY =
-      (leftEye.y +
-        rightEye.y) /
-      2;
-
-    const eyeDistance =
-      distance(
-        leftEye,
-        rightEye
-      ) || 1;
-
-    const faceHeight =
-      distance(
-        forehead,
-        chin
-      ) || 1;
-
-    return {
-      yaw:
-        (nose.x -
-          eyeCenterX) /
-        eyeDistance,
-
-      pitch:
-        (nose.y -
-          eyeCenterY) /
-        faceHeight,
-
-      roll:
-        (rightEye.y -
-          leftEye.y) /
-        eyeDistance
-    };
-  }
-
-  function smileScore(
-    expressions
-  ) {
-    return clamp(
-      Number(
-        expressions &&
-          expressions.happy
-          ? expressions.happy
-          : 0
-      ),
-      0,
-      1
-    );
-  }
-
-  function faceArea(
-    detection
-  ) {
-    if (
-      !detection ||
-      !detection.box
-    ) {
-      return 0;
-    }
-
-    const size =
-      getVideoSize();
-
-    const total =
-      size.width *
-      size.height;
-
-    if (!total) {
-      return 0;
-    }
-
-    return (
-      detection.box.width *
-      detection.box.height
-    ) / total;
-  }
-
-  function faceSizeScore(
-    area
-  ) {
-    if (
-      area <
-      CONFIG.minFaceArea
-    ) {
-      return clamp(
-        area /
-          CONFIG.minFaceArea,
-        0,
-        1
-      );
-    }
-
-    if (
-      area >
-      CONFIG.maxFaceArea
-    ) {
-      return clamp(
-        CONFIG.maxFaceArea /
-          area,
-        0,
-        1
-      );
-    }
-
-    if (
-      area >=
-        CONFIG.idealFaceAreaMin &&
-      area <=
-        CONFIG.idealFaceAreaMax
-    ) {
-      return 1;
-    }
-
-    return 0.75;
-  }
-
-  /*
-   * ==========================================================
-   * AVALIAÇÃO DA POSIÇÃO
-   * ==========================================================
-   */
-
-  function evaluate(
-    position,
-    pose,
-    smile,
-    area,
-    brightness,
-    detectorScore
-  ) {
-    const yaw =
-      Number(
-        pose.yaw || 0
-      );
-
-    const pitch =
-      Number(
-        pose.pitch || 0
-      );
-
-    const roll =
-      Math.abs(
-        Number(
-          pose.roll || 0
-        )
-      );
-
-    let yawScore =
-      0;
-
-    let pitchScore =
-      0;
-
-    let smilePositionScore =
-      0;
-
-    switch (
-      position.id
-    ) {
-      case "frontal":
-        yawScore =
-          1 -
-          clamp(
-            Math.abs(yaw) /
-              0.30,
-            0,
-            1
-          );
-
-        pitchScore =
-          1 -
-          clamp(
-            Math.abs(pitch) /
-              0.28,
-            0,
-            1
-          );
-
-        break;
-
-      case "left":
-        yawScore =
-          clamp(
-            -yaw /
-              0.35,
-            0,
-            1
-          );
-
-        pitchScore =
-          1 -
-          clamp(
-            Math.abs(pitch) /
-              0.35,
-            0,
-            1
-          );
-
-        break;
-
-      case "right":
-        yawScore =
-          clamp(
-            yaw /
-              0.35,
-            0,
-            1
-          );
-
-        pitchScore =
-          1 -
-          clamp(
-            Math.abs(pitch) /
-              0.35,
-            0,
-            1
-          );
-
-        break;
-
-      case "up":
-        pitchScore =
-          clamp(
-            -pitch /
-              0.28,
-            0,
-            1
-          );
-
-        yawScore =
-          1 -
-          clamp(
-            Math.abs(yaw) /
-              0.35,
-            0,
-            1
-          );
-
-        break;
-
-      case "down":
-        pitchScore =
-          clamp(
-            pitch /
-              0.28,
-            0,
-            1
-          );
-
-        yawScore =
-          1 -
-          clamp(
-            Math.abs(yaw) /
-              0.35,
-            0,
-            1
-          );
-
-        break;
-
-      case "left_up":
-        yawScore =
-          clamp(
-            -yaw /
-              0.32,
-            0,
-            1
-          );
-
-        pitchScore =
-          clamp(
-            -pitch /
-              0.25,
-            0,
-            1
-          );
-
-        break;
-
-      case "right_up":
-        yawScore =
-          clamp(
-            yaw /
-              0.32,
-            0,
-            1
-          );
-
-        pitchScore =
-          clamp(
-            -pitch /
-              0.25,
-            0,
-            1
-          );
-
-        break;
-
-      case "left_down":
-        yawScore =
-          clamp(
-            -yaw /
-              0.32,
-            0,
-            1
-          );
-
-        pitchScore =
-          clamp(
-            pitch /
-              0.25,
-            0,
-            1
-          );
-
-        break;
-
-      case "right_down":
-        yawScore =
-          clamp(
-            yaw /
-              0.32,
-            0,
-            1
-          );
-
-        pitchScore =
-          clamp(
-            pitch /
-              0.25,
-            0,
-            1
-          );
-
-        break;
-
-      case "smile":
-        yawScore =
-          1 -
-          clamp(
-            Math.abs(yaw) /
-              0.35,
-            0,
-            1
-          );
-
-        pitchScore =
-          1 -
-          clamp(
-            Math.abs(pitch) /
-              0.35,
-            0,
-            1
-          );
-
-        smilePositionScore =
-          clamp(
-            smile /
-              CONFIG.smileThreshold,
-            0,
-            1
-          );
-
-        break;
-
-      default:
-        yawScore =
-          1;
-
-        pitchScore =
-          1;
-    }
-
-    const rollScore =
+    30
+  );
+
+const leftEye =
+  landmark(
+    landmarks,
+    36
+  );
+
+const rightEye =
+  landmark(
+    landmarks,
+    45
+  );
+
+const forehead =
+  landmark(
+    landmarks,
+    27
+  );
+
+const chin =
+  landmark(
+    landmarks,
+    8
+  );
+
+if (
+  !nose ||
+  !leftEye ||
+  !rightEye ||
+  !forehead ||
+  !chin
+) {
+
+  return {
+    yaw: 0,
+    pitch: 0,
+    roll: 0
+  };
+}
+
+const eyeCenterX =
+  (
+    leftEye.x +
+    rightEye.x
+  ) / 2;
+
+const eyeCenterY =
+  (
+    leftEye.y +
+    rightEye.y
+  ) / 2;
+
+const eyeDistance =
+  distance(
+    leftEye,
+    rightEye
+  ) || 1;
+
+const faceHeight =
+  distance(
+    forehead,
+    chin
+  ) || 1;
+
+return {
+
+  yaw:
+    (
+      nose.x -
+      eyeCenterX
+    ) /
+    eyeDistance,
+
+  pitch:
+    (
+      nose.y -
+      eyeCenterY
+    ) /
+    faceHeight,
+
+  roll:
+    (
+      rightEye.y -
+      leftEye.y
+    ) /
+    eyeDistance
+};
+
+}
+
+function smileScore(
+expressions
+) {
+
+return clamp(
+  Number(
+    expressions?.happy ||
+    0
+  ),
+  0,
+  1
+);
+
+}
+
+function faceArea(
+detection
+) {
+
+if (
+  !detection?.box
+) {
+
+  return 0;
+}
+
+const size =
+  getVideoSize();
+
+const total =
+  size.width *
+  size.height;
+
+if (
+  !total
+) {
+
+  return 0;
+}
+
+return clamp(
+  (
+    detection.box.width *
+    detection.box.height
+  ) /
+  total,
+  0,
+  1
+);
+
+}
+
+function faceSizeScore(
+area
+) {
+
+if (
+  area <
+  CONFIG.minFaceArea
+) {
+
+  return clamp(
+    area /
+      CONFIG.minFaceArea,
+    0,
+    1
+  );
+}
+
+if (
+  area >
+  CONFIG.maxFaceArea
+) {
+
+  return clamp(
+    CONFIG.maxFaceArea /
+      area,
+    0,
+    1
+  );
+}
+
+if (
+  area >=
+    CONFIG.idealFaceAreaMin &&
+  area <=
+    CONFIG.idealFaceAreaMax
+) {
+
+  return 1;
+}
+
+return 0.78;
+
+}
+
+/*
+
+* ==========================================================
+* AVALIAÇÃO
+* ==========================================================
+  */
+
+function evaluate(
+position,
+pose,
+smile,
+area,
+brightness,
+detectorScore
+) {
+
+const yaw =
+  Number(
+    pose?.yaw || 0
+  );
+
+const pitch =
+  Number(
+    pose?.pitch || 0
+  );
+
+const roll =
+  Math.abs(
+    Number(
+      pose?.roll || 0
+    )
+  );
+
+let yawScore =
+  0;
+
+let pitchScore =
+  0;
+
+let smilePositionScore =
+  0;
+
+switch (
+  position.id
+) {
+
+  case "frontal":
+
+    yawScore =
       1 -
       clamp(
-        roll /
+        Math.abs(yaw) /
           0.30,
         0,
         1
       );
 
-    const detector =
+    pitchScore =
+      1 -
       clamp(
-        detectorScore ||
-          0,
+        Math.abs(pitch) /
+          0.28,
         0,
         1
       );
 
-    const size =
-      faceSizeScore(
-        area
+    break;
+
+  case "left":
+
+    yawScore =
+      clamp(
+        -yaw /
+          0.35,
+        0,
+        1
       );
 
-    const light =
+    pitchScore =
+      1 -
+      clamp(
+        Math.abs(pitch) /
+          0.35,
+        0,
+        1
+      );
+
+    break;
+
+  case "right":
+
+    yawScore =
+      clamp(
+        yaw /
+          0.35,
+        0,
+        1
+      );
+
+    pitchScore =
+      1 -
+      clamp(
+        Math.abs(pitch) /
+          0.35,
+        0,
+        1
+      );
+
+    break;
+
+  case "up":
+
+    pitchScore =
+      clamp(
+        -pitch /
+          0.28,
+        0,
+        1
+      );
+
+    yawScore =
+      1 -
+      clamp(
+        Math.abs(yaw) /
+          0.35,
+        0,
+        1
+      );
+
+    break;
+
+  case "down":
+
+    pitchScore =
+      clamp(
+        pitch /
+          0.28,
+        0,
+        1
+      );
+
+    yawScore =
+      1 -
+      clamp(
+        Math.abs(yaw) /
+          0.35,
+        0,
+        1
+      );
+
+    break;
+
+  case "left_up":
+
+    yawScore =
+      clamp(
+        -yaw /
+          0.32,
+        0,
+        1
+      );
+
+    pitchScore =
+      clamp(
+        -pitch /
+          0.25,
+        0,
+        1
+      );
+
+    break;
+
+  case "right_up":
+
+    yawScore =
+      clamp(
+        yaw /
+          0.32,
+        0,
+        1
+      );
+
+    pitchScore =
+      clamp(
+        -pitch /
+          0.25,
+        0,
+        1
+      );
+
+    break;
+
+  case "left_down":
+
+    yawScore =
+      clamp(
+        -yaw /
+          0.32,
+        0,
+        1
+      );
+
+    pitchScore =
+      clamp(
+        pitch /
+          0.25,
+        0,
+        1
+      );
+
+    break;
+
+  case "right_down":
+
+    yawScore =
+      clamp(
+        yaw /
+          0.32,
+        0,
+        1
+      );
+
+    pitchScore =
+      clamp(
+        pitch /
+          0.25,
+        0,
+        1
+      );
+
+    break;
+
+  case "smile":
+
+    yawScore =
+      1 -
+      clamp(
+        Math.abs(yaw) /
+          0.35,
+        0,
+        1
+      );
+
+    pitchScore =
+      1 -
+      clamp(
+        Math.abs(pitch) /
+          0.35,
+        0,
+        1
+      );
+
+    smilePositionScore =
+      clamp(
+        smile /
+          CONFIG.smileThreshold,
+        0,
+        1
+      );
+
+    break;
+
+  default:
+
+    yawScore =
+      1;
+
+    pitchScore =
+      1;
+}
+
+const rollScore =
+  1 -
+  clamp(
+    roll /
+      0.30,
+    0,
+    1
+  );
+
+const detector =
+  clamp(
+    detectorScore,
+    0,
+    1
+  );
+
+const size =
+  faceSizeScore(
+    area
+  );
+
+const light =
+  brightnessScore(
+    brightness
+  );
+
+let score;
+
+if (
+  position.id ===
+  "smile"
+) {
+
+  score =
+    detector * 0.20 +
+    yawScore * 0.12 +
+    pitchScore * 0.12 +
+    rollScore * 0.08 +
+    smilePositionScore *
+      0.32 +
+    size * 0.08 +
+    light * 0.08;
+
+} else {
+
+  score =
+    detector * 0.20 +
+    yawScore * 0.27 +
+    pitchScore * 0.22 +
+    rollScore * 0.10 +
+    size * 0.10 +
+    light * 0.11;
+}
+
+return {
+
+  score:
+    clamp(
+      score,
+      0,
+      1
+    ),
+
+  yawScore,
+
+  pitchScore,
+
+  rollScore,
+
+  smileScore:
+    smilePositionScore,
+
+  faceSizeScore:
+    size,
+
+  brightnessScore:
+    light,
+
+  detectionScore:
+    detector
+};
+
+}
+
+/*
+
+* ==========================================================
+* ANÁLISE PARA A UI
+* ==========================================================
+  */
+
+function buildAnalysis(
+detection,
+evaluation,
+brightness,
+faceCount
+) {
+
+const area =
+  detection
+    ? faceArea(
+        detection.detection
+      )
+    : 0;
+
+return {
+
+  faceDetected:
+    Boolean(
+      detection
+    ),
+
+  singleFace:
+    faceCount === 1,
+
+  faceCount:
+    faceCount,
+
+  faceArea:
+    area,
+
+  detectionScore:
+    Number(
+      detection?.detection?.score ||
+      0
+    ),
+
+  pose:
+    detection
+      ? calculatePose(
+          detection.landmarks
+        )
+      : {
+          yaw: 0,
+          pitch: 0,
+          roll: 0
+        },
+
+  quality: {
+
+    brightness:
+      brightness,
+
+    brightnessScore:
       brightnessScore(
         brightness
-      );
+      ),
 
-    let score;
+    sharpnessScore:
+      0.85,
 
-    if (
-      position.id ===
-      "smile"
-    ) {
-      score =
-        detector * 0.20 +
-        yawScore * 0.12 +
-        pitchScore * 0.12 +
-        rollScore * 0.08 +
-        smilePositionScore *
-          0.32 +
-        size * 0.08 +
-        light * 0.08;
-    } else {
-      score =
-        detector * 0.20 +
-        yawScore * 0.27 +
-        pitchScore * 0.22 +
-        rollScore * 0.10 +
-        size * 0.10 +
-        light * 0.11;
-    }
+    faceSizeScore:
+      evaluation
+        ?.faceSizeScore ||
+      0,
 
-    return {
-      score:
-        clamp(
-          score,
-          0,
-          1
-        ),
+    detectionScore:
+      evaluation
+        ?.detectionScore ||
+      0
+  },
 
-      yawScore,
+  positionScore:
+    evaluation
+      ?.score ||
+    0
+};
 
-      pitchScore,
+}
 
-      rollScore,
+/*
 
-      smileScore:
-        smilePositionScore,
+* ==========================================================
+* CAPTURA
+* ==========================================================
+  */
 
-      faceSizeScore:
-        size,
+function captureFrame() {
 
-      brightnessScore:
-        light,
+if (
+  !videoElement ||
+  !videoElement.videoWidth
+) {
 
-      detectionScore:
-        detector
-    };
-  }
+  return null;
+}
 
-  /*
-   * ==========================================================
-   * CAPTURA
-   * ==========================================================
-   */
+try {
 
-  function captureFrame() {
-    if (
-      !videoElement ||
-      !videoElement.videoWidth
-    ) {
-      return null;
-    }
-
-    try {
-      const canvas =
-        document.createElement(
-          "canvas"
-        );
-
-      const width =
-        Math.min(
-          640,
-          videoElement.videoWidth
-        );
-
-      const ratio =
-        videoElement.videoHeight /
-        videoElement.videoWidth;
-
-      canvas.width =
-        width;
-
-      canvas.height =
-        Math.round(
-          width * ratio
-        );
-
-      const ctx =
-        canvas.getContext(
-          "2d"
-        );
-
-      ctx.drawImage(
-        videoElement,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
-
-      return canvas.toDataURL(
-        "image/jpeg",
-        0.78
-      );
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /*
-   * ==========================================================
-   * CÂMERA
-   * ==========================================================
-   */
-
-  async function startCamera() {
-    if (
-      !videoElement
-    ) {
-      throw new Error(
-        "Elemento de vídeo facial não encontrado."
-      );
-    }
-
-    if (
-      !navigator.mediaDevices ||
-      !navigator.mediaDevices.getUserMedia
-    ) {
-      throw new Error(
-        "O navegador não disponibiliza acesso à câmera."
-      );
-    }
-
-    if (
-      stream
-    ) {
-      return stream;
-    }
-
-    setStatus(
-      "A solicitar acesso à câmera...",
-      "info"
+  const canvas =
+    document.createElement(
+      "canvas"
     );
 
-    stream =
-      await navigator.mediaDevices.getUserMedia(
-        {
-          video: {
-            facingMode: {
-              ideal:
-                "user"
-            },
+  const width =
+    Math.min(
+      720,
+      videoElement.videoWidth
+    );
 
-            width: {
-              ideal:
-                CONFIG.cameraWidth
-            },
+  const ratio =
+    videoElement.videoHeight /
+    videoElement.videoWidth;
 
-            height: {
-              ideal:
-                CONFIG.cameraHeight
-            },
+  canvas.width =
+    width;
 
-            frameRate: {
-              ideal:
-                CONFIG.cameraFrameRate,
+  canvas.height =
+    Math.round(
+      width * ratio
+    );
 
-              max:
-                30
-            }
+  const ctx =
+    canvas.getContext(
+      "2d"
+    );
+
+  ctx.drawImage(
+    videoElement,
+    0,
+    0,
+    canvas.width,
+    canvas.height
+  );
+
+  return canvas.toDataURL(
+    "image/jpeg",
+    0.82
+  );
+
+} catch (error) {
+
+  console.warn(
+    "[FacialPreflight] captura:",
+    error
+  );
+
+  return null;
+}
+
+}
+
+/*
+
+* ==========================================================
+* CÂMERA
+* ==========================================================
+  */
+
+async function startCamera() {
+
+if (
+  !videoElement
+) {
+
+  throw new Error(
+    "Elemento de vídeo facial não encontrado."
+  );
+}
+
+if (
+  !navigator.mediaDevices ||
+  !navigator.mediaDevices.getUserMedia
+) {
+
+  throw new Error(
+    "Este navegador não disponibiliza acesso à câmera. Abra o sistema em HTTPS."
+  );
+}
+
+if (
+  stream
+) {
+
+  return stream;
+}
+
+setStatus(
+  "A solicitar acesso à câmera...",
+  "info"
+);
+
+try {
+
+  stream =
+    await navigator.mediaDevices.getUserMedia(
+      {
+        video: {
+          facingMode: {
+            ideal:
+              "user"
           },
 
-          audio:
-            false
-        }
+          width: {
+            ideal:
+              CONFIG.cameraWidth
+          },
+
+          height: {
+            ideal:
+              CONFIG.cameraHeight
+          },
+
+          frameRate: {
+            ideal:
+              CONFIG.cameraFrameRate,
+
+            max:
+              30
+          }
+        },
+
+        audio:
+          false
+      }
+    );
+
+} catch (error) {
+
+  let message =
+    "Não foi possível abrir a câmera.";
+
+  if (
+    error?.name ===
+    "NotAllowedError"
+  ) {
+
+    message =
+      "O acesso à câmera foi bloqueado. Autorize a câmera no navegador e tente novamente.";
+
+  } else if (
+    error?.name ===
+    "NotFoundError"
+  ) {
+
+    message =
+      "Nenhuma câmera compatível foi encontrada.";
+
+  } else if (
+    error?.name ===
+    "NotReadableError"
+  ) {
+
+    message =
+      "A câmera está sendo utilizada por outra aplicação.";
+
+  } else if (
+    error?.name ===
+    "OverconstrainedError"
+  ) {
+
+    message =
+      "A câmera não aceitou a resolução solicitada. Tentando uma configuração compatível...";
+
+    try {
+
+      stream =
+        await navigator.mediaDevices.getUserMedia(
+          {
+            video:
+              true,
+
+            audio:
+              false
+          }
+        );
+
+    } catch (fallbackError) {
+
+      throw new Error(
+        fallbackError?.message ||
+        message
       );
-
-    videoElement.srcObject =
-      stream;
-
-    videoElement.muted =
-      true;
-
-    videoElement.playsInline =
-      true;
-
-    await videoElement.play();
-
-    await waitForVideo();
-
-    ensureCanvas();
+    }
 
     return stream;
   }
 
-  function waitForVideo() {
-    return new Promise(
-      (
-        resolve,
-        reject
-      ) => {
-        if (
-          videoElement &&
-          videoElement.readyState >=
-            2 &&
-          videoElement.videoWidth
-        ) {
-          resolve();
-          return;
-        }
+  throw new Error(
+    message
+  );
+}
 
-        const timeout =
-          setTimeout(
-            () => {
-              cleanup();
+videoElement.srcObject =
+  stream;
 
-              reject(
-                new Error(
-                  "A câmera não ficou pronta a tempo."
-                )
-              );
-            },
-            10000
+videoElement.autoplay =
+  true;
+
+videoElement.muted =
+  true;
+
+videoElement.playsInline =
+  true;
+
+try {
+
+  await videoElement.play();
+
+} catch (_) {}
+
+await waitForVideo();
+
+ensureCanvas();
+
+return stream;
+
+}
+
+function waitForVideo() {
+
+return new Promise(
+  (
+    resolve,
+    reject
+  ) => {
+
+    if (
+      videoElement &&
+      videoElement.readyState >= 2 &&
+      videoElement.videoWidth
+    ) {
+
+      resolve();
+
+      return;
+    }
+
+    const timeout =
+      setTimeout(
+        () => {
+
+          cleanup();
+
+          reject(
+            new Error(
+              "A câmera não ficou pronta a tempo."
+            )
           );
 
-        const ready =
-          () => {
-            if (
-              videoElement.videoWidth
-            ) {
-              cleanup();
-              resolve();
-            }
-          };
+        },
+        12000
+      );
 
-        const cleanup =
-          () => {
-            clearTimeout(
-              timeout
-            );
+    const check =
+      () => {
 
-            videoElement.removeEventListener(
-              "loadedmetadata",
-              ready
-            );
+        if (
+          videoElement &&
+          videoElement.videoWidth
+        ) {
 
-            videoElement.removeEventListener(
-              "canplay",
-              ready
-            );
-          };
+          cleanup();
 
-        videoElement.addEventListener(
+          resolve();
+        }
+      };
+
+    const cleanup =
+      () => {
+
+        clearTimeout(
+          timeout
+        );
+
+        videoElement?.removeEventListener(
           "loadedmetadata",
-          ready
+          check
         );
 
-        videoElement.addEventListener(
+        videoElement?.removeEventListener(
           "canplay",
-          ready
+          check
         );
-      }
+
+        videoElement?.removeEventListener(
+          "playing",
+          check
+        );
+      };
+
+    videoElement?.addEventListener(
+      "loadedmetadata",
+      check
+    );
+
+    videoElement?.addEventListener(
+      "canplay",
+      check
+    );
+
+    videoElement?.addEventListener(
+      "playing",
+      check
     );
   }
+);
 
-  function stopCamera() {
-    if (
-      stream
-    ) {
-      stream
-        .getTracks()
-        .forEach(
-          track => {
-            try {
-              track.stop();
-            } catch (_) {}
-          }
-        );
-    }
+}
 
-    stream =
-      null;
+function stopCamera() {
 
-    if (
-      videoElement
-    ) {
-      try {
-        videoElement.pause();
-      } catch (_) {}
+if (
+  stream
+) {
 
-      videoElement.srcObject =
-        null;
-    }
-  }
+  stream
+    .getTracks()
+    .forEach(
+      track => {
 
-  /*
-   * ==========================================================
-   * INITIALIZE
-   * ==========================================================
-   */
+        try {
+          track.stop();
+        } catch (_) {}
 
-  async function initialize(
-    options = {}
-  ) {
-    callbacks = {
-      onStatus:
-        options.onStatus,
+      }
+    );
+}
 
-      onProgress:
-        options.onProgress,
+stream =
+  null;
 
-      onPosition:
-        options.onPosition,
+if (
+  videoElement
+) {
 
-      onComplete:
-        options.onComplete,
+  try {
+    videoElement.pause();
+  } catch (_) {}
 
-      onError:
-        options.onError
-    };
+  videoElement.srcObject =
+    null;
+}
 
-    videoElement =
+}
+
+/*
+
+* ==========================================================
+* INITIALIZE
+* ==========================================================
+  */
+
+async function initialize(
+options = {}
+) {
+
+/*
+ * IMPORTANTE:
+ *
+ * Este bloco executa ANTES do primeiro await.
+ *
+ * Portanto o primeiro comando de voz continua
+ * associado ao clique do botão.
+ */
+
+primeAudio();
+
+callbacks = {
+
+  onStatus:
+    options.onStatus ||
+    callbacks.onStatus,
+
+  onProgress:
+    options.onProgress ||
+    callbacks.onProgress,
+
+  onPosition:
+    options.onPosition ||
+    callbacks.onPosition,
+
+  onComplete:
+    options.onComplete ||
+    callbacks.onComplete,
+
+  onError:
+    options.onError ||
+    callbacks.onError
+};
+
+if (
+  options.videoElement
+) {
+
+  videoElement =
+    options.videoElement;
+}
+
+if (
+  options.clientId
+) {
+
+  clientId =
+    options.clientId;
+}
+
+if (
+  !videoElement
+) {
+
+  throw new Error(
+    "Elemento de vídeo facial não foi fornecido."
+  );
+}
+
+try {
+
+  setStatus(
+    "A preparar o motor facial local...",
+    "info"
+  );
+
+  await loadModels();
+
+  initialized =
+    true;
+
+  setStatus(
+    "Motor facial pronto. A preparar a câmera...",
+    "success"
+  );
+
+  return true;
+
+} catch (error) {
+
+  initialized =
+    false;
+
+  emitError(
+    error?.message ||
+      "Não foi possível preparar o motor facial.",
+    error
+  );
+
+  throw error;
+}
+
+}
+
+/*
+
+* ==========================================================
+* RESET
+* ==========================================================
+  */
+
+function reset() {
+
+running =
+  false;
+
+processing =
+  false;
+
+currentPositionIndex =
+  0;
+
+stableFrames =
+  0;
+
+positionStartedAt =
+  0;
+
+lastDetectionAt =
+  0;
+
+completedPositions =
+  [];
+
+capturedPositions =
+  [];
+
+result =
+  null;
+
+if (
+  animationFrame
+) {
+
+  cancelAnimationFrame(
+    animationFrame
+  );
+
+  animationFrame =
+    null;
+}
+
+stopSpeech();
+
+}
+
+/*
+
+* ==========================================================
+* START
+* ==========================================================
+  */
+
+async function start(
+options = {}
+) {
+
+if (
+  options.clientId
+) {
+
+  clientId =
+    options.clientId;
+}
+
+callbacks = {
+
+  onStatus:
+    options.onStatus ||
+    callbacks.onStatus,
+
+  onProgress:
+    options.onProgress ||
+    callbacks.onProgress,
+
+  onPosition:
+    options.onPosition ||
+    callbacks.onPosition,
+
+  onComplete:
+    options.onComplete ||
+    callbacks.onComplete,
+
+  onError:
+    options.onError ||
+    callbacks.onError
+};
+
+reset();
+
+/*
+ * Se start() for chamado diretamente,
+ * o áudio também é preparado imediatamente.
+ */
+
+primeAudio();
+
+if (
+  !initialized
+) {
+
+  await initialize({
+    videoElement:
       options.videoElement ||
-      videoElement;
+      videoElement,
 
-    clientId =
-      options.clientId ||
-      clientId;
+    clientId:
+      clientId
+  });
 
-    if (
-      !videoElement
-    ) {
-      throw new Error(
-        "Elemento de vídeo facial não foi fornecido."
-      );
-    }
+} else if (
+  options.videoElement
+) {
 
-    try {
-      setStatus(
-        "A preparar o motor facial local...",
-        "info"
-      );
+  videoElement =
+    options.videoElement;
+}
 
-      await loadModels();
+await startCamera();
 
-      initialized =
-        true;
+running =
+  true;
 
-      setStatus(
-        "Motor facial local pronto.",
-        "success"
-      );
+currentPositionIndex =
+  0;
 
-      return true;
-    } catch (error) {
-      initialized =
-        false;
+positionStartedAt =
+  Date.now();
 
-      emitError(
-        error.message ||
-          "Não foi possível preparar o motor facial.",
-        error
-      );
+stableFrames =
+  0;
 
-      throw error;
-    }
-  }
+const first =
+  POSITIONS[0];
+
+if (
+  first
+) {
+
+  setStatus(
+    first.instruction,
+    "instruction"
+  );
 
   /*
-   * ==========================================================
-   * RESET
-   * ==========================================================
+   * Não é necessário falar imediatamente
+   * novamente se o primeiro comando já foi
+   * reproduzido pelo primeAudio().
    */
+}
 
-  function reset() {
-    running =
-      false;
+emitProgress();
 
-    processing =
-      false;
+animationFrame =
+  requestAnimationFrame(
+    processFrame
+  );
 
-    currentPositionIndex =
-      0;
+return true;
 
-    stableFrames =
-      0;
+}
 
-    positionStartedAt =
-      0;
+/*
 
-    completedPositions =
-      [];
+* ==========================================================
+* PROCESSAMENTO
+* ==========================================================
+  */
 
-    capturedPositions =
-      [];
+function processFrame(
+timestamp
+) {
 
-    result =
-      null;
+if (
+  !running
+) {
 
-    if (
-      animationFrame
-    ) {
-      cancelAnimationFrame(
-        animationFrame
-      );
+  return;
+}
 
-      animationFrame =
-        null;
-    }
+animationFrame =
+  requestAnimationFrame(
+    processFrame
+  );
 
-    stopSpeech();
-  }
+if (
+  processing
+) {
 
-  /*
-   * ==========================================================
-   * START
-   * ==========================================================
-   */
-     async function start(
-    options = {}
-  ) {
-    if (
-      options.clientId
-    ) {
-      clientId =
-        options.clientId;
-    }
+  return;
+}
 
-    /*
-     * Guardamos os callbacks imediatamente.
-     * Assim o start() pode ser chamado diretamente
-     * pelo clique do utilizador, sem precisar de um
-     * initialize() anterior.
-     */
-    callbacks = {
-      onStatus:
-        options.onStatus ||
-        callbacks.onStatus,
+if (
+  timestamp -
+    lastDetectionAt <
+  CONFIG.detectionIntervalMs
+) {
 
-      onProgress:
-        options.onProgress ||
-        callbacks.onProgress,
+  return;
+}
 
-      onPosition:
-        options.onPosition ||
-        callbacks.onPosition,
+lastDetectionAt =
+  timestamp;
 
-      onComplete:
-        options.onComplete ||
-        callbacks.onComplete,
+processing =
+  true;
 
-      onError:
-        options.onError ||
-        callbacks.onError
-    };
+analyzeFrame()
+  .catch(
+    error => {
 
-    /*
-     * IMPORTANTE:
-     *
-     * O reset cancela qualquer fala anterior.
-     */
-    reset();
-
-    const initialPosition =
-      getCurrentPosition();
-
-    /*
-     * ========================================================
-     * ÁUDIO — PRIMEIRO ATO DO CLIQUE
-     * ========================================================
-     *
-     * Isto acontece ANTES de qualquer await.
-     *
-     * Portanto o speechSynthesis continua associado
-     * ao gesto do utilizador que clicou em
-     * "Iniciar verificação".
-     */
-    if (
-      initialPosition
-    ) {
-      setStatus(
-        initialPosition.instruction,
-        "instruction"
-      );
-
-      preparePortugueseVoice();
-
-      speak(
-        initialPosition.instruction
-      );
-    }
-
-    /*
-     * ========================================================
-     * MOTOR FACIAL
-     * ========================================================
-     *
-     * Se ainda não estiver preparado, o próprio start()
-     * faz a inicialização.
-     */
-    if (
-      !initialized
-    ) {
-      await initialize({
-        videoElement:
-          options.videoElement ||
-          videoElement,
-
-        clientId:
-          clientId,
-
-        onStatus:
-          callbacks.onStatus,
-
-        onProgress:
-          callbacks.onProgress,
-
-        onPosition:
-          callbacks.onPosition,
-
-        onComplete:
-          callbacks.onComplete,
-
-        onError:
-          callbacks.onError
-      });
-    } else if (
-      options.videoElement
-    ) {
-      videoElement =
-        options.videoElement;
-    }
-
-    /*
-     * ========================================================
-     * CÂMERA
-     * ========================================================
-     *
-     * A câmera é iniciada no mesmo fluxo do clique.
-     */
-    await startCamera();
-
-    running =
-      true;
-
-    positionStartedAt =
-      Date.now();
-
-    emitProgress();
-
-    animationFrame =
-      requestAnimationFrame(
-        processFrame
-      );
-
-    return true;
-  } 
-    
-  /*
-   * ==========================================================
-   * PROCESSAMENTO
-   * ==========================================================
-   */
-
-  async function processFrame(
-    timestamp
-  ) {
-    if (
-      !running
-    ) {
-      return;
-    }
-
-    animationFrame =
-      requestAnimationFrame(
-        processFrame
-      );
-
-    if (
-      processing
-    ) {
-      return;
-    }
-
-    if (
-      timestamp -
-        lastDetectionAt <
-      CONFIG.detectionIntervalMs
-    ) {
-      return;
-    }
-
-    lastDetectionAt =
-      timestamp;
-
-    processing =
-      true;
-
-    try {
-      await analyzeFrame();
-    } catch (error) {
       console.warn(
-        "[FacialPreflight] frame error",
+        "[FacialPreflight] análise:",
         error
       );
-    } finally {
+    }
+  )
+  .finally(
+    () => {
+
       processing =
         false;
     }
-  }
+  );
 
-  async function analyzeFrame() {
-    if (
-      !running ||
-      !faceApi ||
-      !videoElement
-    ) {
-      return;
-    }
+}
 
-    const position =
-      getCurrentPosition();
+async function analyzeFrame() {
 
-    if (
-      !position
-    ) {
-      await finish();
-      return;
-    }
+if (
+  !running ||
+  !faceApi ||
+  !videoElement ||
+  !videoElement.videoWidth
+) {
 
-    const brightness =
-      calculateBrightness();
+  return;
+}
 
-    const detections =
-      await faceApi
-        .detectAllFaces(
-          videoElement,
-          new faceApi.TinyFaceDetectorOptions(
-            {
-              inputSize:
-                CONFIG.detectorInputSize,
+const position =
+  POSITIONS[
+    currentPositionIndex
+  ];
 
-              scoreThreshold:
-                CONFIG.detectorScoreThreshold
-            }
-          )
-        )
-        .withFaceLandmarks()
-        .withFaceExpressions();
+if (
+  !position
+) {
 
-    if (
-      !detections ||
-      !detections.length
-    ) {
-      stableFrames =
-        0;
+  await finish();
 
-      setStatus(
-        "Posicione o rosto diante da câmera.",
-        "warning"
-      );
+  return;
+}
 
-      emitProgress();
+const brightness =
+  calculateBrightness();
 
-      return;
-    }
+const detections =
+  await faceApi
+    .detectAllFaces(
+      videoElement,
+      new faceApi.TinyFaceDetectorOptions(
+        {
+          inputSize:
+            CONFIG.detectorInputSize,
 
-    if (
-      detections.length >
-      CONFIG.maxFaces
-    ) {
-      stableFrames =
-        0;
+          scoreThreshold:
+            CONFIG.detectorScoreThreshold
+        }
+      )
+    )
+    .withFaceLandmarks()
+    .withFaceExpressions();
 
-      setStatus(
-        "Deixe apenas uma pessoa diante da câmera.",
-        "warning"
-      );
+const faceCount =
+  detections?.length ||
+  0;
 
-      emitProgress();
+if (
+  !faceCount
+) {
 
-      return;
-    }
+  stableFrames =
+    0;
 
-    const detection =
-      detections[0];
+  const analysis = {
+    faceDetected:
+      false,
 
-    const pose =
-      calculatePose(
-        detection.landmarks
-      );
+    singleFace:
+      false,
 
-    const smile =
-      smileScore(
-        detection.expressions
-      );
+    faceCount:
+      0,
 
-    const area =
-      faceArea(
-        detection.detection
-      );
+    faceArea:
+      0,
 
-    const evaluation =
-      evaluate(
-        position,
-        pose,
-        smile,
-        area,
+    quality: {
+
+      brightness:
         brightness,
-        detection.detection.score
-      );
 
-    if (
-      evaluation.score >=
-      CONFIG.positionScoreThreshold
-    ) {
-      stableFrames++;
-    } else {
-      stableFrames =
-        0;
+      brightnessScore:
+        brightnessScore(
+          brightness
+        ),
+
+      sharpnessScore:
+        0
     }
+  };
 
-    let message =
-      position.instruction;
+  setStatus(
+    "Posicione o rosto dentro do enquadramento.",
+    "warning",
+    analysis
+  );
 
-    if (
-      position.id ===
-        "smile" &&
-      evaluation.smileScore <
-        0.50
-    ) {
-      message =
-        "Sorria para completar esta posição.";
+  emitProgress(
+    null,
+    analysis
+  );
+
+  return;
+}
+
+if (
+  faceCount >
+  CONFIG.maxFaces
+) {
+
+  stableFrames =
+    0;
+
+  const analysis = {
+    faceDetected:
+      true,
+
+    singleFace:
+      false,
+
+    faceCount,
+
+    faceArea:
+      0,
+
+    quality: {
+
+      brightness:
+        brightness,
+
+      brightnessScore:
+        brightnessScore(
+          brightness
+        ),
+
+      sharpnessScore:
+        0.6
     }
+  };
 
-    if (
-      evaluation.brightnessScore <
-      0.60
-    ) {
-      message =
-        "Melhore a iluminação do rosto.";
-    }
+  setStatus(
+    "Deixe apenas uma pessoa diante da câmera.",
+    "warning",
+    analysis
+  );
 
-    if (
-      evaluation.faceSizeScore <
-      0.55
-    ) {
-      message =
-        "Aproxime ou afaste ligeiramente o rosto da câmera.";
-    }
+  emitProgress(
+    null,
+    analysis
+  );
 
-    if (
-      evaluation.score >=
-      CONFIG.positionScoreThreshold
-    ) {
-      message =
-        "Perfeito. Mantenha esta posição.";
-    }
+  return;
+}
 
-    setStatus(
-      message,
-      evaluation.score >=
-        CONFIG.positionScoreThreshold
-        ? "success"
-        : "instruction"
-    );
+const detection =
+  detections[0];
 
-    emitProgress(
-      evaluation
-    );
+const pose =
+  calculatePose(
+    detection.landmarks
+  );
 
-    if (
-      Date.now() -
-        positionStartedAt >
-      CONFIG.positionTimeoutMs
-    ) {
-      stableFrames =
-        0;
+const smile =
+  smileScore(
+    detection.expressions
+  );
 
-      positionStartedAt =
-        Date.now();
+const area =
+  faceArea(
+    detection.detection
+  );
 
-      speak(
-        position.instruction
-      );
-    }
+const evaluation =
+  evaluate(
+    position,
+    pose,
+    smile,
+    area,
+    brightness,
+    detection.detection.score
+  );
 
-    if (
-      stableFrames >=
-      CONFIG.stableFramesRequired
-    ) {
-      await completePosition(
-        evaluation
-      );
-    }
-  }
+const analysis =
+  buildAnalysis(
+    detection,
+    evaluation,
+    brightness,
+    faceCount
+  );
 
-  /*
-   * ==========================================================
-   * COMPLETAR POSIÇÃO
-   * ==========================================================
-   */
+if (
+  evaluation.score >=
+  CONFIG.positionScoreThreshold
+) {
 
-  async function completePosition(
-    evaluation
-  ) {
-    const position =
-      getCurrentPosition();
+  stableFrames +=
+    1;
 
-    if (
-      !position ||
-      !running
-    ) {
-      return;
-    }
+} else {
 
-    stableFrames =
-      0;
+  stableFrames =
+    0;
+}
 
-    completedPositions.push(
-      position.id
-    );
+let message =
+  position.instruction;
 
-    capturedPositions.push({
-      position:
+let statusType =
+  "instruction";
+
+if (
+  evaluation.brightnessScore <
+  0.60
+) {
+
+  message =
+    "Melhore a iluminação do rosto.";
+
+  statusType =
+    "warning";
+}
+
+if (
+  evaluation.faceSizeScore <
+  0.55
+) {
+
+  message =
+    area <
+    CONFIG.idealFaceAreaMin
+      ? "Aproxime um pouco o rosto da câmera."
+      : "Afaste ligeiramente o rosto da câmera.";
+
+  statusType =
+    "warning";
+}
+
+if (
+  position.id ===
+    "smile" &&
+  evaluation.smileScore <
+    0.45
+) {
+
+  message =
+    "Sorria para completar esta posição.";
+
+  statusType =
+    "instruction";
+}
+
+if (
+  evaluation.score >=
+  CONFIG.positionScoreThreshold
+) {
+
+  message =
+    "Perfeito. Mantenha esta posição.";
+
+  statusType =
+    "success";
+}
+
+setStatus(
+  message,
+  statusType,
+  analysis
+);
+
+emitProgress(
+  evaluation,
+  analysis
+);
+
+if (
+  Date.now() -
+    positionStartedAt >
+  CONFIG.positionTimeoutMs
+) {
+
+  stableFrames =
+    0;
+
+  positionStartedAt =
+    Date.now();
+
+  speakInstruction(
+    position.instruction
+  );
+}
+
+if (
+  stableFrames >=
+  CONFIG.stableFramesRequired
+) {
+
+  await completePosition(
+    evaluation,
+    analysis
+  );
+}
+
+}
+
+/*
+
+* ==========================================================
+* COMPLETAR POSIÇÃO
+* ==========================================================
+  */
+
+async function completePosition(
+evaluation,
+analysis
+) {
+
+const position =
+  POSITIONS[
+    currentPositionIndex
+  ];
+
+if (
+  !position ||
+  !running
+) {
+
+  return;
+}
+
+stableFrames =
+  0;
+
+completedPositions.push(
+  position.id
+);
+
+capturedPositions.push({
+
+  position:
+    position.id,
+
+  label:
+    position.label,
+
+  score:
+    Number(
+      evaluation.score.toFixed(
+        4
+      )
+    ),
+
+  capturedAt:
+    new Date().toISOString(),
+
+  image:
+    captureFrame()
+});
+
+safeCall(
+  "onPosition",
+  {
+
+    completed:
+      true,
+
+    completedCount:
+      completedPositions.length,
+
+    total:
+      POSITIONS.length,
+
+    position:
+      position.id,
+
+    positionData: {
+      id:
         position.id,
 
       label:
-        position.label,
+        position.label
+    },
 
-      score:
-        Number(
-          evaluation.score.toFixed(
-            4
-          )
-        ),
+    score:
+      evaluation.score,
 
-      capturedAt:
-        new Date().toISOString(),
-
-      image:
-        captureFrame()
-    });
-
-    safeCall(
-      "onPosition",
-      {
-        completed:
-          true,
-
-        completedCount:
-          completedPositions.length,
-
-        total:
-          POSITIONS.length,
-
-        position: {
-          id:
-            position.id,
-
-          label:
-            position.label
-        },
-
-        score:
-          evaluation.score
-      }
-    );
-
-    const next =
-      currentPositionIndex +
-      1;
-
-    if (
-      next >=
-      POSITIONS.length
-    ) {
-      await finish();
-      return;
-    }
-
-    currentPositionIndex =
-      next;
-
-    positionStartedAt =
-      Date.now();
-
-    const nextPosition =
-      getCurrentPosition();
-
-    setStatus(
-      nextPosition.instruction,
-      "instruction"
-    );
-
-    speak(
-      nextPosition.instruction
-    );
-
-    emitProgress();
+    analysis
   }
+);
 
-  /*
-   * ==========================================================
-   * PROGRESSO
-   * ==========================================================
-   */
+const nextIndex =
+  currentPositionIndex +
+  1;
 
-  function emitProgress(
-    evaluation = null
-  ) {
-    const completed =
-      completedPositions.length;
+if (
+  nextIndex >=
+  POSITIONS.length
+) {
 
-    const total =
-      POSITIONS.length;
+  await finish();
 
-    safeCall(
-      "onProgress",
-      {
-        completed,
+  return;
+}
 
-        total,
+currentPositionIndex =
+  nextIndex;
 
-        progress:
-          Math.round(
-            (completed /
-              total) *
-              100
-          ),
+positionStartedAt =
+  Date.now();
 
-        currentPosition:
-          getCurrentPosition()
-            ? getCurrentPosition()
-                .id
-            : null,
+const next =
+  POSITIONS[
+    currentPositionIndex
+  ];
 
-        currentPositionIndex,
+if (
+  next
+) {
 
-        evaluation
-      }
-    );
-  }
-
-  /*
-   * ==========================================================
-   * FINALIZAÇÃO
-   * ==========================================================
-   */
-
-  async function finish() {
-    running =
-      false;
-
-    if (
-      animationFrame
-    ) {
-      cancelAnimationFrame(
-        animationFrame
-      );
-
-      animationFrame =
-        null;
-    }
-
-    stopSpeech();
-
-    const scores =
-      capturedPositions.map(
-        item =>
-          Number(
-            item.score || 0
-          )
-      );
-
-    const score =
-      average(
-        scores
-      );
-
-    result = {
-      completed:
-        completedPositions.length ===
-        POSITIONS.length,
-
-      success:
-        completedPositions.length ===
-          POSITIONS.length &&
-        score >=
-          CONFIG.overallScoreThreshold,
-
-      clientId,
-
-      completedCount:
-        completedPositions.length,
-
-      total:
-        POSITIONS.length,
-
-      score:
-        Number(
-          score.toFixed(
-            4
-          )
-        ),
-
-      positions:
-        capturedPositions,
-
-      completedPositions:
-        completedPositions.slice(),
-
-      completedAt:
-        new Date().toISOString()
-    };
-
-    safeCall(
-      "onComplete",
-      result
-    );
-
-    return result;
-  }
-
-  /*
-   * ==========================================================
-   * STOP
-   * ==========================================================
-   */
-
-  function stop() {
-    running =
-      false;
-
-    if (
-      animationFrame
-    ) {
-      cancelAnimationFrame(
-        animationFrame
-      );
-
-      animationFrame =
-        null;
-    }
-
-    stopSpeech();
-
-    stopCamera();
-  }
-
-  /*
-   * ==========================================================
-   * BACKEND
-   * ==========================================================
-   */
-
-  async function submitToBackend(
-    payload = {}
-  ) {
-    const targetClientId =
-      payload.clientId ||
-      clientId;
-
-    if (
-      !targetClientId
-    ) {
-      throw new Error(
-        "ID do cliente não encontrado."
-      );
-    }
-
-    const body = {
-      clientId:
-        targetClientId,
-
-      completed:
-        Boolean(
-          result &&
-          result.completed
-        ),
-
-      score:
-        result
-          ? result.score
-          : 0,
-
-      completedCount:
-        result
-          ? result.completedCount
-          : 0,
-
-      total:
-        POSITIONS.length,
-
-      positions:
-        result
-          ? result.positions
-          : [],
-
-      passportMatch:
-        payload.passportMatch ||
-        null,
-
-      facialResult:
-        result ||
-        null
-    };
-
-    const response =
-      await fetch(
-        `/api/clients/${encodeURIComponent(
-          targetClientId
-        )}/facial-preflight`,
-        {
-          method:
-            "POST",
-
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
-
-          credentials:
-            "include",
-
-          body:
-            JSON.stringify(
-              body
-            )
-        }
-      );
-
-    const data =
-      await response
-        .json()
-        .catch(
-          () => null
-        );
-
-    if (
-      !response.ok
-    ) {
-      throw new Error(
-        data &&
-        (
-          data.message ||
-          data.error
-        )
-          ? data.message ||
-              data.error
-          : "O servidor recusou o resultado facial."
-      );
-    }
-
-    return data;
-  }
-
-  /*
-   * ==========================================================
-   * API PÚBLICA
-   * ==========================================================
-   */
-
-  function getResult() {
-    return result;
-  }
-
-  function getPositions() {
-    return POSITIONS.map(
-      item => ({
-        ...item
-      })
-    );
-  }
-
-  function isReady() {
-    return Boolean(
-      initialized &&
-      faceApi
-    );
-  }
-
-  window.TravelFacialPreflight =
-    {
-      initialize,
-      start,
-      stop,
-      reset,
-      finish,
-      submitToBackend,
-      getResult,
-      getPositions,
-      isReady,
-
-      constants: {
-        AUDIO_LANGUAGE,
-
-        POSITIONS,
-
-        CONFIG,
-
-        FACE_API_SCRIPT_URL,
-
-        FACE_API_MODEL_URL
-      }
-    };
-
-  console.info(
-    "[FacialPreflight] Motor facial local disponível."
+  setStatus(
+    next.instruction,
+    "instruction"
   );
+
+  /*
+   * Aqui o sistema já está dentro de uma
+   * sessão de áudio iniciada pelo utilizador.
+   */
+
+  speakInstruction(
+    next.instruction
+  );
+}
+
+emitProgress();
+
+}
+
+/*
+
+* ==========================================================
+* PROGRESSO
+* ==========================================================
+  */
+
+function emitProgress(
+evaluation = null,
+analysis = null
+) {
+
+const completed =
+  completedPositions.length;
+
+const total =
+  POSITIONS.length;
+
+safeCall(
+  "onProgress",
+  {
+
+    completed,
+
+    total,
+
+    progress:
+      Math.round(
+        (
+          completed /
+          total
+        ) * 100
+      ),
+
+    currentPosition:
+      POSITIONS[
+        currentPositionIndex
+      ]?.id ||
+      null,
+
+    currentPositionIndex,
+
+    evaluation,
+
+    analysis
+  }
+);
+
+}
+
+/*
+
+* ==========================================================
+* FINALIZAÇÃO
+* ==========================================================
+  */
+
+async function finish() {
+
+running =
+  false;
+
+if (
+  animationFrame
+) {
+
+  cancelAnimationFrame(
+    animationFrame
+  );
+
+  animationFrame =
+    null;
+}
+
+const scores =
+  capturedPositions.map(
+    item =>
+      Number(
+        item.score || 0
+      )
+  );
+
+const score =
+  average(
+    scores
+  );
+
+const completed =
+  completedPositions.length ===
+  POSITIONS.length;
+
+const success =
+  completed &&
+  score >=
+    CONFIG.overallScoreThreshold;
+
+/*
+ * IMPORTANTE:
+ *
+ * A UI atual espera "passed".
+ * O motor também expõe "success".
+ *
+ * Assim os dois lados ficam compatíveis.
+ */
+
+result = {
+
+  completed,
+
+  success,
+
+  passed:
+    success,
+
+  clientId,
+
+  completedCount:
+    completedPositions.length,
+
+  total:
+    POSITIONS.length,
+
+  score:
+    Number(
+      score.toFixed(
+        4
+      )
+    ),
+
+  positions:
+    capturedPositions,
+
+  completedPositions:
+    completedPositions.slice(),
+
+  audioReady,
+
+  completedAt:
+    new Date().toISOString()
+};
+
+if (
+  success
+) {
+
+  setStatus(
+    "As dez posições foram concluídas.",
+    "success"
+  );
+
+} else {
+
+  setStatus(
+    "A preparação facial não atingiu todos os critérios.",
+    "warning"
+  );
+}
+
+safeCall(
+  "onComplete",
+  result
+);
+
+return result;
+
+}
+
+/*
+
+* ==========================================================
+* STOP
+* ==========================================================
+  */
+
+function stop() {
+
+running =
+  false;
+
+processing =
+  false;
+
+if (
+  animationFrame
+) {
+
+  cancelAnimationFrame(
+    animationFrame
+  );
+
+  animationFrame =
+    null;
+}
+
+stopSpeech();
+
+stopCamera();
+
+}
+
+/*
+
+* ==========================================================
+* BACKEND
+* ==========================================================
+  */
+
+async function submitToBackend(
+payload = {}
+) {
+
+const targetClientId =
+  payload.clientId ||
+  clientId;
+
+if (
+  !targetClientId
+) {
+
+  throw new Error(
+    "ID do cliente não encontrado."
+  );
+}
+
+if (
+  !result
+) {
+
+  throw new Error(
+    "Não existe resultado facial para guardar."
+  );
+}
+
+const body = {
+
+  clientId:
+    targetClientId,
+
+  completed:
+    Boolean(
+      result.completed
+    ),
+
+  success:
+    Boolean(
+      result.success
+    ),
+
+  passed:
+    Boolean(
+      result.passed
+    ),
+
+  score:
+    result.score,
+
+  completedCount:
+    result.completedCount,
+
+  total:
+    result.total,
+
+  positions:
+    result.positions,
+
+  passportMatch:
+    payload.passportMatch ||
+    null,
+
+  facialResult:
+    result
+};
+
+const response =
+  await fetch(
+    `/api/clients/${encodeURIComponent(
+      targetClientId
+    )}/facial-preflight`,
+    {
+
+      method:
+        "POST",
+
+      headers: {
+        "Content-Type":
+          "application/json",
+
+        Accept:
+          "application/json"
+      },
+
+      credentials:
+        "include",
+
+      body:
+        JSON.stringify(
+          body
+        )
+    }
+  );
+
+const data =
+  await response
+    .json()
+    .catch(
+      () =>
+        null
+    );
+
+if (
+  !response.ok
+) {
+
+  throw new Error(
+    data?.message ||
+    data?.error ||
+    `O servidor recusou o resultado facial. HTTP ${response.status}`
+  );
+}
+
+return data;
+
+}
+
+/*
+
+* ==========================================================
+* ESTADO
+* ==========================================================
+  */
+
+function getResult() {
+
+return result;
+
+}
+
+function getPositions() {
+
+return POSITIONS.map(
+  position => ({
+    ...position
+  })
+);
+
+}
+
+function isReady() {
+
+return Boolean(
+  initialized &&
+  faceApi
+);
+
+}
+
+function getState() {
+
+return {
+
+  initialized,
+
+  running,
+
+  audioReady,
+
+  speaking,
+
+  clientId,
+
+  currentPosition:
+    POSITIONS[
+      currentPositionIndex
+    ]?.id ||
+    null,
+
+  currentPositionIndex,
+
+  completedCount:
+    completedPositions.length,
+
+  total:
+    POSITIONS.length,
+
+  result
+};
+
+}
+
+/*
+
+* ==========================================================
+* API GLOBAL
+* ==========================================================
+  */
+
+window.TravelFacialPreflight = {
+
+initialize,
+
+start,
+
+stop,
+
+reset,
+
+finish,
+
+submitToBackend,
+
+getResult,
+
+getPositions,
+
+getState,
+
+isReady,
+
+speak,
+
+primeAudio,
+
+constants: {
+
+  AUDIO_LANGUAGE,
+
+  POSITIONS,
+
+  CONFIG,
+
+  FACE_API_SCRIPT_URL,
+
+  FACE_API_MODEL_URL
+}
+
+};
+
+console.info(
+"[FacialPreflight] Motor facial local disponível."
+);
+
 })();
