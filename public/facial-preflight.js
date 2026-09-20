@@ -653,28 +653,172 @@ try {
 
 function primeAudio() {
 
-preparePortugueseVoice();
+  if (
+    !(
+      "speechSynthesis" in
+      window
+    ) ||
+    typeof SpeechSynthesisUtterance ===
+      "undefined"
+  ) {
 
-const first =
-  POSITIONS[0];
+    console.warn(
+      "[FacialPreflight] Speech Synthesis não disponível neste navegador."
+    );
 
-if (!first) {
-  return false;
-}
-
-/*
- * O primeiro speak acontece no contexto
- * direto do clique que iniciou o processo.
- */
-
-return speak(
-  first.instruction,
-  {
-    rate:
-      0.92
+    return false;
   }
-);
 
+  try {
+
+    const synthesis =
+      window.speechSynthesis;
+
+    /*
+     * Cancela qualquer fila antiga.
+     */
+
+    synthesis.cancel();
+
+    /*
+     * Alguns Androids deixam o motor de voz
+     * suspenso depois de uma utilização anterior.
+     */
+
+    try {
+      synthesis.resume();
+    } catch (_) {}
+
+
+    /*
+     * Pequena fala silenciosa.
+     *
+     * Serve apenas para acordar o mecanismo TTS
+     * dentro do gesto do utilizador.
+     */
+
+    const unlock =
+      new SpeechSynthesisUtterance(
+        " "
+      );
+
+    unlock.lang =
+      "pt-PT";
+
+    unlock.volume =
+      0;
+
+    unlock.rate =
+      1;
+
+    unlock.pitch =
+      1;
+
+
+    synthesis.speak(
+      unlock
+    );
+
+
+    /*
+     * Agora a instrução real.
+     */
+
+    const first =
+      POSITIONS[0];
+
+    if (
+      first
+    ) {
+
+      const utterance =
+        new SpeechSynthesisUtterance(
+          first.instruction
+        );
+
+      utterance.lang =
+        "pt-PT";
+
+      utterance.rate =
+        0.90;
+
+      utterance.pitch =
+        1;
+
+      utterance.volume =
+        1;
+
+
+      const voice =
+        preferredPortugueseVoice ||
+        selectPortugueseVoice();
+
+      if (
+        voice
+      ) {
+
+        utterance.voice =
+          voice;
+      }
+
+
+      utterance.onstart =
+        () => {
+
+          speaking =
+            true;
+
+          console.log(
+            "[FacialPreflight] Áudio iniciado."
+          );
+        };
+
+
+      utterance.onend =
+        () => {
+
+          speaking =
+            false;
+
+          console.log(
+            "[FacialPreflight] Áudio concluído."
+          );
+        };
+
+
+      utterance.onerror =
+        event => {
+
+          speaking =
+            false;
+
+          console.error(
+            "[FacialPreflight] Erro TTS:",
+            event
+          );
+        };
+
+
+      synthesis.speak(
+        utterance
+      );
+    }
+
+
+    audioReady =
+      true;
+
+    return true;
+
+  } catch (error) {
+
+    console.error(
+      "[FacialPreflight] Falha ao iniciar áudio:",
+      error
+    );
+
+    return false;
+  }
 }
 
 function speakInstruction(
