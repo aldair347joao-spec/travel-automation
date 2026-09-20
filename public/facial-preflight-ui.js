@@ -1762,13 +1762,152 @@
     try {
       const engine =
         window.TravelFacialPreflight;
+
+
+      await engine.initialize({
+        videoElement:
+          $("facialPreflightVideo"),
+
+        clientId:
+          client.id,
+
+        onStatus: ({
+          message,
+          type,
+          analysis
+        }) => {
+          setStatus(
+            message
+          );
+
+          setAnalysis(
+            analysis
+          );
+
+          if (
+            type === "error"
+          ) {
+            setState(
+              "ATENÇÃO",
+              "error"
+            );
+          } else if (
+            type === "success"
+          ) {
+            setState(
+              "LIVE",
+              "success"
+            );
+          } else {
+            setState(
+              "ANALISANDO",
+              "warning"
+            );
+          }
+        },
+
+
+        onProgress:
+          updateProgress,
+
+
+        onPosition: ({
+          position,
+          completed:
+            positionCompleted
+        }) => {
+
+          const index =
+            POSITIONS.findIndex(
+              item =>
+                item.id ===
+                position
+            );
+
+          if (index >= 0) {
+            activePositionIndex =
+              index;
+          }
+
+          /*
+           * SOMENTE aqui uma posição vira verde.
+           */
+          if (
+            positionCompleted === true &&
+            index >= 0
+          ) {
+            markPositionCompleted(
+              position
+            );
+
+            setStatus(
+              index + 1 <
+                POSITIONS.length
+                ? `Posição ${
+                    POSITIONS[index].number
+                  } concluída. Prepare a próxima.`
+                : "As 10 posições foram concluídas."
+            );
+          } else {
+            renderPositionState();
+          }
+        },
+
+
+        onComplete:
+          async result => {
+            await handleComplete(
+              result
+            );
+          },
+
+
+        onError:
+          error => {
+            console.error(
+              "[IdentityCenter]",
+              error
+            );
+
+            running = false;
+
+            setCameraState(
+              false
+            );
+
+            setState(
+              "ERRO",
+              "error"
+            );
+
+            setStatus(
+              error?.message ||
+              "Não foi possível concluir a análise."
+            );
+
+            if (start) {
+              start.disabled = false;
+            }
+
+            if (stop) {
+              stop.hidden = true;
+            }
+
+            renderPositionState();
+          }
+      });
+
+
       /*
        * A CÂMERA SÓ É ATIVADA AQUI.
        *
        * Portanto abrir o Identity Center nunca
        * dispara getUserMedia().
        */
-      
+      await engine.start({
+        clientId:
+          client.id
+      });
 
 
       setCameraState(
