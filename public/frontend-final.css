@@ -1,908 +1,2514 @@
-/*
- * ============================================================
- * TRAVEL AUTOMATION
- * FRONTEND FINAL OVERLAY
- *
- * IMPORTANTE:
- * - style.css é o CSS mestre do projeto.
- * - Este arquivo NÃO redefine :root.
- * - Este arquivo NÃO deve controlar o layout base.
- * - Aqui ficam apenas estados e componentes adicionados
- *   pelo frontend-final.js.
- * ============================================================
- */
+/* ============================================================
+   TRAVEL AUTOMATION
+   FINAL PRODUCT VISUAL LAYER
+   ============================================================
+
+   Esta camada é propositalmente colocada no FINAL do arquivo.
+   Não altera IDs, JS, OCR, câmera, áudio ou backend.
+
+   Objetivos:
+   - unificar identidade visual
+   - eliminar conflitos tipográficos
+   - melhorar hierarquia
+   - transformar a interface em produto final
+   - preservar o HTML/JS existente
+   ============================================================ */
 
 
 /* ============================================================
-   PREFERÊNCIAS DE VIAGEM
+   01. DESIGN TOKENS
    ============================================================ */
 
-.frontend-final-preferences {
-  width: 100%;
-  margin-top: 24px;
-  padding: 24px;
+:root {
+  --ta-final-bg: #06101b;
+  --ta-final-bg-2: #081522;
+  --ta-final-surface: #0c1825;
+  --ta-final-surface-2: #101f2e;
+  --ta-final-surface-3: #132536;
 
-  border: 1px solid rgba(7, 86, 166, .12);
-  border-radius: 24px;
+  --ta-final-border: rgba(148, 190, 220, .13);
+  --ta-final-border-strong: rgba(74, 181, 255, .25);
+
+  --ta-final-text: #f5f8fb;
+  --ta-final-text-soft: #c5d1dc;
+  --ta-final-muted: #7f92a4;
+  --ta-final-muted-2: #627487;
+
+  --ta-final-blue: #32b8ff;
+  --ta-final-blue-2: #087dd1;
+  --ta-final-cyan: #49d9ee;
+
+  --ta-final-green: #35d991;
+  --ta-final-orange: #ffb04a;
+  --ta-final-red: #ff6470;
+
+  --ta-final-shadow:
+    0 24px 70px rgba(0, 0, 0, .28);
+
+  --ta-final-shadow-soft:
+    0 14px 40px rgba(0, 0, 0, .18);
+
+  --ta-final-radius: 22px;
+  --ta-final-radius-sm: 14px;
+
+  --ta-final-ease:
+    cubic-bezier(.22, .61, .36, 1);
+}
+
+
+/* ============================================================
+   02. GLOBAL PRODUCT SURFACE
+   ============================================================ */
+
+html {
+  background: var(--ta-final-bg);
+}
+
+body {
+  min-height: 100vh;
+
+  color: var(--ta-final-text);
+
+  background:
+    radial-gradient(
+      circle at 82% 5%,
+      rgba(50, 184, 255, .10),
+      transparent 26%
+    ),
+    radial-gradient(
+      circle at 10% 42%,
+      rgba(73, 217, 238, .055),
+      transparent 24%
+    ),
+    linear-gradient(
+      145deg,
+      #050c14 0%,
+      #07121d 45%,
+      #091724 100%
+    );
+}
+
+
+/* ============================================================
+   03. BACKGROUND
+   ============================================================ */
+
+.site-background {
+  opacity: 1;
+}
+
+.background-sky {
+  background:
+    radial-gradient(
+      circle at 78% 8%,
+      rgba(50, 184, 255, .13),
+      transparent 25%
+    ),
+    radial-gradient(
+      circle at 12% 74%,
+      rgba(73, 217, 238, .055),
+      transparent 27%
+    ),
+    linear-gradient(
+      145deg,
+      #050c14,
+      #07131f 55%,
+      #091724
+    );
+}
+
+.background-overlay {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(3, 10, 17, .12),
+      rgba(3, 10, 17, .45)
+    );
+}
+
+.background-grid {
+  opacity: .12;
+
+  background-image:
+    linear-gradient(
+      rgba(73, 180, 230, .12) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(73, 180, 230, .12) 1px,
+      transparent 1px
+    );
+
+  background-size: 54px 54px;
+
+  mask-image:
+    linear-gradient(
+      to bottom,
+      black,
+      transparent 78%
+    );
+}
+
+.background-airplane {
+  opacity: .035;
+}
+
+
+/* ============================================================
+   04. TOPBAR
+   ============================================================ */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+
+  min-height: 76px;
+
+  border-bottom:
+    1px solid rgba(148, 190, 220, .10);
+
+  background:
+    rgba(5, 12, 20, .78);
+
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, .12);
+
+  backdrop-filter: blur(22px);
+  -webkit-backdrop-filter: blur(22px);
+}
+
+.topbar-brand {
+  gap: 13px;
+}
+
+.brand-mark.small {
+  width: 38px;
+  height: 38px;
+
+  border:
+    1px solid rgba(50, 184, 255, .30);
+
+  border-radius: 12px;
 
   background:
     linear-gradient(
       145deg,
-      rgba(248, 252, 255, .98),
-      rgba(235, 246, 254, .96)
+      rgba(50, 184, 255, .20),
+      rgba(8, 125, 209, .08)
+    );
+
+  color: var(--ta-final-blue);
+
+  box-shadow:
+    0 0 30px rgba(50, 184, 255, .08);
+}
+
+.brand-copy strong {
+  color: var(--ta-final-text);
+
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+
+.brand-copy span {
+  color: var(--ta-final-muted);
+
+  font-size: 9px;
+}
+
+.topbar-center {
+  color: var(--ta-final-muted);
+
+  font-size: 10px;
+}
+
+.live-indicator {
+  width: 7px;
+  height: 7px;
+
+  background: var(--ta-final-green);
+
+  box-shadow:
+    0 0 0 4px rgba(53, 217, 145, .09),
+    0 0 16px rgba(53, 217, 145, .32);
+}
+
+.icon-button {
+  border:
+    1px solid var(--ta-final-border);
+
+  color: var(--ta-final-muted);
+
+  background:
+    rgba(255, 255, 255, .035);
+
+  transition:
+    border-color 180ms var(--ta-final-ease),
+    color 180ms var(--ta-final-ease),
+    background 180ms var(--ta-final-ease),
+    transform 180ms var(--ta-final-ease);
+}
+
+.icon-button:hover {
+  border-color: var(--ta-final-border-strong);
+
+  color: var(--ta-final-text);
+
+  background:
+    rgba(50, 184, 255, .08);
+
+  transform: translateY(-1px);
+}
+
+.user-chip {
+  border:
+    1px solid var(--ta-final-border);
+
+  background:
+    rgba(255, 255, 255, .035);
+
+  color: var(--ta-final-text);
+}
+
+.user-chip small {
+  color: var(--ta-final-muted);
+}
+
+.user-avatar {
+  border:
+    1px solid rgba(50, 184, 255, .24);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(50, 184, 255, .17),
+      rgba(8, 125, 209, .08)
+    );
+
+  color: var(--ta-final-blue);
+}
+
+
+/* ============================================================
+   05. MAIN CONTAINER
+   ============================================================ */
+
+.main-container {
+  position: relative;
+
+  width: min(1380px, calc(100% - 48px));
+
+  margin:
+    0 auto;
+
+  padding:
+    34px 0 90px;
+}
+
+
+/* ============================================================
+   06. HERO
+   ============================================================ */
+
+.operations-hero {
+  position: relative;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1.25fr)
+    minmax(360px, .75fr);
+
+  gap: 34px;
+
+  min-height: 420px;
+
+  align-items: center;
+
+  padding:
+    58px 58px 56px;
+
+  overflow: hidden;
+
+  border:
+    1px solid rgba(102, 184, 226, .14);
+
+  border-radius:
+    30px;
+
+  background:
+    radial-gradient(
+      circle at 84% 18%,
+      rgba(50, 184, 255, .13),
+      transparent 32%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(13, 29, 44, .97),
+      rgba(7, 18, 29, .98)
     );
 
   box-shadow:
-    0 18px 50px rgba(4, 45, 83, .06);
+    0 30px 100px rgba(0, 0, 0, .24);
 
-  animation:
-    frontendFinalPanelIn .45s ease both;
+  isolation: isolate;
 }
 
-.frontend-final-preferences-header span {
-  display: block;
+.operations-hero::before {
+  content: "";
 
-  color: var(--ta-blue);
-
-  font-size: 9px;
-  font-weight: 900;
-  letter-spacing: .14em;
-}
-
-.frontend-final-preferences-header strong {
-  display: block;
-
-  margin-top: 7px;
-
-  color: var(--ta-text);
-
-  font-family: var(--ta-display);
-  font-size: 20px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.frontend-final-preferences-header small {
-  display: block;
-
-  max-width: 700px;
-
-  margin-top: 8px;
-
-  color: var(--ta-muted);
-
-  font-size: 11px;
-  line-height: 1.6;
-}
-
-
-/* ============================================================
-   GRID DE PREFERÊNCIAS
-   ============================================================ */
-
-.frontend-final-grid {
-  display: grid;
-
-  grid-template-columns:
-    repeat(2, minmax(0, 1fr));
-
-  gap: 16px;
-
-  margin-top: 20px;
-}
-
-.frontend-field {
-  display: flex;
-  flex-direction: column;
-
-  gap: 8px;
-}
-
-.frontend-field > span {
-  color: #49647b;
-
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .04em;
-}
-
-.frontend-field select {
-  width: 100%;
-  min-height: 46px;
-
-  padding: 0 13px;
-
-  border: 1px solid var(--ta-border);
-  border-radius: 12px;
-
-  outline: none;
-
-  color: var(--ta-text);
-  background: #fff;
-
-  font: inherit;
-
-  transition:
-    border-color var(--ta-fast),
-    box-shadow var(--ta-fast),
-    transform var(--ta-fast);
-}
-
-.frontend-field select:hover {
-  border-color: #a9cdea;
-}
-
-.frontend-field select:focus {
-  border-color: var(--ta-blue-2);
-
-  box-shadow:
-    0 0 0 4px rgba(21, 150, 233, .10);
-}
-
-
-/* ============================================================
-   DIAS DA SEMANA
-   ============================================================ */
-
-.frontend-final-weekdays {
-  margin-top: 20px;
-}
-
-.frontend-final-weekdays > span {
-  display: block;
-
-  margin-bottom: 10px;
-
-  color: #49647b;
-
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .08em;
-
-  text-transform: uppercase;
-}
-
-.frontend-final-weekday-grid {
-  display: grid;
-
-  grid-template-columns:
-    repeat(7, minmax(0, 1fr));
-
-  gap: 8px;
-}
-
-.frontend-final-day {
-  position: relative;
-
-  cursor: pointer;
-}
-
-.frontend-final-day input {
   position: absolute;
+  inset: 0;
 
-  width: 1px;
-  height: 1px;
+  background:
+    linear-gradient(
+      115deg,
+      transparent 0%,
+      rgba(50, 184, 255, .035) 50%,
+      transparent 100%
+    );
 
-  opacity: 0;
   pointer-events: none;
 }
 
-.frontend-final-day span {
-  min-height: 42px;
+.operations-hero::after {
+  content: "";
 
+  position: absolute;
+
+  width: 420px;
+  height: 420px;
+
+  right: -220px;
+  bottom: -250px;
+
+  border-radius: 50%;
+
+  border:
+    1px solid rgba(50, 184, 255, .08);
+
+  box-shadow:
+    0 0 0 70px rgba(50, 184, 255, .015),
+    0 0 0 140px rgba(50, 184, 255, .01);
+
+  pointer-events: none;
+}
+
+.hero-content {
+  position: relative;
+  z-index: 2;
+
+  max-width: 700px;
+}
+
+.hero-eyebrow {
   display: flex;
+  align-items: center;
+  gap: 10px;
+
+  margin-bottom: 18px;
+
+  color: var(--ta-final-blue);
+
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .20em;
+}
+
+.hero-line {
+  width: 30px;
+  height: 1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      var(--ta-final-blue),
+      transparent
+    );
+}
+
+.operations-hero h1 {
+  max-width: 720px;
+
+  margin: 0;
+
+  color: var(--ta-final-text);
+
+  font-family:
+    "Plus Jakarta Sans",
+    Inter,
+    sans-serif;
+
+  font-size:
+    clamp(40px, 5vw, 66px);
+
+  font-weight: 800;
+
+  line-height: .98;
+
+  letter-spacing: -.045em;
+}
+
+.operations-hero h1 strong {
+  display: block;
+
+  margin-top: 5px;
+
+  color: var(--ta-final-blue);
+
+  font-weight: 800;
+}
+
+.operations-hero p {
+  max-width: 650px;
+
+  margin:
+    24px 0 0;
+
+  color: var(--ta-final-text-soft);
+
+  font-size: 14px;
+
+  line-height: 1.8;
+}
+
+.operations-hero p strong {
+  color: var(--ta-final-text);
+
+  font-weight: 800;
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 11px;
+
+  margin-top: 30px;
+}
+
+.hero-button {
+  min-height: 48px;
+
+  display: inline-flex;
   align-items: center;
   justify-content: center;
 
-  padding: 8px 7px;
+  gap: 10px;
 
-  border: 1px solid var(--ta-border);
-  border-radius: 12px;
+  padding:
+    0 18px;
 
-  color: #587086;
-  background: #fff;
+  border-radius: 13px;
 
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
 
   transition:
-    border-color var(--ta-fast),
-    background var(--ta-fast),
-    color var(--ta-fast),
-    transform var(--ta-fast),
-    box-shadow var(--ta-fast);
+    transform 180ms var(--ta-final-ease),
+    box-shadow 180ms var(--ta-final-ease),
+    border-color 180ms var(--ta-final-ease);
 }
 
-.frontend-final-day:hover span {
+.hero-button:hover {
   transform: translateY(-2px);
-
-  border-color: #91c7ea;
 }
 
-.frontend-final-day input:focus-visible + span {
-  outline: 2px solid var(--ta-blue-2);
-  outline-offset: 2px;
-}
-
-.frontend-final-day input:checked + span {
-  color: #fff;
-
-  border-color: var(--ta-blue);
+.hero-button.primary {
+  color: #04101a;
 
   background:
     linear-gradient(
       135deg,
-      var(--ta-blue),
-      var(--ta-blue-2)
+      #49d9ee,
+      #32b8ff
     );
 
   box-shadow:
-    0 10px 22px rgba(7, 86, 166, .18);
+    0 12px 30px rgba(50, 184, 255, .20);
 }
 
+.hero-button.secondary {
+  border:
+    1px solid var(--ta-final-border);
 
-/* ============================================================
-   RESUMO DAS PREFERÊNCIAS
-   ============================================================ */
-
-.frontend-final-summary {
-  display: grid;
-
-  grid-template-columns:
-    repeat(2, minmax(0, 1fr));
-
-  gap: 7px 18px;
-
-  margin-top: 18px;
-  padding: 15px;
-
-  border: 1px solid rgba(7, 86, 166, .10);
-  border-radius: 14px;
+  color: var(--ta-final-text-soft);
 
   background:
-    rgba(255, 255, 255, .75);
-
-  color: var(--ta-muted);
-
-  font-size: 10px;
+    rgba(255, 255, 255, .035);
 }
 
-.frontend-final-summary strong {
-  grid-column: 1 / -1;
+.hero-button.secondary:hover {
+  border-color:
+    rgba(50, 184, 255, .28);
 
-  color: var(--ta-text);
+  color:
+    var(--ta-final-text);
 
-  font-size: 11px;
-}
-
-.frontend-final-summary span {
-  line-height: 1.5;
+  background:
+    rgba(50, 184, 255, .06);
 }
 
 
 /* ============================================================
-   AGUARDANDO ADMINISTRAÇÃO
+   07. FLIGHT CARD
    ============================================================ */
 
-.frontend-final-admin-waiting {
+.hero-flight-card {
+  position: relative;
+  z-index: 2;
+
+  min-height: 270px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+
+  padding: 23px;
+
+  border:
+    1px solid rgba(116, 184, 220, .16);
+
+  border-radius: 22px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(19, 37, 54, .88),
+      rgba(10, 24, 38, .92)
+    );
+
+  box-shadow:
+    var(--ta-final-shadow);
+
+  overflow: hidden;
+}
+
+.hero-flight-card::before {
+  content: "";
+
+  position: absolute;
+  inset: 0;
+
+  background:
+    linear-gradient(
+      120deg,
+      rgba(50, 184, 255, .05),
+      transparent 42%
+    );
+
+  pointer-events: none;
+}
+
+.flight-card-header,
+.flight-card-footer {
+  position: relative;
+  z-index: 2;
+}
+
+.flight-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 10px;
+
+  color: var(--ta-final-muted);
+
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: .15em;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  padding:
+    7px 10px;
+
+  border:
+    1px solid rgba(53, 217, 145, .16);
+
+  border-radius: 999px;
+
+  color: var(--ta-final-green);
+
+  background:
+    rgba(53, 217, 145, .06);
+
+  font-size: 7px;
+  letter-spacing: .08em;
+}
+
+.status-pill i {
+  width: 6px;
+  height: 6px;
+
+  border-radius: 50%;
+
+  background:
+    var(--ta-final-green);
+
+  box-shadow:
+    0 0 10px rgba(53, 217, 145, .45);
+}
+
+.flight-route {
   position: relative;
 
   display: grid;
 
   grid-template-columns:
     auto
-    minmax(0, 1fr)
+    1fr
     auto;
 
   align-items: center;
 
-  gap: 18px;
+  gap: 15px;
 
-  margin: 22px 0;
-  padding: 22px;
-
-  overflow: hidden;
-
-  border: 1px solid rgba(7, 86, 166, .14);
-  border-radius: 22px;
-
-  background:
-    linear-gradient(
-      135deg,
-      rgba(248, 252, 255, .99),
-      rgba(232, 245, 253, .96)
-    );
-
-  box-shadow:
-    0 20px 55px rgba(4, 45, 83, .08);
-
-  animation:
-    frontendFinalPanelIn .45s ease both;
+  margin:
+    34px 0;
 }
 
-.frontend-final-admin-waiting::before {
-  content: "";
+.route-point strong {
+  display: block;
 
-  position: absolute;
+  color: var(--ta-final-text);
 
-  width: 240px;
-  height: 240px;
-
-  top: -130px;
-  right: -110px;
-
-  border-radius: 50%;
-
-  background:
-    radial-gradient(
-      circle,
-      rgba(21, 150, 233, .15),
-      transparent 70%
-    );
-
-  pointer-events: none;
-}
-
-.frontend-final-status-icon {
-  position: relative;
-  z-index: 1;
-
-  width: 52px;
-  height: 52px;
-
-  display: grid;
-  place-items: center;
-
-  border-radius: 16px;
-
-  color: var(--ta-blue);
-
-  background:
-    #e7f3fc;
-
-  font-size: 20px;
+  font-size: 15px;
   font-weight: 900;
 
-  box-shadow:
-    inset 0 0 0 1px rgba(7, 86, 166, .08);
+  letter-spacing: .08em;
 }
 
-.frontend-final-status-icon.success {
-  color: var(--ta-green);
-
-  background:
-    var(--ta-green-soft);
-}
-
-.frontend-final-status-copy {
-  position: relative;
-  z-index: 1;
-
-  min-width: 0;
-}
-
-.frontend-final-status-copy > span {
+.route-point span {
   display: block;
 
-  color: var(--ta-blue);
+  margin-top: 5px;
 
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: .14em;
-}
-
-.frontend-final-status-copy > strong {
-  display: block;
-
-  margin-top: 6px;
-
-  color: var(--ta-text);
-
-  font-family: var(--ta-display);
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.frontend-final-status-copy > small {
-  display: block;
-
-  max-width: 760px;
-
-  margin-top: 7px;
-
-  color: var(--ta-muted);
-
-  font-size: 10px;
-  line-height: 1.6;
-}
-
-.frontend-final-state-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-
-  gap: 7px;
-
-  margin-top: 11px;
-
-  color: var(--ta-muted);
+  color: var(--ta-final-muted);
 
   font-size: 9px;
 }
 
-.frontend-final-state-row strong {
-  color: var(--ta-text);
+.route-point.right {
+  text-align: right;
 }
 
-.frontend-final-status-badge {
+.route-line {
   position: relative;
-  z-index: 2;
 
-  white-space: nowrap;
-
-  padding: 9px 12px;
-
-  border-radius: 999px;
-
-  font-size: 8px;
-  font-weight: 900;
-  letter-spacing: .08em;
-}
-
-.frontend-final-status-badge.pending {
-  color: var(--ta-orange);
+  height: 1px;
 
   background:
-    rgba(237, 146, 46, .10);
+    rgba(130, 177, 207, .18);
 }
 
-.frontend-final-status-badge.active {
-  color: var(--ta-green);
+.route-progress {
+  position: absolute;
+  left: 0;
+  top: 0;
+
+  width: 42%;
+  height: 1px;
 
   background:
-    var(--ta-green-soft);
-}
-
-
-/* ============================================================
-   PAGAMENTO
-   ============================================================ */
-
-.frontend-final-payment {
-  margin: 22px 0;
-  padding: 22px;
-
-  border: 1px solid rgba(7, 86, 166, .12);
-  border-radius: 22px;
-
-  background: #fff;
+    linear-gradient(
+      90deg,
+      var(--ta-final-blue),
+      var(--ta-final-cyan)
+    );
 
   box-shadow:
-    0 18px 48px rgba(4, 45, 83, .07);
-
-  animation:
-    frontendFinalPanelIn .45s ease both;
+    0 0 12px rgba(50, 184, 255, .32);
 }
 
-.frontend-final-payment-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.route-plane {
+  position: absolute;
 
-  gap: 16px;
+  left: 42%;
+  top: 50%;
+
+  transform:
+    translate(-50%, -50%);
+
+  width: 28px;
+  height: 28px;
+
+  display: grid;
+  place-items: center;
+
+  border:
+    1px solid rgba(50, 184, 255, .18);
+
+  border-radius: 50%;
+
+  color: var(--ta-final-blue);
+
+  background:
+    #0c1b29;
+
+  font-size: 11px;
 }
 
-.frontend-final-payment-header span {
+.flight-card-footer {
+  padding-top: 15px;
+
+  border-top:
+    1px solid rgba(148, 190, 220, .09);
+}
+
+.flight-card-footer span {
   display: block;
 
-  color: var(--ta-muted);
+  color: var(--ta-final-muted-2);
 
-  font-size: 8px;
+  font-size: 7px;
   font-weight: 900;
   letter-spacing: .14em;
 }
 
-.frontend-final-payment-header strong {
+.flight-card-footer strong {
   display: block;
 
   margin-top: 6px;
 
-  color: var(--ta-text);
+  color: var(--ta-final-text-soft);
 
-  font-family: var(--ta-display);
-  font-size: 19px;
-  font-weight: 800;
-  line-height: 1.2;
+  font-size: 11px;
 }
 
-.frontend-final-payment-status {
-  width: 42px;
-  height: 42px;
+
+/* ============================================================
+   08. JOURNEY PIPELINE
+   ============================================================ */
+
+.system-pipeline {
+  position: relative;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    28px
+    minmax(0, 1fr)
+    28px
+    minmax(0, 1fr)
+    28px
+    minmax(0, 1fr);
+
+  align-items: center;
+
+  margin:
+    22px 0;
+
+  padding:
+    15px;
+
+  border:
+    1px solid var(--ta-final-border);
+
+  border-radius: 20px;
+
+  background:
+    rgba(10, 22, 34, .82);
+
+  box-shadow:
+    var(--ta-final-shadow-soft);
+
+  backdrop-filter:
+    blur(14px);
+}
+
+.pipeline-item {
+  position: relative;
+
+  min-width: 0;
+
+  display: grid;
+
+  grid-template-columns:
+    auto
+    auto
+    minmax(0, 1fr);
+
+  align-items: center;
+
+  gap: 10px;
+
+  min-height: 68px;
+
+  padding:
+    10px 12px;
+
+  border:
+    1px solid transparent;
+
+  border-radius: 14px;
+
+  transition:
+    border-color 180ms var(--ta-final-ease),
+    background 180ms var(--ta-final-ease),
+    opacity 180ms var(--ta-final-ease);
+}
+
+.pipeline-item.active {
+  border-color:
+    rgba(50, 184, 255, .20);
+
+  background:
+    rgba(50, 184, 255, .06);
+
+  box-shadow:
+    0 0 0 1px rgba(50, 184, 255, .04);
+}
+
+.pipeline-item.completed {
+  border-color:
+    rgba(53, 217, 145, .14);
+
+  background:
+    rgba(53, 217, 145, .045);
+}
+
+.pipeline-item.locked {
+  opacity: .42;
+}
+
+.pipeline-number {
+  align-self: start;
+
+  padding-top: 3px;
+
+  color: var(--ta-final-muted-2);
+
+  font-family:
+    "JetBrains Mono",
+    monospace;
+
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.pipeline-icon {
+  width: 36px;
+  height: 36px;
 
   display: grid;
   place-items: center;
 
   flex: 0 0 auto;
 
-  border-radius: 13px;
+  border:
+    1px solid rgba(148, 190, 220, .11);
 
-  font-size: 17px;
-  font-weight: 900;
-}
+  border-radius: 11px;
 
-.frontend-final-payment-status.pending {
-  color: var(--ta-orange);
+  color: var(--ta-final-muted);
 
   background:
-    rgba(237, 146, 46, .10);
+    rgba(255, 255, 255, .025);
 }
 
-.frontend-final-payment-status.confirmed {
-  color: var(--ta-green);
+.pipeline-item.active .pipeline-icon {
+  border-color:
+    rgba(50, 184, 255, .24);
+
+  color:
+    var(--ta-final-blue);
 
   background:
-    var(--ta-green-soft);
+    rgba(50, 184, 255, .08);
 }
 
-.frontend-final-payment-grid {
+.pipeline-item.completed .pipeline-icon {
+  border-color:
+    rgba(53, 217, 145, .20);
+
+  color:
+    var(--ta-final-green);
+
+  background:
+    rgba(53, 217, 145, .07);
+}
+
+.pipeline-copy {
+  min-width: 0;
+}
+
+.pipeline-copy strong {
+  display: block;
+
+  overflow: hidden;
+
+  color: var(--ta-final-text);
+
+  font-size: 10px;
+  font-weight: 800;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pipeline-copy span {
+  display: block;
+
+  margin-top: 3px;
+
+  overflow: hidden;
+
+  color: var(--ta-final-muted);
+
+  font-size: 8px;
+
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.pipeline-state {
+  display: none;
+}
+
+.pipeline-connector {
+  width: 100%;
+  height: 1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(111, 164, 196, .22),
+      transparent
+    );
+}
+
+
+/* ============================================================
+   09. STATISTICS
+   ============================================================ */
+
+.stats-grid {
   display: grid;
 
   grid-template-columns:
-    repeat(3, minmax(0, 1fr));
+    repeat(4, minmax(0, 1fr));
 
-  gap: 10px;
+  gap: 12px;
 
-  margin-top: 19px;
+  margin:
+    18px 0 26px;
 }
 
-.frontend-final-payment-grid > div {
+.stat-card {
   min-width: 0;
 
-  padding: 14px;
+  display: flex;
+  align-items: center;
 
-  border: 1px solid #e1eaf2;
-  border-radius: 13px;
+  gap: 13px;
+
+  padding:
+    16px;
+
+  border:
+    1px solid var(--ta-final-border);
+
+  border-radius: 17px;
 
   background:
-    #f8fbfd;
+    rgba(11, 25, 38, .72);
+
+  box-shadow:
+    0 12px 35px rgba(0, 0, 0, .12);
 }
 
-.frontend-final-payment-grid span {
+.stat-icon {
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+
+  flex: 0 0 auto;
+
+  border-radius: 11px;
+
+  background:
+    rgba(255, 255, 255, .035);
+}
+
+.stat-icon.blue,
+.stat-icon.cyan {
+  color: var(--ta-final-blue);
+
+  background:
+    rgba(50, 184, 255, .07);
+}
+
+.stat-icon.green {
+  color: var(--ta-final-green);
+
+  background:
+    rgba(53, 217, 145, .07);
+}
+
+.stat-icon.orange {
+  color: var(--ta-final-orange);
+
+  background:
+    rgba(255, 176, 74, .07);
+}
+
+.stat-content {
+  min-width: 0;
+}
+
+.stat-content span {
   display: block;
 
-  color: var(--ta-muted);
+  color: var(--ta-final-muted);
 
   font-size: 7px;
+  font-weight: 900;
+
+  letter-spacing: .10em;
+}
+
+.stat-content strong {
+  display: block;
+
+  margin-top: 3px;
+
+  color: var(--ta-final-text);
+
+  font-family:
+    "Plus Jakarta Sans",
+    Inter,
+    sans-serif;
+
+  font-size: 19px;
+}
+
+.stat-content small {
+  display: block;
+
+  margin-top: 2px;
+
+  color: var(--ta-final-muted-2);
+
+  font-size: 8px;
+}
+
+
+/* ============================================================
+   10. DASHBOARD STRUCTURE
+   ============================================================ */
+
+.dashboard-grid {
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr);
+
+  gap: 22px;
+}
+
+.dashboard-main {
+  min-width: 0;
+}
+
+
+/* ============================================================
+   11. PANELS
+   ============================================================ */
+
+.panel {
+  border:
+    1px solid var(--ta-final-border) !important;
+
+  border-radius:
+    var(--ta-final-radius) !important;
+
+  color:
+    var(--ta-final-text);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(14, 29, 43, .95),
+      rgba(8, 19, 30, .96)
+    ) !important;
+
+  box-shadow:
+    var(--ta-final-shadow-soft) !important;
+}
+
+.panel + .panel {
+  margin-top: 18px;
+}
+
+.panel-header {
+  padding-bottom: 20px;
+
+  border-bottom:
+    1px solid rgba(148, 190, 220, .08);
+}
+
+.panel-heading {
+  min-width: 0;
+}
+
+.panel-heading h2 {
+  margin-top: 6px !important;
+
+  color:
+    var(--ta-final-text) !important;
+
+  font-family:
+    "Plus Jakarta Sans",
+    Inter,
+    sans-serif;
+
+  font-size:
+    clamp(25px, 3vw, 34px) !important;
+
+  line-height: 1.1;
+
+  letter-spacing: -.035em;
+}
+
+.panel-heading p {
+  max-width: 720px;
+
+  margin-top: 9px !important;
+
+  color:
+    var(--ta-final-muted) !important;
+
+  font-size: 11px !important;
+
+  line-height: 1.7 !important;
+}
+
+.panel-eyebrow {
+  color:
+    var(--ta-final-blue) !important;
+
+  font-size: 8px !important;
+
+  letter-spacing: .16em;
+}
+
+.section-number {
+  color:
+    var(--ta-final-muted-2) !important;
+
+  font-family:
+    "JetBrains Mono",
+    monospace;
+
+  font-size: 9px !important;
+}
+
+.panel-status {
+  border:
+    1px solid rgba(50, 184, 255, .18) !important;
+
+  border-radius: 999px !important;
+
+  color:
+    var(--ta-final-blue) !important;
+
+  background:
+    rgba(50, 184, 255, .06) !important;
+
+  font-size: 7px !important;
   font-weight: 900;
   letter-spacing: .10em;
 }
 
-.frontend-final-payment-grid strong {
-  display: block;
 
-  margin-top: 7px;
+/* ============================================================
+   12. SELECTED CLIENT
+   ============================================================ */
 
-  overflow-wrap: anywhere;
+.selected-client-card {
+  border:
+    1px solid var(--ta-final-border) !important;
 
-  color: var(--ta-text);
+  border-radius:
+    17px !important;
 
-  font-size: 12px;
+  background:
+    rgba(255, 255, 255, .025) !important;
+
+  color:
+    var(--ta-final-text) !important;
 }
 
-.frontend-final-payment p {
-  margin: 15px 0 0;
-
-  color: var(--ta-muted);
-
-  font-size: 9px;
-  line-height: 1.55;
+.selected-client-card.empty {
+  color:
+    var(--ta-final-muted) !important;
 }
 
-.frontend-final-confirmation-link {
-  display: inline-flex;
-  align-items: center;
+.selected-client-avatar {
+  border:
+    1px solid rgba(50, 184, 255, .18) !important;
 
-  gap: 8px;
+  background:
+    rgba(50, 184, 255, .06) !important;
 
-  margin-top: 15px;
-  padding: 10px 14px;
+  color:
+    var(--ta-final-blue) !important;
+}
 
-  border-radius: 10px;
 
-  color: #fff;
+/* ============================================================
+   13. FORMULÁRIOS
+   ============================================================ */
+
+.field > span,
+.field label,
+.form-section-title {
+  color:
+    var(--ta-final-text-soft) !important;
+
+  font-size: 9px !important;
+
+  font-weight: 800;
+
+  letter-spacing: .04em;
+}
+
+.field input,
+.field select,
+.field textarea,
+.frontend-field select {
+  min-height: 46px;
+
+  border:
+    1px solid rgba(148, 190, 220, .13) !important;
+
+  border-radius: 12px !important;
+
+  outline: none;
+
+  color:
+    var(--ta-final-text) !important;
+
+  background:
+    rgba(255, 255, 255, .035) !important;
+
+  box-shadow:
+    none !important;
+}
+
+.field input::placeholder,
+.field textarea::placeholder {
+  color:
+    var(--ta-final-muted-2);
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color:
+    rgba(50, 184, 255, .45) !important;
+
+  box-shadow:
+    0 0 0 3px rgba(50, 184, 255, .07) !important;
+}
+
+.field select option {
+  color:
+    #102a43;
+
+  background:
+    #ffffff;
+}
+
+
+/* ============================================================
+   14. PASSAPORTE — PROTAGONISTA
+   ============================================================ */
+
+.passport-client-bar {
+  margin-bottom: 18px;
+}
+
+.passport-upload-layout {
+  gap: 18px;
+}
+
+.passport-upload-card,
+.passport-validation-card {
+  border:
+    1px solid var(--ta-final-border) !important;
+
+  border-radius:
+    18px !important;
+
+  background:
+    rgba(255, 255, 255, .025) !important;
+
+  box-shadow:
+    none !important;
+}
+
+.passport-upload-header {
+  border-bottom:
+    1px solid rgba(148, 190, 220, .07);
+}
+
+.passport-upload-limit {
+  color:
+    var(--ta-final-blue) !important;
+}
+
+.passport-dropzone {
+  min-height: 220px;
+
+  border:
+    1px dashed rgba(50, 184, 255, .24) !important;
+
+  border-radius:
+    17px !important;
+
+  background:
+    radial-gradient(
+      circle at center,
+      rgba(50, 184, 255, .06),
+      transparent 65%
+    ) !important;
+
+  color:
+    var(--ta-final-text-soft) !important;
+
+  transition:
+    border-color 180ms var(--ta-final-ease),
+    background 180ms var(--ta-final-ease),
+    transform 180ms var(--ta-final-ease);
+}
+
+.passport-dropzone:hover {
+  border-color:
+    rgba(50, 184, 255, .50) !important;
+
+  background:
+    rgba(50, 184, 255, .07) !important;
+
+  transform:
+    translateY(-1px);
+}
+
+.passport-dropzone-icon {
+  color:
+    var(--ta-final-blue) !important;
+
+  background:
+    rgba(50, 184, 255, .08) !important;
+}
+
+.passport-preview {
+  border:
+    1px solid var(--ta-final-border) !important;
+
+  border-radius:
+    17px !important;
+
+  background:
+    #08121d !important;
+}
+
+.passport-preview-image-wrap {
+  background:
+    #02070c !important;
+}
+
+.passport-preview-header {
+  color:
+    var(--ta-final-text-soft) !important;
+}
+
+.passport-validation-card {
+  overflow: hidden;
+}
+
+.passport-result-state {
+  border-radius:
+    13px !important;
+
+  background:
+    rgba(255, 255, 255, .025) !important;
+
+  color:
+    var(--ta-final-muted) !important;
+}
+
+.passport-extracted-data {
+  border:
+    1px solid rgba(148, 190, 220, .08) !important;
+
+  border-radius:
+    14px !important;
+
+  background:
+    rgba(255, 255, 255, .025) !important;
+
+  color:
+    var(--ta-final-text-soft) !important;
+}
+
+.passport-check-list {
+  color:
+    var(--ta-final-muted) !important;
+}
+
+.identity-gate-message {
+  border:
+    1px solid rgba(50, 184, 255, .14) !important;
+
+  border-radius:
+    15px !important;
+
+  color:
+    var(--ta-final-text-soft) !important;
+
+  background:
+    rgba(50, 184, 255, .045) !important;
+}
+
+
+/* ============================================================
+   15. BUTTONS
+   ============================================================ */
+
+.primary-button,
+button.primary-button {
+  min-height: 46px;
+
+  border:
+    0 !important;
+
+  border-radius:
+    12px !important;
+
+  color:
+    #04101a !important;
 
   background:
     linear-gradient(
       135deg,
-      var(--ta-blue),
-      var(--ta-blue-2)
-    );
+      #49d9ee,
+      #32b8ff
+    ) !important;
 
-  font-size: 9px;
-  font-weight: 800;
+  font-size: 10px;
 
-  text-decoration: none;
+  font-weight: 900;
 
   box-shadow:
-    0 9px 20px rgba(7, 86, 166, .18);
+    0 12px 28px rgba(50, 184, 255, .16);
 
   transition:
-    transform var(--ta-fast),
-    box-shadow var(--ta-fast);
+    transform 180ms var(--ta-final-ease),
+    box-shadow 180ms var(--ta-final-ease),
+    filter 180ms var(--ta-final-ease);
 }
 
-.frontend-final-confirmation-link:hover {
-  transform: translateY(-2px);
+.primary-button:hover {
+  transform:
+    translateY(-2px);
+
+  filter:
+    brightness(1.04);
 
   box-shadow:
-    0 13px 25px rgba(7, 86, 166, .24);
+    0 16px 35px rgba(50, 184, 255, .22);
+}
+
+.secondary-button {
+  min-height: 46px;
+
+  border:
+    1px solid var(--ta-final-border) !important;
+
+  border-radius:
+    12px !important;
+
+  color:
+    var(--ta-final-text-soft) !important;
+
+  background:
+    rgba(255, 255, 255, .035) !important;
+}
+
+.secondary-button:hover {
+  border-color:
+    rgba(50, 184, 255, .30) !important;
+
+  color:
+    var(--ta-final-text) !important;
+
+  background:
+    rgba(50, 184, 255, .06) !important;
 }
 
 
 /* ============================================================
-   BOTÃO ANTIGO "PREPARAR"
+   16. IDENTITY / CAMERA
    ============================================================ */
+
+.workflow-stage-mount,
+.facial-preflight-mount {
+  color:
+    var(--ta-final-text);
+}
+
+.workflow-stage-mount > *,
+.facial-preflight-mount > * {
+  max-width: 100%;
+}
+
+.camera-panel,
+.face-capture-panel,
+.identity-panel,
+.facial-panel {
+  border:
+    1px solid var(--ta-final-border) !important;
+
+  border-radius:
+    22px !important;
+
+  background:
+    #07111b !important;
+
+  box-shadow:
+    var(--ta-final-shadow) !important;
+}
+
+.camera-panel video,
+.face-capture-panel video,
+.identity-panel video,
+.facial-panel video {
+  border-radius:
+    17px;
+}
+
+.camera-frame,
+.face-frame {
+  border-color:
+    rgba(50, 184, 255, .65) !important;
+
+  box-shadow:
+    0 0 0 999px rgba(2, 8, 13, .20),
+    0 0 35px rgba(50, 184, 255, .10) !important;
+}
+
+
+/* ============================================================
+   17. READINESS
+   ============================================================ */
+
+.passport-readiness {
+  border:
+    1px solid var(--ta-final-border) !important;
+
+  border-radius:
+    17px !important;
+
+  background:
+    rgba(255, 255, 255, .025) !important;
+
+  color:
+    var(--ta-final-text-soft) !important;
+}
+
+.readiness-checks {
+  color:
+    var(--ta-final-muted) !important;
+}
+
+.document-note {
+  color:
+    var(--ta-final-muted) !important;
+}
+
+.facial-consent-card {
+  border:
+    1px solid rgba(50, 184, 255, .13) !important;
+
+  border-radius:
+    17px !important;
+
+  background:
+    rgba(50, 184, 255, .035) !important;
+
+  color:
+    var(--ta-final-text-soft) !important;
+}
+
+
+/* ============================================================
+   18. PREFERÊNCIAS DE VIAGEM
+   ============================================================ */
+
+.frontend-final-preferences {
+  border:
+    1px solid var(--ta-final-border) !important;
+
+  border-radius:
+    20px !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(14, 29, 43, .96),
+      rgba(8, 19, 30, .97)
+    ) !important;
+
+  box-shadow:
+    var(--ta-final-shadow-soft) !important;
+}
+
+.frontend-final-preferences-header span,
+.frontend-final-preferences-header strong {
+  color:
+    var(--ta-final-text);
+}
+
+.frontend-final-preferences-header span {
+  color:
+    var(--ta-final-blue);
+}
+
+.frontend-final-preferences-header small {
+  color:
+    var(--ta-final-muted);
+}
+
+.frontend-field > span,
+.frontend-final-weekdays > span {
+  color:
+    var(--ta-final-muted) !important;
+}
+
+.frontend-field select {
+  color:
+    var(--ta-final-text) !important;
+
+  background:
+    rgba(255, 255, 255, .035) !important;
+}
+
+.frontend-final-day span {
+  border-color:
+    rgba(148, 190, 220, .12) !important;
+
+  color:
+    var(--ta-final-muted) !important;
+
+  background:
+    rgba(255, 255, 255, .025) !important;
+}
+
+.frontend-final-day:hover span {
+  border-color:
+    rgba(50, 184, 255, .28) !important;
+}
+
+.frontend-final-day input:checked + span {
+  border-color:
+    var(--ta-final-blue) !important;
+
+  color:
+    #03101a !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      #49d9ee,
+      #32b8ff
+    ) !important;
+
+  box-shadow:
+    0 10px 25px rgba(50, 184, 255, .16) !important;
+}
+
+.frontend-final-summary {
+  border-color:
+    rgba(148, 190, 220, .08) !important;
+
+  background:
+    rgba(255, 255, 255, .025) !important;
+
+  color:
+    var(--ta-final-muted) !important;
+}
+
+.frontend-final-summary strong {
+  color:
+    var(--ta-final-text) !important;
+}
+
+
+/* ============================================================
+   19. ADMIN WAITING
+   ============================================================ */
+
+.frontend-final-admin-waiting {
+  border:
+    1px solid rgba(50, 184, 255, .14) !important;
+
+  border-radius:
+    20px !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(13, 31, 47, .96),
+      rgba(8, 19, 30, .97)
+    ) !important;
+
+  box-shadow:
+    var(--ta-final-shadow-soft) !important;
+}
+
+.frontend-final-status-icon {
+  border:
+    1px solid rgba(50, 184, 255, .13);
+
+  color:
+    var(--ta-final-blue);
+
+  background:
+    rgba(50, 184, 255, .06);
+}
+
+.frontend-final-status-icon.success {
+  color:
+    var(--ta-final-green);
+
+  background:
+    rgba(53, 217, 145, .07);
+}
+
+.frontend-final-status-copy > span {
+  color:
+    var(--ta-final-blue);
+}
+
+.frontend-final-status-copy > strong {
+  color:
+    var(--ta-final-text);
+}
+
+.frontend-final-status-copy > small,
+.frontend-final-state-row {
+  color:
+    var(--ta-final-muted);
+}
+
+.frontend-final-status-badge.pending {
+  color:
+    var(--ta-final-orange);
+
+  background:
+    rgba(255, 176, 74, .08);
+}
+
+.frontend-final-status-badge.active,
+.frontend-final-status-badge.completed {
+  color:
+    var(--ta-final-green);
+
+  background:
+    rgba(53, 217, 145, .08);
+}
+
+
+/* ============================================================
+   20. PAYMENT
+   ============================================================ */
+
+.frontend-final-payment {
+  border:
+    1px solid var(--ta-final-border) !important;
+
+  border-radius:
+    20px !important;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(14, 29, 43, .96),
+      rgba(8, 19, 30, .97)
+    ) !important;
+
+  box-shadow:
+    var(--ta-final-shadow-soft) !important;
+}
+
+.frontend-final-payment-header strong,
+.frontend-final-payment-grid strong {
+  color:
+    var(--ta-final-text) !important;
+}
+
+.frontend-final-payment-header span,
+.frontend-final-payment p,
+.frontend-final-payment-grid span {
+  color:
+    var(--ta-final-muted) !important;
+}
+
+.frontend-final-payment-grid > div {
+  border-color:
+    rgba(148, 190, 220, .08) !important;
+
+  background:
+    rgba(255, 255, 255, .025) !important;
+}
+
+.frontend-final-confirmation-link {
+  color:
+    #04101a !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      #49d9ee,
+      #32b8ff
+    ) !important;
+}
+
+
+/* ============================================================
+   21. RAW SYSTEM TEXT / STATUS CLEANUP
+   ============================================================ */
+
+.pipeline-state {
+  color:
+    var(--ta-final-muted) !important;
+}
 
 .application-actions button.admin-gated,
 button.admin-gated {
-  cursor: not-allowed;
+  border:
+    1px solid rgba(255, 176, 74, .22) !important;
 
-  color: var(--ta-orange) !important;
-
-  border-color: rgba(237, 146, 46, .35) !important;
+  color:
+    var(--ta-final-orange) !important;
 
   background:
-    rgba(237, 146, 46, .09) !important;
-
-  opacity: .9;
-}
-
-.application-actions button.admin-gated:hover,
-button.admin-gated:hover {
-  transform: none !important;
-
-  box-shadow: none !important;
+    rgba(255, 176, 74, .06) !important;
 }
 
 
 /* ============================================================
-   ESTADOS DE PIPELINE
+   22. MICRO ICON SYSTEM
    ============================================================ */
 
-.pipeline-item.active {
-  animation:
-    frontendFinalPipelinePulse 2.6s ease-in-out infinite;
+.document-icon,
+.face-icon,
+.radar-icon,
+.person-icon,
+.check-icon {
+  position: relative;
+
+  display: inline-block;
+
+  width: 17px;
+  height: 17px;
+
+  color: currentColor;
 }
 
-.pipeline-item.completed {
-  opacity: 1;
+/* documento */
+.document-icon::before {
+  content: "";
+
+  position: absolute;
+
+  inset:
+    2px 3px 1px;
+
+  border:
+    1.5px solid currentColor;
+
+  border-radius: 3px;
 }
 
-.pipeline-item.locked {
-  opacity: .48;
+.document-icon::after {
+  content: "";
+
+  position: absolute;
+
+  width: 5px;
+  height: 1.5px;
+
+  left: 6px;
+  top: 7px;
+
+  border-radius: 2px;
+
+  background:
+    currentColor;
+
+  box-shadow:
+    0 4px 0 currentColor;
+}
+
+/* pessoa / identidade */
+.face-icon::before {
+  content: "";
+
+  position: absolute;
+
+  width: 8px;
+  height: 8px;
+
+  left: 4.5px;
+  top: 1px;
+
+  border:
+    1.5px solid currentColor;
+
+  border-radius: 50%;
+}
+
+.face-icon::after {
+  content: "";
+
+  position: absolute;
+
+  width: 13px;
+  height: 7px;
+
+  left: 2px;
+  bottom: 1px;
+
+  border:
+    1.5px solid currentColor;
+
+  border-bottom: 0;
+
+  border-radius:
+    9px 9px 0 0;
+}
+
+/* radar */
+.radar-icon::before {
+  content: "";
+
+  position: absolute;
+
+  inset: 2px;
+
+  border:
+    1.5px solid currentColor;
+
+  border-radius: 50%;
+}
+
+.radar-icon::after {
+  content: "";
+
+  position: absolute;
+
+  width: 7px;
+  height: 1.5px;
+
+  left: 8px;
+  top: 8px;
+
+  transform:
+    rotate(-45deg);
+
+  transform-origin:
+    left center;
+
+  background:
+    currentColor;
+
+  box-shadow:
+    0 0 5px currentColor;
+}
+
+/* pessoa */
+.person-icon::before {
+  content: "";
+
+  position: absolute;
+
+  width: 7px;
+  height: 7px;
+
+  left: 5px;
+  top: 1px;
+
+  border:
+    1.5px solid currentColor;
+
+  border-radius: 50%;
+}
+
+.person-icon::after {
+  content: "";
+
+  position: absolute;
+
+  width: 13px;
+  height: 7px;
+
+  left: 2px;
+  bottom: 1px;
+
+  border:
+    1.5px solid currentColor;
+
+  border-bottom: 0;
+
+  border-radius:
+    8px 8px 0 0;
+}
+
+/* check */
+.check-icon::before {
+  content: "";
+
+  position: absolute;
+
+  width: 8px;
+  height: 4px;
+
+  left: 4px;
+  top: 5px;
+
+  border-left:
+    1.7px solid currentColor;
+
+  border-bottom:
+    1.7px solid currentColor;
+
+  transform:
+    rotate(-45deg);
 }
 
 
 /* ============================================================
-   ESTADOS ESPECÍFICOS DO FRONTEND FINAL
+   23. HIERARQUIA DA CANDIDATURA
    ============================================================ */
 
-.frontend-final-preferences.is-hidden,
-.frontend-final-admin-waiting.is-hidden,
-.frontend-final-payment.is-hidden {
-  display: none !important;
+.application-panel {
+  position: relative;
 }
 
-.frontend-final-status-badge.completed {
-  color: var(--ta-green);
+.application-panel::before {
+  content: "";
+
+  position: absolute;
+
+  left: 0;
+  top: 0;
+
+  width: 3px;
+  height: 100%;
+
+  border-radius:
+    20px 0 0 20px;
 
   background:
-    var(--ta-green-soft);
-}
+    linear-gradient(
+      180deg,
+      var(--ta-final-blue),
+      transparent
+    );
 
-.frontend-final-status-badge.paused {
-  color: var(--ta-orange);
-
-  background:
-    rgba(237, 146, 46, .10);
-}
-
-.frontend-final-status-badge.error {
-  color: var(--ta-red);
-
-  background:
-    rgba(217, 75, 82, .10);
+  opacity: .7;
 }
 
 
 /* ============================================================
-   LINKS / REFERÊNCIAS
+   24. FOOTER / FINAL PAGE AREA
    ============================================================ */
 
-.frontend-final-reference {
-  display: inline-flex;
-  align-items: center;
+.main-container::after {
+  content:
+    "TRAVEL AUTOMATION  ·  PREPARAÇÃO INTELIGENTE DE VIAGENS";
 
-  max-width: 100%;
+  display: block;
 
-  margin-top: 8px;
-  padding: 7px 10px;
+  margin-top: 56px;
+  padding-top: 24px;
 
-  border: 1px solid rgba(7, 86, 166, .10);
-  border-radius: 9px;
+  border-top:
+    1px solid rgba(148, 190, 220, .08);
 
-  color: var(--ta-blue);
+  color:
+    var(--ta-final-muted-2);
 
-  background:
-    rgba(7, 86, 166, .045);
+  font-size: 8px;
+  font-weight: 800;
 
-  font-family:
-    "JetBrains Mono",
-    "SFMono-Regular",
-    Consolas,
-    monospace;
+  letter-spacing: .14em;
 
-  font-size: 9px;
-  font-weight: 700;
-
-  overflow-wrap: anywhere;
+  text-align: center;
 }
 
 
 /* ============================================================
-   ANIMAÇÕES EXCLUSIVAS
+   25. SCROLLBAR
    ============================================================ */
 
-@keyframes frontendFinalPanelIn {
-  from {
-    opacity: 0;
+* {
+  scrollbar-width: thin;
 
-    transform:
-      translateY(12px)
-      scale(.99);
+  scrollbar-color:
+    rgba(84, 143, 178, .35)
+    transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+  background:
+    transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+
+  background:
+    rgba(84, 143, 178, .30);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background:
+    rgba(50, 184, 255, .45);
+}
+
+
+/* ============================================================
+   26. TABLET
+   ============================================================ */
+
+@media (max-width: 1100px) {
+
+  .main-container {
+    width:
+      min(100% - 32px, 980px);
   }
 
-  to {
-    opacity: 1;
-
-    transform:
-      translateY(0)
-      scale(1);
-  }
-}
-
-@keyframes frontendFinalPipelinePulse {
-  0%,
-  100% {
-    box-shadow:
-      0 0 0 0
-      rgba(21, 150, 233, 0);
-  }
-
-  50% {
-    box-shadow:
-      0 0 0 5px
-      rgba(21, 150, 233, .06);
-  }
-}
-
-
-/* ============================================================
-   RESPONSIVE — TABLET
-   ============================================================ */
-
-@media (max-width: 900px) {
-
-  .frontend-final-weekday-grid {
+  .operations-hero {
     grid-template-columns:
-      repeat(4, minmax(0, 1fr));
+      1fr;
+
+    padding:
+      42px;
   }
 
-  .frontend-final-payment-grid {
+  .hero-flight-card {
+    min-height:
+      230px;
+  }
+
+  .stats-grid {
     grid-template-columns:
       repeat(2, minmax(0, 1fr));
   }
+
+  .system-pipeline {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+
+    gap: 8px;
+  }
+
+  .pipeline-connector {
+    display: none;
+  }
 }
 
 
 /* ============================================================
-   RESPONSIVE — MOBILE
+   27. MOBILE
    ============================================================ */
 
 @media (max-width: 760px) {
 
-  .frontend-final-grid {
-    grid-template-columns: 1fr;
+  .topbar {
+    min-height: 64px;
   }
 
-  .frontend-final-weekday-grid {
+  .topbar-center {
+    display: none;
+  }
+
+  .user-chip {
+    padding:
+      5px 8px;
+  }
+
+  .user-chip > div:last-child {
+    display: none;
+  }
+
+  .main-container {
+    width:
+      calc(100% - 24px);
+
+    padding-top:
+      18px;
+
+    padding-bottom:
+      60px;
+  }
+
+  .operations-hero {
+    min-height:
+      auto;
+
+    padding:
+      32px 23px 24px;
+
+    border-radius:
+      23px;
+
+    gap:
+      28px;
+  }
+
+  .operations-hero h1 {
+    font-size:
+      clamp(35px, 11vw, 50px);
+  }
+
+  .operations-hero p {
+    font-size:
+      12px;
+
+    line-height:
+      1.7;
+  }
+
+  .hero-actions {
+    flex-direction:
+      column;
+
+    align-items:
+      stretch;
+  }
+
+  .hero-button {
+    width:
+      100%;
+  }
+
+  .hero-flight-card {
+    min-height:
+      220px;
+
+    padding:
+      19px;
+  }
+
+  .system-pipeline {
+    grid-template-columns:
+      1fr;
+
+    padding:
+      10px;
+  }
+
+  .pipeline-item {
+    min-height:
+      62px;
+  }
+
+  .stats-grid {
     grid-template-columns:
       repeat(2, minmax(0, 1fr));
+
+    gap:
+      8px;
   }
 
-  .frontend-final-summary {
-    grid-template-columns: 1fr;
+  .stat-card {
+    padding:
+      12px;
+
+    gap:
+      9px;
   }
 
-  .frontend-final-admin-waiting {
-    grid-template-columns:
-      auto
-      minmax(0, 1fr);
+  .stat-icon {
+    width:
+      34px;
+
+    height:
+      34px;
   }
 
-  .frontend-final-status-badge {
-    grid-column: 2;
-
-    justify-self: start;
+  .stat-content strong {
+    font-size:
+      17px;
   }
 
-  .frontend-final-payment-grid {
-    grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+  .panel {
+    border-radius:
+      18px !important;
+  }
+
+  .panel-header {
+    padding-bottom:
+      16px;
+  }
+
+  .panel-heading h2 {
+    font-size:
+      26px !important;
+  }
+
+  .passport-dropzone {
+    min-height:
+      190px;
   }
 }
 
 
 /* ============================================================
-   RESPONSIVE — MOBILE PEQUENO
+   28. SMALL MOBILE
    ============================================================ */
 
 @media (max-width: 480px) {
 
-  .frontend-final-preferences {
-    padding: 17px;
-
-    border-radius: 18px;
+  .brand-copy span {
+    display: none;
   }
 
-  .frontend-final-admin-waiting {
-    grid-template-columns: 1fr;
-
-    padding: 18px;
-
-    border-radius: 18px;
+  .topbar-brand {
+    gap:
+      8px;
   }
 
-  .frontend-final-status-badge {
-    grid-column: auto;
+  .brand-copy strong {
+    font-size:
+      9px;
   }
 
-  .frontend-final-payment {
-    padding: 18px;
-
-    border-radius: 18px;
+  .main-container {
+    width:
+      calc(100% - 18px);
   }
 
-  .frontend-final-payment-grid {
-    grid-template-columns: 1fr;
+  .operations-hero {
+    padding:
+      28px 18px 20px;
   }
 
-  .frontend-final-weekday-grid {
+  .operations-hero h1 {
+    font-size:
+      34px;
+  }
+
+  .hero-flight-card {
+    min-height:
+      200px;
+
+    padding:
+      16px;
+  }
+
+  .flight-route {
+    gap:
+      9px;
+  }
+
+  .route-point strong {
+    font-size:
+      12px;
+  }
+
+  .stats-grid {
     grid-template-columns:
-      repeat(2, minmax(0, 1fr));
+      1fr;
   }
 
-  .frontend-final-status-copy > strong {
-    font-size: 16px;
+  .stat-card {
+    min-height:
+      62px;
   }
 
-  .frontend-final-payment-header strong {
-    font-size: 17px;
+  .pipeline-item {
+    padding:
+      9px;
+  }
+
+  .pipeline-copy strong {
+    font-size:
+      9px;
+  }
+
+  .pipeline-copy span {
+    font-size:
+      7px;
+  }
+
+  .panel-heading h2 {
+    font-size:
+      24px !important;
+  }
+
+  .panel-heading p {
+    font-size:
+      10px !important;
+  }
+
+  .frontend-final-preferences,
+  .frontend-final-admin-waiting,
+  .frontend-final-payment {
+    border-radius:
+      17px !important;
   }
 }
 
 
 /* ============================================================
-   REDUCED MOTION
+   29. ACCESSIBILITY / REDUCED MOTION
    ============================================================ */
+
+:focus-visible {
+  outline:
+    2px solid rgba(50, 184, 255, .65);
+
+  outline-offset:
+    3px;
+}
 
 @media (prefers-reduced-motion: reduce) {
 
-  .frontend-final-preferences,
-  .frontend-final-admin-waiting,
-  .frontend-final-payment,
-  .pipeline-item.active {
-    animation: none !important;
+  *,
+  *::before,
+  *::after {
+    scroll-behavior:
+      auto !important;
+
+    animation-duration:
+      .01ms !important;
+
+    animation-iteration-count:
+      1 !important;
+
+    transition-duration:
+      .01ms !important;
   }
 }
