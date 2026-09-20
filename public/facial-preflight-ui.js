@@ -1963,6 +1963,64 @@
 
   async function startPreflight() {
 
+    try {
+
+    if (
+      window.TravelFacialPreflight &&
+      typeof window
+        .TravelFacialPreflight
+        .primeAudio === "function"
+    ) {
+
+      window
+        .TravelFacialPreflight
+        .primeAudio();
+
+    } else if (
+      "speechSynthesis" in window &&
+      typeof SpeechSynthesisUtterance !==
+        "undefined"
+    ) {
+
+      /*
+       * Fallback direto do navegador.
+       */
+
+      const speech =
+        window.speechSynthesis;
+
+      speech.cancel();
+
+      const unlock =
+        new SpeechSynthesisUtterance(
+          ""
+        );
+
+      unlock.lang =
+        "pt-PT";
+
+      unlock.volume =
+        0;
+
+      unlock.rate =
+        1;
+
+      speech.speak(
+        unlock
+      );
+
+      speech.resume();
+
+    }
+
+  } catch (audioError) {
+
+    console.warn(
+      "[IdentityCenter] Não foi possível inicializar o áudio:",
+      audioError
+    );
+  }
+
     const client =
       selectedClient ||
       normalizeClient(
