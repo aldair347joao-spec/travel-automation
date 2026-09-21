@@ -10,9 +10,6 @@ require("crypto");
 const User =
 require("../models/user");
 
-const Client =
-require("../models/client");
-
 const AuditLog =
 require("../models/audit-log");
 
@@ -34,20 +31,32 @@ require("../middleware/rate-limit");
 const router =
 express.Router();
 
+/*
+
+* =========================================================
+* HELPERS
+* =========================================================
+  */
+
 function normalizeEmail(email) {
-return String(email || "")
+return String(
+email || ""
+)
 .trim()
 .toLowerCase();
 }
 
 function validPassword(password) {
 return (
-typeof password === "string" &&
+typeof password ===
+"string" &&
 password.length >= 12 &&
 /[a-z]/.test(password) &&
 /[A-Z]/.test(password) &&
 /\d/.test(password) &&
-/[^A-Za-z0-9]/.test(password)
+/[^A-Za-z0-9]/.test(
+password
+)
 );
 }
 
@@ -56,7 +65,8 @@ res,
 token
 ) {
 const csrfToken =
-crypto.randomBytes(32)
+crypto
+.randomBytes(32)
 .toString("hex");
 
 res.cookie(
@@ -68,14 +78,14 @@ httpOnly: true,
   secure:
     config.cookieSecure,
 
-  sameSite:
-    "lax",
+  sameSite: "lax",
 
-  path:
-    "/",
+  path: "/",
 
   maxAge:
-    15 * 60 * 1000
+    15 *
+    60 *
+    1000
 }
 
 );
@@ -89,14 +99,14 @@ httpOnly: false,
   secure:
     config.cookieSecure,
 
-  sameSite:
-    "lax",
+  sameSite: "lax",
 
-  path:
-    "/",
+  path: "/",
 
   maxAge:
-    15 * 60 * 1000
+    15 *
+    60 *
+    1000
 }
 
 );
@@ -109,6 +119,9 @@ return {
 id:
 user._id,
 
+accountId:
+  user.accountId,
+
 name:
   user.name,
 
@@ -118,8 +131,17 @@ email:
 role:
   user.role,
 
+/*
+ * clientId permanece disponível caso exista
+ * alguma associação antiga ou futura.
+ *
+ * IMPORTANTE:
+ * ele NÃO é usado para limitar o acesso de
+ * utilizadores com role "client".
+ */
 clientId:
-  user.clientId || null
+  user.clientId ||
+  null
 
 };
 }
@@ -145,7 +167,8 @@ req.get(
 );
 
   const configuredToken =
-    process.env.BOOTSTRAP_TOKEN;
+    process.env
+      .BOOTSTRAP_TOKEN;
 
   if (
     !configuredToken ||
@@ -156,8 +179,7 @@ req.get(
     return res
       .status(403)
       .json({
-        success:
-          false,
+        success: false,
 
         error:
           "Bootstrap forbidden"
@@ -173,8 +195,7 @@ req.get(
     return res
       .status(409)
       .json({
-        success:
-          false,
+        success: false,
 
         error:
           "Initial account already created"
@@ -198,8 +219,7 @@ req.get(
     return res
       .status(400)
       .json({
-        success:
-          false,
+        success: false,
 
         error:
           "Name, email and strong password are required"
@@ -260,13 +280,11 @@ req.get(
   return res
     .status(201)
     .json({
-      success:
-        true,
+      success: true,
 
       message:
         "Owner account created"
     });
-
 } catch (
   error
 ) {
@@ -300,6 +318,11 @@ req.body.email
   const password =
     req.body.password;
 
+  /*
+   * O email é globalmente único no modelo User,
+   * portanto podemos localizar directamente.
+   */
+
   const user =
     await User.findOne({
       email
@@ -313,8 +336,7 @@ req.body.email
     return res
       .status(401)
       .json({
-        success:
-          false,
+        success: false,
 
         error:
           "Invalid email or password"
@@ -329,8 +351,7 @@ req.body.email
     return res
       .status(423)
       .json({
-        success:
-          false,
+        success: false,
 
         error:
           "Account temporarily locked"
@@ -348,15 +369,16 @@ req.body.email
     !valid
   ) {
     const attempts =
-      user.failedLoginAttempts +
-      1;
+      (
+        user.failedLoginAttempts ||
+        0
+      ) + 1;
 
     user.failedLoginAttempts =
       attempts;
 
     if (
-      attempts >=
-      5
+      attempts >= 5
     ) {
       user.lockedUntil =
         new Date(
@@ -372,8 +394,7 @@ req.body.email
     return res
       .status(401)
       .json({
-        success:
-          false,
+        success: false,
 
         error:
           "Invalid email or password"
@@ -386,8 +407,7 @@ req.body.email
     return res
       .status(403)
       .json({
-        success:
-          false,
+        success: false,
 
         error:
           "Account disabled"
@@ -395,61 +415,33 @@ req.body.email
   }
 
   /*
-   * -----------------------------------------------------
-   * CLIENT ACCOUNT INTEGRITY
-   * -----------------------------------------------------
+   * ===================================================
+   * CLIENT COLLABORATOR
+   * ===================================================
    *
-   * Um utilizador com role client precisa obrigatoriamente
-   * de estar associado a um perfil Client.
+   * NÃO fazemos aqui:
    *
-   * Se a associação estiver quebrada, não permitimos
-   * entrar na plataforma.
+   *   user.clientId
+   *
+   * nem:
+   *
+   *   Client.findOne({
+   *      _id: user.clientId
+   *   })
+   *
+   * Porque "client" é uma conta colaboradora que
+   * pode gerir vários viajantes.
+   *
+   * A autorização dos viajantes é feita nos endpoints
+   * de Client através de:
+   *
+   *   accountId
+   *   +
+   *   createdBy
+   *
+   * Portanto uma conta client pode iniciar sessão
+   * mesmo sem nenhum viajante criado ainda.
    */
-
-  if (
-    user.role ===
-    "client"
-  ) {
-    if (
-      !user.clientId
-    ) {
-      return res
-        .status(403)
-        .json({
-          success:
-            false,
-
-          error:
-            "Client account is not linked to a client profile"
-        });
-    }
-
-    const client =
-      await Client.findOne({
-        _id:
-          user.clientId,
-
-        accountId:
-          user.accountId,
-
-        active:
-          true
-      });
-
-    if (
-      !client
-    ) {
-      return res
-        .status(403)
-        .json({
-          success:
-            false,
-
-          error:
-            "Client profile is unavailable"
-        });
-    }
-  }
 
   user.failedLoginAttempts =
     0;
@@ -480,19 +472,25 @@ req.body.email
       "auth.login",
 
     ip:
-      req.ip
+      req.ip,
+
+    metadata: {
+      role:
+        user.role,
+
+      accountId:
+        user.accountId
+    }
   });
 
   return res.json({
-    success:
-      true,
+    success: true,
 
     user:
       serializeUser(
         user
       )
   });
-
 } catch (
   error
 ) {
@@ -541,8 +539,7 @@ req.user.sessionVersion +=
   res.clearCookie(
     config.cookieName,
     {
-      httpOnly:
-        true,
+      httpOnly: true,
 
       secure:
         config.cookieSecure,
@@ -550,8 +547,7 @@ req.user.sessionVersion +=
       sameSite:
         "lax",
 
-      path:
-        "/"
+      path: "/"
     }
   );
 
@@ -564,16 +560,13 @@ req.user.sessionVersion +=
       sameSite:
         "lax",
 
-      path:
-        "/"
+      path: "/"
     }
   );
 
   return res.json({
-    success:
-      true
+    success: true
   });
-
 } catch (
   error
 ) {
@@ -598,8 +591,7 @@ req,
 res
 ) => {
 return res.json({
-success:
-true,
+success: true,
 
   user:
     serializeUser(
@@ -613,22 +605,28 @@ true,
 /*
 
 * =========================================================
-* CREATE USER
+* CREATE USER / COLLABORATOR
 * =========================================================
 * 
 * owner:
+* pode criar:
 * admin
 * operator
 * viewer
 * client
 * 
 * admin:
+* pode criar:
 * operator
 * viewer
 * client
 * 
-* Apenas owner/admin podem criar contas.
-* =========================================================
+* Um "client" aqui é um COLABORADOR.
+* 
+* Não precisa de clientId.
+* 
+* Depois de entrar na plataforma, esse colaborador
+* poderá criar vários Client viajantes.
   */
 
 router.post(
@@ -676,8 +674,7 @@ req.body;
     return res
       .status(403)
       .json({
-        success:
-          false,
+        success: false,
 
         error:
           "Role not allowed"
@@ -694,8 +691,7 @@ req.body;
     return res
       .status(400)
       .json({
-        success:
-          false,
+        success: false,
 
         error:
           "Invalid user data"
@@ -708,119 +704,21 @@ req.body;
     );
 
   /*
-   * -----------------------------------------------------
-   * CLIENT ACCOUNT
-   * -----------------------------------------------------
-   */
-
-  let linkedClient =
-    null;
-
-  if (
-    role ===
-    "client"
-  ) {
-    if (
-      !clientId
-    ) {
-      return res
-        .status(400)
-        .json({
-          success:
-            false,
-
-          error:
-            "clientId is required for client accounts"
-        });
-    }
-
-    linkedClient =
-      await Client.findOne({
-        _id:
-          clientId,
-
-        accountId:
-          req.user.accountId,
-
-        active:
-          true
-      });
-
-    if (
-      !linkedClient
-    ) {
-      return res
-        .status(404)
-        .json({
-          success:
-            false,
-
-          error:
-            "Client profile not found"
-        });
-    }
-
-    /*
-     * Um perfil de cliente possui uma única conta
-     * de acesso.
-     */
-
-    const existingClientUser =
-      await User.findOne({
-        accountId:
-          req.user.accountId,
-
-        clientId:
-          linkedClient._id,
-
-        role:
-          "client"
-      });
-
-    if (
-      existingClientUser
-    ) {
-      return res
-        .status(409)
-        .json({
-          success:
-            false,
-
-          error:
-            "This client already has an access account"
-        });
-    }
-
-    /*
-     * O e-mail da conta deve corresponder ao e-mail
-     * registado no perfil do cliente.
-     *
-     * Isto evita criar uma conta para uma pessoa e
-     * associá-la silenciosamente ao perfil de outra.
-     */
-
-    if (
-      normalizeEmail(
-        linkedClient.email
-      ) !==
-      normalizedEmail
-    ) {
-      return res
-        .status(400)
-        .json({
-          success:
-            false,
-
-          error:
-            "The login email must match the client profile email"
-        });
-    }
-  }
-
-  /*
-   * -----------------------------------------------------
-   * DUPLICATE EMAIL
-   * -----------------------------------------------------
+   * clientId NÃO é obrigatório para role client.
+   *
+   * Se vier no request, ignoramos.
+   *
+   * Isto é intencional:
+   *
+   * User(client)
+   *       |
+   *       +---- Client A
+   *       +---- Client B
+   *       +---- Client C
+   *       +---- Client D
+   *
+   * A relação entre colaborador e viajantes é feita
+   * através de Client.createdBy.
    */
 
   const existingUser =
@@ -835,8 +733,7 @@ req.body;
     return res
       .status(409)
       .json({
-        success:
-          false,
+        success: false,
 
         error:
           "An account with this email already exists"
@@ -854,11 +751,12 @@ req.body;
       accountId:
         req.user.accountId,
 
+      /*
+       * Nunca ligamos uma conta colaboradora
+       * automaticamente a um viajante.
+       */
       clientId:
-        role ===
-        "client"
-          ? linkedClient._id
-          : null,
+        null,
 
       name:
         String(
@@ -898,25 +796,21 @@ req.body;
       role:
         user.role,
 
-      clientId:
-        user.clientId
-          ? user.clientId.toString()
-          : null
+      accountId:
+        user.accountId
     }
   });
 
   return res
     .status(201)
     .json({
-      success:
-        true,
+      success: true,
 
       user:
         serializeUser(
           user
         )
     });
-
 } catch (
   error
 ) {
