@@ -48,19 +48,11 @@ function createToken(user) {
  * DEVELOPMENT / PUBLIC USER
  * =========================================================
  *
- * IMPORTANTE:
+ * Quando AUTH_ENABLED=false, o sistema continua a funcionar
+ * sem login para desenvolvimento.
  *
- * Mesmo sem login precisamos de uma identidade
- * válida para o backend.
- *
- * O Client model exige createdBy como ObjectId.
- *
- * Por isso NÃO usamos _id: null.
- *
- * Criamos um ObjectId válido por processo.
- *
- * Não é necessário existir um User no MongoDB,
- * porque o modo público não consulta o User.
+ * O Client model exige createdBy como ObjectId, por isso
+ * mantemos um ObjectId válido durante o processo.
  * =========================================================
  */
 
@@ -96,7 +88,209 @@ function createDevelopmentUser() {
 
 /*
  * =========================================================
+ * AUTHENTICATE REQUEST
+ * =========================================================
+ *
+ * Esta função concentra a validação da sessão.
+ *
+ * IMPORTANTE:
+ *
+ * Ela NÃO envia respostas HTTP.
+ *
+ * Isso permite que:
+ *
+ * - APIs respondam JSON 401
+ * - páginas redirecionem para /login
+ *
+ * sem duplicar a lógica de autenticação.
+ * =========================================================
+ */
+
+async function authenticateRequest(
+  req
+) {
+  /*
+   * =======================================================
+   * DEVELOPMENT MODE
+   * =======================================================
+   */
+
+  if (
+    !config.authEnabled
+  ) {
+    return {
+      success:
+        true,
+
+      user:
+        createDevelopmentUser()
+    };
+  }
+
+
+  /*
+   * =======================================================
+   * TOKEN
+   * =======================================================
+   */
+
+  const token =
+    req.cookies?.[
+      config.cookieName
+    ];
+
+
+  if (!token) {
+    return {
+      success:
+        false,
+
+      status:
+        401,
+
+      error:
+        "Authentication required"
+    };
+  }
+
+
+  /*
+   * =======================================================
+   * VERIFY JWT
+   * =======================================================
+   */
+
+  let payload;
+
+  try {
+    payload =
+      jwt.verify(
+        token,
+        config.jwtSecret
+      );
+
+  } catch (error) {
+    return {
+      success:
+        false,
+
+      status:
+        401,
+
+      error:
+        "Invalid session"
+    };
+  }
+
+
+  /*
+   * =======================================================
+   * LOAD USER
+   * =======================================================
+   */
+
+  let user;
+
+  try {
+    user =
+      await User.findById(
+        payload.sub
+      );
+
+  } catch (error) {
+    console.error(
+      "[AUTH] Failed to load user:",
+      error.message
+    );
+
+    return {
+      success:
+        false,
+
+      status:
+        401,
+
+      error:
+        "Invalid session"
+    };
+  }
+
+
+  /*
+   * =======================================================
+   * USER STATUS
+   * =======================================================
+   */
+
+  if (
+    !user ||
+    !user.active
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        401,
+
+      error:
+        "Invalid session"
+    };
+  }
+
+
+  /*
+   * =======================================================
+   * SESSION VERSION
+   * =======================================================
+   *
+   * Permite invalidar sessões antigas depois de logout,
+   * alteração de segurança ou rotação de sessão.
+   * =======================================================
+   */
+
+  if (
+    user.sessionVersion !==
+    payload.sessionVersion
+  ) {
+    return {
+      success:
+        false,
+
+      status:
+        401,
+
+      error:
+        "Session expired"
+    };
+  }
+
+
+  /*
+   * =======================================================
+   * SUCCESS
+   * =======================================================
+   */
+
+  return {
+    success:
+      true,
+
+    user
+  };
+}
+
+
+/*
+ * =========================================================
  * REQUIRE AUTH
+ * =========================================================
+ *
+ * Middleware utilizado pelas APIs.
+ *
+ * APIs continuam a receber JSON 401.
+ *
+ * NÃO redirecionar APIs para /login.
  * =========================================================
  */
 
@@ -106,107 +300,37 @@ async function requireAuth(
   next
 ) {
   try {
-
-    /*
-     * =====================================================
-     * PUBLIC MODE
-     * =====================================================
-     *
-     * Quando AUTH_ENABLED=false:
-     *
-     * não existe login;
-     * não existe sessão;
-     * não existe JWT obrigatório.
-     *
-     * A aplicação recebe uma identidade operacional.
-     */
-
-    if (!config.authEnabled) {
-
-      req.user =
-        createDevelopmentUser();
-
-      return next();
-    }
+    const result =
+      await authenticateRequest(
+        req
+      );
 
 
-    /*
-     * =====================================================
-     * AUTHENTICATED MODE
-     * =====================================================
-     */
-
-    const token =
-      req.cookies?.[
-        config.cookieName
-      ];
-
-    if (!token) {
-
+    if (
+      !result.success
+    ) {
       return res
-        .status(401)
+        .status(
+          result.status || 401
+        )
         .json({
-          success: false,
+          success:
+            false,
 
           error:
+            result.error ||
             "Authentication required"
         });
     }
 
 
-    const payload =
-      jwt.verify(
-        token,
-        config.jwtSecret
-      );
-
-
-    const user =
-      await User.findById(
-        payload.sub
-      );
-
-
-    if (
-      !user ||
-      !user.active
-    ) {
-
-      return res
-        .status(401)
-        .json({
-          success: false,
-
-          error:
-            "Invalid session"
-        });
-    }
-
-
-    if (
-      user.sessionVersion !==
-      payload.sessionVersion
-    ) {
-
-      return res
-        .status(401)
-        .json({
-          success: false,
-
-          error:
-            "Session expired"
-        });
-    }
-
-
     req.user =
-      user;
+      result.user;
 
 
     return next();
 
   } catch (error) {
-
     console.error(
       "[AUTH]",
       error.message
@@ -215,11 +339,101 @@ async function requireAuth(
     return res
       .status(401)
       .json({
-        success: false,
+        success:
+          false,
 
         error:
           "Invalid session"
       });
+  }
+}
+
+
+/*
+ * =========================================================
+ * REQUIRE PAGE AUTH
+ * =========================================================
+ *
+ * Middleware utilizado por páginas HTML protegidas.
+ *
+ * Quando não existe sessão:
+ *
+ *     /       -> /login
+ *     /admin  -> /login
+ *
+ * Quando existe uma sessão inválida ou expirada:
+ *
+ *     -> /login
+ *
+ * As APIs NÃO utilizam este middleware.
+ * =========================================================
+ */
+
+async function requirePageAuth(
+  req,
+  res,
+  next
+) {
+  try {
+    const result =
+      await authenticateRequest(
+        req
+      );
+
+
+    if (
+      !result.success
+    ) {
+      /*
+       * Limpa o cookie inválido/expirado.
+       *
+       * Isto evita que o navegador continue a enviar
+       * uma sessão que já não é válida.
+       */
+
+      try {
+        res.clearCookie(
+          config.cookieName
+        );
+      } catch (error) {
+        /*
+         * Não interromper o redirecionamento caso
+         * o clearCookie não esteja disponível.
+         */
+      }
+
+
+      return res.redirect(
+        "/login"
+      );
+    }
+
+
+    req.user =
+      result.user;
+
+
+    return next();
+
+  } catch (error) {
+    console.error(
+      "[PAGE AUTH]",
+      error.message
+    );
+
+    try {
+      res.clearCookie(
+        config.cookieName
+      );
+    } catch (clearError) {
+      /*
+       * Ignorar erro de limpeza do cookie.
+       */
+    }
+
+    return res.redirect(
+      "/login"
+    );
   }
 }
 
@@ -233,7 +447,6 @@ async function requireAuth(
 function requireRole(
   ...roles
 ) {
-
   return (
     req,
     res,
@@ -241,19 +454,26 @@ function requireRole(
   ) => {
 
     /*
-     * Public mode:
+     * =====================================================
+     * DEVELOPMENT MODE
+     * =====================================================
      *
-     * A identidade operacional possui
-     * permissões de owner.
+     * A identidade operacional possui permissões de owner.
+     * =====================================================
      */
 
     if (
       !config.authEnabled
     ) {
-
       return next();
     }
 
+
+    /*
+     * =====================================================
+     * AUTHENTICATED USER
+     * =====================================================
+     */
 
     if (
       !req.user ||
@@ -261,11 +481,11 @@ function requireRole(
         req.user.role
       )
     ) {
-
       return res
         .status(403)
         .json({
-          success: false,
+          success:
+            false,
 
           error:
             "Forbidden"
@@ -288,6 +508,8 @@ module.exports = {
   createToken,
 
   requireAuth,
+
+  requirePageAuth,
 
   requireRole
 };
