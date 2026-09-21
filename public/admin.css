@@ -2002,3 +2002,155 @@ button {
         width: 100%;
     }
 }
+/* =========================
+   PERMISSION STATE
+========================= */
+
+.permission-notice {
+    min-height: 42px;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+
+    padding: 7px 11px;
+
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+
+    background: rgba(255, 255, 255, 0.025);
+}
+
+.permission-notice[hidden] {
+    display: none;
+}
+
+.permission-dot {
+    width: 7px;
+    height: 7px;
+
+    flex: 0 0 auto;
+
+    border-radius: 50%;
+
+    background: var(--green);
+
+    box-shadow:
+        0 0 0 4px rgba(53, 208, 127, 0.08);
+}
+
+.permission-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.permission-copy strong {
+    color: var(--text-soft);
+
+    font-size: 9px;
+    font-weight: 800;
+
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.permission-copy span {
+    color: var(--text-muted);
+
+    font-size: 8px;
+    line-height: 1.3;
+}
+
+/* Perfil sem permissão de alteração */
+
+.admin-readonly {
+    opacity: 0.68;
+}
+
+.credentials-form.admin-readonly {
+    position: relative;
+
+    border-radius: 12px;
+}
+
+.credentials-form.admin-readonly input {
+    cursor: not-allowed;
+}
+
+.admin-notes.admin-readonly {
+    cursor: not-allowed;
+
+    background:
+        repeating-linear-gradient(
+            -45deg,
+            rgba(255, 255, 255, 0.018),
+            rgba(255, 255, 255, 0.018) 8px,
+            rgba(255, 255, 255, 0.028) 8px,
+            rgba(255, 255, 255, 0.028) 16px
+        );
+}
+
+#saveCredentialsButton:disabled,
+#releaseButton:disabled,
+#pauseButton:disabled {
+    cursor: not-allowed;
+
+    opacity: 0.42;
+
+    filter: saturate(0.35);
+}
+
+#releaseButton[data-permission-denied="true"]::after,
+#pauseButton[data-permission-denied="true"]::after {
+    content: " · ADMIN";
+
+    font-size: 8px;
+    letter-spacing: 0.05em;
+}
+
+/* Estado visual específico para perfis de consulta */
+
+body.admin-viewer .permission-dot,
+body.admin-operator .permission-dot {
+    background: var(--orange);
+
+    box-shadow:
+        0 0 0 4px rgba(255, 173, 66, 0.08);
+}
+
+body.admin-viewer .permission-notice,
+body.admin-operator .permission-notice {
+    border-color: rgba(255, 173, 66, 0.14);
+
+    background: rgba(255, 173, 66, 0.035);
+}
+
+@media (max-width: 900px) {
+
+    .permission-notice {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .permission-copy span {
+        display: none;
+    }
+
+}
+
+@media (max-width: 680px) {
+
+    .permission-notice {
+        width: 100%;
+    }
+
+    .permission-copy {
+        min-width: 0;
+    }
+
+    .permission-copy strong {
+        white-space: nowrap;
+    }
+
+}
