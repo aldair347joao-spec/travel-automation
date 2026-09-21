@@ -120,24 +120,42 @@
 
             <div class="topbar-actions">
 
-                <span
-                    id="connectionStatus"
-                    class="connection-status checking"
-                >
-                    <i></i>
-                    A verificar...
-                </span>
+    <div
+        id="permissionNotice"
+        class="permission-notice"
+        hidden
+    >
+        <span class="permission-dot"></span>
 
-                <button
-                    type="button"
-                    id="refreshButton"
-                    class="btn btn-secondary"
-                >
-                    <span class="refresh-icon">↻</span>
-                    Atualizar
-                </button>
+        <div class="permission-copy">
+            <strong id="permissionTitle">
+                Acesso de consulta
+            </strong>
 
-            </div>
+            <span id="permissionDescription">
+                As ações administrativas estão bloqueadas para o seu perfil.
+            </span>
+        </div>
+    </div>
+
+    <span
+        id="connectionStatus"
+        class="connection-status checking"
+    >
+        <i></i>
+        A verificar...
+    </span>
+
+    <button
+        type="button"
+        id="refreshButton"
+        class="btn btn-secondary"
+    >
+        <span class="refresh-icon">↻</span>
+        Atualizar
+    </button>
+
+</div>
 
         </header>
 
