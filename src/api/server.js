@@ -40,6 +40,9 @@ const {
 const authRouter =
   require("./auth");
 
+const accessRequestsRouter =
+  require("./access-requests");
+
 const clientsRouter =
   require("./clients");
 
@@ -248,6 +251,29 @@ function createApp({
 
   /*
    * =========================================================
+   * ACCESS REQUEST API
+   * =========================================================
+   *
+   * Este endpoint é público.
+   *
+   * Um colaborador que ainda não possui conta pode enviar
+   * um pedido de acesso através da página de login.
+   *
+   * O pedido não cria automaticamente um utilizador.
+   *
+   * O owner/admin deverá posteriormente analisar o pedido
+   * e aprová-lo ou rejeitá-lo.
+   * =========================================================
+   */
+
+  app.use(
+    "/api/access-requests",
+    accessRequestsRouter
+  );
+
+
+  /*
+   * =========================================================
    * CSRF
    * =========================================================
    */
@@ -262,6 +288,14 @@ function createApp({
       if (
         req.path.startsWith(
           "/auth/"
+        )
+      ) {
+        return next();
+      }
+
+      if (
+        req.path.startsWith(
+          "/access-requests"
         )
       ) {
         return next();
