@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <meta
+    name="theme-color"
+    content="#031b3d"
+  >
+
+  <meta
+    name="description"
+    content="Travel Automation — acesso à plataforma."
+  >
+
+  <title>Travel Automation — Acesso</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
+    rel="stylesheet"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/style.css"
+  >
+
+  <link
+    rel="stylesheet"
+    href="/frontend-final.css"
+  >
+</head>
+
+<body>
+
+  <!-- =========================================================
+       FUNDO DA PLATAFORMA
+  ========================================================== -->
+
+  <div
+    class="site-background"
+    aria-hidden="true"
+  >
+    <div class="background-sky"></div>
+    <div class="background-airplane"></div>
+    <div class="background-grid"></div>
+    <div class="background-overlay"></div>
+  </div>
+
+
+  <!-- =========================================================
+       ACESSO
+  ========================================================== -->
+
+  <main
+    id="loginView"
+    class="login-view"
+  >
+
+    <div class="login-shell">
+
+      <!-- =====================================================
+           MARCA
+      ====================================================== -->
+
+      <div class="login-brand">
+
+        <div class="brand-mark">
+          <span>TA</span>
+        </div>
+
+        <div>
+
+          <strong>
+            TRAVEL AUTOMATION
+          </strong>
+
+          <small>
+            ANGOLA → PORTUGAL
+          </small>
+
+        </div>
+
+      </div>
+
+
+      <!-- =====================================================
+           CARTÃO DE ACESSO
+      ====================================================== -->
+
+      <section class="login-card">
+
+        <div class="login-card-top">
+
+          <span class="eyebrow">
+            ACESSO À PLATAFORMA
+          </span>
+
+          <h1>
+            Entrar na
+            <span>Travel Automation.</span>
+          </h1>
+
+          <p>
+            Aceda ao seu espaço de trabalho para
+            continuar o processo de viagem.
+          </p>
+
+        </div>
+
+
+        <!-- ===================================================
+             ESTADO DA PLATAFORMA
+        ==================================================== -->
+
+        <div class="login-status">
+
+          <span
+            class="status-dot"
+            aria-hidden="true"
+          ></span>
+
+          <span>
+            Plataforma disponível
+          </span>
+
+        </div>
+
+
+        <!-- ===================================================
+             FORMULÁRIO
+        ==================================================== -->
+
+        <form
+          id="loginForm"
+          novalidate
+        >
+
+          <div class="form-field">
+
+            <label
+              for="loginEmail"
+            >
+              E-mail
+            </label>
+
+            <input
+              id="loginEmail"
+              name="email"
+              type="email"
+              autocomplete="username"
+              inputmode="email"
+              placeholder="seu@email.com"
+              required
+            >
+
+          </div>
+
+
+          <div class="form-field">
+
+            <label
+              for="loginPassword"
+            >
+              Palavra-passe
+            </label>
+
+            <input
+              id="loginPassword"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              placeholder="Introduza a sua palavra-passe"
+              required
+            >
+
+          </div>
+
+
+          <!-- =================================================
+               MENSAGEM DE ERRO
+          ================================================== -->
+
+          <div
+            id="loginError"
+            class="form-message error hidden"
+            role="alert"
+            aria-live="polite"
+          ></div>
+
+
+          <!-- =================================================
+               BOTÃO
+          ================================================== -->
+
+          <button
+            id="loginButton"
+            class="login-button"
+            type="submit"
+          >
+
+            <span id="loginButtonText">
+              Entrar na plataforma
+            </span>
+
+            <span
+              id="loginButtonArrow"
+              aria-hidden="true"
+            >
+              →
+            </span>
+
+          </button>
+
+        </form>
+
+
+        <!-- ===================================================
+             CARACTERÍSTICAS
+        ==================================================== -->
+
+        <div class="login-features">
+
+          <div>
+
+            <strong>
+              01
+            </strong>
+
+            <span>
+              ACESSO SEGURO
+            </span>
+
+          </div>
+
+
+          <div>
+
+            <strong>
+              02
+            </strong>
+
+            <span>
+              PROCESSO DIGITAL
+            </span>
+
+          </div>
+
+
+          <div>
+
+            <strong>
+              03
+            </strong>
+
+            <span>
+              ACOMPANHAMENTO
+            </span>
+
+          </div>
+
+        </div>
+
+      </section>
+
+
+      <!-- =====================================================
+           RODAPÉ
+      ====================================================== -->
+
+      <footer class="login-footer">
+
+        <span>
+          Travel Automation
+        </span>
+
+        <span>
+          •
+        </span>
+
+        <span>
+          Plataforma de preparação de viagens
+        </span>
+
+      </footer>
+
+    </div>
+
+  </main>
+
+
+  <!-- =========================================================
+       LÓGICA DE LOGIN
+  ========================================================== -->
+
+  <script
+    src="/login.js"
+    defer
+  ></script>
+
+</body>
+</html>
