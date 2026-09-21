@@ -435,13 +435,14 @@ function createApplicationRouter({
    */
 
   router.post(
-    "/",
+  "/",
 
-    requireRole(
-      "owner",
-      "admin",
-      "operator"
-    ),
+  requireRole(
+    "owner",
+    "admin",
+    "operator",
+    "client"
+  ),
 
     async (
       req,
