@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="pt-AO">
+<head>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="robots"
+        content="noindex,nofollow"
+    >
+
+    <title>
+        Configuração inicial — Travel Automation
+    </title>
+
+    <style>
+        :root {
+            --bg: #07090d;
+            --panel: #10141b;
+            --panel-2: #151a22;
+            --border: rgba(255, 255, 255, 0.09);
+            --text: #f4f7fb;
+            --muted: #8993a3;
+            --accent: #d9ff4f;
+            --accent-dark: #a9c92d;
+            --danger: #ff5d6c;
+            --success: #5ee7a0;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background:
+                radial-gradient(
+                    circle at 50% 0%,
+                    rgba(217, 255, 79, 0.08),
+                    transparent 35%
+                ),
+                var(--bg);
+            color: var(--text);
+            font-family:
+                Inter,
+                system-ui,
+                -apple-system,
+                BlinkMacSystemFont,
+                "Segoe UI",
+                sans-serif;
+        }
+
+        .page {
+            width: 100%;
+            max-width: 520px;
+        }
+
+        .brand {
+            margin-bottom: 22px;
+        }
+
+        .brand-mark {
+            width: 46px;
+            height: 46px;
+            display: grid;
+            place-items: center;
+            margin-bottom: 18px;
+            border: 1px solid rgba(217, 255, 79, 0.3);
+            border-radius: 14px;
+            color: var(--accent);
+            background: rgba(217, 255, 79, 0.06);
+            font-size: 20px;
+            font-weight: 800;
+        }
+
+        .eyebrow {
+            margin: 0 0 8px;
+            color: var(--accent);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: clamp(28px, 7vw, 40px);
+            line-height: 1.05;
+            letter-spacing: -0.04em;
+        }
+
+        .intro {
+            margin: 14px 0 0;
+            color: var(--muted);
+            font-size: 14px;
+            line-height: 1.65;
+        }
+
+        .card {
+            padding: 24px;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            background:
+                linear-gradient(
+                    145deg,
+                    rgba(255, 255, 255, 0.035),
+                    rgba(255, 255, 255, 0.015)
+                ),
+                var(--panel);
+            box-shadow:
+                0 24px 70px rgba(0, 0, 0, 0.35);
+        }
+
+        .field {
+            margin-bottom: 17px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #c7ced9;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        input {
+            width: 100%;
+            height: 50px;
+            padding: 0 14px;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            outline: none;
+            color: var(--text);
+            background: var(--panel-2);
+            font: inherit;
+            transition:
+                border-color 0.2s ease,
+                box-shadow 0.2s ease;
+        }
+
+        input:focus {
+            border-color: rgba(217, 255, 79, 0.65);
+            box-shadow:
+                0 0 0 3px
+                rgba(217, 255, 79, 0.08);
+        }
+
+        .password-hint {
+            margin-top: 7px;
+            color: var(--muted);
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .security {
+            margin: 20px 0;
+            padding: 14px;
+            border: 1px solid rgba(217, 255, 79, 0.12);
+            border-radius: 12px;
+            color: var(--muted);
+            background: rgba(217, 255, 79, 0.035);
+            font-size: 12px;
+            line-height: 1.55;
+        }
+
+        .security strong {
+            color: #e8edf4;
+        }
+
+        button {
+            width: 100%;
+            min-height: 52px;
+            border: 0;
+            border-radius: 13px;
+            cursor: pointer;
+            color: #080a0d;
+            background: var(--accent);
+            font: inherit;
+            font-weight: 800;
+            transition:
+                transform 0.15s ease,
+                opacity 0.15s ease;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+        }
+
+        button:disabled {
+            cursor: wait;
+            opacity: 0.55;
+            transform: none;
+        }
+
+        .message {
+            display: none;
+            margin-top: 18px;
+            padding: 14px;
+            border-radius: 12px;
+            font-size: 13px;
+            line-height: 1.55;
+        }
+
+        .message.visible {
+            display: block;
+        }
+
+        .message.success {
+            border: 1px solid rgba(94, 231, 160, 0.25);
+            color: var(--success);
+            background: rgba(94, 231, 160, 0.07);
+        }
+
+        .message.error {
+            border: 1px solid rgba(255, 93, 108, 0.25);
+            color: #ff9aa5;
+            background: rgba(255, 93, 108, 0.07);
+        }
+
+        .footer {
+            margin-top: 18px;
+            color: #596271;
+            font-size: 11px;
+            line-height: 1.5;
+            text-align: center;
+        }
+
+        @media (max-width: 520px) {
+            body {
+                padding: 18px;
+                align-items: flex-start;
+            }
+
+            .page {
+                margin-top: 6vh;
+            }
+
+            .card {
+                padding: 20px;
+                border-radius: 18px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<main class="page">
+
+    <div class="brand">
+
+        <div class="brand-mark">
+            TA
+        </div>
+
+        <p class="eyebrow">
+            Travel Automation
+        </p>
+
+        <h1>
+            Configuração inicial
+        </h1>
+
+        <p class="intro">
+            Crie o primeiro utilizador da plataforma.
+            Esta conta será o proprietário da organização
+            e terá acesso à administração.
+        </p>
+
+    </div>
+
+    <section class="card">
+
+        <form id="bootstrapForm">
+
+            <div class="field">
+
+                <label for="name">
+                    Nome
+                </label>
+
+                <input
+                    id="name"
+                    name="name"
+                    type="text"
+                    autocomplete="name"
+                    placeholder="Nome do administrador"
+                    required
+                >
+
+            </div>
+
+            <div class="field">
+
+                <label for="email">
+                    Email
+                </label>
+
+                <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    autocomplete="email"
+                    placeholder="administrador@exemplo.com"
+                    required
+                >
+
+            </div>
+
+            <div class="field">
+
+                <label for="password">
+                    Palavra-passe
+                </label>
+
+                <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autocomplete="new-password"
+                    placeholder="Cria uma palavra-passe forte"
+                    minlength="12"
+                    required
+                >
+
+                <div class="password-hint">
+                    Mínimo de 12 caracteres, com
+                    maiúscula, minúscula, número e símbolo.
+                </div>
+
+            </div>
+
+            <div class="field">
+
+                <label for="bootstrapToken">
+                    Token de configuração
+                </label>
+
+                <input
+                    id="bootstrapToken"
+                    name="bootstrapToken"
+                    type="password"
+                    autocomplete="off"
+                    placeholder="BOOTSTRAP_TOKEN do Render"
+                    required
+                >
+
+            </div>
+
+            <div class="security">
+                <strong>Configuração protegida.</strong><br>
+                O token é utilizado apenas para autorizar
+                a criação inicial do proprietário. Depois
+                de o primeiro utilizador existir, o backend
+                bloqueia novas criações através deste processo.
+            </div>
+
+            <button
+                id="submitButton"
+                type="submit"
+            >
+                Criar administrador
+            </button>
+
+        </form>
+
+        <div
+            id="message"
+            class="message"
+            role="alert"
+        ></div>
+
+    </section>
+
+    <div class="footer">
+        Esta página serve apenas para a configuração inicial
+        da plataforma.
+    </div>
+
+</main>
+
+<script>
+    "use strict";
+
+    const form =
+        document.getElementById(
+            "bootstrapForm"
+        );
+
+    const button =
+        document.getElementById(
+            "submitButton"
+        );
+
+    const message =
+        document.getElementById(
+            "message"
+        );
+
+    function showMessage(
+        text,
+        type
+    ) {
+        message.textContent = text;
+
+        message.className =
+            "message visible " +
+            type;
+    }
+
+    function clearMessage() {
+        message.textContent = "";
+
+        message.className =
+            "message";
+    }
+
+    form.addEventListener(
+        "submit",
+        async function (event) {
+
+            event.preventDefault();
+
+            clearMessage();
+
+            const name =
+                document
+                    .getElementById("name")
+                    .value
+                    .trim();
+
+            const email =
+                document
+                    .getElementById("email")
+                    .value
+                    .trim();
+
+            const password =
+                document
+                    .getElementById("password")
+                    .value;
+
+            const bootstrapToken =
+                document
+                    .getElementById("bootstrapToken")
+                    .value
+                    .trim();
+
+            if (!name || !email || !password) {
+                showMessage(
+                    "Preenche todos os campos.",
+                    "error"
+                );
+
+                return;
+            }
+
+            if (!bootstrapToken) {
+                showMessage(
+                    "Introduz o token de configuração.",
+                    "error"
+                );
+
+                return;
+            }
+
+            if (password.length < 12) {
+                showMessage(
+                    "A palavra-passe precisa de ter pelo menos 12 caracteres.",
+                    "error"
+                );
+
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent =
+                "A criar administrador...";
+
+            try {
+
+                const response =
+                    await fetch(
+                        "/api/auth/bootstrap",
+                        {
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json",
+
+                                "x-bootstrap-token":
+                                    bootstrapToken
+                            },
+
+                            credentials:
+                                "same-origin",
+
+                            body:
+                                JSON.stringify({
+                                    name,
+                                    email,
+                                    password
+                                })
+                        }
+                    );
+
+                let data = null;
+
+                try {
+                    data =
+                        await response.json();
+                } catch {
+                    data = null;
+                }
+
+                if (!response.ok) {
+
+                    const errorMessage =
+                        data?.error ||
+                        data?.message ||
+                        `Não foi possível criar a conta. HTTP ${response.status}.`;
+
+                    throw new Error(
+                        errorMessage
+                    );
+                }
+
+                showMessage(
+                    "Administrador criado com sucesso. A tua conta é OWNER. Agora podes fazer login e entrar na administração.",
+                    "success"
+                );
+
+                form.reset();
+
+                button.textContent =
+                    "Administrador criado";
+
+                setTimeout(
+                    function () {
+                        window.location.href =
+                            "/";
+                    },
+                    2500
+                );
+
+            } catch (error) {
+
+                console.error(
+                    "[BOOTSTRAP]",
+                    error
+                );
+
+                showMessage(
+                    error.message ||
+                    "Não foi possível comunicar com o servidor.",
+                    "error"
+                );
+
+                button.disabled = false;
+
+                button.textContent =
+                    "Criar administrador";
+            }
+        }
+    );
+</script>
+
+</body>
+</html>
