@@ -193,7 +193,7 @@
      *
      * É propositalmente diferente da zona de entrada.
      */
-    poseHoldTolerance: 0.075,
+    poseHoldTolerance: 0.095,
 
     /*
      * Margem para evitar que uma posição vizinha seja aceita.
@@ -1552,11 +1552,11 @@
      * manutenção.
      */
 
-    const YAW =
-      0.22;
+  const YAW =
+  0.22;
 
-    const PITCH =
-      0.18;
+ const PITCH =
+  0.16;
 
     const tolerance =
       CONFIG.poseHoldTolerance;
@@ -1677,7 +1677,67 @@
         PITCH,
         tolerance
       );
+     /*
+ * ========================================================
+ * DIAGONAIS SUPERIORES — ZONA MAIS NATURAL
+ * ========================================================
+ *
+ * Para esquerda/cima e direita/cima, não exigimos que
+ * a pessoa levante a cabeça tanto quanto numa posição
+ * exclusivamente "para cima".
+ *
+ * O movimento horizontal continua sendo obrigatório.
+ * O movimento vertical também continua obrigatório,
+ * mas possui uma zona de entrada mais larga.
+ *
+ * Assim:
+ *
+ * esquerda + pequeno movimento para cima  -> reconhece
+ * direita  + pequeno movimento para cima  -> reconhece
+ *
+ * sem permitir:
+ *
+ * esquerda pura -> esquerda/cima
+ * direita pura  -> direita/cima
+ */
+let diagonalPitchScore =
+  pitchScore;
 
+const isUpperDiagonal =
+  positionId === "left_up" ||
+  positionId === "right_up";
+
+if (isUpperDiagonal) {
+  const upperDiagonalPitch =
+    axisDirectionScore(
+      pitch,
+      "negative",
+      0.135,
+      0.105
+    );
+
+  /*
+   * O eixo vertical fica ligeiramente mais tolerante,
+   * mas nunca pode desaparecer completamente.
+   */
+  diagonalPitchScore =
+    Math.max(
+      pitchScore,
+      upperDiagonalPitch * 0.92
+    );
+
+  /*
+   * Não permitimos que um simples movimento lateral
+   * seja confundido com uma diagonal superior.
+   */
+  if (
+    Math.abs(Number(pitch || 0)) <
+    0.085
+  ) {
+    diagonalPitchScore *=
+      0.72;
+  }
+}
     let poseScore;
 
     const isDiagonal =
@@ -1687,15 +1747,27 @@
       positionId === "right_down";
 
     if (isDiagonal) {
-      /*
-       * Nas diagonais, os dois movimentos têm importância.
-       */
-      poseScore =
-        yawScore *
-          CONFIG.diagonalAxisWeight +
-        pitchScore *
-          CONFIG.diagonalAxisWeight;
-    } else {
+  /*
+   * Nas diagonais superiores, a direção lateral continua
+   * sendo a principal referência, enquanto o movimento
+   * vertical precisa apenas estar claramente presente.
+   *
+   * Isso deixa esquerda+cima e direita+cima naturais,
+   * sem transformar uma simples esquerda/direita numa
+   * diagonal.
+   */
+  if (isUpperDiagonal) {
+    poseScore =
+      yawScore * 0.56 +
+      diagonalPitchScore * 0.44;
+  } else {
+    poseScore =
+      yawScore *
+        CONFIG.diagonalAxisWeight +
+      pitchScore *
+        CONFIG.diagonalAxisWeight;
+  }
+} else {
       poseScore =
         yawScore * 0.50 +
         pitchScore * 0.50;
