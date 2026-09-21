@@ -3018,7 +3018,50 @@ const AdminApp = (() => {
             !canManage
         );
     }
+      const permissionNotice =
+    $(
+        "#permissionNotice"
+    );
 
+const permissionTitle =
+    $(
+        "#permissionTitle"
+    );
+
+const permissionDescription =
+    $(
+        "#permissionDescription"
+    );
+
+if (permissionNotice) {
+    permissionNotice.hidden =
+        canManage;
+
+    document.body.classList.remove(
+        "admin-owner",
+        "admin-admin",
+        "admin-operator",
+        "admin-viewer"
+    );
+
+    document.body.classList.add(
+        `admin-${role || "viewer"}`
+    );
+}
+
+if (permissionTitle) {
+    permissionTitle.textContent =
+        canManage
+            ? "Acesso administrativo"
+            : "Acesso de consulta";
+}
+
+if (permissionDescription) {
+    permissionDescription.textContent =
+        canManage
+            ? "Pode configurar e controlar a automação."
+            : "As ações administrativas estão disponíveis apenas para administradores.";
+}
     if (!canManage) {
         if (saveCredentialsButton) {
             saveCredentialsButton.title =
