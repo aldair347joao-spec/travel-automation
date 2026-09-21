@@ -12,15 +12,19 @@ const {
   requireRole
 } =
   require("../middleware/auth");
+
 const PassportStorageService =
   require("../services/passport/passport-storage-service");
 
 const passportStorage =
   new PassportStorageService();
+
 const FacialService =
   require("../services/facial/facial-service");
+
 const preflight =
   require("../services/facial/preflight-service");
+
 const router =
   express.Router();
 
@@ -30,6 +34,72 @@ const facial =
 router.use(
   requireAuth
 );
+
+/*
+ * =========================================================
+ * CLIENT ACCESS HELPERS
+ * =========================================================
+ */
+
+/*
+ * Um utilizador com role "client" nunca pode escolher
+ * livremente o clientId.
+ *
+ * O único perfil permitido é:
+ *
+ * req.user.clientId
+ *
+ * Isto impede que um cliente tente consultar:
+ *
+ * /api/clients/OUTRO_ID
+ *
+ * ou manipule clientId no body/query.
+ */
+
+function isClientUser(req) {
+  return (
+    req.user &&
+    req.user.role === "client"
+  );
+}
+
+function isOwnClient(
+  req,
+  clientId
+) {
+  if (!isClientUser(req)) {
+    return false;
+  }
+
+  return (
+    req.user.clientId &&
+    String(
+      req.user.clientId
+    ) ===
+      String(clientId)
+  );
+}
+
+async function findOwnClient(req) {
+  if (!isClientUser(req)) {
+    return null;
+  }
+
+  if (!req.user.clientId) {
+    return null;
+  }
+
+  return Client.findOne({
+    _id:
+      req.user.clientId,
+
+    accountId:
+      req.user.accountId,
+
+    active:
+      true
+  });
+}
 
 /*
  * =========================================================
@@ -171,6 +241,15 @@ router.post(
  * =========================================================
  * LIST CLIENTS
  * =========================================================
+ *
+ * ADMIN / OPERATOR / VIEWER:
+ *   recebem os clientes da própria conta.
+ *
+ * CLIENT:
+ *   recebe exclusivamente o próprio perfil.
+ *
+ * Mantemos "clients" como array para não quebrar o
+ * frontend administrativo existente.
  */
 
 router.get(
@@ -181,6 +260,22 @@ router.get(
     next
   ) => {
     try {
+      if (isClientUser(req)) {
+        const client =
+          await findOwnClient(
+            req
+          );
+
+        return res.json({
+          success: true,
+
+          clients:
+            client
+              ? [client]
+              : []
+        });
+      }
+
       const clients =
         await Client.find({
           accountId:
@@ -212,6 +307,12 @@ router.get(
  * =========================================================
  * GET CLIENT
  * =========================================================
+ *
+ * CLIENT:
+ *   só pode consultar o próprio clientId.
+ *
+ * ADMIN / OPERATOR / VIEWER:
+ *   podem consultar qualquer cliente da própria conta.
  */
 
 router.get(
@@ -222,6 +323,23 @@ router.get(
     next
   ) => {
     try {
+      if (
+        isClientUser(req) &&
+        !isOwnClient(
+          req,
+          req.params.id
+        )
+      ) {
+        return res
+          .status(403)
+          .json({
+            success: false,
+
+            error:
+              "You can only access your own client profile"
+          });
+      }
+
       const client =
         await Client.findOne({
           _id:
@@ -259,21 +377,66 @@ router.get(
  * =========================================================
  * UPDATE CLIENT
  * =========================================================
+ *
+ * ADMIN:
+ *   pode atualizar qualquer cliente da conta.
+ *
+ * OPERATOR:
+ *   pode atualizar qualquer cliente da conta.
+ *
+ * CLIENT:
+ *   pode atualizar somente o próprio perfil.
+ *
+ * O clientId nunca vem do body.
  */
 
 router.patch(
   "/:id",
-  requireRole(
-    "owner",
-    "admin",
-    "operator"
-  ),
   async (
     req,
     res,
     next
   ) => {
     try {
+      const administrativeRoles = [
+        "owner",
+        "admin",
+        "operator"
+      ];
+
+      if (
+        isClientUser(req)
+      ) {
+        if (
+          !isOwnClient(
+            req,
+            req.params.id
+          )
+        ) {
+          return res
+            .status(403)
+            .json({
+              success: false,
+
+              error:
+                "You can only update your own client profile"
+            });
+        }
+      } else if (
+        !administrativeRoles.includes(
+          req.user.role
+        )
+      ) {
+        return res
+          .status(403)
+          .json({
+            success: false,
+
+            error:
+              "Insufficient permissions"
+          });
+      }
+
       const allowed = [
         "fullName",
         "email",
@@ -329,6 +492,17 @@ router.patch(
             );
       }
 
+      /*
+       * Nunca permitir alteração de:
+       *
+       * accountId
+       * clientId
+       * createdBy
+       * active
+       *
+       * através deste endpoint.
+       */
+
       const client =
         await Client.findOneAndUpdate(
           {
@@ -336,7 +510,17 @@ router.patch(
               req.params.id,
 
             accountId:
-              req.user.accountId
+              req.user.accountId,
+
+            ...(isClientUser(req)
+              ? {
+                  _id:
+                    req.user.clientId,
+
+                  active:
+                    true
+                }
+              : {})
           },
 
           {
@@ -363,6 +547,23 @@ router.patch(
           });
       }
 
+      await AuditLog.create({
+        actorId:
+          req.user._id,
+
+        action:
+          "client.update",
+
+        resource:
+          "client",
+
+        resourceId:
+          client._id.toString(),
+
+        ip:
+          req.ip
+      });
+
       return res.json({
         success: true,
 
@@ -381,8 +582,10 @@ router.patch(
  * SAVE OFFICIAL FACIAL PROFILE
  * =========================================================
  *
- * This route remains separate from the internal
- * facial preflight.
+ * Continua reservado ao fluxo operacional.
+ *
+ * O cliente não pode alterar directamente o perfil
+ * biométrico oficial através deste endpoint.
  */
 
 router.post(
@@ -511,10 +714,6 @@ router.post(
           videoReference ||
           null,
 
-        /*
-         * This is the official profile state.
-         * It remains independent from preflight.
-         */
         verificationStatus:
           "pending"
       };
@@ -559,17 +758,10 @@ router.post(
     }
   }
 );
+
 /*
  * =========================================================
  * GET PASSPORT IMAGE FOR LOCAL FACIAL MATCH
- * =========================================================
- *
- * A fotografia nunca fica pública.
- *
- * Apenas utilizadores autenticados com permissão
- * operacional podem obtê-la.
- *
- * O processamento facial acontece no navegador.
  * =========================================================
  */
 
@@ -602,8 +794,7 @@ router.get(
         return res
           .status(404)
           .json({
-            success:
-              false,
+            success: false,
 
             error:
               "Client not found"
@@ -623,8 +814,7 @@ router.get(
         return res
           .status(404)
           .json({
-            success:
-              false,
+            success: false,
 
             error:
               "No validated passport image is available for this client"
@@ -643,9 +833,6 @@ router.get(
           ? document.mimeType
           : "image/jpeg";
 
-      /*
-       * Impede cache persistente da fotografia biométrica.
-       */
       res.setHeader(
         "Cache-Control",
         "no-store, no-cache, must-revalidate, private"
@@ -686,6 +873,7 @@ router.get(
     }
   }
 );
+
 /*
  * =========================================================
  * FACIAL PREFLIGHT INSTRUCTIONS
@@ -721,8 +909,7 @@ router.get(
         return res
           .status(404)
           .json({
-            success:
-              false,
+            success: false,
 
             error:
               "Client not found"
@@ -730,8 +917,7 @@ router.get(
       }
 
       return res.json({
-        success:
-          true,
+        success: true,
 
         clientId:
           client._id,
@@ -757,10 +943,6 @@ router.get(
  * =========================================================
  * FACIAL PREFLIGHT EVALUATION
  * =========================================================
- *
- * This endpoint evaluates preparation quality.
- *
- * It does NOT mark VFS facial verification as completed.
  */
 
 router.post(
@@ -792,8 +974,7 @@ router.post(
         return res
           .status(404)
           .json({
-            success:
-              false,
+            success: false,
 
             error:
               "Client not found"
@@ -806,10 +987,6 @@ router.post(
         passportMatch
       } = req.body;
 
-      /*
-       * Evaluate the complete
-       * 10-position sequence.
-       */
       const result =
         preflight.evaluate({
           positions,
@@ -819,10 +996,6 @@ router.post(
           consentAccepted
         });
 
-      /*
-       * Persist only the internal
-       * preflight state.
-       */
       client.facialConsent = {
         accepted:
           consentAccepted ===
@@ -901,16 +1074,8 @@ router.post(
       };
 
       /*
-       * IMPORTANT:
-       *
-       * Never change:
-       *
-       * client.facialProfile.verificationStatus
-       *
-       * here.
-       *
-       * The preflight is not the official
-       * VFS facial verification.
+       * O preflight nunca altera o estado oficial
+       * de verificação facial.
        */
 
       await client.save();
@@ -953,8 +1118,7 @@ router.post(
       });
 
       return res.json({
-        success:
-          true,
+        success: true,
 
         clientId:
           client._id,
@@ -962,10 +1126,6 @@ router.post(
         preflight:
           result,
 
-        /*
-         * Explicitly state that
-         * VFS has not been verified.
-         */
         vfsVerification:
           "not_completed"
       });
@@ -981,6 +1141,8 @@ router.post(
  * =========================================================
  * DELETE / DEACTIVATE CLIENT
  * =========================================================
+ *
+ * Nunca disponível para role "client".
  */
 
 router.delete(
@@ -1021,8 +1183,7 @@ router.delete(
         return res
           .status(404)
           .json({
-            success:
-              false,
+            success: false,
 
             error:
               "Client not found"
@@ -1030,8 +1191,7 @@ router.delete(
       }
 
       return res.json({
-        success:
-          true
+        success: true
       });
     } catch (
       error
