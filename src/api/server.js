@@ -43,6 +43,9 @@ const authRouter =
 const accessRequestsRouter =
   require("./access-requests");
 
+const adminAccessRequestsRouter =
+  require("./admin-access-requests");
+
 const clientsRouter =
   require("./clients");
 
@@ -251,18 +254,16 @@ function createApp({
 
   /*
    * =========================================================
-   * ACCESS REQUEST API
+   * PUBLIC ACCESS REQUEST API
    * =========================================================
    *
-   * Este endpoint é público.
+   * Um colaborador que ainda não possui conta pode solicitar
+   * acesso através da página de login.
    *
-   * Um colaborador que ainda não possui conta pode enviar
-   * um pedido de acesso através da página de login.
+   * Este pedido não cria automaticamente um User.
    *
-   * O pedido não cria automaticamente um utilizador.
-   *
-   * O owner/admin deverá posteriormente analisar o pedido
-   * e aprová-lo ou rejeitá-lo.
+   * A criação da conta acontece somente depois da aprovação
+   * no painel administrativo.
    * =========================================================
    */
 
@@ -285,6 +286,10 @@ function createApp({
       res,
       next
     ) => {
+      /*
+       * Authentication API
+       */
+
       if (
         req.path.startsWith(
           "/auth/"
@@ -293,6 +298,14 @@ function createApp({
         return next();
       }
 
+
+      /*
+       * Public access request.
+       *
+       * Este endpoint é utilizado antes de existir
+       * uma sessão autenticada.
+       */
+
       if (
         req.path.startsWith(
           "/access-requests"
@@ -300,6 +313,7 @@ function createApp({
       ) {
         return next();
       }
+
 
       return csrfProtection(
         req,
@@ -344,9 +358,51 @@ function createApp({
   );
 
 
+  /*
+   * =========================================================
+   * ADMIN APPLICATION API
+   * =========================================================
+   */
+
   app.use(
     "/api/admin",
     createAdminRouter()
+  );
+
+
+  /*
+   * =========================================================
+   * ADMIN ACCESS REQUEST API
+   * =========================================================
+   *
+   * Endpoints:
+   *
+   * GET
+   * /api/admin/access-requests
+   *
+   * GET
+   * /api/admin/access-requests/stats
+   *
+   * GET
+   * /api/admin/access-requests/:id
+   *
+   * POST
+   * /api/admin/access-requests/:id/approve
+   *
+   * POST
+   * /api/admin/access-requests/:id/reject
+   *
+   * A autenticação e autorização são feitas dentro do
+   * próprio router.
+   *
+   * O accountId utilizado pelo router vem sempre da sessão
+   * autenticada. Nunca vem do frontend.
+   * =========================================================
+   */
+
+  app.use(
+    "/api/admin/access-requests",
+    adminAccessRequestsRouter
   );
 
 
@@ -650,12 +706,6 @@ function createApp({
    * =========================================================
    * LOGIN PAGE
    * =========================================================
-   *
-   * Login é sempre público.
-   *
-   * O login.js decide para onde encaminhar o utilizador
-   * depois de verificar a sessão.
-   * =========================================================
    */
 
   app.get(
@@ -693,21 +743,6 @@ function createApp({
   /*
    * =========================================================
    * ADMINISTRATION PAGE
-   * =========================================================
-   *
-   * Primeiro verificamos a sessão.
-   *
-   * Se não existir:
-   *
-   *     /admin -> /login
-   *
-   * Se existir mas for client:
-   *
-   *     -> 403
-   *
-   * Se for owner/admin/operator/viewer:
-   *
-   *     -> painel
    * =========================================================
    */
 
@@ -761,23 +796,6 @@ function createApp({
    * =========================================================
    * STATIC FRONTEND
    * =========================================================
-   *
-   * Os ficheiros estáticos permanecem públicos.
-   *
-   * Isto é necessário para que:
-   *
-   *     /login
-   *
-   * consiga carregar:
-   *
-   *     login.js
-   *     style.css
-   *     imagens
-   *     fontes
-   *     outros recursos estáticos
-   *
-   * A entrada "/" continua protegida separadamente abaixo.
-   * =========================================================
    */
 
   app.use(
@@ -801,9 +819,6 @@ function createApp({
    * MAIN APPLICATION
    * =========================================================
    *
-   * Esta é a porta de entrada principal do Travel
-   * Automation.
-   *
    * SEM SESSÃO:
    *
    *     / -> /login
@@ -815,8 +830,6 @@ function createApp({
    * OWNER / ADMIN / OPERATOR / VIEWER:
    *
    *     / -> /admin
-   *
-   * A autenticação é feita no servidor.
    * =========================================================
    */
 
@@ -855,17 +868,13 @@ function createApp({
        * CLIENT COLLABORATOR
        * =====================================================
        *
-       * Um utilizador client entra na aplicação principal.
+       * "client" representa o colaborador da plataforma,
+       * não o viajante.
        *
-       * IMPORTANTE:
+       * Um colaborador pode criar vários Client/traveler
+       * profiles dentro da sua account.
        *
-       * "client" aqui é o colaborador da plataforma.
-       *
-       * Ele pode criar vários Client/traveler profiles
-       * dentro da sua account.
-       *
-       * Não existe aqui qualquer limitação a um único
-       * clientId.
+       * Não existe aqui limitação por clientId.
        * =====================================================
        */
 
