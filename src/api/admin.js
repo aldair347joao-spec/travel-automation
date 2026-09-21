@@ -43,33 +43,200 @@ function createAdminRouter() {
    * =========================================================
    * HELPER — CLIENTE
    * =========================================================
+   *
+   * A aplicação guarda um snapshot do cliente em
+   * applicants[].personalData e applicants[].passport.
+   *
+   * O Client continua a ser a fonte principal.
+   * O snapshot da Application funciona como fallback.
+   *
+   * Isto garante que o administrador recebe os dados
+   * existentes no momento em que o cliente enviou o processo.
+   * =========================================================
    */
 
   function serializeClient(
-    client
+    client,
+    applicant = null
   ) {
-    if (!client) {
-      return null;
-    }
+    const personalData =
+      applicant?.personalData ||
+      {};
+
+    const passport =
+      applicant?.passport ||
+      {};
+
+    const identityStatus =
+      applicant?.identityStatus ||
+      applicant?.facialStatus ||
+      null;
+
+    const clientId =
+      client?._id ||
+      applicant?.client ||
+      null;
+
+    const name =
+      client?.name ||
+      client?.fullName ||
+      personalData.fullName ||
+      personalData.name ||
+      passport.fullName ||
+      passport.name ||
+      "Cliente";
+
+    const fullName =
+      client?.fullName ||
+      client?.name ||
+      personalData.fullName ||
+      personalData.name ||
+      passport.fullName ||
+      passport.name ||
+      null;
+
+    const email =
+      client?.email ||
+      personalData.email ||
+      null;
+
+    const phone =
+      client?.phone ||
+      client?.mobile ||
+      personalData.phone ||
+      personalData.mobile ||
+      null;
+
+    const dateOfBirth =
+      client?.dateOfBirth ||
+      personalData.dateOfBirth ||
+      personalData.birthDate ||
+      null;
+
+    const gender =
+      client?.gender ||
+      personalData.gender ||
+      null;
+
+    const nationality =
+      client?.nationality ||
+      personalData.nationality ||
+      passport.nationality ||
+      null;
+
+    const passportNumber =
+      client?.passportNumber ||
+      passport.number ||
+      passport.passportNumber ||
+      null;
+
+    const passportExpiryDate =
+      client?.passportExpiryDate ||
+      passport.expiryDate ||
+      passport.passportExpiryDate ||
+      null;
+
+    const passportIssueDate =
+      client?.passportIssueDate ||
+      passport.issueDate ||
+      passport.passportIssueDate ||
+      null;
+
+    const passportValidationStatus =
+      client?.passportValidation?.status ||
+      passport.validationStatus ||
+      passport.status ||
+      "not_started";
+
+    const facialStatus =
+      client?.facialPreflight?.status ||
+      identityStatus ||
+      "pending";
 
     return {
       id:
-        client._id,
+        clientId,
 
-      name:
-        client.name ||
-        client.fullName ||
-        "Cliente",
+      name,
 
-      email:
-        client.email ||
+      fullName,
+
+      email,
+
+      phone,
+
+      dateOfBirth,
+
+      gender,
+
+      nationality,
+
+      passportNumber,
+
+      passportExpiryDate,
+
+      passportIssueDate,
+
+      passportValidationStatus,
+
+      passportVerified:
+        passportValidationStatus ===
+        "passed" ||
+        Boolean(
+          passport.verified ||
+          passport.validated
+        ),
+
+      facialStatus,
+
+      facialVerified:
+        facialStatus ===
+        "passed",
+
+      accountId:
+        client?.accountId ||
         null,
 
-      phone:
-        client.phone ||
-        client.mobile ||
-        null
+      active:
+        client?.active !== false
     };
+  }
+
+
+  /*
+   * =========================================================
+   * HELPER — ENCONTRAR SNAPSHOT DO CLIENTE
+   * =========================================================
+   */
+
+  function resolveApplicant(
+    application,
+    clientId
+  ) {
+    if (
+      !Array.isArray(
+        application?.applicants
+      )
+    ) {
+      return null;
+    }
+
+    const targetId =
+      clientId
+        ? String(clientId)
+        : null;
+
+    return (
+      application.applicants.find(
+        applicant =>
+          applicant?.client &&
+          String(
+            applicant.client
+          ) === targetId
+      ) ||
+      application.applicants[0] ||
+      null
+    );
   }
 
 
@@ -316,11 +483,11 @@ function createAdminRouter() {
    *
    * Nunca devolvemos:
    *
-   * preparedDataEncrypted
-   * VFS credentials
-   * password
-   * tokens
-   * dados internos desnecessários.
+   * - preparedDataEncrypted
+   * - VFS credentials
+   * - passwords
+   * - tokens
+   * - dados secretos internos
    *
    * O administrador recebe apenas os dados necessários
    * para gerir o processo.
@@ -337,13 +504,27 @@ function createAdminRouter() {
         clientMap
       );
 
+    const applicant =
+      resolveApplicant(
+        application,
+        client?._id ||
+        application.client
+      );
+
+    const serializedClient =
+      serializeClient(
+        client,
+        applicant
+      );
+
     const payment =
       serializePayment(
         application
       );
 
     const result =
-      application.result || {};
+      application.result ||
+      {};
 
     const passport =
       application.passport ||
@@ -368,8 +549,28 @@ function createAdminRouter() {
         application._id,
 
       client:
-        serializeClient(
-          client
+        serializedClient,
+
+      /*
+       * Também entregamos a coleção completa
+       * de candidatos, caso no futuro exista
+       * candidatura de grupo.
+       */
+      clients:
+        applicants.map(
+          applicantItem => {
+            const applicantClient =
+              clientMap.get(
+                String(
+                  applicantItem?.client
+                )
+              );
+
+            return serializeClient(
+              applicantClient,
+              applicantItem
+            );
+          }
         ),
 
       status:
@@ -446,67 +647,243 @@ function createAdminRouter() {
         application.preferredWeekdays ||
         [],
 
-      applicants: applicants.map(
-        applicant => ({
-          client:
-            applicant?.client ||
-            null,
+      /*
+       * =====================================================
+       * APPLICANTS
+       * =====================================================
+       *
+       * Mantemos os dados necessários do snapshot,
+       * mas não devolvemos dados secretos.
+       */
+      applicants:
+        applicants.map(
+          applicantItem => ({
+            client:
+              applicantItem?.client ||
+              null,
 
-          status:
-            applicant?.status ||
-            null
-        })
-      ),
-
-      passport: passport
-        ? {
             status:
-              passport.status ||
-              passport.validationStatus ||
+              applicantItem?.status ||
               null,
 
-            verified:
-              Boolean(
-                passport.verified ||
-                passport.validated
-              ),
+            passport:
+              applicantItem?.passport
+                ? {
+                    number:
+                      applicantItem
+                        .passport
+                        .number ||
+                      applicantItem
+                        .passport
+                        .passportNumber ||
+                      null,
 
-            number:
-              passport.number ||
-              passport.passportNumber ||
-              null,
+                    nationality:
+                      applicantItem
+                        .passport
+                        .nationality ||
+                      null,
 
-            name:
-              passport.name ||
-              passport.fullName ||
+                    expiryDate:
+                      applicantItem
+                        .passport
+                        .expiryDate ||
+                      applicantItem
+                        .passport
+                        .passportExpiryDate ||
+                      null,
+
+                    issueDate:
+                      applicantItem
+                        .passport
+                        .issueDate ||
+                      applicantItem
+                        .passport
+                        .passportIssueDate ||
+                      null,
+
+                    validationStatus:
+                      applicantItem
+                        .passport
+                        .validationStatus ||
+                      applicantItem
+                        .passport
+                        .status ||
+                      null
+                  }
+                : null,
+
+            personalData:
+              applicantItem?.personalData
+                ? {
+                    fullName:
+                      applicantItem
+                        .personalData
+                        .fullName ||
+                      null,
+
+                    dateOfBirth:
+                      applicantItem
+                        .personalData
+                        .dateOfBirth ||
+                      null,
+
+                    gender:
+                      applicantItem
+                        .personalData
+                        .gender ||
+                      null,
+
+                    nationality:
+                      applicantItem
+                        .personalData
+                        .nationality ||
+                      null,
+
+                    email:
+                      applicantItem
+                        .personalData
+                        .email ||
+                      null,
+
+                    phone:
+                      applicantItem
+                        .personalData
+                        .phone ||
+                      null
+                  }
+                : null,
+
+            identityStatus:
+              applicantItem
+                ?.identityStatus ||
               null
-          }
-        : null,
+          })
+        ),
 
-      identity: facial
-        ? {
-            status:
-              facial.status ||
-              null,
+      passport:
+        passport
+          ? {
+              status:
+                passport.status ||
+                passport.validationStatus ||
+                null,
 
-            verified:
-              Boolean(
-                facial.verified ||
-                facial.completed
-              ),
+              verified:
+                Boolean(
+                  passport.verified ||
+                  passport.validated
+                ),
 
-            positionCount:
-              Array.isArray(
-                facial.positions
-              )
-                ? facial.positions.length
-                : (
-                    facial.positionCount ||
-                    facial.positionsCount ||
-                    0
-                  )
-          }
-        : null,
+              number:
+                passport.number ||
+                passport.passportNumber ||
+                serializedClient
+                  .passportNumber ||
+                null,
+
+              name:
+                passport.name ||
+                passport.fullName ||
+                serializedClient
+                  .fullName ||
+                null,
+
+              nationality:
+                passport.nationality ||
+                serializedClient
+                  .nationality ||
+                null,
+
+              issueDate:
+                passport.issueDate ||
+                passport.passportIssueDate ||
+                serializedClient
+                  .passportIssueDate ||
+                null,
+
+              expiryDate:
+                passport.expiryDate ||
+                passport.passportExpiryDate ||
+                serializedClient
+                  .passportExpiryDate ||
+                null
+            }
+          : {
+              status:
+                serializedClient
+                  .passportValidationStatus ||
+                null,
+
+              verified:
+                serializedClient
+                  .passportVerified ||
+                false,
+
+              number:
+                serializedClient
+                  .passportNumber ||
+                null,
+
+              name:
+                serializedClient
+                  .fullName ||
+                null,
+
+              nationality:
+                serializedClient
+                  .nationality ||
+                null,
+
+              issueDate:
+                serializedClient
+                  .passportIssueDate ||
+                null,
+
+              expiryDate:
+                serializedClient
+                  .passportExpiryDate ||
+                null
+            },
+
+      identity:
+        facial
+          ? {
+              status:
+                facial.status ||
+                null,
+
+              verified:
+                Boolean(
+                  facial.verified ||
+                  facial.completed
+                ),
+
+              positionCount:
+                Array.isArray(
+                  facial.positions
+                )
+                  ? facial.positions.length
+                  : (
+                      facial.positionCount ||
+                      facial.positionsCount ||
+                      0
+                    )
+            }
+          : {
+              status:
+                serializedClient
+                  .facialStatus ||
+                null,
+
+              verified:
+                serializedClient
+                  .facialVerified ||
+                false,
+
+              positionCount:
+                10
+            },
 
       bot1:
         application.bot1 ||
@@ -827,6 +1204,19 @@ function createAdminRouter() {
                   clientMap
                 );
 
+              const applicant =
+                resolveApplicant(
+                  application,
+                  client?._id ||
+                  application.client
+                );
+
+              const serializedClient =
+                serializeClient(
+                  client,
+                  applicant
+                );
+
               const control =
                 controlMap.get(
                   String(
@@ -839,9 +1229,28 @@ function createAdminRouter() {
                   application._id,
 
                 client:
-                  serializeClient(
-                    client
-                  ),
+                  serializedClient,
+
+                clients:
+                  Array.isArray(
+                    application
+                      .applicants
+                  )
+                    ? application
+                        .applicants
+                        .map(
+                          applicantItem =>
+                            serializeClient(
+                              clientMap.get(
+                                String(
+                                  applicantItem
+                                    ?.client
+                                )
+                              ),
+                              applicantItem
+                            )
+                        )
+                    : [],
 
                 status:
                   application.status ||
@@ -1085,11 +1494,6 @@ function createAdminRouter() {
                 "Invalid application ID"
             });
         }
-
-        /*
-         * Verificar account ANTES
-         * de alterar qualquer dado.
-         */
 
         await AdminControlService
           .assertApplicationAccount(
