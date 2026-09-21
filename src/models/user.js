@@ -37,7 +37,8 @@ const userSchema =
           "owner",
           "admin",
           "operator",
-          "viewer"
+          "viewer",
+          "client"
         ],
         default: "operator"
       },
