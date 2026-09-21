@@ -2585,298 +2585,197 @@
 
   async function saveResult(result) {
 
-    const applicationForm =
-      document.getElementById(
-        "applicationForm"
-      );
+  const applicationForm =
+    document.getElementById(
+      "applicationForm"
+    );
 
+
+  if (applicationForm) {
+
+    applicationForm.dataset
+      .facialPreflight =
+      "pending";
+  }
+
+
+  if (
+    saving ||
+    !selectedClient
+  ) {
+
+    return;
+  }
+
+
+  saving = true;
+
+
+  showResult(
+    result,
+    null
+  );
+
+
+  /*
+   * ========================================================
+   * RESULTADO DO MOTOR FACIAL
+   * ========================================================
+   *
+   * A conclusão depende exclusivamente do fluxo facial:
+   *
+   * - detecção facial;
+   * - uma única pessoa;
+   * - enquadramento;
+   * - iluminação;
+   * - orientação;
+   * - estabilidade;
+   * - dez posições;
+   * - sorriso da posição 10;
+   * - pontuação global.
+   *
+   * NÃO existe comparação com a fotografia do passaporte.
+   */
+
+  if (!result?.passed) {
 
     if (applicationForm) {
 
       applicationForm.dataset
         .facialPreflight =
-        "pending";
+        "failed";
     }
+
+
+    saving = false;
+
+    return;
+  }
+
+
+  try {
+
+    if (
+      !window.TravelFacialPreflight ||
+      typeof window
+        .TravelFacialPreflight
+        .submitToBackend !==
+        "function"
+    ) {
+
+      throw new Error(
+        "O módulo facial não possui a função de gravação no backend."
+      );
+    }
+
+
+    /*
+     * ======================================================
+     * CONCLUSÃO
+     * ======================================================
+     *
+     * As dez posições já foram concluídas pelo motor.
+     *
+     * Não fazemos:
+     *
+     * - comparação facial com passaporte;
+     * - leitura da fotografia do passaporte;
+     * - cálculo de similaridade;
+     * - validação de matched;
+     * - rejeição por diferença de rosto.
+     */
+
+    setState(
+      "10 POSIÇÕES CONCLUÍDAS",
+      "success"
+    );
+
+
+    setStatus(
+      "As dez posições foram concluídas. A verificação facial está concluída."
+    );
+
+
+    /*
+     * Guardamos apenas o resultado da preparação facial.
+     */
+
+    const data =
+      await window
+        .TravelFacialPreflight
+        .submitToBackend({
+          clientId:
+            selectedClient.id
+        });
 
 
     if (
-      saving ||
-      !selectedClient
+      data?.success !==
+      true
     ) {
 
-      return;
+      throw new Error(
+        data?.error ||
+        data?.message ||
+        "O backend não confirmou a verificação facial."
+      );
     }
 
 
-    saving = true;
+    /*
+     * O frontend agora considera a etapa facial concluída.
+     *
+     * O app.js usa este estado para liberar
+     * a submissão da candidatura para Administração.
+     */
+
+    if (applicationForm) {
+
+      applicationForm.dataset
+        .facialPreflight =
+        "passed";
+    }
 
 
     showResult(
       result,
-      null
+      data
     );
 
 
-    if (!result?.passed) {
+  } catch (error) {
 
-      if (applicationForm) {
+    if (applicationForm) {
 
-        applicationForm.dataset
-          .facialPreflight =
-          "failed";
-      }
-
-
-      saving = false;
-
-      return;
+      applicationForm.dataset
+        .facialPreflight =
+        "failed";
     }
 
 
-    try {
+    console.error(
+      "[IdentityCenter] backend",
+      error
+    );
 
-      if (
-        !window.TravelFacialPreflight ||
-        typeof window
-          .TravelFacialPreflight
-          .submitToBackend !==
-          "function"
-      ) {
 
-        throw new Error(
-          "O módulo facial não possui a função de gravação no backend."
-        );
-      }
+    setState(
+      "NÃO GUARDADA",
+      "error"
+    );
 
 
-      let localFaceMatch =
-        null;
+    setStatus(
+      error?.message ||
+      "A preparação terminou, mas não foi possível guardar o resultado."
+    );
 
 
-      /*
-       * Comparação facial local com a fotografia
-       * do passaporte.
-       */
+  } finally {
 
-      if (
-        window.TravelLocalFaceMatch &&
-        typeof window
-          .TravelLocalFaceMatch
-          .compare ===
-          "function"
-      ) {
-
-        const video =
-          document.getElementById(
-            "facialPreflightVideo"
-          );
-
-
-        setState(
-          "COMPARANDO",
-          "warning"
-        );
-
-
-        setStatus(
-          "A comparar o rosto com a fotografia do passaporte..."
-        );
-
-
-        try {
-
-          localFaceMatch =
-            await window
-              .TravelLocalFaceMatch
-              .compare({
-                clientId:
-                  selectedClient.id,
-
-                videoElement:
-                  video
-              });
-
-
-          console.info(
-            "[IdentityCenter] local face match",
-            localFaceMatch
-          );
-
-
-          if (
-            localFaceMatch?.attempted !==
-            true
-          ) {
-
-            throw new Error(
-              "A comparação facial local não foi executada."
-            );
-          }
-
-
-          if (
-            localFaceMatch.matched !==
-            true
-          ) {
-
-            setState(
-              "ROSTOS DIFERENTES",
-              "error"
-            );
-
-
-            setStatus(
-              "O rosto apresentado não atingiu a correspondência mínima com a fotografia do passaporte."
-            );
-
-
-            if (applicationForm) {
-
-              applicationForm.dataset
-                .facialPreflight =
-                "failed";
-            }
-
-
-            saving = false;
-
-
-            showResult(
-              {
-                ...result,
-
-                passed:
-                  false,
-
-                localFaceMatch
-              },
-
-              null
-            );
-
-
-            return;
-          }
-
-
-          setState(
-            "IDENTIDADE COMPATÍVEL",
-            "success"
-          );
-
-
-          setStatus(
-            `Rosto compatível com o passaporte. Similaridade local: ${localFaceMatch.similarityPercent}%.`
-          );
-
-        } catch (faceError) {
-
-          console.error(
-            "[IdentityCenter] local face match",
-            faceError
-          );
-
-
-          setState(
-            "COMPARAÇÃO FALHOU",
-            "error"
-          );
-
-
-          setStatus(
-            faceError?.message ||
-            "Não foi possível comparar o rosto com a fotografia do passaporte."
-          );
-
-
-          if (applicationForm) {
-
-            applicationForm.dataset
-              .facialPreflight =
-              "failed";
-          }
-
-
-          saving = false;
-
-          return;
-        }
-      }
-
-
-      const data =
-        await window
-          .TravelFacialPreflight
-          .submitToBackend({
-            clientId:
-              selectedClient.id,
-
-            passportMatch: {
-              localFaceMatch:
-                localFaceMatch
-            }
-          });
-
-
-      if (
-        data?.success !==
-        true
-      ) {
-
-        throw new Error(
-          data?.error ||
-          data?.message ||
-          "O backend não confirmou a verificação facial."
-        );
-      }
-
-
-      if (applicationForm) {
-
-        applicationForm.dataset
-          .facialPreflight =
-          "passed";
-      }
-
-
-      showResult(
-        result,
-        data
-      );
-
-    } catch (error) {
-
-      if (applicationForm) {
-
-        applicationForm.dataset
-          .facialPreflight =
-          "failed";
-      }
-
-
-      console.error(
-        "[IdentityCenter] backend",
-        error
-      );
-
-
-      setState(
-        "NÃO GUARDADA",
-        "error"
-      );
-
-
-      setStatus(
-        error?.message ||
-        "A preparação terminou, mas não foi possível guardar o resultado."
-      );
-
-    } finally {
-
-      saving = false;
-    }
+    saving = false;
   }
-
+}
 
   /*
    * ==========================================================
@@ -3027,19 +2926,19 @@
             ? `
               <div class="identity-result-checks">
 
-                <span>
-                  ✓ Captura facial concluída
-                </span>
+  <span>
+    ✓ Captura facial concluída
+  </span>
 
-                <span>
-                  ✓ Comparação com documento concluída
-                </span>
+  <span>
+    ✓ Dez posições faciais concluídas
+  </span>
 
-                <span>
-                  ✓ Resultado registado
-                </span>
+  <span>
+    ✓ Resultado registado
+  </span>
 
-              </div>
+</div>
             `
             : `
               <div class="identity-result-checks warning">
@@ -3189,8 +3088,8 @@
           </span>
 
           <span>
-            ✓ Comparação com documento concluída
-          </span>
+  ✓ Dez posições faciais concluídas
+</span>
 
           <span>
             ✓ Resultado registado
