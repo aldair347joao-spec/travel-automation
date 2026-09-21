@@ -20,8 +20,16 @@
 
   <title>Travel Automation — Acesso</title>
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    rel="preconnect"
+    href="https://fonts.googleapis.com"
+  >
+
+  <link
+    rel="preconnect"
+    href="https://fonts.googleapis.com"
+    crossorigin
+  >
 
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&family=JetBrains+Mono:wght@500;700&display=swap"
@@ -57,7 +65,7 @@
 
 
   <!-- =========================================================
-       ACESSO
+       LOGIN
   ========================================================== -->
 
   <main
@@ -93,7 +101,7 @@
 
 
       <!-- =====================================================
-           CARTÃO DE ACESSO
+           CARTÃO DE LOGIN
       ====================================================== -->
 
       <section class="login-card">
@@ -136,7 +144,7 @@
 
 
         <!-- ===================================================
-             FORMULÁRIO
+             FORMULÁRIO DE LOGIN
         ==================================================== -->
 
         <form
@@ -198,7 +206,7 @@
 
 
           <!-- =================================================
-               BOTÃO
+               BOTÃO DE LOGIN
           ================================================== -->
 
           <button
@@ -221,6 +229,51 @@
           </button>
 
         </form>
+
+
+        <!-- ===================================================
+             PEDIDO DE ACESSO
+        ==================================================== -->
+
+        <div class="login-access-request">
+
+          <div class="login-access-divider">
+
+            <span></span>
+
+            <small>
+              PRIMEIRO ACESSO
+            </small>
+
+            <span></span>
+
+          </div>
+
+
+          <p class="login-access-text">
+            Ainda não possui uma conta de colaborador?
+          </p>
+
+
+          <button
+            id="showAccessRequestButton"
+            class="login-access-button"
+            type="button"
+          >
+
+            <span>
+              Solicitar acesso
+            </span>
+
+            <span
+              aria-hidden="true"
+            >
+              →
+            </span>
+
+          </button>
+
+        </div>
 
 
         <!-- ===================================================
@@ -298,7 +351,346 @@
 
 
   <!-- =========================================================
-       LÓGICA DE LOGIN
+       PEDIDO DE ACESSO
+  ========================================================== -->
+
+  <main
+    id="accessRequestView"
+    class="login-view hidden"
+  >
+
+    <div class="login-shell">
+
+      <!-- =====================================================
+           MARCA
+      ====================================================== -->
+
+      <div class="login-brand">
+
+        <div class="brand-mark">
+          <span>TA</span>
+        </div>
+
+        <div>
+
+          <strong>
+            TRAVEL AUTOMATION
+          </strong>
+
+          <small>
+            ANGOLA → PORTUGAL
+          </small>
+
+        </div>
+
+      </div>
+
+
+      <!-- =====================================================
+           CARTÃO DE PEDIDO
+      ====================================================== -->
+
+      <section class="login-card access-request-card">
+
+        <div class="login-card-top">
+
+          <span class="eyebrow">
+            SOLICITAR ACESSO
+          </span>
+
+          <h1>
+            Junte-se à
+            <span>Travel Automation.</span>
+          </h1>
+
+          <p>
+            Preencha os seus dados. A administração irá
+            analisar o pedido antes de ativar o seu acesso.
+          </p>
+
+        </div>
+
+
+        <!-- ===================================================
+             INFORMAÇÃO
+        ==================================================== -->
+
+        <div class="login-status access-request-status">
+
+          <span
+            class="status-dot"
+            aria-hidden="true"
+          ></span>
+
+          <span>
+            Pedido sujeito a aprovação
+          </span>
+
+        </div>
+
+
+        <!-- ===================================================
+             FORMULÁRIO
+        ==================================================== -->
+
+        <form
+          id="accessRequestForm"
+          novalidate
+        >
+
+          <!-- =================================================
+               NOME
+          ================================================== -->
+
+          <div class="form-field">
+
+            <label
+              for="accessRequestName"
+            >
+              Nome completo
+            </label>
+
+            <input
+              id="accessRequestName"
+              name="name"
+              type="text"
+              autocomplete="name"
+              placeholder="Introduza o seu nome completo"
+              maxlength="120"
+              required
+            >
+
+          </div>
+
+
+          <!-- =================================================
+               E-MAIL
+          ================================================== -->
+
+          <div class="form-field">
+
+            <label
+              for="accessRequestEmail"
+            >
+              E-mail profissional
+            </label>
+
+            <input
+              id="accessRequestEmail"
+              name="email"
+              type="email"
+              autocomplete="email"
+              inputmode="email"
+              placeholder="seu@email.com"
+              maxlength="180"
+              required
+            >
+
+          </div>
+
+
+          <!-- =================================================
+               TELEFONE
+          ================================================== -->
+
+          <div class="form-field">
+
+            <label
+              for="accessRequestPhone"
+            >
+              Telefone / WhatsApp
+              <span>
+                opcional
+              </span>
+            </label>
+
+            <input
+              id="accessRequestPhone"
+              name="phone"
+              type="tel"
+              autocomplete="tel"
+              inputmode="tel"
+              placeholder="+244 9XX XXX XXX"
+              maxlength="40"
+            >
+
+          </div>
+
+
+          <!-- =================================================
+               EMPRESA
+          ================================================== -->
+
+          <div class="form-field">
+
+            <label
+              for="accessRequestCompany"
+            >
+              Empresa ou organização
+              <span>
+                opcional
+              </span>
+            </label>
+
+            <input
+              id="accessRequestCompany"
+              name="company"
+              type="text"
+              autocomplete="organization"
+              placeholder="Nome da empresa ou organização"
+              maxlength="160"
+            >
+
+          </div>
+
+
+          <!-- =================================================
+               MOTIVO
+          ================================================== -->
+
+          <div class="form-field">
+
+            <label
+              for="accessRequestReason"
+            >
+              Motivo do pedido
+              <span>
+                opcional
+              </span>
+            </label>
+
+            <textarea
+              id="accessRequestReason"
+              name="reason"
+              rows="4"
+              maxlength="1000"
+              placeholder="Explique brevemente como pretende utilizar a plataforma."
+            ></textarea>
+
+          </div>
+
+
+          <!-- =================================================
+               ERRO
+          ================================================== -->
+
+          <div
+            id="accessRequestError"
+            class="form-message error hidden"
+            role="alert"
+            aria-live="polite"
+          ></div>
+
+
+          <!-- =================================================
+               SUCESSO
+          ================================================== -->
+
+          <div
+            id="accessRequestSuccess"
+            class="form-message success hidden"
+            role="status"
+            aria-live="polite"
+          ></div>
+
+
+          <!-- =================================================
+               BOTÃO
+          ================================================== -->
+
+          <button
+            id="accessRequestButton"
+            class="login-button"
+            type="submit"
+          >
+
+            <span id="accessRequestButtonText">
+              Solicitar acesso
+            </span>
+
+            <span
+              id="accessRequestButtonArrow"
+              aria-hidden="true"
+            >
+              →
+            </span>
+
+          </button>
+
+
+          <!-- =================================================
+               VOLTAR
+          ================================================== -->
+
+          <button
+            id="backToLoginButton"
+            class="login-back-button"
+            type="button"
+          >
+
+            <span
+              aria-hidden="true"
+            >
+              ←
+            </span>
+
+            <span>
+              Voltar para o login
+            </span>
+
+          </button>
+
+        </form>
+
+
+        <!-- ===================================================
+             NOTA
+        ==================================================== -->
+
+        <div class="access-request-note">
+
+          <strong>
+            Como funciona?
+          </strong>
+
+          <p>
+            O seu pedido será analisado pela administração.
+            Se for aprovado, receberá as instruções para
+            aceder à sua conta de colaborador.
+          </p>
+
+        </div>
+
+      </section>
+
+
+      <!-- =====================================================
+           RODAPÉ
+      ====================================================== -->
+
+      <footer class="login-footer">
+
+        <span>
+          Travel Automation
+        </span>
+
+        <span>
+          •
+        </span>
+
+        <span>
+          Acesso de colaboradores
+        </span>
+
+      </footer>
+
+    </div>
+
+  </main>
+
+
+  <!-- =========================================================
+       LÓGICA DE LOGIN E PEDIDO DE ACESSO
   ========================================================== -->
 
   <script
