@@ -2,11 +2,9 @@
   "use strict";
 
 
-  /*
-   * =========================================================
-   * ROLES
-   * =========================================================
-   */
+  /* =========================================================
+     ROLES
+  ========================================================== */
 
   const ADMIN_ROLES = [
     "owner",
@@ -19,11 +17,14 @@
     "client";
 
 
-  /*
-   * =========================================================
-   * LOGIN ELEMENTS
-   * =========================================================
-   */
+  /* =========================================================
+     LOGIN ELEMENTS
+  ========================================================== */
+
+  const loginView =
+    document.getElementById(
+      "loginView"
+    );
 
   const form =
     document.getElementById(
@@ -61,11 +62,9 @@
     );
 
 
-  /*
-   * =========================================================
-   * ACCESS REQUEST ELEMENTS
-   * =========================================================
-   */
+  /* =========================================================
+     ACCESS REQUEST ELEMENTS
+  ========================================================== */
 
   const accessRequestView =
     document.getElementById(
@@ -138,11 +137,20 @@
     );
 
 
-  /*
-   * =========================================================
-   * BASIC HELPERS
-   * =========================================================
-   */
+  /* =========================================================
+     STATE
+  ========================================================== */
+
+  let loginSubmitting = false;
+
+  let accessRequestSubmitting = false;
+
+  let accessRequestReturnTimer = null;
+
+
+  /* =========================================================
+     BASIC HELPERS
+  ========================================================== */
 
   function showError(
     message
@@ -158,6 +166,11 @@
     errorBox.classList.remove(
       "hidden"
     );
+
+    errorBox.setAttribute(
+      "aria-hidden",
+      "false"
+    );
   }
 
 
@@ -171,6 +184,11 @@
 
     errorBox.classList.add(
       "hidden"
+    );
+
+    errorBox.setAttribute(
+      "aria-hidden",
+      "true"
     );
   }
 
@@ -189,6 +207,11 @@
     accessRequestError.classList.remove(
       "hidden"
     );
+
+    accessRequestError.setAttribute(
+      "aria-hidden",
+      "false"
+    );
   }
 
 
@@ -202,6 +225,11 @@
 
     accessRequestError.classList.add(
       "hidden"
+    );
+
+    accessRequestError.setAttribute(
+      "aria-hidden",
+      "true"
     );
   }
 
@@ -220,6 +248,11 @@
     accessRequestSuccess.classList.remove(
       "hidden"
     );
+
+    accessRequestSuccess.setAttribute(
+      "aria-hidden",
+      "false"
+    );
   }
 
 
@@ -234,14 +267,274 @@
     accessRequestSuccess.classList.add(
       "hidden"
     );
+
+    accessRequestSuccess.setAttribute(
+      "aria-hidden",
+      "true"
+    );
   }
 
 
-  /*
-   * =========================================================
-   * LOGIN LOADING
-   * =========================================================
-   */
+  /* =========================================================
+     INPUT VISUAL STATE
+  ========================================================== */
+
+  function updateFieldState(
+    input
+  ) {
+    if (!input) {
+      return;
+    }
+
+    const shell =
+      input.closest(
+        ".login-input-shell"
+      );
+
+    if (!shell) {
+      return;
+    }
+
+    shell.classList.remove(
+      "is-filled",
+      "is-valid",
+      "is-invalid"
+    );
+
+    if (
+      input.value &&
+      input.value.trim() !== ""
+    ) {
+      shell.classList.add(
+        "is-filled"
+      );
+    }
+
+    if (
+      input.value &&
+      input.checkValidity()
+    ) {
+      shell.classList.add(
+        "is-valid"
+      );
+    }
+
+    if (
+      input.value &&
+      !input.checkValidity()
+    ) {
+      shell.classList.add(
+        "is-invalid"
+      );
+    }
+  }
+
+
+  function attachFieldState(
+    input
+  ) {
+    if (!input) {
+      return;
+    }
+
+    input.addEventListener(
+      "input",
+      () => {
+        updateFieldState(
+          input
+        );
+      }
+    );
+
+    input.addEventListener(
+      "blur",
+      () => {
+        updateFieldState(
+          input
+        );
+      }
+    );
+
+    input.addEventListener(
+      "focus",
+      () => {
+        const shell =
+          input.closest(
+            ".login-input-shell"
+          );
+
+        if (shell) {
+          shell.classList.add(
+            "is-focused"
+          );
+        }
+      }
+    );
+
+    input.addEventListener(
+      "blur",
+      () => {
+        const shell =
+          input.closest(
+            ".login-input-shell"
+          );
+
+        if (shell) {
+          shell.classList.remove(
+            "is-focused"
+          );
+        }
+      }
+    );
+
+    updateFieldState(
+      input
+    );
+  }
+
+
+  /* =========================================================
+     PASSWORD VISIBILITY
+  ========================================================== */
+
+  function createPasswordToggle() {
+    if (!passwordInput) {
+      return;
+    }
+
+    const shell =
+      passwordInput.closest(
+        ".login-input-shell"
+      );
+
+    if (!shell) {
+      return;
+    }
+
+    if (
+      shell.querySelector(
+        ".login-password-toggle"
+      )
+    ) {
+      return;
+    }
+
+    const button =
+      document.createElement(
+        "button"
+      );
+
+    button.type =
+      "button";
+
+    button.className =
+      "login-password-toggle";
+
+    button.setAttribute(
+      "aria-label",
+      "Mostrar palavra-passe"
+    );
+
+    button.setAttribute(
+      "aria-pressed",
+      "false"
+    );
+
+    button.innerHTML = `
+      <svg
+        class="password-eye password-eye-open"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M2.8 12s3.1-5.2 9.2-5.2S21.2 12 21.2 12 18.1 17.2 12 17.2 2.8 12 2.8 12Z"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linejoin="round"
+        />
+        <circle
+          cx="12"
+          cy="12"
+          r="2.5"
+          stroke="currentColor"
+          stroke-width="1.7"
+        />
+      </svg>
+
+      <svg
+        class="password-eye password-eye-closed"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M3 3l18 18"
+          stroke="currentColor"
+          stroke-width="1.8"
+          stroke-linecap="round"
+        />
+        <path
+          d="M10.6 6.9A10.7 10.7 0 0 1 12 6.8c6.1 0 9.2 5.2 9.2 5.2a17 17 0 0 1-3.1 3.3"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+        <path
+          d="M6.7 9.1C4.2 10.5 2.8 12 2.8 12s3.1 5.2 9.2 5.2c1.2 0 2.3-.2 3.2-.6"
+          stroke="currentColor"
+          stroke-width="1.7"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        />
+      </svg>
+    `;
+
+    shell.appendChild(
+      button
+    );
+
+    button.addEventListener(
+      "click",
+      () => {
+        const showing =
+          passwordInput.type ===
+          "text";
+
+        passwordInput.type =
+          showing
+            ? "password"
+            : "text";
+
+        button.setAttribute(
+          "aria-pressed",
+          showing
+            ? "false"
+            : "true"
+        );
+
+        button.setAttribute(
+          "aria-label",
+          showing
+            ? "Mostrar palavra-passe"
+            : "Ocultar palavra-passe"
+        );
+
+        shell.classList.toggle(
+          "password-visible",
+          !showing
+        );
+
+        passwordInput.focus();
+      }
+    );
+  }
+
+
+  /* =========================================================
+     LOGIN LOADING
+  ========================================================== */
 
   function setLoading(
     loading
@@ -249,6 +542,9 @@
     if (!loginButton) {
       return;
     }
+
+    loginSubmitting =
+      loading;
 
     loginButton.disabled =
       loading;
@@ -273,14 +569,22 @@
           ? "…"
           : "→";
     }
+
+    if (loading) {
+      loginButton.classList.add(
+        "is-loading"
+      );
+    } else {
+      loginButton.classList.remove(
+        "is-loading"
+      );
+    }
   }
 
 
-  /*
-   * =========================================================
-   * ACCESS REQUEST LOADING
-   * =========================================================
-   */
+  /* =========================================================
+     ACCESS REQUEST LOADING
+  ========================================================== */
 
   function setAccessRequestLoading(
     loading
@@ -288,6 +592,9 @@
     if (!accessRequestButton) {
       return;
     }
+
+    accessRequestSubmitting =
+      loading;
 
     accessRequestButton.disabled =
       loading;
@@ -312,14 +619,22 @@
           ? "…"
           : "→";
     }
+
+    if (loading) {
+      accessRequestButton.classList.add(
+        "is-loading"
+      );
+    } else {
+      accessRequestButton.classList.remove(
+        "is-loading"
+      );
+    }
   }
 
 
-  /*
-   * =========================================================
-   * ROLE REDIRECTION
-   * =========================================================
-   */
+  /* =========================================================
+     ROLE REDIRECTION
+  ========================================================== */
 
   function redirectByRole(
     role
@@ -336,7 +651,6 @@
       return;
     }
 
-
     if (
       role ===
       CLIENT_ROLE
@@ -348,7 +662,6 @@
       return;
     }
 
-
     showError(
       "A sua conta não possui um perfil de acesso válido."
     );
@@ -359,11 +672,9 @@
   }
 
 
-  /*
-   * =========================================================
-   * CURRENT SESSION
-   * =========================================================
-   */
+  /* =========================================================
+     CURRENT SESSION
+  ========================================================== */
 
   async function getCurrentUser() {
     try {
@@ -387,17 +698,14 @@
           }
         );
 
-
       if (
         !response.ok
       ) {
         return null;
       }
 
-
       const data =
         await response.json();
-
 
       if (
         !data ||
@@ -406,7 +714,6 @@
       ) {
         return null;
       }
-
 
       return data.user;
 
@@ -422,7 +729,6 @@
     const user =
       await getCurrentUser();
 
-
     if (
       !user ||
       !user.role
@@ -430,27 +736,28 @@
       return;
     }
 
-
     redirectByRole(
       user.role
     );
   }
 
 
-  /*
-   * =========================================================
-   * LOGIN
-   * =========================================================
-   */
+  /* =========================================================
+     LOGIN
+  ========================================================== */
 
   async function handleLogin(
     event
   ) {
     event.preventDefault();
 
+    if (
+      loginSubmitting
+    ) {
+      return;
+    }
 
     clearError();
-
 
     const email =
       String(
@@ -460,13 +767,11 @@
         .trim()
         .toLowerCase();
 
-
     const password =
       String(
         passwordInput?.value ||
         ""
       );
-
 
     if (!email) {
       showError(
@@ -478,6 +783,19 @@
       return;
     }
 
+    if (
+      !isValidEmail(
+        email
+      )
+    ) {
+      showError(
+        "Introduza um e-mail válido."
+      );
+
+      emailInput?.focus();
+
+      return;
+    }
 
     if (!password) {
       showError(
@@ -489,11 +807,9 @@
       return;
     }
 
-
     setLoading(
       true
     );
-
 
     try {
       const response =
@@ -522,10 +838,8 @@
           }
         );
 
-
       let data =
         null;
-
 
       try {
         data =
@@ -537,7 +851,6 @@
         data =
           null;
       }
-
 
       if (
         !response.ok ||
@@ -560,10 +873,8 @@
         return;
       }
 
-
       const role =
         data.user?.role;
-
 
       if (!role) {
         showError(
@@ -577,7 +888,6 @@
         return;
       }
 
-
       redirectByRole(
         role
       );
@@ -585,6 +895,11 @@
     } catch (
       error
     ) {
+      console.error(
+        "[LOGIN]",
+        error
+      );
+
       showError(
         "Não foi possível contactar a plataforma. Verifique a sua ligação e tente novamente."
       );
@@ -596,21 +911,34 @@
   }
 
 
-  /*
-   * =========================================================
-   * SHOW LOGIN
-   * =========================================================
-   */
+  /* =========================================================
+     SHOW LOGIN
+  ========================================================== */
 
   function showLoginView() {
+    if (
+      accessRequestReturnTimer
+    ) {
+      window.clearTimeout(
+        accessRequestReturnTimer
+      );
+
+      accessRequestReturnTimer =
+        null;
+    }
+
+    clearError();
+
     clearAccessRequestError();
     clearAccessRequestSuccess();
 
+    setAccessRequestLoading(
+      false
+    );
 
     if (accessRequestForm) {
       accessRequestForm.reset();
     }
-
 
     if (accessRequestView) {
       accessRequestView.classList.add(
@@ -618,41 +946,43 @@
       );
     }
 
-
-    const loginView =
-      document.getElementById(
-        "loginView"
-      );
-
-
     if (loginView) {
       loginView.classList.remove(
         "hidden"
       );
     }
 
+    updateFieldState(
+      emailInput
+    );
 
-    emailInput?.focus();
+    updateFieldState(
+      passwordInput
+    );
+
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
+
+    window.setTimeout(
+      () => {
+        emailInput?.focus();
+      },
+      120
+    );
   }
 
 
-  /*
-   * =========================================================
-   * SHOW ACCESS REQUEST
-   * =========================================================
-   */
+  /* =========================================================
+     SHOW ACCESS REQUEST
+  ========================================================== */
 
   function showAccessRequestView() {
     clearError();
+
     clearAccessRequestError();
     clearAccessRequestSuccess();
-
-
-    const loginView =
-      document.getElementById(
-        "loginView"
-      );
-
 
     if (loginView) {
       loginView.classList.add(
@@ -660,23 +990,29 @@
       );
     }
 
-
     if (accessRequestView) {
       accessRequestView.classList.remove(
         "hidden"
       );
     }
 
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth"
+    });
 
-    accessRequestName?.focus();
+    window.setTimeout(
+      () => {
+        accessRequestName?.focus();
+      },
+      120
+    );
   }
 
 
-  /*
-   * =========================================================
-   * EMAIL VALIDATION
-   * =========================================================
-   */
+  /* =========================================================
+     EMAIL VALIDATION
+  ========================================================== */
 
   function isValidEmail(
     email
@@ -688,21 +1024,23 @@
   }
 
 
-  /*
-   * =========================================================
-   * ACCESS REQUEST
-   * =========================================================
-   */
+  /* =========================================================
+     ACCESS REQUEST
+  ========================================================== */
 
   async function handleAccessRequest(
     event
   ) {
     event.preventDefault();
 
+    if (
+      accessRequestSubmitting
+    ) {
+      return;
+    }
 
     clearAccessRequestError();
     clearAccessRequestSuccess();
-
 
     const name =
       String(
@@ -710,7 +1048,6 @@
         ""
       )
         .trim();
-
 
     const email =
       String(
@@ -720,14 +1057,12 @@
         .trim()
         .toLowerCase();
 
-
     const phone =
       String(
         accessRequestPhone?.value ||
         ""
       )
         .trim();
-
 
     const company =
       String(
@@ -736,14 +1071,12 @@
       )
         .trim();
 
-
     const reason =
       String(
         accessRequestReason?.value ||
         ""
       )
         .trim();
-
 
     if (
       name.length <
@@ -757,7 +1090,6 @@
 
       return;
     }
-
 
     if (
       !isValidEmail(
@@ -773,7 +1105,6 @@
       return;
     }
 
-
     if (
       phone.length >
       40
@@ -786,7 +1117,6 @@
 
       return;
     }
-
 
     if (
       company.length >
@@ -801,7 +1131,6 @@
       return;
     }
 
-
     if (
       reason.length >
       1000
@@ -815,11 +1144,9 @@
       return;
     }
 
-
     setAccessRequestLoading(
       true
     );
-
 
     try {
       const response =
@@ -851,10 +1178,8 @@
           }
         );
 
-
       let data =
         null;
-
 
       try {
         data =
@@ -866,7 +1191,6 @@
         data =
           null;
       }
-
 
       if (
         !response.ok ||
@@ -889,12 +1213,10 @@
         return;
       }
 
-
       showAccessRequestSuccess(
         data.message ||
         "Pedido de acesso enviado com sucesso. Aguarde a análise da administração."
       );
-
 
       if (
         accessRequestForm
@@ -902,27 +1224,36 @@
         accessRequestForm.reset();
       }
 
+      [
+        accessRequestName,
+        accessRequestEmail,
+        accessRequestPhone,
+        accessRequestCompany,
+        accessRequestReason
+      ].forEach(
+        updateFieldState
+      );
 
       setAccessRequestLoading(
         false
       );
 
-
-      /*
-       * Depois de alguns segundos voltamos ao login.
-       * O pedido permanece registado no servidor.
-       */
-
-      window.setTimeout(
-        () => {
-          showLoginView();
-        },
-        3500
-      );
+      accessRequestReturnTimer =
+        window.setTimeout(
+          () => {
+            showLoginView();
+          },
+          4500
+        );
 
     } catch (
       error
     ) {
+      console.error(
+        "[ACCESS REQUEST]",
+        error
+      );
+
       showAccessRequestError(
         "Não foi possível contactar a plataforma. Verifique a sua ligação e tente novamente."
       );
@@ -934,15 +1265,11 @@
   }
 
 
-  /*
-   * =========================================================
-   * EVENT LISTENERS
-   * =========================================================
-   */
+  /* =========================================================
+     EVENT LISTENERS
+  ========================================================== */
 
-  if (
-    form
-  ) {
+  if (form) {
     form.addEventListener(
       "submit",
       handleLogin
@@ -950,9 +1277,7 @@
   }
 
 
-  if (
-    accessRequestForm
-  ) {
+  if (accessRequestForm) {
     accessRequestForm.addEventListener(
       "submit",
       handleAccessRequest
@@ -960,9 +1285,7 @@
   }
 
 
-  if (
-    emailInput
-  ) {
+  if (emailInput) {
     emailInput.addEventListener(
       "input",
       clearError
@@ -970,9 +1293,7 @@
   }
 
 
-  if (
-    passwordInput
-  ) {
+  if (passwordInput) {
     passwordInput.addEventListener(
       "input",
       clearError
@@ -980,9 +1301,7 @@
   }
 
 
-  if (
-    accessRequestName
-  ) {
+  if (accessRequestName) {
     accessRequestName.addEventListener(
       "input",
       clearAccessRequestError
@@ -990,9 +1309,7 @@
   }
 
 
-  if (
-    accessRequestEmail
-  ) {
+  if (accessRequestEmail) {
     accessRequestEmail.addEventListener(
       "input",
       clearAccessRequestError
@@ -1000,9 +1317,7 @@
   }
 
 
-  if (
-    accessRequestPhone
-  ) {
+  if (accessRequestPhone) {
     accessRequestPhone.addEventListener(
       "input",
       clearAccessRequestError
@@ -1010,9 +1325,7 @@
   }
 
 
-  if (
-    accessRequestCompany
-  ) {
+  if (accessRequestCompany) {
     accessRequestCompany.addEventListener(
       "input",
       clearAccessRequestError
@@ -1020,9 +1333,7 @@
   }
 
 
-  if (
-    accessRequestReason
-  ) {
+  if (accessRequestReason) {
     accessRequestReason.addEventListener(
       "input",
       clearAccessRequestError
@@ -1030,9 +1341,7 @@
   }
 
 
-  if (
-    showAccessRequestButton
-  ) {
+  if (showAccessRequestButton) {
     showAccessRequestButton.addEventListener(
       "click",
       showAccessRequestView
@@ -1040,9 +1349,7 @@
   }
 
 
-  if (
-    backToLoginButton
-  ) {
+  if (backToLoginButton) {
     backToLoginButton.addEventListener(
       "click",
       showLoginView
@@ -1050,11 +1357,57 @@
   }
 
 
-  /*
-   * =========================================================
-   * START
-   * =========================================================
-   */
+  /* =========================================================
+     KEYBOARD
+  ========================================================== */
+
+  document.addEventListener(
+    "keydown",
+    (event) => {
+      if (
+        event.key ===
+        "Escape"
+      ) {
+        if (
+          accessRequestView &&
+          !accessRequestView.classList.contains(
+            "hidden"
+          )
+        ) {
+          showLoginView();
+        }
+      }
+    }
+  );
+
+
+  /* =========================================================
+     FIELD INITIALIZATION
+  ========================================================== */
+
+  [
+    emailInput,
+    passwordInput,
+    accessRequestName,
+    accessRequestEmail,
+    accessRequestPhone,
+    accessRequestCompany,
+    accessRequestReason
+  ].forEach(
+    attachFieldState
+  );
+
+
+  /* =========================================================
+     PASSWORD TOGGLE
+  ========================================================== */
+
+  createPasswordToggle();
+
+
+  /* =========================================================
+     START
+  ========================================================== */
 
   checkExistingSession();
 
