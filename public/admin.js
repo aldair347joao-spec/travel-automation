@@ -2877,7 +2877,7 @@ const AdminApp = (() => {
         try {
             const response =
                 await fetch(
-                    "/api/me",
+                    "/api/auth/me",
                     {
                         credentials:
                             "include",
