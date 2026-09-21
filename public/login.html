@@ -10,20 +10,17 @@
 
   <meta
     name="theme-color"
-    content="#031b3d"
+    content="#06111f"
   >
 
   <meta
     name="description"
-    content="Travel Automation — acesso à plataforma."
+    content="Travel Automation — acesso seguro à plataforma."
   >
 
   <title>Travel Automation — Acesso</title>
 
-  <link
-    rel="preconnect"
-    href="https://fonts.googleapis.com"
-  >
+  <link rel="preconnect" href="https://fonts.googleapis.com">
 
   <link
     rel="preconnect"
@@ -50,17 +47,22 @@
 <body>
 
   <!-- =========================================================
-       FUNDO DA PLATAFORMA
+       AMBIENTE VISUAL
   ========================================================== -->
 
   <div
-    class="site-background"
+    class="site-background login-background"
     aria-hidden="true"
   >
     <div class="background-sky"></div>
     <div class="background-airplane"></div>
     <div class="background-grid"></div>
     <div class="background-overlay"></div>
+
+    <div class="login-orbit login-orbit-one"></div>
+    <div class="login-orbit login-orbit-two"></div>
+    <div class="login-glow login-glow-one"></div>
+    <div class="login-glow login-glow-two"></div>
   </div>
 
 
@@ -75,70 +77,107 @@
 
     <div class="login-shell">
 
+
       <!-- =====================================================
-           MARCA
+           CABEÇALHO DA MARCA
       ====================================================== -->
 
-      <div class="login-brand">
+      <header class="login-brand">
 
-        <div class="brand-mark">
+        <div
+          class="brand-mark"
+          aria-hidden="true"
+        >
           <span>TA</span>
         </div>
 
-        <div>
+        <div class="login-brand-copy">
 
           <strong>
             TRAVEL AUTOMATION
           </strong>
 
           <small>
-            ANGOLA → PORTUGAL
+            TRAVEL OPERATIONS PLATFORM
           </small>
 
         </div>
 
-      </div>
+      </header>
 
 
       <!-- =====================================================
-           CARTÃO DE LOGIN
+           CARTÃO PRINCIPAL
       ====================================================== -->
 
       <section class="login-card">
 
+        <div class="login-card-accent"></div>
+
+
+        <!-- ===================================================
+             INTRODUÇÃO
+        ==================================================== -->
+
         <div class="login-card-top">
 
-          <span class="eyebrow">
-            ACESSO À PLATAFORMA
-          </span>
+          <div class="login-eyebrow-row">
+
+            <span class="eyebrow">
+              ÁREA RESERVADA
+            </span>
+
+            <span class="login-secure-label">
+              <span
+                class="login-secure-dot"
+                aria-hidden="true"
+              ></span>
+
+              SESSÃO SEGURA
+            </span>
+
+          </div>
+
 
           <h1>
-            Entrar na
-            <span>Travel Automation.</span>
+            Aceda à sua
+            <span>operação.</span>
           </h1>
 
+
           <p>
-            Aceda ao seu espaço de trabalho para
-            continuar o processo de viagem.
+            Entre na plataforma para gerir os seus
+            processos, colaboradores e viajantes.
           </p>
 
         </div>
 
 
         <!-- ===================================================
-             ESTADO DA PLATAFORMA
+             ESTADO
         ==================================================== -->
 
-        <div class="login-status">
+        <div
+          class="login-status"
+          role="status"
+        >
 
           <span
             class="status-dot"
             aria-hidden="true"
           ></span>
 
-          <span>
-            Plataforma disponível
-          </span>
+          <div>
+
+            <strong>
+              Plataforma operacional
+            </strong>
+
+            <span>
+              Acesso disponível
+            </span>
+
+          </div>
 
         </div>
 
@@ -149,10 +188,16 @@
 
         <form
           id="loginForm"
+          class="login-form"
           novalidate
         >
 
-          <div class="form-field">
+
+          <!-- =================================================
+               E-MAIL
+          ================================================== -->
+
+          <div class="form-field login-form-field">
 
             <label
               for="loginEmail"
@@ -160,20 +205,53 @@
               E-mail
             </label>
 
-            <input
-              id="loginEmail"
-              name="email"
-              type="email"
-              autocomplete="username"
-              inputmode="email"
-              placeholder="seu@email.com"
-              required
-            >
+            <div class="login-input-shell">
+
+              <span
+                class="login-input-icon"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M4 6.5h16v11H4z"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linejoin="round"
+                  />
+                  <path
+                    d="m5 8 7 5 7-5"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+
+              <input
+                id="loginEmail"
+                name="email"
+                type="email"
+                autocomplete="username"
+                inputmode="email"
+                placeholder="seu@email.com"
+                required
+              />
+
+            </div>
 
           </div>
 
 
-          <div class="form-field">
+          <!-- =================================================
+               PALAVRA-PASSE
+          ================================================== -->
+
+          <div class="form-field login-form-field">
 
             <label
               for="loginPassword"
@@ -181,20 +259,59 @@
               Palavra-passe
             </label>
 
-            <input
-              id="loginPassword"
-              name="password"
-              type="password"
-              autocomplete="current-password"
-              placeholder="Introduza a sua palavra-passe"
-              required
-            >
+            <div class="login-input-shell">
+
+              <span
+                class="login-input-icon"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <rect
+                    x="5"
+                    y="10"
+                    width="14"
+                    height="10"
+                    rx="2"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                  />
+
+                  <path
+                    d="M8 10V7.5a4 4 0 0 1 8 0V10"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                  />
+
+                  <circle
+                    cx="12"
+                    cy="15"
+                    r="1.2"
+                    fill="currentColor"
+                  />
+                </svg>
+              </span>
+
+              <input
+                id="loginPassword"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="Introduza a sua palavra-passe"
+                required
+              />
+
+            </div>
 
           </div>
 
 
           <!-- =================================================
-               MENSAGEM DE ERRO
+               ERRO
           ================================================== -->
 
           <div
@@ -206,7 +323,7 @@
 
 
           <!-- =================================================
-               BOTÃO DE LOGIN
+               BOTÃO
           ================================================== -->
 
           <button
@@ -215,15 +332,22 @@
             type="submit"
           >
 
-            <span id="loginButtonText">
-              Entrar na plataforma
-            </span>
+            <span class="login-button-content">
 
-            <span
-              id="loginButtonArrow"
-              aria-hidden="true"
-            >
-              →
+              <span
+                id="loginButtonText"
+              >
+                Entrar na plataforma
+              </span>
+
+              <span
+                id="loginButtonArrow"
+                class="login-button-arrow"
+                aria-hidden="true"
+              >
+                →
+              </span>
+
             </span>
 
           </button>
@@ -250,9 +374,18 @@
           </div>
 
 
-          <p class="login-access-text">
-            Ainda não possui uma conta de colaborador?
-          </p>
+          <div class="login-access-copy">
+
+            <strong>
+              Trabalha connosco?
+            </strong>
+
+            <p>
+              Solicite o seu acesso de colaborador
+              à plataforma.
+            </p>
+
+          </div>
 
 
           <button
@@ -277,7 +410,7 @@
 
 
         <!-- ===================================================
-             CARACTERÍSTICAS
+             INDICADORES
         ==================================================== -->
 
         <div class="login-features">
@@ -302,7 +435,7 @@
             </strong>
 
             <span>
-              PROCESSO DIGITAL
+              OPERAÇÃO DIGITAL
             </span>
 
           </div>
@@ -315,7 +448,7 @@
             </strong>
 
             <span>
-              ACOMPANHAMENTO
+              GESTÃO DE VIAJANTES
             </span>
 
           </div>
@@ -332,15 +465,15 @@
       <footer class="login-footer">
 
         <span>
-          Travel Automation
+          TRAVEL AUTOMATION
+        </span>
+
+        <span class="login-footer-separator">
+          /
         </span>
 
         <span>
-          •
-        </span>
-
-        <span>
-          Plataforma de preparação de viagens
+          PLATAFORMA DE OPERAÇÕES DE VIAGEM
         </span>
 
       </footer>
@@ -361,29 +494,33 @@
 
     <div class="login-shell">
 
+
       <!-- =====================================================
            MARCA
       ====================================================== -->
 
-      <div class="login-brand">
+      <header class="login-brand">
 
-        <div class="brand-mark">
+        <div
+          class="brand-mark"
+          aria-hidden="true"
+        >
           <span>TA</span>
         </div>
 
-        <div>
+        <div class="login-brand-copy">
 
           <strong>
             TRAVEL AUTOMATION
           </strong>
 
           <small>
-            ANGOLA → PORTUGAL
+            TRAVEL OPERATIONS PLATFORM
           </small>
 
         </div>
 
-      </div>
+      </header>
 
 
       <!-- =====================================================
@@ -392,39 +529,67 @@
 
       <section class="login-card access-request-card">
 
+        <div class="login-card-accent"></div>
+
+
+        <!-- ===================================================
+             INTRODUÇÃO
+        ==================================================== -->
+
         <div class="login-card-top">
 
-          <span class="eyebrow">
-            SOLICITAR ACESSO
-          </span>
+          <div class="login-eyebrow-row">
+
+            <span class="eyebrow">
+              NOVO COLABORADOR
+            </span>
+
+            <span class="login-secure-label">
+              ACESSO CONTROLADO
+            </span>
+
+          </div>
+
 
           <h1>
-            Junte-se à
-            <span>Travel Automation.</span>
+            Solicite o seu
+            <span>acesso.</span>
           </h1>
 
+
           <p>
-            Preencha os seus dados. A administração irá
-            analisar o pedido antes de ativar o seu acesso.
+            Envie os seus dados para a administração.
+            O acesso só será ativado depois da aprovação.
           </p>
 
         </div>
 
 
         <!-- ===================================================
-             INFORMAÇÃO
+             ESTADO
         ==================================================== -->
 
-        <div class="login-status access-request-status">
+        <div
+          class="login-status access-request-status"
+          role="status"
+        >
 
           <span
             class="status-dot"
             aria-hidden="true"
           ></span>
 
-          <span>
-            Pedido sujeito a aprovação
-          </span>
+          <div>
+
+            <strong>
+              Pedido sujeito a aprovação
+            </strong>
+
+            <span>
+              A administração irá analisar os seus dados
+            </span>
+
+          </div>
 
         </div>
 
@@ -435,14 +600,16 @@
 
         <form
           id="accessRequestForm"
+          class="login-form access-request-form"
           novalidate
         >
+
 
           <!-- =================================================
                NOME
           ================================================== -->
 
-          <div class="form-field">
+          <div class="form-field login-form-field">
 
             <label
               for="accessRequestName"
@@ -450,15 +617,45 @@
               Nome completo
             </label>
 
-            <input
-              id="accessRequestName"
-              name="name"
-              type="text"
-              autocomplete="name"
-              placeholder="Introduza o seu nome completo"
-              maxlength="120"
-              required
-            >
+            <div class="login-input-shell">
+
+              <span
+                class="login-input-icon"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <circle
+                    cx="12"
+                    cy="8"
+                    r="3.2"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                  />
+
+                  <path
+                    d="M5.5 19c.7-3.2 3-5 6.5-5s5.8 1.8 6.5 5"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+
+              <input
+                id="accessRequestName"
+                name="name"
+                type="text"
+                autocomplete="name"
+                placeholder="Introduza o seu nome completo"
+                maxlength="120"
+                required
+              />
+
+            </div>
 
           </div>
 
@@ -467,7 +664,7 @@
                E-MAIL
           ================================================== -->
 
-          <div class="form-field">
+          <div class="form-field login-form-field">
 
             <label
               for="accessRequestEmail"
@@ -475,16 +672,46 @@
               E-mail profissional
             </label>
 
-            <input
-              id="accessRequestEmail"
-              name="email"
-              type="email"
-              autocomplete="email"
-              inputmode="email"
-              placeholder="seu@email.com"
-              maxlength="180"
-              required
-            >
+            <div class="login-input-shell">
+
+              <span
+                class="login-input-icon"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M4 6.5h16v11H4z"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linejoin="round"
+                  />
+
+                  <path
+                    d="m5 8 7 5 7-5"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+
+              <input
+                id="accessRequestEmail"
+                name="email"
+                type="email"
+                autocomplete="email"
+                inputmode="email"
+                placeholder="seu@email.com"
+                maxlength="180"
+                required
+              />
+
+            </div>
 
           </div>
 
@@ -493,26 +720,49 @@
                TELEFONE
           ================================================== -->
 
-          <div class="form-field">
+          <div class="form-field login-form-field">
 
             <label
               for="accessRequestPhone"
             >
               Telefone / WhatsApp
-              <span>
+
+              <span class="field-optional">
                 opcional
               </span>
             </label>
 
-            <input
-              id="accessRequestPhone"
-              name="phone"
-              type="tel"
-              autocomplete="tel"
-              inputmode="tel"
-              placeholder="+244 9XX XXX XXX"
-              maxlength="40"
-            >
+            <div class="login-input-shell">
+
+              <span
+                class="login-input-icon"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M7.2 4.5h2.1l1.1 4-1.8 1.5a14.5 14.5 0 0 0 5.4 5.4l1.5-1.8 4 1.1v2.1c0 1-.8 1.8-1.8 1.8C11 18.6 5.4 13 5.4 6.3c0-1 .8-1.8 1.8-1.8Z"
+                    stroke="currentColor"
+                    stroke-width="1.6"
+                    stroke-linejoin="round"
+                  />
+                </svg>
+              </span>
+
+              <input
+                id="accessRequestPhone"
+                name="phone"
+                type="tel"
+                autocomplete="tel"
+                inputmode="tel"
+                placeholder="+244 9XX XXX XXX"
+                maxlength="40"
+              />
+
+            </div>
 
           </div>
 
@@ -521,25 +771,62 @@
                EMPRESA
           ================================================== -->
 
-          <div class="form-field">
+          <div class="form-field login-form-field">
 
             <label
               for="accessRequestCompany"
             >
               Empresa ou organização
-              <span>
+
+              <span class="field-optional">
                 opcional
               </span>
             </label>
 
-            <input
-              id="accessRequestCompany"
-              name="company"
-              type="text"
-              autocomplete="organization"
-              placeholder="Nome da empresa ou organização"
-              maxlength="160"
-            >
+            <div class="login-input-shell">
+
+              <span
+                class="login-input-icon"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M5 20V5.5h9V20"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linejoin="round"
+                  />
+
+                  <path
+                    d="M14 9h5v11"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                    stroke-linejoin="round"
+                  />
+
+                  <path
+                    d="M8 8h2M8 11.5h2M8 15h2M16.5 12h1M16.5 15h1M16.5 18h1"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+
+              <input
+                id="accessRequestCompany"
+                name="company"
+                type="text"
+                autocomplete="organization"
+                placeholder="Nome da empresa ou organização"
+                maxlength="160"
+              />
+
+            </div>
 
           </div>
 
@@ -548,24 +835,53 @@
                MOTIVO
           ================================================== -->
 
-          <div class="form-field">
+          <div class="form-field login-form-field">
 
             <label
               for="accessRequestReason"
             >
               Motivo do pedido
-              <span>
+
+              <span class="field-optional">
                 opcional
               </span>
             </label>
 
-            <textarea
-              id="accessRequestReason"
-              name="reason"
-              rows="4"
-              maxlength="1000"
-              placeholder="Explique brevemente como pretende utilizar a plataforma."
-            ></textarea>
+            <div class="login-input-shell login-textarea-shell">
+
+              <span
+                class="login-input-icon"
+                aria-hidden="true"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M6 4.5h12a1.5 1.5 0 0 1 1.5 1.5v12a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 18V6A1.5 1.5 0 0 1 6 4.5Z"
+                    stroke="currentColor"
+                    stroke-width="1.7"
+                  />
+
+                  <path
+                    d="M8 9h8M8 12h8M8 15h5"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                  />
+                </svg>
+              </span>
+
+              <textarea
+                id="accessRequestReason"
+                name="reason"
+                rows="4"
+                maxlength="1000"
+                placeholder="Explique brevemente como pretende utilizar a plataforma."
+              ></textarea>
+
+            </div>
 
           </div>
 
@@ -604,15 +920,22 @@
             type="submit"
           >
 
-            <span id="accessRequestButtonText">
-              Solicitar acesso
-            </span>
+            <span class="login-button-content">
 
-            <span
-              id="accessRequestButtonArrow"
-              aria-hidden="true"
-            >
-              →
+              <span
+                id="accessRequestButtonText"
+              >
+                Solicitar acesso
+              </span>
+
+              <span
+                id="accessRequestButtonArrow"
+                class="login-button-arrow"
+                aria-hidden="true"
+              >
+                →
+              </span>
+
             </span>
 
           </button>
@@ -635,7 +958,7 @@
             </span>
 
             <span>
-              Voltar para o login
+              Voltar para o acesso
             </span>
 
           </button>
@@ -644,22 +967,31 @@
 
 
         <!-- ===================================================
-             NOTA
+             EXPLICAÇÃO
         ==================================================== -->
 
-        <div class="access-request-note">
+        <aside class="access-request-note">
 
-          <strong>
-            Como funciona?
-          </strong>
+          <div class="access-request-note-marker">
+            i
+          </div>
 
-          <p>
-            O seu pedido será analisado pela administração.
-            Se for aprovado, receberá as instruções para
-            aceder à sua conta de colaborador.
-          </p>
+          <div>
 
-        </div>
+            <strong>
+              O que acontece depois?
+            </strong>
+
+            <p>
+              O pedido é encaminhado para a administração
+              da plataforma. Após a aprovação, poderá utilizar
+              a sua conta de colaborador para criar e enviar
+              vários perfis de viajantes.
+            </p>
+
+          </div>
+
+        </aside>
 
       </section>
 
@@ -671,15 +1003,15 @@
       <footer class="login-footer">
 
         <span>
-          Travel Automation
+          TRAVEL AUTOMATION
+        </span>
+
+        <span class="login-footer-separator">
+          /
         </span>
 
         <span>
-          •
-        </span>
-
-        <span>
-          Acesso de colaboradores
+          ACESSO DE COLABORADORES
         </span>
 
       </footer>
@@ -690,7 +1022,8 @@
 
 
   <!-- =========================================================
-       LÓGICA DE LOGIN E PEDIDO DE ACESSO
+       LÓGICA
+       Não utilizamos workflow.js.
   ========================================================== -->
 
   <script
