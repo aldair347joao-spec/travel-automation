@@ -3981,7 +3981,163 @@ span.completed {
 .login-input-shell:focus-within .login-input-icon {
   color: var(--ta-blue);
 }
+/* ============================================================
+   BOTÃO MOSTRAR / OCULTAR PALAVRA-PASSE
+   ============================================================ */
 
+.login-password-toggle {
+  width: 42px;
+  height: 42px;
+
+  flex: 0 0 42px;
+
+  display: grid;
+  place-items: center;
+
+  margin-right: 7px;
+
+  padding: 0;
+
+  border: 1px solid transparent;
+  border-radius: 11px;
+
+  color: #8298aa;
+
+  background: transparent;
+
+  cursor: pointer;
+
+  transition:
+    color var(--ta-fast),
+    background var(--ta-fast),
+    border-color var(--ta-fast),
+    transform var(--ta-fast);
+}
+
+.login-password-toggle:hover {
+  color: var(--ta-blue);
+
+  border-color: rgba(7, 86, 166, .10);
+
+  background: rgba(7, 86, 166, .055);
+
+  transform: translateY(-1px);
+}
+
+.login-password-toggle:active {
+  transform: translateY(0) scale(.96);
+}
+
+.login-password-toggle:focus-visible {
+  outline: 2px solid rgba(7, 86, 166, .25);
+
+  outline-offset: 2px;
+}
+
+.login-password-toggle svg {
+  width: 18px;
+  height: 18px;
+
+  display: block;
+
+  transition:
+    opacity var(--ta-fast),
+    transform var(--ta-fast);
+}
+
+.password-eye-closed {
+  display: none !important;
+}
+
+.login-input-shell.password-visible
+.password-eye-open {
+  display: none !important;
+}
+
+.login-input-shell.password-visible
+.password-eye-closed {
+  display: block !important;
+}
+
+.login-input-shell.password-visible
+.login-password-toggle {
+  color: var(--ta-blue);
+
+  background: rgba(7, 86, 166, .045);
+}
+
+
+/* ============================================================
+   ESTADOS DOS CAMPOS
+   ============================================================ */
+
+.login-input-shell.is-focused {
+  border-color: rgba(7, 86, 166, .58);
+
+  background: #fff;
+
+  box-shadow:
+    0 0 0 4px rgba(7, 86, 166, .075),
+    0 10px 25px rgba(3, 27, 61, .055);
+
+  transform: translateY(-1px);
+}
+
+.login-input-shell.is-filled {
+  background: rgba(255, 255, 255, .96);
+}
+
+.login-input-shell.is-valid {
+  border-color: rgba(22, 163, 106, .30);
+}
+
+.login-input-shell.is-valid .login-input-icon {
+  color: var(--ta-green);
+}
+
+.login-input-shell.is-invalid {
+  border-color: rgba(217, 75, 82, .42);
+
+  background:
+    rgba(217, 75, 82, .018);
+}
+
+.login-input-shell.is-invalid .login-input-icon {
+  color: var(--ta-red);
+}
+
+.login-input-shell.is-invalid:focus-within {
+  border-color: rgba(217, 75, 82, .55);
+
+  box-shadow:
+    0 0 0 4px rgba(217, 75, 82, .075),
+    0 10px 25px rgba(3, 27, 61, .055);
+}
+
+
+/* ============================================================
+   MOBILE — BOTÃO DA PALAVRA-PASSE
+   ============================================================ */
+
+@media (max-width: 640px) {
+
+  .login-password-toggle {
+    width: 38px;
+    height: 38px;
+
+    flex-basis: 38px;
+
+    margin-right: 5px;
+
+    border-radius: 10px;
+  }
+
+  .login-password-toggle svg {
+    width: 17px;
+    height: 17px;
+  }
+
+}
 .login-input-shell input,
 .login-input-shell textarea {
   width: 100%;
