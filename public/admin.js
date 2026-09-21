@@ -26,7 +26,9 @@ const AdminApp = (() => {
         refreshTimer: null,
         currentAction: null,
         loadingApplications: false,
-        loadingDetails: false
+        loadingDetails: false,
+        currentUser: null,
+        currentUserRole: null,
     };
 
 
@@ -2304,6 +2306,13 @@ const AdminApp = (() => {
                     .vfsCredentials
                     ?.configured
             );
+        const canManage =
+    [
+        "owner",
+        "admin"
+    ].includes(
+        state.currentUserRole
+    );
 
         const releaseButton =
             $(
@@ -2367,22 +2376,24 @@ const AdminApp = (() => {
         }
 
         if (releaseButton) {
-            releaseButton.disabled =
-                released ||
-                !configured ||
-                ![
-                    "PENDING_REVIEW",
-                    "PAUSED",
-                    "READY_FOR_AUTOMATION"
-                ].includes(
-                    status
-                );
-        }
+    releaseButton.disabled =
+        !canManage ||
+        released ||
+        !configured ||
+        ![
+            "PENDING_REVIEW",
+            "PAUSED",
+            "READY_FOR_AUTOMATION"
+        ].includes(
+            status
+        );
+}
 
         if (pauseButton) {
-            pauseButton.disabled =
-                !released;
-        }
+    pauseButton.disabled =
+        !canManage ||
+        !released;
+}
     }
 
 
@@ -2425,6 +2436,22 @@ const AdminApp = (() => {
         event
     ) {
         event.preventDefault();
+        if (
+    ![
+        "owner",
+        "admin"
+    ].includes(
+        state.currentUserRole
+    )
+) {
+    showToast(
+        "Permissão",
+        "Apenas administradores podem configurar credenciais VFS.",
+        "error"
+    );
+
+    return;
+}
 
         const id =
             state.selectedApplicationId;
@@ -2568,6 +2595,22 @@ const AdminApp = (() => {
      */
 
     async function saveNotes() {
+        if (
+    ![
+        "owner",
+        "admin"
+    ].includes(
+        state.currentUserRole
+    )
+) {
+    showToast(
+        "Permissão",
+        "Apenas administradores podem configurar credenciais VFS.",
+        "error"
+    );
+
+    return;
+}
         const id =
             state.selectedApplicationId;
 
@@ -2638,6 +2681,22 @@ const AdminApp = (() => {
      */
 
     async function releaseApplication() {
+        if (
+    ![
+        "owner",
+        "admin"
+    ].includes(
+        state.currentUserRole
+    )
+) {
+    showToast(
+        "Permissão",
+        "Apenas administradores podem configurar credenciais VFS.",
+        "error"
+    );
+
+    return;
+}
         const id =
             state.selectedApplicationId;
 
@@ -2691,6 +2750,22 @@ const AdminApp = (() => {
      */
 
     async function pauseApplication() {
+       if (
+    ![
+        "owner",
+        "admin"
+    ].includes(
+        state.currentUserRole
+    )
+) {
+    showToast(
+        "Permissão",
+        "Apenas administradores podem configurar credenciais VFS.",
+        "error"
+    );
+
+    return;
+}
         const id =
             state.selectedApplicationId;
 
@@ -2872,76 +2947,179 @@ const AdminApp = (() => {
      * ADMIN IDENTITY
      * ========================================================
      */
+    function applyAdminPermissions() {
+    const role =
+        String(
+            state.currentUserRole ||
+            ""
+        ).toLowerCase();
 
-    async function loadAdminIdentity() {
-        try {
-            const response =
-                await fetch(
-                    "/api/auth/me",
-                    {
-                        credentials:
-                            "include",
+    const canManage =
+        role === "owner" ||
+        role === "admin";
 
-                        headers: {
-                            Accept:
-                                "application/json"
-                        }
-                    }
-                );
+    const credentialsForm =
+        $(
+            "#credentialsForm"
+        );
 
-            if (!response.ok) {
-                return;
-            }
+    const saveCredentialsButton =
+        $(
+            "#saveCredentialsButton"
+        );
 
-            const data =
-                await response.json();
+    const releaseButton =
+        $(
+            "#releaseButton"
+        );
 
-            const user =
-                data?.user ||
-                data;
+    const pauseButton =
+        $(
+            "#pauseButton"
+        );
 
-            if (!user) {
-                return;
-            }
+    const notes =
+        $(
+            "#adminNotes"
+        );
 
-            const name =
-                user.name ||
-                user.email ||
-                "Administrador";
-
-            const role =
-                user.role ||
-                "admin";
-
-            setText(
-                "#adminName",
-                name
-            );
-
-            setText(
-                "#adminRole",
-                String(
-                    role
-                ).toUpperCase()
-            );
-
-            setText(
-                "#adminAvatar",
-                firstLetter(
-                    name
-                )
-            );
-
-        } catch (
-            error
-        ) {
-            console.debug(
-                "[ADMIN] identity",
-                error
-            );
-        }
+    if (credentialsForm) {
+        credentialsForm.classList.toggle(
+            "admin-readonly",
+            !canManage
+        );
     }
 
+    if (saveCredentialsButton) {
+        saveCredentialsButton.disabled =
+            !canManage;
+    }
+
+    if (releaseButton) {
+        releaseButton.dataset.permissionDenied =
+            canManage
+                ? "false"
+                : "true";
+    }
+
+    if (pauseButton) {
+        pauseButton.dataset.permissionDenied =
+            canManage
+                ? "false"
+                : "true";
+    }
+
+    if (notes) {
+        notes.readOnly =
+            !canManage;
+
+        notes.classList.toggle(
+            "admin-readonly",
+            !canManage
+        );
+    }
+
+    if (!canManage) {
+        if (saveCredentialsButton) {
+            saveCredentialsButton.title =
+                "Apenas administradores podem configurar credenciais VFS.";
+        }
+
+        if (releaseButton) {
+            releaseButton.title =
+                "Apenas administradores podem liberar a automação.";
+        }
+
+        if (pauseButton) {
+            pauseButton.title =
+                "Apenas administradores podem pausar a automação.";
+        }
+
+        if (notes) {
+            notes.title =
+                "Apenas administradores podem alterar observações.";
+        }
+    }
+}
+    async function loadAdminIdentity() {
+    try {
+        const response =
+            await fetch(
+                "/api/auth/me",
+                {
+                    credentials:
+                        "include",
+
+                    headers: {
+                        Accept:
+                            "application/json"
+                    }
+                }
+            );
+
+        if (!response.ok) {
+            return;
+        }
+
+        const data =
+            await response.json();
+
+        const user =
+            data?.user ||
+            data;
+
+        if (!user) {
+            return;
+        }
+
+        state.currentUser =
+            user;
+
+        state.currentUserRole =
+            String(
+                user.role ||
+                "viewer"
+            ).toLowerCase();
+
+        const name =
+            user.name ||
+            user.email ||
+            "Administrador";
+
+        const role =
+            user.role ||
+            "viewer";
+
+        setText(
+            "#adminName",
+            name
+        );
+
+        setText(
+            "#adminRole",
+            String(
+                role
+            ).toUpperCase()
+        );
+
+        setText(
+            "#adminAvatar",
+            firstLetter(
+                name
+            )
+        );
+
+        applyAdminPermissions();
+
+    } catch (
+        error
+    ) {
+        console.debug(
+            "[ADMIN] identity",
+            error
+        );
+    }
+}
 
     /*
      * ========================================================
