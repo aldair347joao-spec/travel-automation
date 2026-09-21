@@ -30,6 +30,12 @@ const {
 } =
   require("../middleware/error");
 
+const {
+  requireAuth,
+  requireRole
+} =
+  require("../middleware/auth");
+
 const authRouter =
   require("./auth");
 
@@ -41,6 +47,7 @@ const passportsRouter =
 
 const createApplicationsRouter =
   require("./applications");
+
 const createAdminRouter =
   require("./admin");
 
@@ -49,6 +56,7 @@ const createSystemRouter =
 
 const config =
   require("../config/environment");
+
 const logger =
   require("../utils/logger");
 
@@ -137,12 +145,6 @@ function createApp({
     generalLimiter
   );
 
-  /*
-   * =========================================================
-   * HEALTH
-   * =========================================================
-   */
-
   app.get(
     "/api/health",
     async (
@@ -172,22 +174,10 @@ function createApp({
     }
   );
 
-  /*
-   * =========================================================
-   * AUTH
-   * =========================================================
-   */
-
   app.use(
     "/api/auth",
     authRouter
   );
-
-  /*
-   * =========================================================
-   * CSRF
-   * =========================================================
-   */
 
   app.use(
     "/api",
@@ -212,33 +202,15 @@ function createApp({
     }
   );
 
-  /*
-   * =========================================================
-   * CLIENTS
-   * =========================================================
-   */
-
   app.use(
     "/api/clients",
     clientsRouter
   );
 
-  /*
-   * =========================================================
-   * PASSPORTS
-   * =========================================================
-   */
-
   app.use(
     "/api/passports",
     passportsRouter
   );
-
-  /*
-   * =========================================================
-   * APPLICATIONS
-   * =========================================================
-   */
 
   app.use(
     "/api/applications",
@@ -247,46 +219,17 @@ function createApp({
     })
   );
 
-  /*
-   * =========================================================
-   * SYSTEM
-   * =========================================================
-   */
-
   app.use(
     "/api/system",
     createSystemRouter({
       supervisor
     })
   );
-  /*
-   * =========================================================
-   * ADMINISTRATION
-   * =========================================================
-   */
 
   app.use(
     "/api/admin",
     createAdminRouter()
   );
-    /*
-   * =========================================================
-   * MEDIA PIPE FACE LANDMARKER MODEL
-   * =========================================================
-   *
-   * O navegador não busca o modelo diretamente no Google
-   * Storage.
-   *
-   * O servidor faz o download do modelo e entrega-o pelo
-   * próprio domínio da aplicação.
-   *
-   * Isso evita problemas de CORS, rede, bloqueios do
-   * navegador e diferenças entre dispositivos móveis.
-   *
-   * O modelo é mantido em memória depois do primeiro
-   * carregamento para evitar downloads repetidos.
-   * =========================================================
-   */
 
   const FACE_LANDMARKER_MODEL_URL =
     "https://storage.googleapis.com/" +
@@ -310,12 +253,6 @@ function createApp({
       res
     ) => {
       try {
-        /*
-         * ---------------------------------------------------
-         * CACHE EM MEMÓRIA
-         * ---------------------------------------------------
-         */
-
         if (
           faceLandmarkerModelCache
         ) {
@@ -340,12 +277,6 @@ function createApp({
             faceLandmarkerModelCache
           );
         }
-
-        /*
-         * ---------------------------------------------------
-         * EVITAR DOWNLOAD DUPLICADO
-         * ---------------------------------------------------
-         */
 
         if (
           !faceLandmarkerModelPromise
@@ -402,14 +333,6 @@ function createApp({
                     "MediaPipe model is empty"
                   );
                 }
-
-                /*
-                 * O modelo Face Landmarker
-                 * normalmente possui vários MB.
-                 *
-                 * Uma resposta extremamente pequena
-                 * indica que recebemos algo inválido.
-                 */
 
                 if (
                   buffer.length <
@@ -483,7 +406,8 @@ function createApp({
         );
 
         return res.status(502).json({
-          success: false,
+          success:
+            false,
 
           error:
             "Não foi possível carregar o modelo facial no servidor."
@@ -491,25 +415,6 @@ function createApp({
       }
     }
   );
-  /*
-   * =========================================================
-   * STATIC FRONTEND
-   * =========================================================
-   */
-  /*
-   * =========================================================
-   * MEDIA PIPE LOCAL
-   * =========================================================
-   *
-   * O pacote é instalado pelo npm durante o deploy.
-   *
-   * Expomos apenas os ficheiros públicos necessários
-   * para o navegador executar o Face Landmarker.
-   *
-   * Não expomos a aplicação Node nem outros ficheiros
-   * do node_modules.
-   * =========================================================
-   */
 
   const mediaPipeDirectory =
     path.join(
@@ -517,12 +422,13 @@ function createApp({
       "../../node_modules/@mediapipe/tasks-vision"
     );
 
-    app.use(
+  app.use(
     "/mediapipe",
     express.static(
       mediaPipeDirectory,
       {
-        index: false,
+        index:
+          false,
 
         maxAge:
           config.isProduction
@@ -559,11 +465,101 @@ function createApp({
       }
     )
   );
+
+  /*
+   * =========================================================
+   * PUBLIC FRONTEND DIRECTORY
+   * =========================================================
+   *
+   * Declaramos o diretório público antes das rotas /admin.
+   * Isso evita ReferenceError e permite proteger a página
+   * administrativa antes do express.static().
+   * =========================================================
+   */
+
   const publicDirectory =
     path.join(
       __dirname,
       "../../public"
     );
+
+  /*
+   * =========================================================
+   * ADMINISTRATION PAGE
+   * =========================================================
+   *
+   * A página administrativa não deve ser pública.
+   *
+   * As APIs /api/admin já possuem proteção própria.
+   * Aqui protegemos também a entrada visual do painel.
+   *
+   * Utilizamos os mesmos papéis aceitos pelo módulo admin:
+   *
+   * owner
+   * admin
+   * operator
+   * viewer
+   *
+   * Em modo de desenvolvimento, o middleware de autenticação
+   * existente continua respeitando a configuração atual.
+   * =========================================================
+   */
+
+  app.get(
+    "/admin",
+    requireAuth,
+    requireRole(
+      "owner",
+      "admin",
+      "operator",
+      "viewer"
+    ),
+    (
+      req,
+      res
+    ) => {
+      return res.sendFile(
+        path.join(
+          publicDirectory,
+          "admin.html"
+        )
+      );
+    }
+  );
+
+  app.get(
+    "/admin.html",
+    requireAuth,
+    requireRole(
+      "owner",
+      "admin",
+      "operator",
+      "viewer"
+    ),
+    (
+      req,
+      res
+    ) => {
+      return res.sendFile(
+        path.join(
+          publicDirectory,
+          "admin.html"
+        )
+      );
+    }
+  );
+
+  /*
+   * =========================================================
+   * PUBLIC FRONTEND
+   * =========================================================
+   *
+   * O restante do frontend continua sendo servido normalmente.
+   *
+   * A diferença importante é que /admin e /admin.html foram
+   * interceptados ANTES deste middleware.
+   * =========================================================
+   */
 
   app.use(
     express.static(
