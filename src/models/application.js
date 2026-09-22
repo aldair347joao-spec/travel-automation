@@ -14,42 +14,267 @@ const {
  * Mantemos o campo "status" antigo durante a migração.
  * O novo "workflowState" passa a representar o estado
  * oficial do processo.
- *
- * Isto permite atualizar Bot 1, Bot 2 e Supervisor
- * progressivamente sem quebrar documentos existentes.
  */
 
 const LEGACY_STATUS_TO_WORKFLOW_STATE = Object.freeze({
   created: STATES.CREATED,
-
   preparing: STATES.IDENTITY_PREPARATION,
-
   otp_required: STATES.OTP_REQUIRED,
-
   otp_verified: STATES.OTP_VERIFIED,
-
   identity_verification: STATES.FACIAL_POSITIONS,
-
   calendar: STATES.RADAR_ACTIVE,
-
   waiting_for_slot: STATES.RADAR_ACTIVE,
-
   slot_received: STATES.SLOT_FOUND,
-
   continuing: STATES.BOOKING,
-
   review_pay: STATES.REVIEW,
-
   book_appointment: STATES.BOOKING,
-
   completed: STATES.COMPLETED,
-
   requires_user: STATES.ERROR,
-
   error: STATES.ERROR,
-
   cancelled: STATES.CANCELLED
 });
+
+/*
+ * =========================================================
+ * LIVENESS SNAPSHOT
+ * =========================================================
+ *
+ * Isto NÃO representa imagens.
+ *
+ * Guarda somente os dados da sessão de liveness que já foi
+ * executada e validada pelo fluxo facial.
+ *
+ * A Administração pode saber:
+ * - qual sessão foi executada;
+ * - se foi aprovada;
+ * - score;
+ * - quantas posições foram concluídas;
+ * - quais posições foram verificadas;
+ * - quando começou e terminou;
+ * - se o sorriso foi validado.
+ */
+
+const livenessPositionSchema = new mongoose.Schema(
+  {
+    position: {
+      type: Number,
+      min: 1,
+      max: 10,
+      required: true
+    },
+
+    label: {
+      type: String,
+      default: null,
+      maxlength: 80
+    },
+
+    instruction: {
+      type: String,
+      default: null,
+      maxlength: 240
+    },
+
+    sequence: {
+      type: Number,
+      min: 1,
+      max: 10,
+      default: null
+    },
+
+    score: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0
+    },
+
+    positionScore: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0
+    },
+
+    faceDetected: {
+      type: Boolean,
+      default: false
+    },
+
+    singleFace: {
+      type: Boolean,
+      default: false
+    },
+
+    faceCount: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
+
+    faceArea: {
+      type: Number,
+      min: 0,
+      default: 0
+    },
+
+    detectionScore: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0
+    },
+
+    pose: {
+      yaw: {
+        type: Number,
+        default: 0
+      },
+
+      pitch: {
+        type: Number,
+        default: 0
+      },
+
+      roll: {
+        type: Number,
+        default: 0
+      }
+    },
+
+    quality: {
+      brightness: {
+        type: Number,
+        default: 0
+      },
+
+      brightnessScore: {
+        type: Number,
+        min: 0,
+        max: 1,
+        default: 0
+      },
+
+      sharpnessScore: {
+        type: Number,
+        min: 0,
+        max: 1,
+        default: 0
+      },
+
+      faceSizeScore: {
+        type: Number,
+        min: 0,
+        max: 1,
+        default: 0
+      },
+
+      detectionScore: {
+        type: Number,
+        min: 0,
+        max: 1,
+        default: 0
+      }
+    },
+
+    smileDetected: {
+      type: Boolean,
+      default: false
+    },
+
+    smileScore: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: 0
+    },
+
+    verified: {
+      type: Boolean,
+      default: false
+    },
+
+    completedAt: {
+      type: Date,
+      default: null
+    }
+  },
+  {
+    _id: false
+  }
+);
+
+const livenessSchema = new mongoose.Schema(
+  {
+    sessionId: {
+      type: String,
+      default: null,
+      maxlength: 160
+    },
+
+    status: {
+      type: String,
+      enum: [
+        "not_started",
+        "in_progress",
+        "passed",
+        "failed",
+        "requires_user"
+      ],
+      default: "not_started"
+    },
+
+    source: {
+      type: String,
+      default: "local_liveness",
+      maxlength: 80
+    },
+
+    score: {
+      type: Number,
+      min: 0,
+      max: 1,
+      default: null
+    },
+
+    completedCount: {
+      type: Number,
+      min: 0,
+      max: 10,
+      default: 0
+    },
+
+    total: {
+      type: Number,
+      min: 0,
+      max: 10,
+      default: 10
+    },
+
+    verified: {
+      type: Boolean,
+      default: false
+    },
+
+    startedAt: {
+      type: Date,
+      default: null
+    },
+
+    completedAt: {
+      type: Date,
+      default: null
+    },
+
+    positions: {
+      type: [livenessPositionSchema],
+      default: []
+    }
+  },
+  {
+    _id: false
+  }
+);
 
 /*
  * =========================================================
@@ -125,6 +350,9 @@ const applicantSchema = new mongoose.Schema(
       }
     },
 
+    /*
+     * Estado resumido da identidade do candidato.
+     */
     identityStatus: {
       type: String,
       enum: [
@@ -136,6 +364,28 @@ const applicantSchema = new mongoose.Schema(
         "failed"
       ],
       default: "not_started"
+    },
+
+    /*
+     * =====================================================
+     * LIVENESS
+     * =====================================================
+     *
+     * Guarda o resultado da sessão de liveness associada
+     * ao candidato.
+     *
+     * Não guarda fotografia nem data URL.
+     */
+    liveness: {
+      type: livenessSchema,
+      default: () => ({
+        status: "not_started",
+        source: "local_liveness",
+        completedCount: 0,
+        total: 10,
+        verified: false,
+        positions: []
+      })
     },
 
     vfsStatus: {
@@ -249,28 +499,12 @@ const applicationSchema = new mongoose.Schema(
       trim: true
     },
 
-    /*
-     * Serviço solicitado no VFS.
-     *
-     * Mantemos como string para permitir que diferentes
-     * categorias de visto tenham serviços diferentes sem
-     * bloquear a aplicação com um enum demasiado rígido.
-     */
     serviceType: {
       type: String,
       default: null,
       trim: true
     },
 
-    /*
-     * Alguns tipos de visto não seguem o fluxo normal
-     * de marcação pelo VFS.
-     *
-     * Exemplos futuros:
-     * - VFS_APPOINTMENT
-     * - CONSULATE_ASSIGNED
-     * - MANUAL
-     */
     appointmentMode: {
       type: String,
       enum: [
@@ -290,11 +524,6 @@ const applicationSchema = new mongoose.Schema(
      * =====================================================
      * LEGACY STATUS
      * =====================================================
-     *
-     * NÃO remover ainda.
-     *
-     * Código existente do projeto ainda pode consultar
-     * este campo. A nova arquitetura usa workflowState.
      */
 
     status: {
@@ -324,8 +553,6 @@ const applicationSchema = new mongoose.Schema(
      * =====================================================
      * NOVO WORKFLOW STATE
      * =====================================================
-     *
-     * Este passa a ser o estado oficial da aplicação.
      */
 
     workflowState: {
@@ -334,11 +561,6 @@ const applicationSchema = new mongoose.Schema(
       default: STATES.CREATED,
       index: true
     },
-
-    /*
-     * Histórico mínimo necessário para recuperação,
-     * auditoria operacional e debugging.
-     */
 
     workflow: {
       previousState: {
@@ -376,7 +598,7 @@ const applicationSchema = new mongoose.Schema(
 
     /*
      * =====================================================
-     * PREFERÊNCIAS DO CLIENTE
+     * PREFERÊNCIAS
      * =====================================================
      */
 
@@ -496,7 +718,7 @@ const applicationSchema = new mongoose.Schema(
 
     /*
      * =====================================================
-     * RESULTADO DA MARCAÇÃO
+     * RESULTADO
      * =====================================================
      */
 
@@ -809,113 +1031,121 @@ const applicationSchema = new mongoose.Schema(
  * =========================================================
  */
 
-/**
- * Retorna o workflowState real.
- *
- * Para documentos antigos que ainda não possuem
- * workflowState, convertemos temporariamente o status legado.
- */
 applicationSchema.methods.getWorkflowState = function () {
   if (this.workflowState) {
     return this.workflowState;
   }
 
   return (
-    LEGACY_STATUS_TO_WORKFLOW_STATE[this.status] ||
+    LEGACY_STATUS_TO_WORKFLOW_STATE[
+      this.status
+    ] ||
     STATES.CREATED
   );
 };
 
-/**
- * Verifica se uma transição é permitida.
- */
-applicationSchema.methods.canTransitionTo = function (
-  nextState
-) {
-  const currentState = this.getWorkflowState();
+applicationSchema.methods.canTransitionTo =
+  function (nextState) {
+    const currentState =
+      this.getWorkflowState();
 
-  return canTransition(
-    currentState,
-    nextState
-  );
-};
-
-/**
- * Transiciona a aplicação para um novo estado.
- *
- * Não altera automaticamente o status legado.
- * A sincronização temporária será feita pelos serviços
- * durante a migração do sistema.
- */
-applicationSchema.methods.transitionTo = function (
-  nextState,
-  metadata = {}
-) {
-  const currentState = this.getWorkflowState();
-
-  const result = transition(
-    this,
-    nextState,
-    metadata
-  );
-
-  /*
-   * Mantemos uma pequena camada de sincronização para
-   * estados antigos que possuem equivalente claro.
-   */
-
-  const workflowToLegacyStatus = {
-    [STATES.CREATED]: "created",
-    [STATES.IDENTITY_PREPARATION]: "preparing",
-    [STATES.OTP_REQUIRED]: "otp_required",
-    [STATES.OTP_VERIFIED]: "otp_verified",
-    [STATES.FACIAL_POSITIONS]: "identity_verification",
-    [STATES.RADAR_ACTIVE]: "waiting_for_slot",
-    [STATES.SLOT_FOUND]: "slot_received",
-    [STATES.BOOKING]: "book_appointment",
-    [STATES.REVIEW]: "review_pay",
-    [STATES.COMPLETED]: "completed",
-    [STATES.CANCELLED]: "cancelled",
-    [STATES.ERROR]: "error"
+    return canTransition(
+      currentState,
+      nextState
+    );
   };
 
-  if (workflowToLegacyStatus[nextState]) {
-    this.status = workflowToLegacyStatus[nextState];
-  }
+applicationSchema.methods.transitionTo =
+  function (
+    nextState,
+    metadata = {}
+  ) {
+    const currentState =
+      this.getWorkflowState();
 
-  /*
-   * Guardamos o estado anterior explicitamente.
-   */
-  if (!this.workflow) {
-    this.workflow = {};
-  }
+    const result = transition(
+      this,
+      nextState,
+      metadata
+    );
 
-  this.workflow.previousState =
-    currentState;
+    const workflowToLegacyStatus = {
+      [STATES.CREATED]:
+        "created",
 
-  this.workflow.stateChangedAt =
-    new Date();
+      [STATES.IDENTITY_PREPARATION]:
+        "preparing",
 
-  if (metadata.event) {
-    this.workflow.lastEvent =
-      String(metadata.event);
-  }
+      [STATES.OTP_REQUIRED]:
+        "otp_required",
 
-  if (metadata.reason) {
-    this.workflow.lastReason =
-      String(metadata.reason);
-  }
+      [STATES.OTP_VERIFIED]:
+        "otp_verified",
 
-  this.workflow.transitionCount =
-    Number(this.workflow.transitionCount || 0) + 1;
+      [STATES.FACIAL_POSITIONS]:
+        "identity_verification",
 
-  return result;
-};
+      [STATES.RADAR_ACTIVE]:
+        "waiting_for_slot",
 
-/**
- * Sincroniza um documento legado para o novo
- * workflowState sem executar uma transição.
- */
+      [STATES.SLOT_FOUND]:
+        "slot_received",
+
+      [STATES.BOOKING]:
+        "book_appointment",
+
+      [STATES.REVIEW]:
+        "review_pay",
+
+      [STATES.COMPLETED]:
+        "completed",
+
+      [STATES.CANCELLED]:
+        "cancelled",
+
+      [STATES.ERROR]:
+        "error"
+    };
+
+    if (
+      workflowToLegacyStatus[
+        nextState
+      ]
+    ) {
+      this.status =
+        workflowToLegacyStatus[
+          nextState
+        ];
+    }
+
+    if (!this.workflow) {
+      this.workflow = {};
+    }
+
+    this.workflow.previousState =
+      currentState;
+
+    this.workflow.stateChangedAt =
+      new Date();
+
+    if (metadata.event) {
+      this.workflow.lastEvent =
+        String(metadata.event);
+    }
+
+    if (metadata.reason) {
+      this.workflow.lastReason =
+        String(metadata.reason);
+    }
+
+    this.workflow.transitionCount =
+      Number(
+        this.workflow.transitionCount || 0
+      ) + 1;
+
+    return result;
+  };
+
 applicationSchema.methods.syncWorkflowStateFromLegacy =
   function () {
     if (this.workflowState) {
@@ -925,9 +1155,11 @@ applicationSchema.methods.syncWorkflowStateFromLegacy =
     const mapped =
       LEGACY_STATUS_TO_WORKFLOW_STATE[
         this.status
-      ] || STATES.CREATED;
+      ] ||
+      STATES.CREATED;
 
-    this.workflowState = mapped;
+    this.workflowState =
+      mapped;
 
     if (!this.workflow) {
       this.workflow = {};
