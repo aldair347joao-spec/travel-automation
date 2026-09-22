@@ -1886,65 +1886,492 @@ const AdminApp = (() => {
      */
 
     function renderIdentityDetails(
-        application
-    ) {
-        const identity =
-            application.identity ||
-            {};
+    application
+) {
+    const identity =
+        application?.identity ||
+        {};
 
-        const count =
-            Number(
-                identity.positionCount ||
-                0
-            );
+    const liveness =
+        identity?.liveness ||
+        null;
 
-        const verified =
-            Boolean(
-                identity.verified
-            );
+    const positions =
+        Array.isArray(
+            liveness?.positions
+        )
+            ? liveness.positions
+            : [];
 
-        const status =
-            identity.status ||
-            (
-                verified
-                    ? "IDENTITY_READY"
-                    : "IDENTITY_PREPARATION"
-            );
-
-        setText(
-            "#detailFaceCount",
-            count
+    const count =
+        Number(
+            liveness?.completedCount ??
+            identity?.positionCount ??
+            positions.length ??
+            0
         );
 
-        setBadge(
-            "#detailIdentityStatus",
-            statusLabel(
-                status
-            ),
+    const verified =
+        liveness?.verified === true ||
+        identity?.verified === true;
+
+    const status =
+        liveness?.status ||
+        identity?.status ||
+        (
+            verified
+                ? "IDENTITY_READY"
+                : "IDENTITY_PREPARATION"
+        );
+
+    /*
+     * ========================================================
+     * RESUMO PRINCIPAL
+     * ========================================================
+     */
+
+    setText(
+        "#detailFaceCount",
+        count
+    );
+
+    setBadge(
+        "#detailIdentityStatus",
+        statusLabel(
             status
+        ),
+        status
+    );
+
+
+    /*
+     * ========================================================
+     * PROGRESSO
+     * ========================================================
+     */
+
+    const progress =
+        $(
+            "#identityProgressBar"
         );
 
-        const progress =
-            $(
-                "#identityProgressBar"
+    if (progress) {
+        const percentage =
+            Math.min(
+                100,
+                (
+                    count /
+                    10
+                ) *
+                100
             );
 
-        if (progress) {
-            const percentage =
-                Math.min(
-                    100,
-                    (
-                        count /
-                        10
-                    ) *
-                    100
-                );
-
-            progress.style.width =
-                `${percentage}%`;
-        }
+        progress.style.width =
+            `${percentage}%`;
     }
 
+
+    /*
+     * ========================================================
+     * INFORMAÇÃO EXTRA DA SESSÃO DE LIVENESS
+     * ========================================================
+     *
+     * O painel antigo não tinha elementos específicos
+     * para estes dados.
+     *
+     * Por isso criamos dinamicamente um bloco dentro
+     * do cartão de identidade, sem alterar o HTML existente.
+     */
+
+    const identityCard =
+        document
+            .querySelector(
+                "#detailIdentityStatus"
+            )
+            ?.closest(
+                ".detail-card"
+            );
+
+    if (!identityCard) {
+        return;
+    }
+
+
+    let livenessPanel =
+        identityCard.querySelector(
+            ".admin-liveness-panel"
+        );
+
+    if (!livenessPanel) {
+        livenessPanel =
+            document.createElement(
+                "div"
+            );
+
+        livenessPanel.className =
+            "admin-liveness-panel";
+
+        identityCard.appendChild(
+            livenessPanel
+        );
+    }
+
+
+    /*
+     * ========================================================
+     * SEM LIVENESS
+     * ========================================================
+     */
+
+    if (!liveness) {
+        livenessPanel.innerHTML =
+            `
+                <div class="admin-liveness-empty">
+                    <strong>
+                        Prova de vida ainda não disponível
+                    </strong>
+
+                    <span>
+                        O processo ainda não possui uma sessão
+                        de liveness registada.
+                    </span>
+                </div>
+            `;
+
+        return;
+    }
+
+
+    /*
+     * ========================================================
+     * DADOS DA SESSÃO
+     * ========================================================
+     */
+
+    const score =
+        Number(
+            liveness.score
+        );
+
+    const scoreText =
+        Number.isFinite(
+            score
+        )
+            ? `${Math.round(
+                score * 100
+            )}%`
+            : "—";
+
+    const sessionStatus =
+        liveness.status ||
+        "not_started";
+
+    const sessionStatusLabel =
+        sessionStatus === "passed"
+            ? "Liveness validado"
+            : sessionStatus === "failed"
+                ? "Liveness reprovado"
+                : sessionStatus === "requires_user"
+                    ? "Requer nova verificação"
+                    : sessionStatus === "in_progress"
+                        ? "Em processamento"
+                        : "Não iniciado";
+
+
+    /*
+     * ========================================================
+     * POSIÇÕES
+     * ========================================================
+     */
+
+    const orderedPositions =
+        [...positions]
+            .sort(
+                (a, b) =>
+                    Number(
+                        a?.position || 0
+                    ) -
+                    Number(
+                        b?.position || 0
+                    )
+            );
+
+
+    const positionItems =
+        Array.from(
+            {
+                length: 10
+            },
+            (_, index) => {
+                const expected =
+                    index + 1;
+
+                const position =
+                    orderedPositions.find(
+                        item =>
+                            Number(
+                                item?.position
+                            ) ===
+                            expected
+                    );
+
+                if (!position) {
+                    return `
+                        <div class="admin-liveness-position missing">
+                            <span class="admin-liveness-position-number">
+                                ${expected}
+                            </span>
+
+                            <div class="admin-liveness-position-info">
+                                <strong>
+                                    Posição ${expected}
+                                </strong>
+
+                                <span>
+                                    Não registada
+                                </span>
+                            </div>
+
+                            <span class="admin-liveness-position-state">
+                                —
+                            </span>
+                        </div>
+                    `;
+                }
+
+                const positionScore =
+                    Number(
+                        position.positionScore ??
+                        position.score ??
+                        0
+                    );
+
+                const positionScoreText =
+                    Number.isFinite(
+                        positionScore
+                    )
+                        ? `${Math.round(
+                            positionScore * 100
+                        )}%`
+                        : "—";
+
+                const positionVerified =
+                    position.verified === true &&
+                    position.faceDetected === true &&
+                    position.singleFace === true;
+
+                const smile =
+                    position.smileDetected === true;
+
+                const positionLabel =
+                    position.label ||
+                    `Posição ${expected}`;
+
+                return `
+                    <div class="admin-liveness-position ${
+                        positionVerified
+                            ? "verified"
+                            : "failed"
+                    }">
+
+                        <span class="admin-liveness-position-number">
+                            ${expected}
+                        </span>
+
+                        <div class="admin-liveness-position-info">
+
+                            <strong>
+                                ${escapeHtml(
+                                    positionLabel
+                                )}
+                            </strong>
+
+                            <span>
+                                ${
+                                    position.instruction
+                                        ? escapeHtml(
+                                            position.instruction
+                                        )
+                                        : positionVerified
+                                            ? "Movimento validado"
+                                            : "Movimento não validado"
+                                }
+                            </span>
+
+                        </div>
+
+                        <div class="admin-liveness-position-meta">
+
+                            <span>
+                                ${positionScoreText}
+                            </span>
+
+                            <span
+                                class="${
+                                    positionVerified
+                                        ? "verified"
+                                        : "failed"
+                                }"
+                            >
+                                ${
+                                    positionVerified
+                                        ? "✓"
+                                        : "!"
+                                }
+                            </span>
+
+                            ${
+                                smile
+                                    ? `
+                                        <span
+                                            title="Sorriso detectado"
+                                        >
+                                            ☺
+                                        </span>
+                                    `
+                                    : ""
+                            }
+
+                        </div>
+
+                    </div>
+                `;
+            }
+        )
+        .join("");
+
+
+    /*
+     * ========================================================
+     * RENDER
+     * ========================================================
+     */
+
+    livenessPanel.innerHTML =
+        `
+            <div class="admin-liveness-header">
+
+                <div>
+                    <span class="section-kicker">
+                        LIVENESS
+                    </span>
+
+                    <strong>
+                        Prova de vida
+                    </strong>
+                </div>
+
+                <span
+                    class="admin-liveness-status ${
+                        sessionStatus
+                    }"
+                >
+                    ${escapeHtml(
+                        sessionStatusLabel
+                    )}
+                </span>
+
+            </div>
+
+
+            <div class="admin-liveness-summary">
+
+                <div>
+                    <span>
+                        Sessão
+                    </span>
+
+                    <strong>
+                        ${escapeHtml(
+                            liveness.sessionId ||
+                            "—"
+                        )}
+                    </strong>
+                </div>
+
+                <div>
+                    <span>
+                        Score
+                    </span>
+
+                    <strong>
+                        ${scoreText}
+                    </strong>
+                </div>
+
+                <div>
+                    <span>
+                        Posições
+                    </span>
+
+                    <strong>
+                        ${count}/10
+                    </strong>
+                </div>
+
+                <div>
+                    <span>
+                        Verificado
+                    </span>
+
+                    <strong>
+                        ${
+                            liveness.verified === true
+                                ? "SIM"
+                                : "NÃO"
+                        }
+                    </strong>
+                </div>
+
+            </div>
+
+
+            <div class="admin-liveness-times">
+
+                <div>
+                    <span>
+                        Início
+                    </span>
+
+                    <strong>
+                        ${formatDate(
+                            liveness.startedAt
+                        )}
+                    </strong>
+                </div>
+
+                <div>
+                    <span>
+                        Conclusão
+                    </span>
+
+                    <strong>
+                        ${formatDate(
+                            liveness.completedAt
+                        )}
+                    </strong>
+                </div>
+
+            </div>
+
+
+            <div class="admin-liveness-positions">
+
+                <div class="admin-liveness-positions-title">
+                    <span>
+                        MOVIMENTOS DA SESSÃO
+                    </span>
+
+                    <strong>
+                        ${positions.length}/10
+                    </strong>
+                </div>
+
+                ${positionItems}
+
+            </div>
+        `;
+}
 
     /*
      * ========================================================
