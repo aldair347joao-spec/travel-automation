@@ -1913,7 +1913,7 @@ document.body.dataset.applicationSubmitted =
         }
     }
 }
-            }
+
     function scrollToAdminPanel() {
         window.setTimeout(
             () => {
