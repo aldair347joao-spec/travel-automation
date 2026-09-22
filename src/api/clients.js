@@ -628,10 +628,6 @@ router.post(
         req.body;
 
 
-      /*
-       * Localizar primeiro o cliente.
-       */
-
       const client =
         await findAccessibleClient(
           req,
@@ -654,10 +650,6 @@ router.post(
           });
       }
 
-
-      /*
-       * Consentimento explícito ou já guardado.
-       */
 
       const storedConsent =
         client?.facialConsent
@@ -697,22 +689,10 @@ router.post(
       }
 
 
-      /*
-       * Este endpoint antigo continua pertencendo
-       * ao fluxo oficial de perfil facial.
-       */
-
       facial.validatePositions(
         positions
       );
 
-
-      /*
-       * O perfil facial antigo exige referências
-       * de armazenamento seguras.
-       *
-       * Não permitimos data URLs.
-       */
 
       if (
         positions.some(
@@ -1038,24 +1018,6 @@ router.get(
  * =========================================================
  * NORMALIZE LIVENESS POSITIONS
  * =========================================================
- *
- * O frontend envia:
- *
- * score
- * positionScore
- * faceDetected
- * singleFace
- * verified
- * smileDetected
- * ...
- *
- * O preflight-service utiliza qualityScore.
- *
- * Fazemos somente a normalização dos dados existentes.
- *
- * NÃO criamos imagens.
- * NÃO criamos evidências.
- * NÃO simulamos movimentos.
  */
 
 function normalizeLivenessPositions(
@@ -1162,9 +1124,6 @@ function normalizeLivenessPositions(
  * =========================================================
  * VALIDATE LIVENESS EVENT SHAPE
  * =========================================================
- *
- * A sessão precisa representar exatamente
- * as dez posições do fluxo.
  */
 
 function validateLivenessEventShape(
@@ -1260,11 +1219,6 @@ function validateLivenessEventShape(
     }
 
 
-    /*
-     * A posição precisa ter sido efetivamente
-     * validada pelo motor de liveness.
-     */
-
     if (
       position?.verified !==
       true
@@ -1298,12 +1252,6 @@ function validateLivenessEventShape(
     }
 
 
-    /*
-     * O score continua sendo obrigatório como
-     * dado técnico da posição, mas NÃO há
-     * um valor mínimo usado como barreira.
-     */
-
     if (
       !Number.isFinite(
         Number(
@@ -1318,10 +1266,6 @@ function validateLivenessEventShape(
     }
 
 
-    /*
-     * A décima posição precisa confirmar sorriso.
-     */
-
     if (
       number === 10 &&
       position?.smileDetected !==
@@ -1334,10 +1278,6 @@ function validateLivenessEventShape(
     }
   }
 
-
-  /*
-   * Confirmar todas as posições.
-   */
 
   for (
     let number = 1;
@@ -1371,23 +1311,6 @@ function validateLivenessEventShape(
  * =========================================================
  * FACIAL PREFLIGHT
  * =========================================================
- *
- * Endpoint utilizado pelo frontend quando as 10 posições
- * terminam.
- *
- * POST /api/clients/:id/facial-preflight
- *
- * RESULTADO:
- *
- * 10 posições corretas
- *        ↓
- * liveness aprovada
- *        ↓
- * sessão guardada
- *        ↓
- * cliente pronto para Administração
- *
- * Não há captura de fotografia.
  */
 
 router.post(
@@ -1404,12 +1327,6 @@ router.post(
     next
   ) => {
     try {
-
-      /*
-       * =====================================================
-       * CLIENTE
-       * =====================================================
-       */
 
       const client =
         await findAccessibleClient(
@@ -1444,17 +1361,6 @@ router.post(
         req.body;
 
 
-      /*
-       * =====================================================
-       * CONSENTIMENTO
-       * =====================================================
-       *
-       * O frontend atual envia consentAccepted=true.
-       *
-       * Também aceitamos um consentimento que já tenha
-       * sido guardado no cliente.
-       */
-
       const storedConsent =
         client?.facialConsent
           ?.accepted === true;
@@ -1478,23 +1384,11 @@ router.post(
       }
 
 
-      /*
-       * =====================================================
-       * POSIÇÕES
-       * =====================================================
-       */
-
       const normalizedPositions =
         normalizeLivenessPositions(
           positions
         );
 
-
-      /*
-       * =====================================================
-       * VALIDAR ESTRUTURA
-       * =====================================================
-       */
 
       const eventShape =
         validateLivenessEventShape(
@@ -1520,21 +1414,6 @@ router.post(
       }
 
 
-      /*
-       * =====================================================
-       * AVALIAÇÃO
-       * =====================================================
-       *
-       * O preflight-service determina:
-       *
-       * 10 posições completas
-       * + posições verificadas
-       * + uma face
-       * + sorriso
-       *
-       * = passed
-       */
-
       const result =
         preflight.evaluate({
           positions:
@@ -1547,20 +1426,8 @@ router.post(
         });
 
 
-      /*
-       * O frontend pode enviar facialResult para
-       * compatibilidade, mas não confiamos nesse campo
-       * para fabricar uma aprovação.
-       */
-
       void facialResult;
 
-
-      /*
-       * =====================================================
-       * SESSION ID
-       * =====================================================
-       */
 
       const sessionId =
         crypto.randomUUID();
@@ -1571,12 +1438,6 @@ router.post(
           ? new Date()
           : null;
 
-
-      /*
-       * =====================================================
-       * STARTED AT
-       * =====================================================
-       */
 
       const completionDates =
         normalizedPositions
@@ -1629,8 +1490,7 @@ router.post(
        * LIVENESS SESSION
        * =====================================================
        *
-       * Nenhuma fotografia é guardada aqui.
-       *
+       * Nenhuma fotografia é guardada.
        * Apenas os eventos da prova de vida.
        */
 
@@ -1667,12 +1527,6 @@ router.post(
         };
 
 
-      /*
-       * =====================================================
-       * CONSENTIMENTO DO CLIENTE
-       * =====================================================
-       */
-
       client.facialConsent =
         {
           accepted:
@@ -1685,12 +1539,6 @@ router.post(
             new Date()
         };
 
-
-      /*
-       * =====================================================
-       * PREFLIGHT
-       * =====================================================
-       */
 
       client.facialPreflight =
         {
@@ -1758,26 +1606,146 @@ router.post(
 
       /*
        * =====================================================
-       * GUARDAR CLIENTE
+       * GUARDAR LIVENESS SEM VALIDAR O DOCUMENTO INTEIRO
        * =====================================================
        *
-       * Este save acontece ANTES do AuditLog.
+       * Não usamos client.save() nesta operação.
        *
-       * Portanto, se a auditoria falhar, a liveness
-       * continua guardada.
+       * A liveness deve ser persistida isoladamente porque
+       * o documento Client pode conter campos antigos ou
+       * outros campos obrigatórios que não pertencem a esta
+       * operação.
+       *
+       * Nenhuma fotografia é criada ou guardada.
        */
 
-      await client.save();
+      const updateResult =
+        await Client.updateOne(
+          {
+            _id:
+              client._id,
+
+            accountId:
+              req.user.accountId
+          },
+
+          {
+            $set: {
+              facialConsent:
+                client.facialConsent,
+
+              facialPreflight:
+                client.facialPreflight
+            }
+          }
+        );
+
+
+      const matchedCount =
+        Number.isFinite(
+          Number(
+            updateResult?.matchedCount
+          )
+        )
+          ? Number(
+              updateResult.matchedCount
+            )
+          : Number(
+              updateResult?.n || 0
+            );
+
+
+      if (
+        matchedCount !== 1
+      ) {
+        return res
+          .status(500)
+          .json({
+            success:
+              false,
+
+            livenessPassed:
+              false,
+
+            error:
+              "Não foi possível localizar o cliente para guardar a liveness.",
+
+            issues: [
+              "MongoDB não encontrou o cliente durante a persistência da sessão."
+            ]
+          });
+      }
+
+
+      /*
+       * =====================================================
+       * CONFIRMAR A PERSISTÊNCIA REAL
+       * =====================================================
+       */
+
+      const savedClient =
+        await Client.findOne(
+          {
+            _id:
+              client._id,
+
+            accountId:
+              req.user.accountId
+          }
+        )
+          .select(
+            "facialConsent facialPreflight"
+          )
+          .lean();
+
+
+      const savedSession =
+        savedClient
+          ?.facialPreflight
+          ?.livenessSession;
+
+
+      if (
+        !savedSession ||
+        savedSession.status !==
+          "passed" ||
+        savedSession.verified !==
+          true ||
+        Number(
+          savedSession.completedCount
+        ) !== 10 ||
+        Number(
+          savedSession.total
+        ) !== 10 ||
+        !Array.isArray(
+          savedSession.positions
+        ) ||
+        savedSession.positions.length !==
+          10
+      ) {
+        return res
+          .status(500)
+          .json({
+            success:
+              false,
+
+            livenessPassed:
+              false,
+
+            error:
+              "A sessão de liveness não foi persistida corretamente.",
+
+            issues: [
+              "MongoDB não confirmou uma sessão de liveness aprovada com as 10 posições."
+            ]
+          });
+      }
 
 
       /*
        * =====================================================
        * AUDITORIA
        * =====================================================
-       *
-       * A falha da auditoria não pode transformar
-       * uma liveness já guardada numa falsa falha
-       * apresentada ao cliente.
        */
 
       try {
@@ -1846,12 +1814,8 @@ router.post(
         success:
           true,
 
-        /*
-         * Campo explícito para o frontend.
-         */
-
         livenessPassed:
-          result.passed,
+          true,
 
         clientId:
           client._id,
@@ -1861,32 +1825,27 @@ router.post(
 
         livenessSession: {
 
-          sessionId,
+          sessionId:
+            savedSession.sessionId,
 
           status:
-            livenessSession.status,
+            savedSession.status,
 
           verified:
-            livenessSession.verified,
+            savedSession.verified,
 
           score:
-            livenessSession.score,
+            savedSession.score,
 
           completedCount:
-            livenessSession.completedCount,
+            savedSession.completedCount,
 
           total:
-            livenessSession.total,
+            savedSession.total,
 
           completedAt:
-            livenessSession.completedAt
+            savedSession.completedAt
         },
-
-        /*
-         * A prova de vida local foi concluída.
-         *
-         * VFS é uma etapa externa e diferente.
-         */
 
         vfsVerification:
           "not_completed"
