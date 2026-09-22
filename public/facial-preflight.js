@@ -3063,18 +3063,40 @@ if (
   !position ||
   !running
 ) {
-
   return;
 }
 
-stableFrames =
-  0;
+stableFrames = 0;
 
-completedPositions.push(
-  position.id
-);
+const completedAt =
+  new Date().toISOString();
 
-capturedPositions.push({
+/*
+ * ==========================================================
+ * REGISTRO DE LIVENESS
+ * ==========================================================
+ *
+ * IMPORTANTE:
+ *
+ * Aqui NÃO existe captura de imagem.
+ *
+ * Cada posição representa um evento real
+ * confirmado pelo motor facial através de:
+ *
+ * - detecção de rosto;
+ * - rosto único;
+ * - pose;
+ * - enquadramento;
+ * - iluminação;
+ * - score da posição;
+ * - sorriso quando aplicável;
+ * - momento em que a posição foi concluída.
+ *
+ * Estes dados serão enviados ao backend como
+ * evidência da sessão de liveness.
+ */
+
+const livenessPosition = {
 
   position:
     position.id,
@@ -3082,19 +3104,143 @@ capturedPositions.push({
   label:
     position.label,
 
+  instruction:
+    position.instruction,
+
+  sequence:
+    completedPositions.length + 1,
+
   score:
     Number(
-      evaluation.score.toFixed(
-        4
-      )
+      Number(
+        evaluation?.score || 0
+      ).toFixed(4)
     ),
 
-  capturedAt:
-    new Date().toISOString(),
+  positionScore:
+    Number(
+      Number(
+        evaluation?.score || 0
+      ).toFixed(4)
+    ),
 
-  image:
-    captureFrame()
-});
+  faceDetected:
+    Boolean(
+      analysis?.faceDetected
+    ),
+
+  singleFace:
+    Boolean(
+      analysis?.singleFace
+    ),
+
+  faceCount:
+    Number(
+      analysis?.faceCount || 0
+    ),
+
+  faceArea:
+    Number(
+      analysis?.faceArea || 0
+    ),
+
+  detectionScore:
+    Number(
+      analysis?.detectionScore || 0
+    ),
+
+  pose: {
+
+    yaw:
+      Number(
+        analysis?.pose?.yaw || 0
+      ),
+
+    pitch:
+      Number(
+        analysis?.pose?.pitch || 0
+      ),
+
+    roll:
+      Number(
+        analysis?.pose?.roll || 0
+      )
+  },
+
+  quality: {
+
+    brightness:
+      Number(
+        analysis?.quality?.brightness || 0
+      ),
+
+    brightnessScore:
+      Number(
+        analysis?.quality?.brightnessScore || 0
+      ),
+
+    sharpnessScore:
+      Number(
+        analysis?.quality?.sharpnessScore || 0
+      ),
+
+    faceSizeScore:
+      Number(
+        analysis?.quality?.faceSizeScore || 0
+      ),
+
+    detectionScore:
+      Number(
+        analysis?.quality?.detectionScore || 0
+      )
+  },
+
+  smileDetected:
+    position.id === "smile"
+      ? Boolean(
+          evaluation?.smileDetected ||
+          (
+            Number(
+              evaluation?.smileScore || 0
+            ) >=
+            CONFIG.smileThreshold
+          )
+        )
+      : false,
+
+  smileScore:
+    Number(
+      evaluation?.smileScore || 0
+    ),
+
+  verified:
+    true,
+
+  completedAt
+};
+
+/*
+ * Guardamos apenas o identificador da posição
+ * na lista de sequência concluída.
+ */
+
+completedPositions.push(
+  position.id
+);
+
+/*
+ * A lista abaixo passa a representar a
+ * sessão de liveness, e NÃO imagens capturadas.
+ */
+
+capturedPositions.push(
+  livenessPosition
+);
+
+/*
+ * Informamos a interface que a posição foi
+ * realmente concluída.
+ */
 
 safeCall(
   "onPosition",
@@ -3113,17 +3259,30 @@ safeCall(
       position.id,
 
     positionData: {
+
       id:
         position.id,
 
       label:
-        position.label
+        position.label,
+
+      sequence:
+        livenessPosition.sequence,
+
+      score:
+        livenessPosition.score,
+
+      verified:
+        true
     },
 
     score:
       evaluation.score,
 
-    analysis
+    analysis,
+
+    liveness:
+      livenessPosition
   }
 );
 
@@ -3162,8 +3321,8 @@ if (
   );
 
   /*
-   * Aqui o sistema já está dentro de uma
-   * sessão de áudio iniciada pelo utilizador.
+   * A sessão continua ativa.
+   * Nenhuma fotografia é criada.
    */
 
   speakInstruction(
