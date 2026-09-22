@@ -478,6 +478,302 @@ function createAdminRouter() {
 
   /*
    * =========================================================
+   * HELPER — SERIALIZAR LIVENESS
+   * =========================================================
+   *
+   * A liveness NÃO depende de imagens.
+   *
+   * O que chega à Administração é:
+   *
+   * - sessão
+   * - estado
+   * - score
+   * - quantidade de posições
+   * - verificação
+   * - timestamps
+   * - resultado individual das 10 posições
+   *
+   * Pode existir liveness no snapshot da Application
+   * ou ainda no Client. O snapshot da Application tem
+   * prioridade porque representa o estado enviado no processo.
+   * =========================================================
+   */
+
+  function serializeLiveness(
+    application,
+    client,
+    applicant
+  ) {
+    const applicantLiveness =
+      applicant?.liveness ||
+      null;
+
+    const clientLiveness =
+      client?.facialPreflight
+        ?.livenessSession ||
+      null;
+
+    const liveness =
+      applicantLiveness ||
+      clientLiveness ||
+      null;
+
+    if (!liveness) {
+      return null;
+    }
+
+    const positions =
+      Array.isArray(
+        liveness.positions
+      )
+        ? liveness.positions
+        : [];
+
+    return {
+      sessionId:
+        liveness.sessionId ||
+        null,
+
+      status:
+        liveness.status ||
+        "not_started",
+
+      source:
+        liveness.source ||
+        "local_liveness",
+
+      score:
+        Number.isFinite(
+          Number(
+            liveness.score
+          )
+        )
+          ? Number(
+              liveness.score
+            )
+          : null,
+
+      completedCount:
+        Number(
+          liveness.completedCount ||
+          positions.length ||
+          0
+        ),
+
+      total:
+        Number(
+          liveness.total ||
+          10
+        ),
+
+      verified:
+        liveness.verified ===
+        true,
+
+      startedAt:
+        liveness.startedAt ||
+        null,
+
+      completedAt:
+        liveness.completedAt ||
+        null,
+
+      positions:
+        positions.map(
+          position => ({
+            position:
+              Number(
+                position?.position
+              ),
+
+            label:
+              position?.label ||
+              null,
+
+            instruction:
+              position?.instruction ||
+              null,
+
+            sequence:
+              Number(
+                position?.sequence
+              ) ||
+              Number(
+                position?.position
+              ) ||
+              null,
+
+            score:
+              Number.isFinite(
+                Number(
+                  position?.score
+                )
+              )
+                ? Number(
+                    position.score
+                  )
+                : 0,
+
+            positionScore:
+              Number.isFinite(
+                Number(
+                  position?.positionScore
+                )
+              )
+                ? Number(
+                    position.positionScore
+                  )
+                : 0,
+
+            faceDetected:
+              position?.faceDetected ===
+              true,
+
+            singleFace:
+              position?.singleFace ===
+              true,
+
+            faceCount:
+              Number(
+                position?.faceCount ||
+                0
+              ),
+
+            faceArea:
+              Number(
+                position?.faceArea ||
+                0
+              ),
+
+            detectionScore:
+              Number.isFinite(
+                Number(
+                  position?.detectionScore
+                )
+              )
+                ? Number(
+                    position.detectionScore
+                  )
+                : 0,
+
+            pose:
+              position?.pose
+                ? {
+                    yaw:
+                      Number(
+                        position.pose.yaw ||
+                        0
+                      ),
+
+                    pitch:
+                      Number(
+                        position.pose.pitch ||
+                        0
+                      ),
+
+                    roll:
+                      Number(
+                        position.pose.roll ||
+                        0
+                      )
+                  }
+                : null,
+
+            quality:
+              position?.quality
+                ? {
+                    brightness:
+                      Number(
+                        position.quality
+                          .brightness ||
+                        0
+                      ),
+
+                    brightnessScore:
+                      Number.isFinite(
+                        Number(
+                          position.quality
+                            .brightnessScore
+                        )
+                      )
+                        ? Number(
+                            position.quality
+                              .brightnessScore
+                          )
+                        : 0,
+
+                    sharpnessScore:
+                      Number.isFinite(
+                        Number(
+                          position.quality
+                            .sharpnessScore
+                        )
+                      )
+                        ? Number(
+                            position.quality
+                              .sharpnessScore
+                          )
+                        : 0,
+
+                    faceSizeScore:
+                      Number.isFinite(
+                        Number(
+                          position.quality
+                            .faceSizeScore
+                        )
+                      )
+                        ? Number(
+                            position.quality
+                              .faceSizeScore
+                          )
+                        : 0,
+
+                    detectionScore:
+                      Number.isFinite(
+                        Number(
+                          position.quality
+                            .detectionScore
+                        )
+                      )
+                        ? Number(
+                            position.quality
+                              .detectionScore
+                          )
+                        : 0
+                  }
+                }
+                : null,
+
+            smileDetected:
+              position?.smileDetected ===
+              true,
+
+            smileScore:
+              Number.isFinite(
+                Number(
+                  position?.smileScore
+                )
+              )
+                ? Number(
+                    position.smileScore
+                  )
+                : 0,
+
+            verified:
+              position?.verified ===
+              true,
+
+            completedAt:
+              position?.completedAt ||
+              null
+          })
+        )
+    };
+  }
+
+
+  /*
+   * =========================================================
    * HELPER — SANITIZAR APPLICATION
    * =========================================================
    *
@@ -489,7 +785,7 @@ function createAdminRouter() {
    * - tokens
    * - dados secretos internos
    *
-   * O administrador recebe apenas os dados necessários
+   * O administrador recebe os dados necessários
    * para gerir o processo.
    * =========================================================
    */
@@ -531,18 +827,31 @@ function createAdminRouter() {
       application.passportData ||
       null;
 
-    const facial =
-      application.facial ||
-      application.identity ||
-      application.identityVerification ||
-      null;
-
     const applicants =
       Array.isArray(
         application.applicants
       )
         ? application.applicants
         : [];
+
+    /*
+     * Liveness atual.
+     *
+     * Primeiro tenta o snapshot do applicant.
+     * Depois Client.facialPreflight.livenessSession.
+     */
+    const liveness =
+      serializeLiveness(
+        application,
+        client,
+        applicant
+      );
+
+    const legacyFacial =
+      application.facial ||
+      application.identity ||
+      application.identityVerification ||
+      null;
 
     return {
       id:
@@ -654,112 +963,139 @@ function createAdminRouter() {
        *
        * Mantemos os dados necessários do snapshot,
        * mas não devolvemos dados secretos.
+       *
+       * A liveness também é entregue dentro do applicant.
        */
       applicants:
         applicants.map(
-          applicantItem => ({
-            client:
-              applicantItem?.client ||
-              null,
+          applicantItem => {
+            const applicantLiveness =
+              applicantItem?.liveness ||
+              null;
 
-            status:
-              applicantItem?.status ||
-              null,
+            return {
+              client:
+                applicantItem?.client ||
+                null,
 
-            passport:
-              applicantItem?.passport
-                ? {
-                    number:
-                      applicantItem
-                        .passport
-                        .number ||
-                      applicantItem
-                        .passport
-                        .passportNumber ||
+              status:
+                applicantItem?.status ||
+                null,
+
+              passport:
+                applicantItem?.passport
+                  ? {
+                      number:
+                        applicantItem
+                          .passport
+                          .number ||
+                        applicantItem
+                          .passport
+                          .passportNumber ||
+                        null,
+
+                      nationality:
+                        applicantItem
+                          .passport
+                          .nationality ||
+                        null,
+
+                      expiryDate:
+                        applicantItem
+                          .passport
+                          .expiryDate ||
+                        applicantItem
+                          .passport
+                          .passportExpiryDate ||
+                        null,
+
+                      issueDate:
+                        applicantItem
+                          .passport
+                          .issueDate ||
+                        applicantItem
+                          .passport
+                          .passportIssueDate ||
+                        null,
+
+                      validationStatus:
+                        applicantItem
+                          .passport
+                          .validationStatus ||
+                        applicantItem
+                          .passport
+                          .status ||
+                        null
+                    }
+                  : null,
+
+              personalData:
+                applicantItem?.personalData
+                  ? {
+                      fullName:
+                        applicantItem
+                          .personalData
+                          .fullName ||
+                        null,
+
+                      dateOfBirth:
+                        applicantItem
+                          .personalData
+                          .dateOfBirth ||
+                        null,
+
+                      gender:
+                        applicantItem
+                          .personalData
+                          .gender ||
+                        null,
+
+                      nationality:
+                        applicantItem
+                          .personalData
+                          .nationality ||
+                        null,
+
+                      email:
+                        applicantItem
+                          .personalData
+                          .email ||
+                        null,
+
+                      phone:
+                        applicantItem
+                          .personalData
+                          .phone ||
+                        null
+                    }
+                  : null,
+
+              identityStatus:
+                applicantItem
+                  ?.identityStatus ||
+                null,
+
+              liveness:
+                applicantLiveness
+                  ? serializeLiveness(
+                      {
+                        applicants: [
+                          applicantItem
+                        ]
+                      },
                       null,
-
-                    nationality:
                       applicantItem
-                        .passport
-                        .nationality ||
-                      null,
-
-                    expiryDate:
-                      applicantItem
-                        .passport
-                        .expiryDate ||
-                      applicantItem
-                        .passport
-                        .passportExpiryDate ||
-                      null,
-
-                    issueDate:
-                      applicantItem
-                        .passport
-                        .issueDate ||
-                      applicantItem
-                        .passport
-                        .passportIssueDate ||
-                      null,
-
-                    validationStatus:
-                      applicantItem
-                        .passport
-                        .validationStatus ||
-                      applicantItem
-                        .passport
-                        .status ||
-                      null
-                  }
-                : null,
-
-            personalData:
-              applicantItem?.personalData
-                ? {
-                    fullName:
-                      applicantItem
-                        .personalData
-                        .fullName ||
-                      null,
-
-                    dateOfBirth:
-                      applicantItem
-                        .personalData
-                        .dateOfBirth ||
-                      null,
-
-                    gender:
-                      applicantItem
-                        .personalData
-                        .gender ||
-                      null,
-
-                    nationality:
-                      applicantItem
-                        .personalData
-                        .nationality ||
-                      null,
-
-                    email:
-                      applicantItem
-                        .personalData
-                        .email ||
-                      null,
-
-                    phone:
-                      applicantItem
-                        .personalData
-                        .phone ||
-                      null
-                  }
-                : null,
-
-            identityStatus:
-              applicantItem
-                ?.identityStatus ||
-              null
-          })
+                    )
+                  : null
+            };
+          }
         ),
+
+      /*
+       * =====================================================
+       * PASSPORT
+       * =====================================================
+       */
 
       passport:
         passport
@@ -846,44 +1182,82 @@ function createAdminRouter() {
                 null
             },
 
-      identity:
-        facial
-          ? {
-              status:
-                facial.status ||
-                null,
+      /*
+       * =====================================================
+       * IDENTITY / LIVENESS
+       * =====================================================
+       *
+       * Esta é a informação que a Administração precisa
+       * receber sobre a prova de vida.
+       *
+       * Não são imagens.
+       * É o resultado da sessão de liveness.
+       */
+      identity: {
+        status:
+          liveness?.status ||
+          legacyFacial?.status ||
+          serializedClient.facialStatus ||
+          "not_started",
 
-              verified:
-                Boolean(
-                  facial.verified ||
-                  facial.completed
-                ),
+        verified:
+          liveness?.verified === true ||
+          Boolean(
+            legacyFacial?.verified ||
+            legacyFacial?.completed ||
+            serializedClient.facialVerified
+          ),
 
-              positionCount:
-                Array.isArray(
-                  facial.positions
-                )
-                  ? facial.positions.length
-                  : (
-                      facial.positionCount ||
-                      facial.positionsCount ||
-                      0
-                    )
-            }
-          : {
-              status:
-                serializedClient
-                  .facialStatus ||
-                null,
+        positionCount:
+          Array.isArray(
+            liveness?.positions
+          )
+            ? liveness.positions.length
+            : Number(
+                liveness?.completedCount ||
+                legacyFacial?.positionCount ||
+                legacyFacial?.positionsCount ||
+                0
+              ),
 
-              verified:
-                serializedClient
-                  .facialVerified ||
-                false,
+        liveness:
+          liveness
+            ? {
+                sessionId:
+                  liveness.sessionId ||
+                  null,
 
-              positionCount:
-                10
-            },
+                status:
+                  liveness.status ||
+                  "not_started",
+
+                source:
+                  liveness.source ||
+                  "local_liveness",
+
+                score:
+                  liveness.score,
+
+                completedCount:
+                  liveness.completedCount,
+
+                total:
+                  liveness.total,
+
+                verified:
+                  liveness.verified,
+
+                startedAt:
+                  liveness.startedAt,
+
+                completedAt:
+                  liveness.completedAt,
+
+                positions:
+                  liveness.positions
+              }
+            : null
+      },
 
       bot1:
         application.bot1 ||
@@ -1198,23 +1572,17 @@ function createAdminRouter() {
         const result =
           applications.map(
             application => {
-              const client =
-                resolveApplicationClient(
+              /*
+               * Usa exatamente o mesmo serializer
+               * utilizado no endpoint de detalhe.
+               *
+               * Assim a lista e o detalhe ficam
+               * consistentes.
+               */
+              const serializedApplication =
+                serializeApplication(
                   application,
                   clientMap
-                );
-
-              const applicant =
-                resolveApplicant(
-                  application,
-                  client?._id ||
-                  application.client
-                );
-
-              const serializedClient =
-                serializeClient(
-                  client,
-                  applicant
                 );
 
               const control =
@@ -1225,81 +1593,7 @@ function createAdminRouter() {
                 );
 
               return {
-                id:
-                  application._id,
-
-                client:
-                  serializedClient,
-
-                clients:
-                  Array.isArray(
-                    application
-                      .applicants
-                  )
-                    ? application
-                        .applicants
-                        .map(
-                          applicantItem =>
-                            serializeClient(
-                              clientMap.get(
-                                String(
-                                  applicantItem
-                                    ?.client
-                                )
-                              ),
-                              applicantItem
-                            )
-                        )
-                    : [],
-
-                status:
-                  application.status ||
-                  null,
-
-                workflowState:
-                  application.workflowState ||
-                  null,
-
-                visaType:
-                  application.visaType ||
-                  null,
-
-                visaCenter:
-                  application.visaCenter ||
-                  null,
-
-                preferredDates:
-                  application.preferredDates ||
-                  null,
-
-                preferredTime:
-                  application.preferredTime ||
-                  null,
-
-                preferredWeekdays:
-                  application.preferredWeekdays ||
-                  [],
-
-                serviceType:
-                  application.serviceType ||
-                  null,
-
-                appointmentMode:
-                  application.appointmentMode ||
-                  null,
-
-                bot1:
-                  application.bot1 ||
-                  null,
-
-                bot2:
-                  application.bot2 ||
-                  null,
-
-                payment:
-                  serializePayment(
-                    application
-                  ),
+                ...serializedApplication,
 
                 admin: {
                   status:
@@ -1328,13 +1622,7 @@ function createAdminRouter() {
                       ?.release
                       ?.releasedAt ||
                     null
-                },
-
-                createdAt:
-                  application.createdAt,
-
-                updatedAt:
-                  application.updatedAt
+                }
               };
             }
           );
