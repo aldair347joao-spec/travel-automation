@@ -1,3 +1,33 @@
+"use strict";
+
+/*
+ * ============================================================
+ * TRAVEL AUTOMATION
+ * SERVIÇO DE LIVENESS FACIAL
+ * ============================================================
+ *
+ * REGRA PRINCIPAL:
+ *
+ * 10 posições corretamente concluídas
+ * =
+ * LIVENESS APROVADA
+ *
+ * Não existe uma segunda barreira baseada em:
+ *
+ * - score geral;
+ * - média de scores;
+ * - comparação facial com passaporte;
+ * - captura de fotografia;
+ * - reconhecimento facial adicional.
+ *
+ * O motor facial do cliente é responsável por determinar
+ * se cada movimento foi corretamente executado.
+ *
+ * O backend valida a integridade da sessão recebida e
+ * guarda a prova de vida.
+ * ============================================================
+ */
+
 const REQUIRED_POSITIONS = [
   {
     position: 1,
@@ -72,18 +102,18 @@ const REQUIRED_POSITIONS = [
 
 /*
  * ============================================================
- * CRITÉRIOS DE QUALIDADE
+ * VALORES DE COMPATIBILIDADE
  * ============================================================
  *
- * Estes valores estão alinhados com o motor facial
- * existente no frontend:
+ * Mantemos estes exports porque podem existir outros módulos
+ * que os importem.
  *
- * positionScoreThreshold: 0.64
- * overallScoreThreshold: 0.62
+ * IMPORTANTE:
  *
- * O backend continua a ser a autoridade final da validação,
- * mas não utiliza um nível de exigência diferente do motor
- * que executa a liveness no dispositivo do cliente.
+ * Estes valores NÃO são usados como barreira final da sessão.
+ *
+ * A aprovação depende da conclusão das 10 posições.
+ * ============================================================
  */
 
 const MIN_POSITION_SCORE =
@@ -95,6 +125,13 @@ const MIN_OVERALL_SCORE =
   Number(
     process.env.FACIAL_PREFLIGHT_MIN_SCORE
   ) || 0.62;
+
+
+/*
+ * ============================================================
+ * UTILITÁRIOS
+ * ============================================================
+ */
 
 function clampScore(value) {
   const score =
@@ -115,6 +152,7 @@ function clampScore(value) {
   );
 }
 
+
 function getExpectedPosition(
   position
 ) {
@@ -124,6 +162,19 @@ function getExpectedPosition(
       Number(position)
   );
 }
+
+
+/*
+ * ============================================================
+ * VALIDAR POSIÇÕES
+ * ============================================================
+ *
+ * Esta função NÃO aplica score mínimo.
+ *
+ * Ela apenas confirma que o conjunto recebido representa
+ * uma sessão completa e coerente de liveness.
+ * ============================================================
+ */
 
 function validatePositions(
   positions
@@ -144,6 +195,12 @@ function validatePositions(
     };
   }
 
+
+  /*
+   * Uma sessão aprovada precisa ter exatamente
+   * as dez posições.
+   */
+
   if (
     positions.length !==
     REQUIRED_POSITIONS.length
@@ -153,24 +210,34 @@ function validatePositions(
     );
   }
 
+
   const seen =
     new Set();
+
 
   for (
     const position
     of positions
   ) {
+
     const number =
       Number(
         position?.position
       );
+
 
     const expected =
       getExpectedPosition(
         number
       );
 
+
+    /*
+     * Posição inexistente.
+     */
+
     if (!expected) {
+
       issues.push(
         `Invalid facial position: ${number}`
       );
@@ -178,9 +245,17 @@ function validatePositions(
       continue;
     }
 
+
+    /*
+     * Posição duplicada.
+     */
+
     if (
-      seen.has(number)
+      seen.has(
+        number
+      )
     ) {
+
       issues.push(
         `Duplicate facial position: ${number}`
       );
@@ -188,79 +263,148 @@ function validatePositions(
       continue;
     }
 
-    seen.add(number);
+
+    seen.add(
+      number
+    );
+
+
+    /*
+     * Cada posição precisa ter timestamp.
+     */
+
+    if (
+      !position?.completedAt
+    ) {
+
+      issues.push(
+        `Position ${number} has no completion timestamp`
+      );
+    }
+
+
+    /*
+     * O motor facial precisa ter marcado
+     * a posição como validada.
+     */
+
+    if (
+      position?.verified !==
+      true
+    ) {
+
+      issues.push(
+        `Position ${number} was not verified by the facial liveness engine`
+      );
+    }
+
+
+    /*
+     * É obrigatório existir uma face.
+     */
+
+    if (
+      position?.faceDetected !==
+      true
+    ) {
+
+      issues.push(
+        `No face detected in position ${number}`
+      );
+    }
+
+
+    /*
+     * Não podem existir múltiplas faces.
+     */
+
+    if (
+      position?.singleFace !==
+      true
+    ) {
+
+      issues.push(
+        `Position ${number} must contain exactly one face`
+      );
+    }
+
+
+    /*
+     * O score continua sendo armazenado para
+     * informação/auditoria, mas NÃO bloqueia
+     * a aprovação.
+     */
 
     const qualityScore =
       clampScore(
         position?.qualityScore
       );
 
-    if (
-      qualityScore === null
-    ) {
-      issues.push(
-        `Position ${number} has no valid quality score`
+
+    const positionScore =
+      clampScore(
+        position?.positionScore
       );
-    } else if (
-      qualityScore <
-      MIN_POSITION_SCORE
+
+
+    const score =
+      clampScore(
+        position?.score
+      );
+
+
+    if (
+      qualityScore === null &&
+      positionScore === null &&
+      score === null
     ) {
+
       issues.push(
-        `Position ${number} quality is below the minimum`
+        `Position ${number} has no valid liveness score`
       );
     }
 
-    if (
-      position?.faceDetected !==
-      true
-    ) {
-      issues.push(
-        `No face detected in position ${number}`
-      );
-    }
-
-    if (
-      position?.singleFace !==
-      true
-    ) {
-      issues.push(
-        `Position ${number} must contain exactly one face`
-      );
-    }
 
     /*
-     * A posição 10 continua a ser obrigatoriamente
-     * a verificação de sorriso.
+     * A décima posição é obrigatoriamente
+     * a posição de sorriso.
      */
+
     if (
       number === 10 &&
       position?.smileDetected !==
         true
     ) {
+
       issues.push(
         "Position 10 requires a natural smile to be detected"
       );
     }
   }
 
+
   /*
-   * Confirma que todas as 10 posições foram
-   * efetivamente realizadas.
+   * Confirmar que nenhuma das dez posições
+   * ficou de fora.
    */
+
   for (
     const expected
     of REQUIRED_POSITIONS
   ) {
+
     if (
       !seen.has(
         expected.position
       )
     ) {
+
       issues.push(
         `Missing position ${expected.position}: ${expected.label}`
       );
     }
   }
+
 
   return {
     valid:
@@ -270,9 +414,23 @@ function validatePositions(
   };
 }
 
+
+/*
+ * ============================================================
+ * SCORE INFORMATIVO
+ * ============================================================
+ *
+ * O score pode continuar a ser calculado e enviado para
+ * Administração para informação/auditoria.
+ *
+ * ELE NÃO DECIDE SE A LIVENESS FOI APROVADA.
+ * ============================================================
+ */
+
 function calculateAverageScore(
   positions
 ) {
+
   if (
     !Array.isArray(
       positions
@@ -281,24 +439,53 @@ function calculateAverageScore(
     return 0;
   }
 
+
   const scores =
     positions
       .map(
-        position =>
-          clampScore(
-            position?.qualityScore
-          )
+        position => {
+
+          const quality =
+            clampScore(
+              position?.qualityScore
+            );
+
+          if (
+            quality !== null
+          ) {
+            return quality;
+          }
+
+
+          const positionScore =
+            clampScore(
+              position?.positionScore
+            );
+
+          if (
+            positionScore !== null
+          ) {
+            return positionScore;
+          }
+
+
+          return clampScore(
+            position?.score
+          );
+        }
       )
       .filter(
         score =>
           score !== null
       );
 
+
   if (
     !scores.length
   ) {
     return 0;
   }
+
 
   return (
     scores.reduce(
@@ -313,92 +500,115 @@ function calculateAverageScore(
   );
 }
 
+
+/*
+ * ============================================================
+ * AVALIAÇÃO FINAL
+ * ============================================================
+ *
+ * REGRA:
+ *
+ * Consentimento válido
+ * +
+ * 10 posições completas
+ * +
+ * todas verificadas
+ * +
+ * uma única face em cada posição
+ * +
+ * sorriso na posição 10
+ *
+ * =
+ * LIVENESS APROVADA
+ *
+ * Não existe segunda barreira de score.
+ * ============================================================
+ */
+
 function evaluate({
   positions,
   passportMatch = null,
   consentAccepted = false
 }) {
+
   const issues = [];
+
+
+  /*
+   * Consentimento continua sendo obrigatório.
+   */
 
   if (
     consentAccepted !==
     true
   ) {
+
     issues.push(
       "Biometric consent has not been accepted"
     );
   }
+
+
+  /*
+   * Validar estrutura e integridade
+   * das dez posições.
+   */
 
   const positionResult =
     validatePositions(
       positions
     );
 
+
   issues.push(
     ...positionResult.issues
   );
+
+
+  /*
+   * Score apenas informativo.
+   */
 
   const averageScore =
     calculateAverageScore(
       positions
     );
 
-  /*
-   * A média agora utiliza exatamente o mesmo
-   * limite do motor facial frontend: 0.62.
-   */
-  if (
-    averageScore <
-    MIN_OVERALL_SCORE
-  ) {
-    issues.push(
-      "Overall facial capture quality is below the minimum"
-    );
-  }
 
   /*
-   * Validação opcional de correspondência
-   * com os dados do passaporte.
+   * Não existe aqui:
+   *
+   * averageScore < MIN_OVERALL_SCORE
+   *
+   * nem:
+   *
+   * positionScore < MIN_POSITION_SCORE
+   *
+   * porque isso criaria uma segunda barreira
+   * depois das dez posições.
    */
-  if (
-    passportMatch
-  ) {
-    if (
-      passportMatch.name ===
-      false
-    ) {
-      issues.push(
-        "Name does not match the passport data"
-      );
-    }
 
-    if (
-      passportMatch.dateOfBirth ===
-      false
-    ) {
-      issues.push(
-        "Date of birth does not match the passport data"
-      );
-    }
 
-    if (
-      passportMatch.passportNumber ===
-      false
-    ) {
-      issues.push(
-        "Passport number does not match the passport data"
-      );
-    }
+  /*
+   * ==========================================================
+   * IMPORTANTE
+   * ==========================================================
+   *
+   * passportMatch pode continuar a ser recebido para
+   * compatibilidade com chamadas antigas.
+   *
+   * Mas a comparação com passaporte NÃO decide a aprovação
+   * da liveness.
+   *
+   * O passaporte é uma etapa própria do processo.
+   */
 
-    if (
-      passportMatch.nationality ===
-      false
-    ) {
-      issues.push(
-        "Nationality does not match the passport data"
-      );
-    }
-  }
+  void passportMatch;
+
+
+  /*
+   * Localizar a posição 10.
+   */
 
   const smilePosition =
     Array.isArray(
@@ -412,10 +622,28 @@ function evaluate({
         )
       : null;
 
+
+  const positionsComplete =
+    Array.isArray(
+      positions
+    ) &&
+    positions.length ===
+      REQUIRED_POSITIONS.length;
+
+
+  /*
+   * A aprovação depende somente da ausência
+   * de problemas estruturais e da conclusão
+   * das dez posições.
+   */
+
   const passed =
+    positionsComplete &&
     issues.length === 0;
 
+
   return {
+
     passed,
 
     status:
@@ -427,6 +655,13 @@ function evaluate({
       Number(
         averageScore.toFixed(4)
       ),
+
+    /*
+     * Mantidos apenas para compatibilidade
+     * e informação.
+     *
+     * Não são usados para bloquear.
+     */
 
     minimumScore:
       MIN_OVERALL_SCORE,
@@ -456,12 +691,22 @@ function evaluate({
   };
 }
 
+
+/*
+ * ============================================================
+ * INSTRUÇÕES
+ * ============================================================
+ */
+
 function getInstructions() {
+
   return {
+
     positions:
       REQUIRED_POSITIONS,
 
     requirements: [
+
       "Use a well-lit environment",
 
       "Keep the entire face visible",
@@ -483,7 +728,15 @@ function getInstructions() {
   };
 }
 
+
+/*
+ * ============================================================
+ * EXPORTS
+ * ============================================================
+ */
+
 module.exports = {
+
   REQUIRED_POSITIONS,
 
   MIN_POSITION_SCORE,
@@ -497,4 +750,5 @@ module.exports = {
   evaluate,
 
   getInstructions
+
 };
