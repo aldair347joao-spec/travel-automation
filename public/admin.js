@@ -260,45 +260,21 @@ const AdminApp = (() => {
 
 
     function getClient(
-    application
-) {
-    const directClient =
-        application?.client;
-
-    if (
-        directClient &&
-        typeof directClient === "object"
+        application
     ) {
-        return directClient;
+        return (
+            application?.client ||
+            (
+                Array.isArray(
+                    application?.clients
+                )
+                    ? application.clients[0]
+                    : null
+            ) ||
+            {}
+        );
     }
 
-    if (
-        Array.isArray(
-            application?.clients
-        ) &&
-        application.clients.length
-    ) {
-        return application.clients[0];
-    }
-
-    if (
-        Array.isArray(
-            application?.applicants
-        ) &&
-        application.applicants.length
-    ) {
-        const applicant =
-            application.applicants[0];
-
-        return {
-            ...(applicant || {}),
-            ...(applicant?.personalData || {}),
-            ...(applicant?.passport || {})
-        };
-    }
-
-    return {};
-}
 
     function getAdmin(
         application
@@ -1678,106 +1654,72 @@ const AdminApp = (() => {
 
 
     function renderClientDetails(
-    application
-) {
-    const client =
-        getClient(
-            application
-        );
-
-    const applicant =
-        Array.isArray(
-            application?.applicants
-        )
-            ? application.applicants[0] || {}
-            : {};
-
-    const personalData =
-        client.personalData ||
-        applicant.personalData ||
-        {};
-
-    const passportData =
-        client.passport ||
-        applicant.passport ||
-        {};
-
-    const name =
-        client.fullName ||
-        client.name ||
-        personalData.fullName ||
-        personalData.name ||
-        applicant.fullName ||
-        applicant.name ||
-        passportData.name ||
-        "Cliente";
-
-    const email =
-        client.email ||
-        personalData.email ||
-        applicant.email ||
-        "";
-
-    const phone =
-        client.phone ||
-        personalData.phone ||
-        applicant.phone ||
-        "";
-
-    setText(
-        "#detailClientName",
-        name
-    );
-
-    setText(
-        "#detailClientFullName",
-        name
-    );
-
-    setText(
-        "#detailClientEmail",
-        email
-    );
-
-    setText(
-        "#detailClientPhone",
-        phone
-    );
-
-    setText(
-        "#detailApplicationId",
-        application.id
-    );
-
-    const avatar =
-        $(
-            "#detailClientAvatar"
-        );
-
-    if (avatar) {
-        avatar.textContent =
-            firstLetter(
-                name
+        application
+    ) {
+        const client =
+            getClient(
+                application
             );
+
+        const name =
+            client.name ||
+            "Cliente";
+
+        setText(
+            "#detailClientName",
+            name
+        );
+
+        setText(
+            "#detailClientFullName",
+            name
+        );
+
+        setText(
+            "#detailClientEmail",
+            client.email ||
+            "—"
+        );
+
+        setText(
+            "#detailClientPhone",
+            client.phone ||
+            "—"
+        );
+
+        setText(
+            "#detailApplicationId",
+            application.id
+        );
+
+        const avatar =
+            $(
+                "#detailClientAvatar"
+            );
+
+        if (avatar) {
+            avatar.textContent =
+                firstLetter(
+                    name
+                );
+        }
+
+        const admin =
+            getAdmin(
+                application
+            );
+
+        setBadge(
+            "#detailAdminStatus",
+            statusLabel(
+                admin.status ||
+                "PENDING_REVIEW"
+            ),
+            admin.status ||
+            "PENDING_REVIEW"
+        );
     }
 
-    const admin =
-        getAdmin(
-            application
-        );
-
-    setBadge(
-        "#detailAdminStatus",
-        statusLabel(
-            admin.status ||
-            application.status ||
-            "PENDING_REVIEW"
-        ),
-        admin.status ||
-        application.status ||
-        "PENDING_REVIEW"
-    );
-}
 
     function renderWorkflowDetails(
         application
@@ -1893,79 +1835,49 @@ const AdminApp = (() => {
      */
 
     function renderPassportDetails(
-    application
-) {
-    const client =
-        getClient(
-            application
-        );
+        application
+    ) {
+        const passport =
+            application.passport ||
+            {};
 
-    const applicant =
-        Array.isArray(
-            application?.applicants
-        )
-            ? application.applicants[0] || {}
-            : {};
+        const verified =
+            Boolean(
+                passport.verified
+            );
 
-    const passport =
-        application?.passport ||
-        client?.passport ||
-        applicant?.passport ||
-        {};
+        const status =
+            passport.status ||
+            (
+                verified
+                    ? "PASSPORT_VERIFIED"
+                    : "PASSPORT_PENDING"
+            );
 
-    const passportNumber =
-        passport.number ||
-        passport.passportNumber ||
-        client.passportNumber ||
-        applicant.passportNumber ||
-        "Número não disponível";
-
-    const passportName =
-        passport.name ||
-        passport.fullName ||
-        client.fullName ||
-        client.name ||
-        applicant.fullName ||
-        applicant.name ||
-        "—";
-
-    const verified =
-        Boolean(
-            passport.verified ||
-            passport.validated ||
-            client.passportVerified ||
-            client.passportValidationStatus === "passed" ||
-            applicant.passportVerified
-        );
-
-    const status =
-        passport.status ||
-        passport.validationStatus ||
-        client.passportValidationStatus ||
-        (
-            verified
-                ? "PASSPORT_VERIFIED"
-                : "PASSPORT_PENDING"
-        );
-
-    setBadge(
-        "#detailPassportStatus",
-        statusLabel(
+        setBadge(
+            "#detailPassportStatus",
+            statusLabel(
+                status
+            ),
             status
-        ),
-        status
-    );
+        );
 
-    setText(
-        "#detailPassportNumber",
-        passportNumber
-    );
+        setText(
+            "#detailPassportNumber",
+            passport.number ||
+            "Número não disponível"
+        );
 
-    setText(
-        "#detailPassportName",
-        passportName
-    );
-}
+        setText(
+            "#detailPassportName",
+            passport.name ||
+            getClient(
+                application
+            ).name ||
+            "—"
+        );
+    }
+
 
     /*
      * ========================================================
@@ -1974,94 +1886,65 @@ const AdminApp = (() => {
      */
 
     function renderIdentityDetails(
-    application
-) {
-    const client =
-        getClient(
-            application
-        );
+        application
+    ) {
+        const identity =
+            application.identity ||
+            {};
 
-    const applicant =
-        Array.isArray(
-            application?.applicants
-        )
-            ? application.applicants[0] || {}
-            : {};
+        const count =
+            Number(
+                identity.positionCount ||
+                0
+            );
 
-    const identity =
-        application?.identity ||
-        client?.identity ||
-        applicant?.identity ||
-        {};
+        const verified =
+            Boolean(
+                identity.verified
+            );
 
-    const positionCount =
-        Number(
-            identity.positionCount ??
-            identity.positionsCompleted ??
-            identity.completedPositions ??
-            client.facialPositionCount ??
-            applicant.facialPositionCount ??
-            0
-        );
-
-    const verified =
-        Boolean(
-            identity.verified ||
-            identity.completed ||
-            client.facialVerified ||
-            client.facialStatus === "passed" ||
-            applicant.facialVerified
-        );
-
-    const status =
-        identity.status ||
-        client.facialStatus ||
-        applicant.facialStatus ||
-        (
-            verified
-                ? "IDENTITY_READY"
-                : "IDENTITY_PREPARATION"
-        );
-
-    const safeCount =
-        Math.max(
-            0,
-            Math.min(
-                10,
-                positionCount
-            )
-        );
-
-    setText(
-        "#detailFaceCount",
-        safeCount
-    );
-
-    setBadge(
-        "#detailIdentityStatus",
-        statusLabel(
-            status
-        ),
-        status
-    );
-
-    const progress =
-        $(
-            "#identityProgressBar"
-        );
-
-    if (progress) {
-        const percentage =
+        const status =
+            identity.status ||
             (
-                safeCount /
-                10
-            ) *
-            100;
+                verified
+                    ? "IDENTITY_READY"
+                    : "IDENTITY_PREPARATION"
+            );
 
-        progress.style.width =
-            `${percentage}%`;
+        setText(
+            "#detailFaceCount",
+            count
+        );
+
+        setBadge(
+            "#detailIdentityStatus",
+            statusLabel(
+                status
+            ),
+            status
+        );
+
+        const progress =
+            $(
+                "#identityProgressBar"
+            );
+
+        if (progress) {
+            const percentage =
+                Math.min(
+                    100,
+                    (
+                        count /
+                        10
+                    ) *
+                    100
+                );
+
+            progress.style.width =
+                `${percentage}%`;
+        }
     }
-}
+
 
     /*
      * ========================================================
