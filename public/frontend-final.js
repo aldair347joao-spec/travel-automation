@@ -1978,7 +1978,7 @@ if (applicationForm) {
         }
     }
 }
-
+}
     function scrollToAdminPanel() {
         window.setTimeout(
             () => {
