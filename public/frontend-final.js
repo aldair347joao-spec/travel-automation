@@ -804,12 +804,15 @@
     ========================================================= */
 
     function detectClientId() {
-        const values = [
-            state.clientId,
-            $("applicationClient")?.value,
-            $("identityClient")?.value,
-            $("passportClientSelect")?.value
-        ];
+        const applicationForm = $("applicationForm");
+
+const values = [
+    state.clientId,
+    applicationForm?.dataset?.clientId,
+    $("applicationClient")?.value,
+    $("identityClient")?.value,
+    $("passportClientSelect")?.value
+];
 
         const found =
             values.find(
@@ -1159,27 +1162,11 @@
 
 
     function disableApplicationForm() {
-        const form =
-            $("applicationForm");
-
-        if (!form) {
-            return;
-        }
-
-        $$(
-            "#applicationForm input, " +
-            "#applicationForm select, " +
-            "#applicationForm textarea, " +
-            "#applicationForm button"
-        ).forEach(
-            element => {
-                element.disabled =
-                    true;
-            }
-        );
-    }
-
-
+    // O formulário da candidatura deve permanecer disponível.
+    // A candidatura só deve ser bloqueada durante o envio
+    // através do estado state.submitting.
+    return;
+}
     /* =========================================================
        PAYMENT
     ========================================================= */
@@ -2396,8 +2383,7 @@
        FORM BINDING
     ========================================================= */
 function bindApplicationForm() {
-    const form =
-        $("applicationForm");
+    const form = $("applicationForm");
 
     if (!form) {
         return;
@@ -2405,94 +2391,32 @@ function bindApplicationForm() {
 
     ensurePreferenceFields();
 
-    /*
-     * O botão não pode executar o submit nativo
-     * do navegador, porque isso provoca o reset/reload
-     * antes de o fluxo da candidatura terminar.
-     */
-    const button =
-        $("applicationSubmitButton");
+    const button = $("applicationSubmitButton");
 
-    if (
-        button &&
-        button.dataset
-            .frontendFinalClickBound !==
-            "true"
-    ) {
-        button.dataset
-            .frontendFinalClickBound =
-            "true";
-
-        /*
-         * O formulário NÃO é desativado.
-         * Apenas o comportamento nativo do botão
-         * é substituído pelo nosso fluxo AJAX.
-         */
-        button.type =
-            "button";
-
-        button.addEventListener(
-            "click",
-            event => {
-                event.preventDefault();
-                event.stopPropagation();
-
-                if (
-                    typeof event.stopImmediatePropagation ===
-                    "function"
-                ) {
-                    event.stopImmediatePropagation();
-                }
-
-                submitApplication({
-                    preventDefault() {},
-
-                    stopPropagation() {},
-
-                    stopImmediatePropagation() {},
-
-                    submitter:
-                        button
-                });
-            },
-            true
-        );
+    if (button) {
+        button.type = "submit";
+        button.dataset.frontendFinalSubmitButton = "true";
     }
 
-    if (
-        form.dataset
-            .frontendFinalBound ===
-        "true"
-    ) {
-        return;
+    if (form.dataset.frontendFinalBound !== "true") {
+        form.dataset.frontendFinalBound = "true";
+
+        form.addEventListener("submit", submitApplication, true);
+
+        form.addEventListener("input", () => {
+            updatePreferenceSummary();
+            detectClientId();
+        });
+
+        form.addEventListener("change", () => {
+            updatePreferenceSummary();
+            detectClientId();
+        });
     }
 
-    form.dataset
-        .frontendFinalBound =
-        "true";
-
-    /*
-     * Mantemos o submit como proteção adicional.
-     * Se algum outro código tentar submeter
-     * o formulário, o navegador não fará reload.
-     */
-    form.addEventListener(
-        "submit",
-        submitApplication,
-        true
-    );
-
-    form.addEventListener(
-        "input",
-        updatePreferenceSummary
-    );
-
-    form.addEventListener(
-        "change",
-        updatePreferenceSummary
-    );
+    detectClientId();
+    updatePreferenceSummary();
 }
-    
 
     /* =========================================================
        OBSERVER
