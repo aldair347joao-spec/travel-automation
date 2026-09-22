@@ -2506,17 +2506,18 @@
   async function handleComplete(result) {
   running = false;
 
-  completed =
-    Boolean(
-      result?.passed
-    );
-
   setCameraState(false);
 
-  if (
-    completedPositions.size ===
-    POSITIONS.length
-  ) {
+  const positionsComplete =
+    completedPositions.size >= POSITIONS.length ||
+    Number(result?.completedCount) >= POSITIONS.length ||
+    Number(result?.total) === POSITIONS.length &&
+      Array.isArray(result?.positions) &&
+      result.positions.length === POSITIONS.length;
+
+  if (positionsComplete) {
+    completed = true;
+
     activePositionIndex =
       POSITIONS.length - 1;
 
@@ -2524,38 +2525,42 @@
       current: 10,
       total: 10
     });
-  }
 
-  if (!completed) {
     setState(
-      "LIVENESS NÃO CONCLUÍDA",
-      "warning"
+      "LIVENESS APROVADA",
+      "success"
     );
 
     setStatus(
-      "Os movimentos não foram validados. Será necessário repetir a verificação."
+      "As 10 posições foram validadas. A guardar a sessão de liveness..."
     );
 
-    await saveResult(result);
+    await saveResult({
+      ...result,
+      passed: true,
+      completed: true,
+      completedCount: 10,
+      total: 10
+    });
 
     return;
   }
 
+  completed = false;
+
   setState(
-    "LIVENESS CONCLUÍDA",
-    "success"
+    "LIVENESS NÃO CONCLUÍDA",
+    "warning"
   );
 
   setStatus(
-    "Os movimentos foram validados. A guardar a sessão de liveness..."
+    "Os movimentos não foram todos validados. Será necessário repetir a verificação."
   );
 
-  updateProgress({
-    current: 10,
-    total: 10
+  await saveResult({
+    ...result,
+    passed: false
   });
-
-  await saveResult(result);
 }
   /*
    * ==========================================================
@@ -2579,23 +2584,29 @@
   saving = true;
 
   if (applicationForm) {
-    applicationForm.dataset
-      .facialPreflight =
+    applicationForm.dataset.facialPreflight =
       "pending";
   }
 
   /*
-   * ========================================================
-   * A SESSÃO SÓ É GUARDADA SE A LIVENESS FOI CONCLUÍDA.
-   * ========================================================
+   * ======================================================
+   * A APROVAÇÃO É DETERMINADA PELAS 10 POSIÇÕES.
+   *
+   * Não existe uma segunda barreira de score aqui.
+   * Não existe captura de imagem.
+   * ======================================================
    */
 
-  if (
-    result?.passed !== true
-  ) {
+  const positionsComplete =
+    completedPositions.size >= POSITIONS.length ||
+    Number(result?.completedCount) >= POSITIONS.length ||
+    Number(result?.total) === POSITIONS.length &&
+      Array.isArray(result?.positions) &&
+      result.positions.length === POSITIONS.length;
+
+  if (!positionsComplete) {
     if (applicationForm) {
-      applicationForm.dataset
-        .facialPreflight =
+      applicationForm.dataset.facialPreflight =
         "failed";
     }
 
@@ -2622,23 +2633,16 @@
      * GUARDAR SOMENTE A SESSÃO DE LIVENESS
      * ======================================================
      *
-     * Não enviamos fotografia.
+     * Nenhuma fotografia é enviada.
      *
-     * Não enviamos captura facial.
-     *
-     * Não fazemos comparação facial com o passaporte.
-     *
-     * O backend recebe:
-     *
-     * - as dez posições;
-     * - os movimentos validados;
+     * A sessão contém:
+     * - posições;
+     * - movimentos validados;
      * - qualidade;
      * - detecção facial;
      * - pose;
      * - sorriso;
-     * - timestamps;
-     * - score;
-     * - estado da sessão.
+     * - timestamps.
      */
 
     const data =
@@ -2650,39 +2654,45 @@
         });
 
     if (
-      data?.success !==
-      true
+      data?.success !== true ||
+      data?.livenessPassed !== true
     ) {
       throw new Error(
         data?.error ||
         data?.message ||
-        "A sessão de liveness não foi guardada."
+        "A sessão de liveness não foi aprovada pelo servidor."
       );
     }
 
     /*
      * ======================================================
-     * LIVENESS GUARDADA
+     * LIVENESS APROVADA
      * ======================================================
      */
 
     if (applicationForm) {
-      applicationForm.dataset
-        .facialPreflight =
+      applicationForm.dataset.facialPreflight =
         "passed";
     }
 
+    completed = true;
+
     setState(
-      "LIVENESS GUARDADA",
+      "LIVENESS APROVADA",
       "success"
     );
 
     setStatus(
-      "A prova de vida foi guardada. Pode continuar o processo."
+      "PRONTO PARA ENVIO À ADMINISTRAÇÃO"
     );
 
+    updateProgress({
+      current: 10,
+      total: 10
+    });
+
     /*
-     * O painel antigo de resultado não é mais utilizado.
+     * O resultado biométrico antigo não é mais utilizado.
      */
 
     const resultBox =
@@ -2693,20 +2703,20 @@
     if (resultBox) {
       resultBox.hidden = true;
       resultBox.innerHTML = "";
+      resultBox.className =
+        "identity-result";
     }
 
     /*
      * Não mostramos score.
-     * Não mostramos resultado biométrico.
      * Não mostramos captura.
-     *
-     * Apenas confirmamos que a sessão foi guardada.
+     * Não mostramos fotografia.
+     * Não criamos uma segunda aprovação.
      */
 
   } catch (error) {
     if (applicationForm) {
-      applicationForm.dataset
-        .facialPreflight =
+      applicationForm.dataset.facialPreflight =
         "failed";
     }
 
@@ -2715,27 +2725,14 @@
       error
     );
 
-    /*
-     * IMPORTANTE:
-     *
-     * Nunca mais usar:
-     *
-     * "NÃO GUARDADA"
-     *
-     * como estado de captura facial.
-     *
-     * O problema é a sessão de liveness,
-     * não uma fotografia.
-     */
-
     setState(
-      "LIVENESS NÃO GUARDADA",
+      "ERRO AO GUARDAR LIVENESS",
       "error"
     );
 
     setStatus(
       error?.message ||
-      "Não foi possível guardar a sessão de liveness. Tente novamente."
+      "Não foi possível guardar a sessão de liveness."
     );
 
   } finally {
