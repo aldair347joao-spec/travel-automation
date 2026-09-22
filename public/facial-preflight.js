@@ -165,10 +165,10 @@ detectionIntervalMs:
   120,
 
 positionScoreThreshold:
-  0.64,
+  0.75,
 
 overallScoreThreshold:
-  0.62,
+  0.82,
 
 smileThreshold:
   0.42,
@@ -3097,9 +3097,8 @@ const completedAt =
  */
 
 const livenessPosition = {
-
   position:
-    position.id,
+    currentPositionIndex + 1,
 
   label:
     position.label,
