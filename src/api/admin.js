@@ -740,7 +740,7 @@ function createAdminRouter() {
                               .detectionScore
                           )
                         : 0
-                  }
+                  
                 }
                 : null,
 
