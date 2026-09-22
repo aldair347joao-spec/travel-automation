@@ -3549,122 +3549,217 @@ stopCamera();
 * ==========================================================
   */
 
-async function submitToBackend(
-payload = {}
-) {
+async function submitToBackend(payload = {}) {
 
-const targetClientId =
-  payload.clientId ||
-  clientId;
+  const targetClientId =
+    payload.clientId ||
+    clientId;
 
-if (
-  !targetClientId
-) {
 
-  throw new Error(
-    "ID do cliente não encontrado."
-  );
-}
+  if (!targetClientId) {
 
-if (
-  !result
-) {
-
-  throw new Error(
-    "Não existe resultado facial para guardar."
-  );
-}
-
-const body = {
-  clientId:
-    targetClientId,
-
-  consentAccepted:
-    true,
-
-  completed:
-    Boolean(
-      result.completed
-    ),
-
-  success:
-    Boolean(
-      result.success
-    ),
-
-  passed:
-    Boolean(
-      result.passed
-    ),
-
-  score:
-    result.score,
-
-  completedCount:
-    result.completedCount,
-
-  total:
-    result.total,
-
-  positions:
-    result.positions,
-
-  passportMatch:
-    payload.passportMatch ||
-    null
-};
-
-const response =
-  await fetch(
-    `/api/clients/${encodeURIComponent(
-      targetClientId
-    )}/facial-preflight`,
-    {
-
-      method:
-        "POST",
-
-      headers: {
-        "Content-Type":
-          "application/json",
-
-        Accept:
-          "application/json"
-      },
-
-      credentials:
-        "include",
-
-      body:
-        JSON.stringify(
-          body
-        )
-    }
-  );
-
-const data =
-  await response
-    .json()
-    .catch(
-      () =>
-        null
+    throw new Error(
+      "ID do cliente não encontrado."
     );
 
-if (
-  !response.ok
-) {
+  }
 
-  throw new Error(
-    data?.message ||
-    data?.error ||
-    `O servidor recusou o resultado facial. HTTP ${response.status}`
-  );
+
+  if (!result) {
+
+    throw new Error(
+      "Não existe resultado facial para guardar."
+    );
+
+  }
+
+
+  /*
+   * ==========================================================
+   * CSRF
+   * ==========================================================
+   *
+   * O endpoint /api/clients/:id/facial-preflight
+   * está protegido pelo middleware CSRF.
+   *
+   * O app.js envia este token através do helper api().
+   * Como este módulo usa fetch() diretamente, precisamos
+   * enviá-lo explicitamente aqui.
+   */
+
+  function getCsrfToken() {
+
+    try {
+
+      const cookies =
+        document.cookie
+          .split(";");
+
+      for (
+        const cookie
+        of cookies
+      ) {
+
+        const [
+          key,
+          ...parts
+        ] =
+          cookie
+            .trim()
+            .split("=");
+
+        if (
+          key ===
+          "csrf_token"
+        ) {
+
+          return decodeURIComponent(
+            parts.join("=")
+          );
+
+        }
+
+      }
+
+    } catch (error) {
+
+      console.warn(
+        "[FacialPreflight] Não foi possível ler o token CSRF:",
+        error
+      );
+
+    }
+
+    return null;
+  }
+
+
+  const csrfToken =
+    getCsrfToken();
+
+
+  if (!csrfToken) {
+
+    throw new Error(
+      "Token de segurança da sessão não encontrado. Atualize a página e tente novamente."
+    );
+
+  }
+
+
+  const body = {
+
+    clientId:
+      targetClientId,
+
+    consentAccepted:
+      true,
+
+    completed:
+      Boolean(
+        result.completed
+      ),
+
+    success:
+      Boolean(
+        result.success
+      ),
+
+    passed:
+      Boolean(
+        result.passed
+      ),
+
+    score:
+      result.score,
+
+    completedCount:
+      result.completedCount,
+
+    total:
+      result.total,
+
+    positions:
+      result.positions,
+
+    passportMatch:
+      payload.passportMatch ||
+      null
+
+  };
+
+
+  const response =
+    await fetch(
+      `/api/clients/${encodeURIComponent(
+        targetClientId
+      )}/facial-preflight`,
+      {
+        method:
+          "POST",
+
+        credentials:
+          "include",
+
+        headers: {
+
+          "Content-Type":
+            "application/json",
+
+          "Accept":
+            "application/json",
+
+          "x-csrf-token":
+            csrfToken
+
+        },
+
+        body:
+          JSON.stringify(
+            body
+          )
+
+      }
+    );
+
+
+  const data =
+    await response
+      .json()
+      .catch(
+        () =>
+          null
+      );
+
+
+  if (!response.ok) {
+
+    const issues =
+      Array.isArray(
+        data?.issues
+      )
+        ? data.issues
+        : [];
+
+
+    const issueText =
+      issues.length
+        ? ` ${issues.join(" ")}`
+        : "";
+
+
+    throw new Error(
+      data?.message ||
+      data?.error ||
+      `O servidor recusou o resultado facial. HTTP ${response.status}.${issueText}`
+    );
+
+  }
+
+
+  return data;
+
 }
-
-return data;
-
-}
-
 /*
 
 * ==========================================================
