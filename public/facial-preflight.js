@@ -165,10 +165,10 @@ detectionIntervalMs:
   120,
 
 positionScoreThreshold:
-  0.75,
+  0.64,
 
 overallScoreThreshold:
-  0.82,
+  0.62,
 
 smileThreshold:
   0.42,
