@@ -1752,6 +1752,11 @@ const values = [
     form.dataset.clientId = clientId;
 
     state.submitting = true;
+        const applicationForm = $("applicationForm");
+
+if (applicationForm) {
+    applicationForm.dataset.applicationSubmitting = "true";
+}
 
     const originalButtonText = button
         ? button.innerHTML
@@ -1952,6 +1957,9 @@ const values = [
 
     } finally {
         state.submitting = false;
+        if (applicationForm) {
+    delete applicationForm.dataset.applicationSubmitting;
+}
 
         if (button) {
             button.disabled = false;
