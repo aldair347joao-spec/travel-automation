@@ -596,28 +596,23 @@ router.post(
     next
   ) => {
     try {
-      const {
-        consentAccepted,
-        positions,
-        videoReference,
-        templateReference
-      } =
-        req.body;
+  const storedConsent =
+  client?.facialConsent?.accepted === true;
 
-      if (
-        consentAccepted !==
-        true
-      ) {
-        return res
-          .status(400)
-          .json({
-            success:
-              false,
+const validConsent =
+  consentAccepted === true ||
+  storedConsent;
 
-            error:
-              "Biometric consent is required"
-          });
-      }
+if (!validConsent) {
+  return res
+    .status(400)
+    .json({
+      success: false,
+
+      error:
+        "Biometric consent is required"
+    });
+}
 
       if (
         !Array.isArray(
