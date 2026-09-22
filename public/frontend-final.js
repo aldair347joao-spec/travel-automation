@@ -1996,7 +1996,6 @@
             }
         }
     }
-}
 
     function scrollToAdminPanel() {
         window.setTimeout(
