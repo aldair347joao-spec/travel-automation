@@ -2519,29 +2519,28 @@ chooseButton?.addEventListener(
 
   function monitorFacialResult() {
 
-  const result =
-    $("identityResult");
-
   const applicationForm =
     $("applicationForm");
 
-  if (!result) {
+  if (!applicationForm) {
     return;
   }
 
-  const passed =
-    result.classList.contains(
-      "passed"
-    );
+  /*
+   * A fonte de verdade agora é a sessão de
+   * liveness guardada pelo backend.
+   *
+   * Não dependemos mais do antigo
+   * #identityResult.
+   */
 
   const backendPassed =
-    applicationForm?.dataset
+    applicationForm.dataset
       ?.facialPreflight ===
     "passed";
 
   state.facialReady =
-    passed &&
-    backendPassed;
+    backendPassed === true;
 
   const status =
     $("facialPanelStatus");
@@ -2557,13 +2556,25 @@ chooseButton?.addEventListener(
         "panel-status";
 
     } else if (
-      result.classList.contains(
-        "failed"
-      )
+      applicationForm.dataset
+        ?.facialPreflight ===
+      "failed"
     ) {
 
       status.textContent =
         "CORRIGIR";
+
+      status.className =
+        "panel-status blue";
+
+    } else if (
+      applicationForm.dataset
+        ?.facialPreflight ===
+      "pending"
+    ) {
+
+      status.textContent =
+        "A GUARDAR";
 
       status.className =
         "panel-status blue";
@@ -2576,12 +2587,10 @@ chooseButton?.addEventListener(
       status.className =
         "panel-status blue";
     }
-
   }
 
   updateIdentityGate();
   updateReadiness();
-
 }
 
   /* =========================================================
