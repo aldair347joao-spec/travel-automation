@@ -259,22 +259,31 @@ router.post(
               : "unknown"
         });
 
-      await AuditLog.create({
-        actorId:
-          req.user._id,
+      try {
+        await AuditLog.create({
+          actorId:
+            req.user._id,
 
-        action:
-          "client.create",
+          action:
+            "client.create",
 
-        resource:
-          "client",
+          resource:
+            "client",
 
-        resourceId:
-          client._id.toString(),
+          resourceId:
+            client._id.toString(),
 
-        ip:
-          req.ip
-      });
+          ip:
+            req.ip
+        });
+      } catch (
+        auditError
+      ) {
+        console.error(
+          "[CLIENTS] AuditLog client.create failed:",
+          auditError
+        );
+      }
 
       return res
         .status(201)
@@ -535,22 +544,31 @@ router.patch(
           });
       }
 
-      await AuditLog.create({
-        actorId:
-          req.user._id,
+      try {
+        await AuditLog.create({
+          actorId:
+            req.user._id,
 
-        action:
-          "client.update",
+          action:
+            "client.update",
 
-        resource:
-          "client",
+          resource:
+            "client",
 
-        resourceId:
-          client._id.toString(),
+          resourceId:
+            client._id.toString(),
 
-        ip:
-          req.ip
-      });
+          ip:
+            req.ip
+        });
+      } catch (
+        auditError
+      ) {
+        console.error(
+          "[CLIENTS] AuditLog client.update failed:",
+          auditError
+        );
+      }
 
       return res.json({
         success:
@@ -578,8 +596,12 @@ router.patch(
  *
  * POST /:id/facial-preflight
  *
- * Portanto não removemos este endpoint para não quebrar
- * funcionalidades existentes.
+ * Este endpoint antigo NÃO é utilizado pelo novo fluxo.
+ *
+ * IMPORTANTE:
+ *
+ * A liveness nova não guarda fotografias.
+ * =========================================================
  */
 
 router.post(
@@ -596,23 +618,67 @@ router.post(
     next
   ) => {
     try {
-  const storedConsent =
-  client?.facialConsent?.accepted === true;
 
-const validConsent =
-  consentAccepted === true ||
-  storedConsent;
+      const {
+        consentAccepted,
+        positions,
+        videoReference,
+        templateReference
+      } =
+        req.body;
 
-if (!validConsent) {
-  return res
-    .status(400)
-    .json({
-      success: false,
 
-      error:
-        "Biometric consent is required"
-    });
-}
+      /*
+       * Localizar primeiro o cliente.
+       */
+
+      const client =
+        await findAccessibleClient(
+          req,
+          req.params.id,
+          {
+            activeOnly:
+              true
+          }
+        );
+
+      if (!client) {
+        return res
+          .status(404)
+          .json({
+            success:
+              false,
+
+            error:
+              "Client not found"
+          });
+      }
+
+
+      /*
+       * Consentimento explícito ou já guardado.
+       */
+
+      const storedConsent =
+        client?.facialConsent
+          ?.accepted === true;
+
+      const validConsent =
+        consentAccepted === true ||
+        storedConsent;
+
+      if (!validConsent) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            error:
+              "Biometric consent is required"
+          });
+      }
+
 
       if (
         !Array.isArray(
@@ -630,15 +696,23 @@ if (!validConsent) {
           });
       }
 
+
       /*
-       * Este endpoint continua pertencendo ao fluxo
-       * oficial de perfil facial e, por isso, mantém
-       * a validação de referências seguras.
+       * Este endpoint antigo continua pertencendo
+       * ao fluxo oficial de perfil facial.
        */
 
       facial.validatePositions(
         positions
       );
+
+
+      /*
+       * O perfil facial antigo exige referências
+       * de armazenamento seguras.
+       *
+       * Não permitimos data URLs.
+       */
 
       if (
         positions.some(
@@ -663,27 +737,6 @@ if (!validConsent) {
           });
       }
 
-      const client =
-        await findAccessibleClient(
-          req,
-          req.params.id,
-          {
-            activeOnly:
-              true
-          }
-        );
-
-      if (!client) {
-        return res
-          .status(404)
-          .json({
-            success:
-              false,
-
-            error:
-              "Client not found"
-          });
-      }
 
       const profile =
         await facial.createProfile({
@@ -695,14 +748,19 @@ if (!validConsent) {
           videoReference
         });
 
+
       client.facialConsent =
         {
           accepted:
             true,
 
           acceptedAt:
+            client
+              .facialConsent
+              ?.acceptedAt ||
             new Date()
         };
+
 
       client.facialProfile =
         {
@@ -723,29 +781,41 @@ if (!validConsent) {
             "pending"
         };
 
+
       await client.save();
 
-      await AuditLog.create({
-        actorId:
-          req.user._id,
 
-        action:
-          "client.facial_profile",
+      try {
+        await AuditLog.create({
+          actorId:
+            req.user._id,
 
-        resource:
-          "client",
+          action:
+            "client.facial_profile",
 
-        resourceId:
-          client._id.toString(),
+          resource:
+            "client",
 
-        ip:
-          req.ip,
+          resourceId:
+            client._id.toString(),
 
-        metadata: {
-          positions:
-            positions.length
-        }
-      });
+          ip:
+            req.ip,
+
+          metadata: {
+            positions:
+              positions.length
+          }
+        });
+      } catch (
+        auditError
+      ) {
+        console.error(
+          "[CLIENTS] AuditLog client.facial_profile failed:",
+          auditError
+        );
+      }
+
 
       return res.json({
         success:
@@ -757,6 +827,7 @@ if (!validConsent) {
         positions:
           positions.length
       });
+
     } catch (
       error
     ) {
@@ -786,6 +857,7 @@ router.get(
     next
   ) => {
     try {
+
       const client =
         await findAccessibleClient(
           req,
@@ -808,6 +880,7 @@ router.get(
           });
       }
 
+
       const document =
         await passportStorage.getForBot({
           accountId:
@@ -816,6 +889,7 @@ router.get(
           clientId:
             client._id
         });
+
 
       if (!document) {
         return res
@@ -829,11 +903,13 @@ router.get(
           });
       }
 
+
       const allowedMimeTypes =
         [
           "image/jpeg",
           "image/png"
         ];
+
 
       const mimeType =
         allowedMimeTypes.includes(
@@ -841,6 +917,7 @@ router.get(
         )
           ? document.mimeType
           : "image/jpeg";
+
 
       res.setHeader(
         "Cache-Control",
@@ -872,9 +949,11 @@ router.get(
         "inline"
       );
 
+
       return res.end(
         document.buffer
       );
+
     } catch (
       error
     ) {
@@ -904,6 +983,7 @@ router.get(
     next
   ) => {
     try {
+
       const client =
         await findAccessibleClient(
           req,
@@ -913,6 +993,7 @@ router.get(
               true
           }
         );
+
 
       if (!client) {
         return res
@@ -925,6 +1006,7 @@ router.get(
               "Client not found"
           });
       }
+
 
       return res.json({
         success:
@@ -942,6 +1024,7 @@ router.get(
             ?.status ||
           "not_started"
       });
+
     } catch (
       error
     ) {
@@ -962,18 +1045,17 @@ router.get(
  * positionScore
  * faceDetected
  * singleFace
+ * verified
+ * smileDetected
  * ...
  *
- * O preflight-service usa qualityScore.
+ * O preflight-service utiliza qualityScore.
  *
- * Fazemos essa adaptação aqui para que os dois módulos
- * falem a mesma linguagem.
+ * Fazemos somente a normalização dos dados existentes.
  *
- * IMPORTANTE:
- *
- * Não criamos qualquer evidência artificial.
- * Apenas normalizamos valores que já foram produzidos
- * pelo motor facial.
+ * NÃO criamos imagens.
+ * NÃO criamos evidências.
+ * NÃO simulamos movimentos.
  */
 
 function normalizeLivenessPositions(
@@ -987,17 +1069,21 @@ function normalizeLivenessPositions(
     return [];
   }
 
+
   return positions.map(
     position => {
+
       const score =
         Number(
           position?.score
         );
 
+
       const positionScore =
         Number(
           position?.positionScore
         );
+
 
       const qualityScore =
         Number.isFinite(
@@ -1009,6 +1095,7 @@ function normalizeLivenessPositions(
             )
             ? score
             : 0;
+
 
       return {
         ...position,
@@ -1037,9 +1124,6 @@ function normalizeLivenessPositions(
             ? positionScore
             : qualityScore,
 
-        /*
-         * Campo exigido pelo preflight-service.
-         */
         qualityScore:
           Math.max(
             0,
@@ -1079,9 +1163,8 @@ function normalizeLivenessPositions(
  * VALIDATE LIVENESS EVENT SHAPE
  * =========================================================
  *
- * Não aceitamos uma lista arbitrária de objetos.
- *
- * A sessão precisa representar as dez posições do fluxo.
+ * A sessão precisa representar exatamente
+ * as dez posições do fluxo.
  */
 
 function validateLivenessEventShape(
@@ -1089,6 +1172,7 @@ function validateLivenessEventShape(
 ) {
   const issues =
     [];
+
 
   if (
     !Array.isArray(
@@ -1105,6 +1189,7 @@ function validateLivenessEventShape(
     };
   }
 
+
   if (
     positions.length !==
     10
@@ -1114,17 +1199,21 @@ function validateLivenessEventShape(
     );
   }
 
+
   const seen =
     new Set();
+
 
   for (
     const position
     of positions
   ) {
+
     const number =
       Number(
         position?.position
       );
+
 
     if (
       !Number.isInteger(
@@ -1133,6 +1222,7 @@ function validateLivenessEventShape(
       number < 1 ||
       number > 10
     ) {
+
       issues.push(
         `Invalid liveness position: ${position?.position}`
       );
@@ -1140,11 +1230,13 @@ function validateLivenessEventShape(
       continue;
     }
 
+
     if (
       seen.has(
         number
       )
     ) {
+
       issues.push(
         `Duplicate liveness position: ${number}`
       );
@@ -1152,35 +1244,65 @@ function validateLivenessEventShape(
       continue;
     }
 
+
     seen.add(
       number
     );
 
+
     if (
       !position?.completedAt
     ) {
+
       issues.push(
         `Position ${number} has no completion timestamp`
       );
     }
 
+
+    /*
+     * A posição precisa ter sido efetivamente
+     * validada pelo motor de liveness.
+     */
+
+    if (
+      position?.verified !==
+      true
+    ) {
+
+      issues.push(
+        `Position ${number} was not verified`
+      );
+    }
+
+
     if (
       position?.faceDetected !==
       true
     ) {
+
       issues.push(
         `Position ${number} has no confirmed face`
       );
     }
 
+
     if (
       position?.singleFace !==
       true
     ) {
+
       issues.push(
         `Position ${number} does not contain exactly one face`
       );
     }
+
+
+    /*
+     * O score continua sendo obrigatório como
+     * dado técnico da posição, mas NÃO há
+     * um valor mínimo usado como barreira.
+     */
 
     if (
       !Number.isFinite(
@@ -1189,27 +1311,52 @@ function validateLivenessEventShape(
         )
       )
     ) {
+
       issues.push(
         `Position ${number} has no valid quality score`
       );
     }
+
+
+    /*
+     * A décima posição precisa confirmar sorriso.
+     */
+
+    if (
+      number === 10 &&
+      position?.smileDetected !==
+        true
+    ) {
+
+      issues.push(
+        "Position 10 requires a natural smile"
+      );
+    }
   }
+
+
+  /*
+   * Confirmar todas as posições.
+   */
 
   for (
     let number = 1;
     number <= 10;
     number += 1
   ) {
+
     if (
       !seen.has(
         number
       )
     ) {
+
       issues.push(
         `Missing liveness position ${number}`
       );
     }
   }
+
 
   return {
     valid:
@@ -1222,13 +1369,25 @@ function validateLivenessEventShape(
 
 /*
  * =========================================================
- * FACIAL PREFLIGHT EVALUATION
+ * FACIAL PREFLIGHT
  * =========================================================
  *
- * ESTE É O ENDPOINT QUE O frontend chama quando termina
- * as dez posições.
+ * Endpoint utilizado pelo frontend quando as 10 posições
+ * terminam.
  *
- * Agora ele guarda uma sessão de LIVENESS, não fotografias.
+ * POST /api/clients/:id/facial-preflight
+ *
+ * RESULTADO:
+ *
+ * 10 posições corretas
+ *        ↓
+ * liveness aprovada
+ *        ↓
+ * sessão guardada
+ *        ↓
+ * cliente pronto para Administração
+ *
+ * Não há captura de fotografia.
  */
 
 router.post(
@@ -1245,6 +1404,13 @@ router.post(
     next
   ) => {
     try {
+
+      /*
+       * =====================================================
+       * CLIENTE
+       * =====================================================
+       */
+
       const client =
         await findAccessibleClient(
           req,
@@ -1254,6 +1420,7 @@ router.post(
               true
           }
         );
+
 
       if (!client) {
         return res
@@ -1267,6 +1434,7 @@ router.post(
           });
       }
 
+
       const {
         consentAccepted,
         positions,
@@ -1275,16 +1443,29 @@ router.post(
       } =
         req.body;
 
+
       /*
-       * ======================================================
-       * CONSENT
-       * ======================================================
+       * =====================================================
+       * CONSENTIMENTO
+       * =====================================================
+       *
+       * O frontend atual envia consentAccepted=true.
+       *
+       * Também aceitamos um consentimento que já tenha
+       * sido guardado no cliente.
        */
 
-      if (
-        consentAccepted !==
-        true
-      ) {
+      const storedConsent =
+        client?.facialConsent
+          ?.accepted === true;
+
+
+      const validConsent =
+        consentAccepted === true ||
+        storedConsent;
+
+
+      if (!validConsent) {
         return res
           .status(400)
           .json({
@@ -1296,10 +1477,11 @@ router.post(
           });
       }
 
+
       /*
-       * ======================================================
-       * NORMALIZAÇÃO
-       * ======================================================
+       * =====================================================
+       * POSIÇÕES
+       * =====================================================
        */
 
       const normalizedPositions =
@@ -1307,16 +1489,18 @@ router.post(
           positions
         );
 
+
       /*
-       * ======================================================
-       * FORMATO DA SESSÃO
-       * ======================================================
+       * =====================================================
+       * VALIDAR ESTRUTURA
+       * =====================================================
        */
 
       const eventShape =
         validateLivenessEventShape(
           normalizedPositions
         );
+
 
       if (
         !eventShape.valid
@@ -1335,10 +1519,20 @@ router.post(
           });
       }
 
+
       /*
-       * ======================================================
-       * AVALIAÇÃO OFICIAL DO PREFLIGHT
-       * ======================================================
+       * =====================================================
+       * AVALIAÇÃO
+       * =====================================================
+       *
+       * O preflight-service determina:
+       *
+       * 10 posições completas
+       * + posições verificadas
+       * + uma face
+       * + sorriso
+       *
+       * = passed
        */
 
       const result =
@@ -1348,31 +1542,96 @@ router.post(
 
           passportMatch,
 
-          consentAccepted
+          consentAccepted:
+            validConsent
         });
 
+
       /*
-       * ======================================================
+       * O frontend pode enviar facialResult para
+       * compatibilidade, mas não confiamos nesse campo
+       * para fabricar uma aprovação.
+       */
+
+      void facialResult;
+
+
+      /*
+       * =====================================================
        * SESSION ID
-       * ======================================================
+       * =====================================================
        */
 
       const sessionId =
         crypto.randomUUID();
+
 
       const completedAt =
         result.passed
           ? new Date()
           : null;
 
+
       /*
-       * ======================================================
+       * =====================================================
+       * STARTED AT
+       * =====================================================
+       */
+
+      const completionDates =
+        normalizedPositions
+          .map(
+            position => {
+
+              if (
+                !position?.completedAt
+              ) {
+                return null;
+              }
+
+              const date =
+                new Date(
+                  position.completedAt
+                );
+
+              if (
+                Number.isNaN(
+                  date.getTime()
+                )
+              ) {
+                return null;
+              }
+
+              return date;
+            }
+          )
+          .filter(
+            date =>
+              date !== null
+          )
+          .sort(
+            (
+              first,
+              second
+            ) =>
+              first.getTime() -
+              second.getTime()
+          );
+
+
+      const startedAt =
+        completionDates[0] ||
+        null;
+
+
+      /*
+       * =====================================================
        * LIVENESS SESSION
-       * ======================================================
+       * =====================================================
        *
-       * Esta estrutura não contém imagens.
+       * Nenhuma fotografia é guardada aqui.
        *
-       * Contém somente eventos de liveness.
+       * Apenas os eventos da prova de vida.
        */
 
       const livenessSession =
@@ -1387,32 +1646,7 @@ router.post(
           source:
             "local_liveness",
 
-          startedAt:
-            normalizedPositions
-              .map(
-                position =>
-                  position.completedAt
-                    ? new Date(
-                        position.completedAt
-                      )
-                    : null
-              )
-              .filter(
-                value =>
-                  value instanceof Date &&
-                  !Number.isNaN(
-                    value.getTime()
-                  )
-              )
-              .sort(
-                (
-                  a,
-                  b
-                ) =>
-                  a.getTime() -
-                  b.getTime()
-              )[0] ||
-            null,
+          startedAt,
 
           completedAt,
 
@@ -1432,10 +1666,11 @@ router.post(
             normalizedPositions
         };
 
+
       /*
-       * ======================================================
-       * CONSENT
-       * ======================================================
+       * =====================================================
+       * CONSENTIMENTO DO CLIENTE
+       * =====================================================
        */
 
       client.facialConsent =
@@ -1450,10 +1685,11 @@ router.post(
             new Date()
         };
 
+
       /*
-       * ======================================================
+       * =====================================================
        * PREFLIGHT
-       * ======================================================
+       * =====================================================
        */
 
       client.facialPreflight =
@@ -1514,76 +1750,108 @@ router.post(
 
           consentAcceptedAt:
             client
-              .facialPreflight
-              ?.consentAcceptedAt ||
+              .facialConsent
+              ?.acceptedAt ||
             new Date()
         };
 
+
       /*
-       * ======================================================
-       * SALVAR
-       * ======================================================
+       * =====================================================
+       * GUARDAR CLIENTE
+       * =====================================================
+       *
+       * Este save acontece ANTES do AuditLog.
+       *
+       * Portanto, se a auditoria falhar, a liveness
+       * continua guardada.
        */
 
       await client.save();
 
+
       /*
-       * ======================================================
+       * =====================================================
        * AUDITORIA
-       * ======================================================
+       * =====================================================
+       *
+       * A falha da auditoria não pode transformar
+       * uma liveness já guardada numa falsa falha
+       * apresentada ao cliente.
        */
 
-      await AuditLog.create({
-        actorId:
-          req.user._id,
+      try {
 
-        action:
-          "client.facial_preflight",
+        await AuditLog.create({
+          actorId:
+            req.user._id,
 
-        resource:
-          "client",
+          action:
+            "client.facial_preflight",
 
-        resourceId:
-          client._id.toString(),
+          resource:
+            "client",
 
-        ip:
-          req.ip,
+          resourceId:
+            client._id.toString(),
 
-        metadata: {
-          passed:
-            result.passed,
+          ip:
+            req.ip,
 
-          score:
-            result.score,
+          metadata: {
+            passed:
+              result.passed,
 
-          positionsCompleted:
-            result.positionsCompleted,
+            score:
+              result.score,
 
-          positionsRequired:
-            result.positionsRequired,
+            positionsCompleted:
+              result.positionsCompleted,
 
-          smileDetected:
-            result.smileDetected,
+            positionsRequired:
+              result.positionsRequired,
 
-          sessionId,
+            smileDetected:
+              result.smileDetected,
 
-          liveness:
-            true,
+            sessionId,
 
-          issues:
-            result.issues
-        }
-      });
+            liveness:
+              true,
+
+            issues:
+              result.issues
+          }
+        });
+
+      } catch (
+        auditError
+      ) {
+
+        console.error(
+          "[CLIENTS] AuditLog facial preflight failed:",
+          auditError
+        );
+      }
+
 
       /*
-       * ======================================================
+       * =====================================================
        * RESPOSTA
-       * ======================================================
+       * =====================================================
        */
 
       return res.json({
+
         success:
           true,
+
+        /*
+         * Campo explícito para o frontend.
+         */
+
+        livenessPassed:
+          result.passed,
 
         clientId:
           client._id,
@@ -1592,6 +1860,7 @@ router.post(
           result,
 
         livenessSession: {
+
           sessionId,
 
           status:
@@ -1614,18 +1883,24 @@ router.post(
         },
 
         /*
-         * Mantemos isto explícito:
+         * A prova de vida local foi concluída.
          *
-         * liveness concluído NÃO significa que uma
-         * verificação VFS externa foi executada.
+         * VFS é uma etapa externa e diferente.
          */
 
         vfsVerification:
           "not_completed"
       });
+
     } catch (
       error
     ) {
+
+      console.error(
+        "[CLIENTS] Facial preflight error:",
+        error
+      );
+
       next(error);
     }
   }
@@ -1650,6 +1925,7 @@ router.delete(
     next
   ) => {
     try {
+
       const client =
         await Client.findOneAndUpdate(
           {
@@ -1673,6 +1949,7 @@ router.delete(
           }
         );
 
+
       if (!client) {
         return res
           .status(404)
@@ -1685,27 +1962,42 @@ router.delete(
           });
       }
 
-      await AuditLog.create({
-        actorId:
-          req.user._id,
 
-        action:
-          "client.deactivate",
+      try {
 
-        resource:
-          "client",
+        await AuditLog.create({
+          actorId:
+            req.user._id,
 
-        resourceId:
-          client._id.toString(),
+          action:
+            "client.deactivate",
 
-        ip:
-          req.ip
-      });
+          resource:
+            "client",
+
+          resourceId:
+            client._id.toString(),
+
+          ip:
+            req.ip
+        });
+
+      } catch (
+        auditError
+      ) {
+
+        console.error(
+          "[CLIENTS] AuditLog client.deactivate failed:",
+          auditError
+        );
+      }
+
 
       return res.json({
         success:
           true
       });
+
     } catch (
       error
     ) {
