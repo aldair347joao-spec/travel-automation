@@ -1,6 +1,276 @@
 const mongoose =
   require("mongoose");
 
+/*
+ * ============================================================
+ * LIVENESS POSITION
+ * ============================================================
+ *
+ * Cada posição representa um evento biométrico confirmado
+ * pelo motor facial local.
+ *
+ * IMPORTANTE:
+ *
+ * Isto NÃO é uma fotografia.
+ * Não existe data URL.
+ * Não existe imagem armazenada.
+ * Não existe storageReference obrigatório.
+ *
+ * Guardamos apenas os sinais necessários para comprovar
+ * que a posição foi realmente executada durante a sessão.
+ * ============================================================
+ */
+
+const livenessPositionSchema =
+  new mongoose.Schema(
+    {
+      position: {
+        type: Number,
+        min: 1,
+        max: 10,
+        required: true
+      },
+
+      label: {
+        type: String,
+        required: true,
+        maxlength: 80
+      },
+
+      instruction: {
+        type: String,
+        default: null,
+        maxlength: 240
+      },
+
+      sequence: {
+        type: Number,
+        min: 1,
+        max: 10,
+        required: true
+      },
+
+      score: {
+        type: Number,
+        min: 0,
+        max: 1,
+        default: 0
+      },
+
+      positionScore: {
+        type: Number,
+        min: 0,
+        max: 1,
+        default: 0
+      },
+
+      faceDetected: {
+        type: Boolean,
+        default: false
+      },
+
+      singleFace: {
+        type: Boolean,
+        default: false
+      },
+
+      faceCount: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+
+      faceArea: {
+        type: Number,
+        min: 0,
+        default: 0
+      },
+
+      detectionScore: {
+        type: Number,
+        min: 0,
+        max: 1,
+        default: 0
+      },
+
+      pose: {
+        yaw: {
+          type: Number,
+          default: 0
+        },
+
+        pitch: {
+          type: Number,
+          default: 0
+        },
+
+        roll: {
+          type: Number,
+          default: 0
+        }
+      },
+
+      quality: {
+        brightness: {
+          type: Number,
+          default: 0
+        },
+
+        brightnessScore: {
+          type: Number,
+          min: 0,
+          max: 1,
+          default: 0
+        },
+
+        sharpnessScore: {
+          type: Number,
+          min: 0,
+          max: 1,
+          default: 0
+        },
+
+        faceSizeScore: {
+          type: Number,
+          min: 0,
+          max: 1,
+          default: 0
+        },
+
+        detectionScore: {
+          type: Number,
+          min: 0,
+          max: 1,
+          default: 0
+        }
+      },
+
+      smileDetected: {
+        type: Boolean,
+        default: false
+      },
+
+      smileScore: {
+        type: Number,
+        min: 0,
+        max: 1,
+        default: 0
+      },
+
+      verified: {
+        type: Boolean,
+        default: false
+      },
+
+      completedAt: {
+        type: Date,
+        default: Date.now
+      }
+    },
+    {
+      _id: false
+    }
+  );
+
+
+/*
+ * ============================================================
+ * LIVENESS SESSION
+ * ============================================================
+ *
+ * Uma sessão representa uma execução completa do fluxo
+ * facial.
+ *
+ * Não contém imagens.
+ * ============================================================
+ */
+
+const livenessSessionSchema =
+  new mongoose.Schema(
+    {
+      sessionId: {
+        type: String,
+        required: true,
+        maxlength: 160
+      },
+
+      status: {
+        type: String,
+        enum: [
+          "in_progress",
+          "passed",
+          "failed",
+          "requires_user"
+        ],
+        default: "in_progress"
+      },
+
+      source: {
+        type: String,
+        default: "local_liveness"
+      },
+
+      startedAt: {
+        type: Date,
+        default: null
+      },
+
+      completedAt: {
+        type: Date,
+        default: null
+      },
+
+      score: {
+        type: Number,
+        min: 0,
+        max: 1,
+        default: null
+      },
+
+      completedCount: {
+        type: Number,
+        min: 0,
+        max: 10,
+        default: 0
+      },
+
+      total: {
+        type: Number,
+        min: 0,
+        max: 10,
+        default: 10
+      },
+
+      verified: {
+        type: Boolean,
+        default: false
+      },
+
+      positions: {
+        type: [
+          livenessPositionSchema
+        ],
+        default: []
+      }
+    },
+    {
+      _id: false
+    }
+  );
+
+
+/*
+ * ============================================================
+ * LEGACY / OFFICIAL FACIAL POSITION
+ * ============================================================
+ *
+ * Mantemos esta estrutura para não quebrar documentos antigos.
+ *
+ * storageReference deixa de ser obrigatório porque o novo
+ * fluxo de liveness não depende de fotografias por posição.
+ * ============================================================
+ */
+
 const facePositionSchema =
   new mongoose.Schema(
     {
@@ -19,7 +289,7 @@ const facePositionSchema =
 
       storageReference: {
         type: String,
-        required: true,
+        default: null,
         maxlength: 500
       },
 
@@ -38,6 +308,13 @@ const facePositionSchema =
     }
   );
 
+
+/*
+ * ============================================================
+ * FACIAL PROFILE
+ * ============================================================
+ */
+
 const facialProfileSchema =
   new mongoose.Schema(
     {
@@ -51,8 +328,16 @@ const facialProfileSchema =
         default: null
       },
 
+      /*
+       * Mantido por compatibilidade com versões anteriores.
+       *
+       * O novo fluxo não depende deste array para validar
+       * a sessão de liveness.
+       */
       positions: {
-        type: [facePositionSchema],
+        type: [
+          facePositionSchema
+        ],
 
         validate: {
           validator(value) {
@@ -70,13 +355,6 @@ const facialProfileSchema =
         maxlength: 500
       },
 
-      /*
-       * This field represents ONLY the
-       * official facial verification state.
-       *
-       * The internal preflight below is
-       * deliberately kept separate.
-       */
       verificationStatus: {
         type: String,
 
@@ -96,14 +374,19 @@ const facialProfileSchema =
     }
   );
 
+
 /*
- * Internal facial preparation.
+ * ============================================================
+ * INTERNAL FACIAL PREFLIGHT
+ * ============================================================
  *
- * IMPORTANT:
- * facialPreflight.passed does NOT mean
- * that VFS facial verification has been
- * completed.
+ * Isto representa a preparação/liveness executada pelo
+ * próprio sistema.
+ *
+ * NÃO significa que uma verificação VFS externa foi concluída.
+ * ============================================================
  */
+
 const facialPreflightSchema =
   new mongoose.Schema(
     {
@@ -184,6 +467,23 @@ const facialPreflightSchema =
         }
       },
 
+      /*
+       * ======================================================
+       * SESSÃO REAL DE LIVENESS
+       * ======================================================
+       *
+       * Aqui ficam os eventos das 10 posições.
+       *
+       * Nenhuma imagem é armazenada.
+       */
+
+      livenessSession: {
+        type:
+          livenessSessionSchema,
+
+        default: null
+      },
+
       issues: {
         type: [String],
         default: []
@@ -203,6 +503,13 @@ const facialPreflightSchema =
       _id: false
     }
   );
+
+
+/*
+ * ============================================================
+ * CLIENT
+ * ============================================================
+ */
 
 const clientSchema =
   new mongoose.Schema(
@@ -293,79 +600,94 @@ const clientSchema =
 
         default: null
       },
+
       passportType: {
-  type: String,
-  enum: [
-    "legacy",
-    "electronic",
-    "unknown"
-  ],
-  default: "unknown"
-},
+        type: String,
 
-passportValidation: {
-  status: {
-    type: String,
-    enum: [
-      "not_started",
-      "pending",
-      "passed",
-      "requires_user",
-      "failed"
-    ],
-    default: "not_started"
-  },
+        enum: [
+          "legacy",
+          "electronic",
+          "unknown"
+        ],
 
-  passportType: {
-    type: String,
-    enum: [
-      "legacy",
-      "electronic",
-      "unknown"
-    ],
-    default: "unknown"
-  },
+        default: "unknown"
+      },
 
-  mrzPresent: {
-    type: Boolean,
-    default: false
-  },
+      passportValidation: {
+        status: {
+          type: String,
 
-  mrzValid: {
-    type: Boolean,
-    default: false
-  },
+          enum: [
+            "not_started",
+            "pending",
+            "passed",
+            "requires_user",
+            "failed"
+          ],
 
-  ocrValid: {
-    type: Boolean,
-    default: false
-  },
+          default:
+            "not_started"
+        },
 
-  clientMatch: {
-    type: Boolean,
-    default: false
-  },
+        passportType: {
+          type: String,
 
-  expired: {
-    type: Boolean,
-    default: false
-  },
+          enum: [
+            "legacy",
+            "electronic",
+            "unknown"
+          ],
 
-  fingerprint: {
-    type: String,
-    default: null
-  },
+          default: "unknown"
+        },
 
-  issues: {
-    type: [String],
-    default: []
-  },
+        mrzPresent: {
+          type: Boolean,
+          default: false
+        },
 
-  checkedAt: {
-    type: Date,
-    default: null
-  }
-},
+        mrzValid: {
+          type: Boolean,
+          default: false
+        },
+
+        ocrValid: {
+          type: Boolean,
+          default: false
+        },
+
+        clientMatch: {
+          type: Boolean,
+          default: false
+        },
+
+        expired: {
+          type: Boolean,
+          default: false
+        },
+
+        fingerprint: {
+          type: String,
+          default: null
+        },
+
+        issues: {
+          type: [String],
+          default: []
+        },
+
+        checkedAt: {
+          type: Date,
+          default: null
+        }
+      },
+
+      /*
+       * ======================================================
+       * BIOMETRIC CONSENT
+       * ======================================================
+       */
+
       facialConsent: {
         accepted: {
           type: Boolean,
@@ -380,6 +702,12 @@ passportValidation: {
         }
       },
 
+      /*
+       * ======================================================
+       * OFFICIAL FACIAL PROFILE
+       * ======================================================
+       */
+
       facialProfile: {
         type:
           facialProfileSchema,
@@ -390,10 +718,11 @@ passportValidation: {
       },
 
       /*
-       * Internal quality/readiness check.
-       *
-       * This is NOT the VFS verification.
+       * ======================================================
+       * FACIAL PREFLIGHT / LIVENESS
+       * ======================================================
        */
+
       facialPreflight: {
         type:
           facialPreflightSchema,
@@ -408,7 +737,10 @@ passportValidation: {
           positionsRequired:
             10,
 
-          issues: []
+          issues: [],
+
+          livenessSession:
+            null
         })
       },
 
@@ -424,10 +756,24 @@ passportValidation: {
     }
   );
 
+
+/*
+ * ============================================================
+ * INDEXES
+ * ============================================================
+ */
+
 clientSchema.index({
   accountId: 1,
   email: 1
 });
+
+
+/*
+ * ============================================================
+ * EXPORT
+ * ============================================================
+ */
 
 module.exports =
   mongoose.model(
