@@ -1701,215 +1701,299 @@
     ========================================================= */
 
     async function submitApplication(
-        event
+    event
+) {
+    if (
+        event &&
+        typeof event.preventDefault ===
+        "function"
     ) {
-        if (
-            state.submitting
-        ) {
-            return;
-        }
-
         event.preventDefault();
+    }
 
+    if (
+        event &&
+        typeof event.stopPropagation ===
+        "function"
+    ) {
         event.stopPropagation();
+    }
 
-        if (
-            typeof event.stopImmediatePropagation ===
-            "function"
-        ) {
-            event.stopImmediatePropagation();
-        }
+    if (
+        event &&
+        typeof event.stopImmediatePropagation ===
+        "function"
+    ) {
+        event.stopImmediatePropagation();
+    }
 
-        ensurePreferenceFields();
+    if (
+        state.submitting
+    ) {
+        return;
+    }
 
-        const clientId =
-            detectClientId();
+    ensurePreferenceFields();
 
-        if (!clientId) {
-            showToast(
-                "Valide primeiro o passaporte para criar o perfil do viajante.",
-                "error"
-            );
+    const clientId =
+        detectClientId();
 
-            return;
-        }
+    if (!clientId) {
+        showToast(
+            "Valide primeiro o passaporte para criar o perfil do viajante.",
+            "error"
+        );
 
-        const preferences =
-            getFinalPreferences();
+        return;
+    }
 
-        const validation =
-            validatePreferences(
-                preferences
-            );
+    const preferences =
+        getFinalPreferences();
 
-        if (
-            !validation.valid
-        ) {
-            showToast(
-                validation.message,
-                "error"
-            );
+    const validation =
+        validatePreferences(
+            preferences
+        );
 
-            return;
-        }
+    if (
+        !validation.valid
+    ) {
+        showToast(
+            validation.message,
+            "error"
+        );
 
-        state.submitting =
+        return;
+    }
+
+    state.submitting =
+        true;
+
+    const button =
+        event?.submitter ||
+        $("applicationSubmitButton");
+
+    const originalText =
+        button
+            ? button.textContent
+            : "";
+
+    if (button) {
+        button.disabled =
             true;
 
-        const button =
-            event.submitter ||
-            $("applicationSubmitButton");
+        button.dataset.originalText =
+            originalText;
 
-        if (button) {
-            button.disabled =
-                true;
+        button.textContent =
+            "A enviar...";
+    }
 
-            button.dataset.originalText =
-                button.textContent;
+    try {
+        const idempotencyKey =
+            `TA-${clientId}-${Date.now()}-${Math.random()
+                .toString(36)
+                .slice(2, 10)}`;
 
-            button.textContent =
-                "A enviar...";
+        const data =
+            await api(
+                "/api/applications",
+                {
+                    method:
+                        "POST",
+
+                    headers: {
+                        "Idempotency-Key":
+                            idempotencyKey
+                    },
+
+                    body:
+                        JSON.stringify({
+                            clientId,
+
+                            visaType:
+                                preferences
+                                    .visaType,
+
+                            visaCenter:
+                                preferences
+                                    .visaCenter,
+
+                            travelPurpose:
+                                preferences
+                                    .travelPurpose,
+
+                            serviceType:
+                                preferences
+                                    .serviceType,
+
+                            appointmentMode:
+                                preferences
+                                    .appointmentMode,
+
+                            preferredDates:
+                                preferences
+                                    .preferredDates,
+
+                            preferredTime:
+                                preferences
+                                    .preferredTime,
+
+                            preferredWeekdays:
+                                preferences
+                                    .preferredWeekdays
+                        })
+                }
+            );
+
+        const application =
+            data?.application;
+
+        if (!application) {
+            throw new Error(
+                "O backend não devolveu a candidatura criada."
+            );
         }
 
+        state.applicationId =
+            application._id ||
+            application.id ||
+            null;
+
+        state.clientId =
+            clientId;
+
+        /*
+         * Marca a candidatura como enviada.
+         * O app.js não deve tratar o formulário
+         * como uma candidatura ainda não enviada.
+         */
+        document.body.dataset.applicationSubmitted =
+            state.applicationId
+                ? "true"
+                : "false";
+
+        /*
+         * Atualiza TODO o estado da candidatura.
+         * Isto inclui PENDING_REVIEW.
+         */
+        updateApplicationInterface(
+            application
+        );
+
+        showToast(
+            "Candidatura enviada para a administração.",
+            "success"
+        );
+
+        scrollToAdminPanel();
+
+    } catch (error) {
+        console.error(
+            "[TRAVEL AUTOMATION] submit",
+            error
+        );
+
+        /*
+         * Se o backend criou a candidatura mas
+         * a resposta chegou de forma inesperada,
+         * tentamos recuperar a candidatura mais
+         * recente antes de apresentar erro.
+         */
         try {
-            const idempotencyKey =
-                `TA-${clientId}-${Date.now()}-${Math.random()
-                    .toString(36)
-                    .slice(2, 10)}`;
-
-            const data =
+            const latest =
                 await api(
-                    "/api/applications",
-                    {
-                        method:
-                            "POST",
-
-                        headers: {
-                            "Idempotency-Key":
-                                idempotencyKey
-                        },
-
-                        body:
-                            JSON.stringify({
-                                clientId,
-
-                                visaType:
-                                    preferences
-                                        .visaType,
-
-                                visaCenter:
-                                    preferences
-                                        .visaCenter,
-
-                                travelPurpose:
-                                    preferences
-                                        .travelPurpose,
-
-                                serviceType:
-                                    preferences
-                                        .serviceType,
-
-                                appointmentMode:
-                                    preferences
-                                        .appointmentMode,
-
-                                preferredDates:
-                                    preferences
-                                        .preferredDates,
-
-                                preferredTime:
-                                    preferences
-                                        .preferredTime,
-
-                                preferredWeekdays:
-                                    preferences
-                                        .preferredWeekdays
-                            })
-                    }
+                    "/api/applications"
                 );
 
-            const application =
-                data?.application;
+            const applications =
+                Array.isArray(
+                    latest?.applications
+                )
+                    ? latest.applications
+                    : Array.isArray(
+                        latest
+                    )
+                        ? latest
+                        : [];
 
-            if (!application) {
-                throw new Error(
-                    "O backend não devolveu a candidatura criada."
-                );
+            if (
+                applications.length
+            ) {
+                const application =
+                    applications[0];
+
+                const recoveredId =
+                    application?._id ||
+                    application?.id ||
+                    null;
+
+                if (
+                    recoveredId
+                ) {
+                    state.applicationId =
+                        recoveredId;
+
+                    state.clientId =
+                        clientId;
+
+                    document.body.dataset.applicationSubmitted =
+                        "true";
+
+                    updateApplicationInterface(
+                        application
+                    );
+
+                    showToast(
+                        "Candidatura enviada para a administração.",
+                        "success"
+                    );
+
+                    scrollToAdminPanel();
+
+                    return;
+                }
             }
-
-    state.applicationId =
-    application._id ||
-    application.id ||
-    null;
-
-state.clientId =
-    clientId;
-
-/*
- * Impede o app.js de voltar a liberar
- * o botão enquanto esta candidatura
- * estiver sob controlo administrativo.
- */
-document.body.dataset.applicationSubmitted =
-    state.applicationId
-        ? "true"
-        : "false";
-
-            renderAdminStatus(
-                application
+        } catch (
+            recoveryError
+        ) {
+            console.warn(
+                "[TRAVEL AUTOMATION] application recovery",
+                recoveryError
             );
+        }
 
-            renderBotStates(
-                application
-            );
+        showToast(
+            error?.message ||
+            "Não foi possível enviar a candidatura.",
+            "error"
+        );
 
-            renderPayment(
-                application
-            );
-
-            showToast(
-                "Candidatura enviada. Aguarde a administração.",
-                "success"
-            );
-
-            scrollToAdminPanel();
-
-        } catch (error) {
-            console.error(
-                "[TRAVEL AUTOMATION] submit",
-                error
-            );
-
-            showToast(
-                error.message ||
-                "Não foi possível enviar a candidatura.",
-                "error"
-            );
-
-        } finally {
-    state.submitting =
-        false;
-
-    /*
-     * Depois de criar a candidatura, o formulário
-     * pertence ao fluxo administrativo.
-     *
-     * Não voltar a habilitar o botão automaticamente.
-     */
-    if (
-        button &&
-        !state.applicationId
-    ) {
-        button.disabled =
+    } finally {
+        state.submitting =
             false;
 
+        /*
+         * NÃO desativamos o formulário.
+         *
+         * Apenas restauramos o botão caso
+         * a candidatura não tenha sido criada.
+         */
         if (
-            button.dataset
-                .originalText
+            button &&
+            !state.applicationId
         ) {
-            button.textContent =
+            button.disabled =
+                false;
+
+            if (
                 button.dataset
-                    .originalText;
+                    .originalText
+            ) {
+                button.textContent =
+                    button.dataset
+                        .originalText;
+            }
         }
     }
 }
@@ -2312,52 +2396,104 @@ document.body.dataset.applicationSubmitted =
     /* =========================================================
        FORM BINDING
     ========================================================= */
+function bindApplicationForm() {
+    const form =
+        $("applicationForm");
 
-    function bindApplicationForm() {
-        const form =
-            $("applicationForm");
+    if (!form) {
+        return;
+    }
 
-        if (!form) {
-            return;
-        }
+    ensurePreferenceFields();
 
-        ensurePreferenceFields();
+    /*
+     * O botão não pode executar o submit nativo
+     * do navegador, porque isso provoca o reset/reload
+     * antes de o fluxo da candidatura terminar.
+     */
+    const button =
+        $("applicationSubmitButton");
 
-        if (
-            form.dataset
-                .frontendFinalBound ===
+    if (
+        button &&
+        button.dataset
+            .frontendFinalClickBound !==
             "true"
-        ) {
-            return;
-        }
-
-        form.dataset
-            .frontendFinalBound =
+    ) {
+        button.dataset
+            .frontendFinalClickBound =
             "true";
 
         /*
-         * CAPTURE:
-         * impede o listener antigo
-         * de enviar outra candidatura
-         * ou chamar /prepare.
+         * O formulário NÃO é desativado.
+         * Apenas o comportamento nativo do botão
+         * é substituído pelo nosso fluxo AJAX.
          */
-        form.addEventListener(
-            "submit",
-            submitApplication,
+        button.type =
+            "button";
+
+        button.addEventListener(
+            "click",
+            event => {
+                event.preventDefault();
+                event.stopPropagation();
+
+                if (
+                    typeof event.stopImmediatePropagation ===
+                    "function"
+                ) {
+                    event.stopImmediatePropagation();
+                }
+
+                submitApplication({
+                    preventDefault() {},
+
+                    stopPropagation() {},
+
+                    stopImmediatePropagation() {},
+
+                    submitter:
+                        button
+                });
+            },
             true
-        );
-
-        form.addEventListener(
-            "input",
-            updatePreferenceSummary
-        );
-
-        form.addEventListener(
-            "change",
-            updatePreferenceSummary
         );
     }
 
+    if (
+        form.dataset
+            .frontendFinalBound ===
+        "true"
+    ) {
+        return;
+    }
+
+    form.dataset
+        .frontendFinalBound =
+        "true";
+
+    /*
+     * Mantemos o submit como proteção adicional.
+     * Se algum outro código tentar submeter
+     * o formulário, o navegador não fará reload.
+     */
+    form.addEventListener(
+        "submit",
+        submitApplication,
+        true
+    );
+
+    form.addEventListener(
+        "input",
+        updatePreferenceSummary
+    );
+
+    form.addEventListener(
+        "change",
+        updatePreferenceSummary
+    );
+}
+    
 
     /* =========================================================
        OBSERVER
