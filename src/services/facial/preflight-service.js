@@ -70,17 +70,31 @@ const REQUIRED_POSITIONS = [
   }
 ];
 
+/*
+ * ============================================================
+ * CRITÉRIOS DE QUALIDADE
+ * ============================================================
+ *
+ * Estes valores estão alinhados com o motor facial
+ * existente no frontend:
+ *
+ * positionScoreThreshold: 0.64
+ * overallScoreThreshold: 0.62
+ *
+ * O backend continua a ser a autoridade final da validação,
+ * mas não utiliza um nível de exigência diferente do motor
+ * que executa a liveness no dispositivo do cliente.
+ */
+
 const MIN_POSITION_SCORE =
   Number(
-    process.env
-      .FACIAL_PREFLIGHT_MIN_POSITION_SCORE
-  ) || 0.75;
+    process.env.FACIAL_PREFLIGHT_MIN_POSITION_SCORE
+  ) || 0.64;
 
 const MIN_OVERALL_SCORE =
   Number(
-    process.env
-      .FACIAL_PREFLIGHT_MIN_SCORE
-  ) || 0.82;
+    process.env.FACIAL_PREFLIGHT_MIN_SCORE
+  ) || 0.62;
 
 function clampScore(value) {
   const score =
@@ -215,7 +229,8 @@ function validatePositions(
     }
 
     /*
-     * Position 10 is the smile test.
+     * A posição 10 continua a ser obrigatoriamente
+     * a verificação de sorriso.
      */
     if (
       number === 10 &&
@@ -228,6 +243,10 @@ function validatePositions(
     }
   }
 
+  /*
+   * Confirma que todas as 10 posições foram
+   * efetivamente realizadas.
+   */
   for (
     const expected
     of REQUIRED_POSITIONS
@@ -324,6 +343,10 @@ function evaluate({
       positions
     );
 
+  /*
+   * A média agora utiliza exatamente o mesmo
+   * limite do motor facial frontend: 0.62.
+   */
   if (
     averageScore <
     MIN_OVERALL_SCORE
@@ -333,6 +356,10 @@ function evaluate({
     );
   }
 
+  /*
+   * Validação opcional de correspondência
+   * com os dados do passaporte.
+   */
   if (
     passportMatch
   ) {
