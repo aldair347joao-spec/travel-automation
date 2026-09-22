@@ -3568,9 +3568,11 @@ if (
 }
 
 const body = {
-
   clientId:
     targetClientId,
+
+  consentAccepted:
+    true,
 
   completed:
     Boolean(
@@ -3601,10 +3603,7 @@ const body = {
 
   passportMatch:
     payload.passportMatch ||
-    null,
-
-  facialResult:
-    result
+    null
 };
 
 const response =
