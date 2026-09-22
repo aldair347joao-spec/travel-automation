@@ -2009,8 +2009,6 @@ const values = [
             delete button.dataset.originalText;
         }
     }
-}
-}
     function scrollToAdminPanel() {
         window.setTimeout(
             () => {
