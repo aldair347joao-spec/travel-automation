@@ -41,6 +41,37 @@ function createAdminRouter() {
 
   /*
    * =========================================================
+   * HELPER — ADMIN GLOBAL
+   * =========================================================
+   *
+   * Owner/Admin possuem visão global da Administração.
+   *
+   * A candidatura continua pertencendo à accountId original
+   * do colaborador.
+   *
+   * Não alteramos Application.accountId.
+   *
+   * Operator/Viewer continuam isolados pela própria conta.
+   * =========================================================
+   */
+
+  function isGlobalAdmin(
+    req
+  ) {
+    return [
+      "owner",
+      "admin"
+    ].includes(
+      String(
+        req.user?.role ||
+        ""
+      ).toLowerCase()
+    );
+  }
+
+
+  /*
+   * =========================================================
    * HELPER — CLIENTE
    * =========================================================
    *
@@ -725,7 +756,7 @@ function createAdminRouter() {
                         ? Number(
                             position.quality
                               .faceSizeScore
-                          )
+                        )
                         : 0,
 
                     detectionScore:
@@ -738,10 +769,9 @@ function createAdminRouter() {
                         ? Number(
                             position.quality
                               .detectionScore
-                          )
+                        )
                         : 0
-                  
-                }
+                  }
                 : null,
 
             smileDetected:
@@ -834,12 +864,6 @@ function createAdminRouter() {
         ? application.applicants
         : [];
 
-    /*
-     * Liveness atual.
-     *
-     * Primeiro tenta o snapshot do applicant.
-     * Depois Client.facialPreflight.livenessSession.
-     */
     const liveness =
       serializeLiveness(
         application,
@@ -860,11 +884,6 @@ function createAdminRouter() {
       client:
         serializedClient,
 
-      /*
-       * Também entregamos a coleção completa
-       * de candidatos, caso no futuro exista
-       * candidatura de grupo.
-       */
       clients:
         applicants.map(
           applicantItem => {
@@ -956,16 +975,6 @@ function createAdminRouter() {
         application.preferredWeekdays ||
         [],
 
-      /*
-       * =====================================================
-       * APPLICANTS
-       * =====================================================
-       *
-       * Mantemos os dados necessários do snapshot,
-       * mas não devolvemos dados secretos.
-       *
-       * A liveness também é entregue dentro do applicant.
-       */
       applicants:
         applicants.map(
           applicantItem => {
@@ -1091,12 +1100,6 @@ function createAdminRouter() {
           }
         ),
 
-      /*
-       * =====================================================
-       * PASSPORT
-       * =====================================================
-       */
-
       passport:
         passport
           ? {
@@ -1182,17 +1185,6 @@ function createAdminRouter() {
                 null
             },
 
-      /*
-       * =====================================================
-       * IDENTITY / LIVENESS
-       * =====================================================
-       *
-       * Esta é a informação que a Administração precisa
-       * receber sobre a prova de vida.
-       *
-       * Não são imagens.
-       * É o resultado da sessão de liveness.
-       */
       identity: {
         status:
           liveness?.status ||
@@ -1533,29 +1525,83 @@ function createAdminRouter() {
       next
     ) => {
       try {
-        const accountId =
-          req.user.accountId;
+        const globalAdmin =
+          isGlobalAdmin(
+            req
+          );
 
-        const applications =
-          await Application.find({
-            accountId
-          })
-          .sort({
-            createdAt:
-              -1
-          })
-          .lean();
+        let applications;
+        let controls;
+
+        if (
+          globalAdmin
+        ) {
+          /*
+           * Owner/Admin têm visão global da Administração.
+           *
+           * A Application mantém o accountId original
+           * do colaborador.
+           *
+           * ApplicationAdminControl identifica as
+           * candidaturas que entraram no fluxo administrativo.
+           */
+          controls =
+            await ApplicationAdminControl.find({})
+              .lean();
+
+          const applicationIds =
+            controls
+              .map(
+                control =>
+                  control?.applicationId
+              )
+              .filter(
+                Boolean
+              );
+
+          applications =
+            applicationIds.length
+              ? await Application.find({
+                  _id: {
+                    $in:
+                      applicationIds
+                  }
+                })
+                  .sort({
+                    createdAt:
+                      -1
+                  })
+                  .lean()
+              : [];
+        } else {
+          /*
+           * Operator/Viewer continuam limitados
+           * à própria conta.
+           */
+          const accountId =
+            req.user.accountId;
+
+          applications =
+            await Application.find({
+              accountId
+            })
+              .sort({
+                createdAt:
+                  -1
+              })
+              .lean();
+
+          controls =
+            await ApplicationAdminControl.find({
+              accountId
+            })
+              .lean();
+        }
 
         const clientMap =
           await loadClientMap(
             applications
           );
-
-        const controls =
-          await ApplicationAdminControl.find({
-            accountId
-          })
-          .lean();
 
         const controlMap =
           new Map(
@@ -1572,13 +1618,6 @@ function createAdminRouter() {
         const result =
           applications.map(
             application => {
-              /*
-               * Usa exatamente o mesmo serializer
-               * utilizado no endpoint de detalhe.
-               *
-               * Assim a lista e o detalhe ficam
-               * consistentes.
-               */
               const serializedApplication =
                 serializeApplication(
                   application,
@@ -1681,15 +1720,57 @@ function createAdminRouter() {
             });
         }
 
-        const application =
-          await Application.findOne({
-            _id:
-              req.params.id,
+        let application;
 
-            accountId:
-              req.user.accountId
-          })
-          .lean();
+        if (
+          isGlobalAdmin(
+            req
+          )
+        ) {
+          /*
+           * Owner/Admin podem abrir qualquer
+           * candidatura que tenha entrado no
+           * fluxo administrativo.
+           */
+          application =
+            await Application.findOne({
+              _id:
+                req.params.id
+            })
+              .lean();
+
+          if (
+            application
+          ) {
+            const control =
+              await ApplicationAdminControl.findOne({
+                applicationId:
+                  application._id
+              })
+                .lean();
+
+            if (
+              !control
+            ) {
+              application =
+                null;
+            }
+          }
+        } else {
+          /*
+           * Operator/Viewer continuam isolados
+           * pela própria conta.
+           */
+          application =
+            await Application.findOne({
+              _id:
+                req.params.id,
+
+              accountId:
+                req.user.accountId
+            })
+              .lean();
+        }
 
         if (!application) {
           return res
@@ -1711,12 +1792,9 @@ function createAdminRouter() {
         const control =
           await ApplicationAdminControl.findOne({
             applicationId:
-              application._id,
-
-            accountId:
-              req.user.accountId
+              application._id
           })
-          .lean();
+            .lean();
 
         return res.json({
           success:
