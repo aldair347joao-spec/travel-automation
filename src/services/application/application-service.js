@@ -183,7 +183,6 @@ function getLivenessSession(client) {
     null
   );
 }
-
 function validateLivenessSession(client) {
   const session =
     getLivenessSession(client);
@@ -191,41 +190,72 @@ function validateLivenessSession(client) {
   if (!session) {
     return {
       valid: false,
+
       code:
         "LIVENESS_SESSION_MISSING",
+
       message:
         "O cliente ainda não possui uma sessão de liveness concluída."
     };
   }
 
+
+  /*
+   * A sessão só pode chegar aqui como aprovada
+   * quando as dez posições foram concluídas.
+   */
+
   if (
-    session.status !== "passed"
+    session.status !==
+    "passed"
   ) {
     return {
       valid: false,
+
       code:
         "LIVENESS_NOT_PASSED",
+
       message:
         "A sessão de liveness ainda não foi aprovada.",
+
       status:
-        session.status || "unknown"
+        session.status ||
+        "unknown"
     };
   }
 
-  if (session.verified !== true) {
+
+  /*
+   * A sessão precisa estar marcada como verificada.
+   */
+
+  if (
+    session.verified !==
+    true
+  ) {
     return {
       valid: false,
+
       code:
         "LIVENESS_NOT_VERIFIED",
+
       message:
         "A sessão de liveness não está marcada como verificada."
     };
   }
 
+
+  /*
+   * Precisamos das dez posições.
+   */
+
   const positions =
-    Array.isArray(session.positions)
+    Array.isArray(
+      session.positions
+    )
       ? session.positions
       : [];
+
 
   if (
     positions.length !==
@@ -233,98 +263,151 @@ function validateLivenessSession(client) {
   ) {
     return {
       valid: false,
+
       code:
         "LIVENESS_POSITIONS_INCOMPLETE",
+
       message:
         "A sessão de liveness precisa conter exatamente as 10 posições obrigatórias."
     };
   }
 
+
+  /*
+   * Confirmar que existem exatamente
+   * as posições 1 a 10.
+   */
+
   const numbers =
     positions
       .map(
         (position) =>
-          Number(position.position)
+          Number(
+            position.position
+          )
       )
-      .sort((a, b) => a - b);
+      .sort(
+        (a, b) =>
+          a - b
+      );
+
 
   const complete =
     numbers.length ===
       REQUIRED_LIVENESS_POSITIONS.length &&
     numbers.every(
-      (value, index) =>
+      (
+        value,
+        index
+      ) =>
         value ===
-        REQUIRED_LIVENESS_POSITIONS[index]
+        REQUIRED_LIVENESS_POSITIONS[
+          index
+        ]
     );
+
 
   if (!complete) {
     return {
       valid: false,
+
       code:
         "LIVENESS_POSITIONS_INVALID",
+
       message:
         "As posições da sessão de liveness devem corresponder exatamente às posições 1 a 10."
     };
   }
 
+
+  /*
+   * Todas as dez posições precisam ter sido
+   * efetivamente verificadas pelo motor facial.
+   */
+
   const invalidPositions =
     positions.filter(
       (position) =>
-        position.verified !== true ||
-        position.faceDetected !== true ||
-        position.singleFace !== true
+        position.verified !==
+          true ||
+        position.faceDetected !==
+          true ||
+        position.singleFace !==
+          true
     );
 
+
   if (
-    invalidPositions.length > 0
+    invalidPositions.length >
+    0
   ) {
     return {
       valid: false,
+
       code:
         "LIVENESS_POSITIONS_NOT_VERIFIED",
+
       message:
         "Uma ou mais posições da sessão de liveness não estão verificadas."
     };
   }
 
+
+  /*
+   * A posição 10 é obrigatoriamente
+   * a posição do sorriso.
+   */
+
   const smilePosition =
     positions.find(
       (position) =>
-        Number(position.position) === 10
+        Number(
+          position.position
+        ) === 10
     );
+
 
   if (
     !smilePosition ||
-    smilePosition.smileDetected !== true
+    smilePosition.smileDetected !==
+      true
   ) {
     return {
       valid: false,
+
       code:
         "LIVENESS_SMILE_NOT_VERIFIED",
+
       message:
         "A posição final de sorriso ainda não foi validada."
     };
   }
 
-  const score =
-    Number(session.score);
 
-  if (
-    !Number.isFinite(score) ||
-    score < 0.82
-  ) {
-    return {
-      valid: false,
-      code:
-        "LIVENESS_SCORE_INSUFFICIENT",
-      message:
-        "A pontuação geral da sessão de liveness não atingiu o mínimo necessário.",
-      score
-    };
-  }
+  /*
+   * ========================================================
+   * IMPORTANTE
+   * ========================================================
+   *
+   * NÃO existe mais:
+   *
+   *   score < 0.82
+   *
+   * nem qualquer outra barreira baseada
+   * na pontuação geral.
+   *
+   * O score pode continuar guardado na sessão
+   * para consulta da Administração, mas não
+   * bloqueia o envio do processo.
+   *
+   * As dez posições corretas são a condição
+   * de aprovação da liveness.
+   */
+
 
   return {
     valid: true,
+
     session
   };
 }
