@@ -3222,388 +3222,91 @@ chooseButton?.addEventListener(
   ========================================================= */
 
   function updateVfsGate() {
+    const applicationButton = $("applicationSubmitButton");
 
-    const clientReady =
-      Boolean(
-        state.selectedClient
-      );
+    if (!applicationButton) {
+        return;
+    }
 
+    const applicationForm = $("applicationForm");
 
+    /*
+     * O frontend-final.js também trabalha com o cliente.
+     * Por isso não podemos depender exclusivamente de
+     * state.selectedClient.
+     */
+    const domClientId =
+        $("applicationClient")?.value ||
+        $("identityClient")?.value ||
+        $("passportClientSelect")?.value ||
+        applicationForm?.dataset?.clientId ||
+        "";
+
+    const clientReady = Boolean(
+        state.selectedClient ||
+        state.selectedClientId ||
+        domClientId
+    );
+
+    /*
+     * O passaporte continua a exigir validação aprovada.
+     */
     const passportReady =
-      state.passportValidation
-        ?.status ===
-      "passed";
+        state.passportValidation?.status === "passed";
 
-
+    /*
+     * O reconhecimento facial pode estar registado no
+     * estado interno ou diretamente no formulário.
+     */
     const faceReady =
-      state.facialReady ===
-      true;
-
+        state.facialReady === true ||
+        applicationForm?.dataset?.facialPreflight === "passed";
 
     const gateReady =
-      (
         clientReady &&
         passportReady &&
-        faceReady
-      );
-
-
-    setGateCheck(
-      "gateClientCheck",
-      clientReady
-    );
-
-
-    setGateCheck(
-      "gatePassportCheck",
-      passportReady
-    );
-
-
-    setGateCheck(
-      "gateFaceCheck",
-      faceReady
-    );
-
-
-    setGateCheck(
-      "gateOperationCheck",
-      gateReady
-    );
-
-
-    const icon =
-      $("vfsGateIcon");
-
-
-    const title =
-      $("vfsGateTitle");
-
-
-    const description =
-      $("vfsGateDescription");
-
-
-    const heroStatus =
-      $("heroGateStatus");
-
-
-    const heroMessage =
-      $("heroGateMessage");
-
-
-    const routeProgress =
-      $("heroRouteProgress");
-
-
-    if (gateReady) {
-
-      icon?.classList.remove(
-        "blocked"
-      );
-
-      icon?.classList.add(
-        "ready"
-      );
-
-
-      if (icon) {
-        icon.textContent =
-          "✓";
-      }
-
-
-      if (title) {
-
-        title.textContent =
-          "CLIENTE APTO PARA VFS";
-
-      }
-
-
-      if (description) {
-
-        description.textContent =
-          "Perfil, passaporte e identidade facial estão conformes. O bot pode avançar para a próxima etapa.";
-
-      }
-
-
-      if (heroStatus) {
-
-        heroStatus.innerHTML =
-          `
-            <i></i>
-            VFS READY
-          `;
-
-      }
-
-
-      if (heroMessage) {
-
-        heroMessage.textContent =
-          "Autorizado para avançar";
-
-      }
-
-
-      if (routeProgress) {
-
-        routeProgress.style.width =
-          "100%";
-
-      }
-
-
-    } else {
-
-      icon?.classList.remove(
-        "ready"
-      );
-
-      icon?.classList.add(
-        "blocked"
-      );
-
-
-      if (icon) {
-        icon.textContent =
-          "!";
-      }
-
-
-      if (title) {
-
-        title.textContent =
-          "VERIFICAÇÕES PENDENTES";
-
-      }
-
-
-      if (description) {
-
-        if (
-          !clientReady
-        ) {
-
-          description.textContent =
-            "Selecione um cliente para iniciar a preparação.";
-
-        } else if (
-          !passportReady
-        ) {
-
-          description.textContent =
-            "O passaporte ainda não foi validado. O bot não deve avançar.";
-
-        } else {
-
-          description.textContent =
-            "O passaporte está conforme, mas a identidade facial ainda precisa ser confirmada.";
-
-        }
-
-      }
-
-
-      if (heroStatus) {
-
-        heroStatus.innerHTML =
-          `
-            <i></i>
-            AGUARDANDO
-          `;
-
-      }
-
-
-      if (heroMessage) {
-
-        heroMessage.textContent =
-          "Verificações pendentes";
-
-      }
-
-
-      if (routeProgress) {
-
-        let width =
-          0;
-
-
-        if (clientReady) {
-          width =
-            30;
-        }
-
-
-        if (passportReady) {
-          width =
-            65;
-        }
-
-
-        if (faceReady) {
-          width =
-            85;
-        }
-
-
-        routeProgress.style.width =
-          `${width}%`;
-
-      }
-
+        faceReady;
+
+    /*
+     * Se o frontend-final.js estiver a enviar a candidatura,
+     * não deixamos o app.js interferir no botão.
+     */
+    if (
+        state.submitting ||
+        applicationForm?.dataset?.applicationSubmitting === "true"
+    ) {
+        applicationButton.disabled = true;
+        return;
     }
 
+    /*
+     * Depois de enviada, a candidatura continua visível e o
+     * formulário não é desativado.
+     *
+     * O próprio submitApplication() impede uma segunda candidatura.
+     */
+    if (
+        document.body.dataset.applicationSubmitted === "true"
+    ) {
+        applicationButton.disabled = false;
+        return;
+    }
 
-    const applicationNotice =
-      $("applicationSecurityNotice");
-
-
-    const applicationButton =
-      $("applicationSubmitButton");
-
-
-    const applicationStatus =
-      $("applicationPanelStatus");
-
-
+    /*
+     * Se todas as condições estiverem prontas, o botão pode
+     * ser utilizado.
+     */
     if (gateReady) {
+        applicationButton.disabled = false;
+        return;
+    }
 
-      applicationNotice
-        ?.classList
-        .add("ready");
-
-
-      if (applicationNotice) {
-
-        applicationNotice.innerHTML = `
-
-          <div class="security-notice-icon">
-            ✓
-          </div>
-
-          <div>
-
-            <strong>
-              Aplicação liberada
-            </strong>
-
-            <span>
-              O cliente passou pelas verificações
-              necessárias para iniciar a operação.
-            </span>
-
-          </div>
-
-        `;
-
-      }
-
-
-      if (applicationButton) {
-
-  const applicationSubmitted =
-    Boolean(
-      document.body.dataset.applicationSubmitted === "true"
-    );
-
-  applicationButton.disabled =
-    applicationSubmitted;
-
+    /*
+     * Só bloqueamos o botão quando ainda falta uma condição
+     * obrigatória para o envio.
+     */
+    applicationButton.disabled = true;
 }
-
-
-      if (applicationStatus) {
-
-        applicationStatus.textContent =
-          "READY";
-
-        applicationStatus.className =
-          "panel-status";
-
-      }
-
-    } else {
-
-      applicationNotice
-        ?.classList
-        .remove("ready");
-
-
-      if (applicationNotice) {
-
-        let message =
-          "Complete as verificações antes de iniciar a operação.";
-
-
-        if (
-          clientReady &&
-          passportReady &&
-          !faceReady
-        ) {
-
-          message =
-            "O passaporte está conforme. Falta confirmar a identidade facial.";
-
-        }
-
-
-        applicationNotice.innerHTML = `
-
-          <div class="security-notice-icon">
-            !
-          </div>
-
-          <div>
-
-            <strong>
-              Aplicação bloqueada
-            </strong>
-
-            <span>
-              ${escapeHtml(message)}
-            </span>
-
-          </div>
-
-        `;
-
-      }
-
-
-      if (applicationButton) {
-
-        applicationButton.disabled =
-          true;
-
-      }
-
-
-      if (applicationStatus) {
-
-        applicationStatus.textContent =
-          "BLOCKED";
-
-        applicationStatus.className =
-          "panel-status blue";
-
-      }
-
-    }
-
-
-    updatePipeline(
-      clientReady,
-      passportReady,
-      faceReady,
-      gateReady
-    );
-
-  }
-
 
   function setGateCheck(
     id,
