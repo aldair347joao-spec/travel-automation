@@ -2010,7 +2010,7 @@ const values = [
         }
     }
 }
-}
+
     function scrollToAdminPanel() {
         window.setTimeout(
             () => {
