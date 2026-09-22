@@ -1687,158 +1687,147 @@ const values = [
        APPLICATION
     ========================================================= */
 
-    async function submitApplication(
-    event
-) {
-    if (
-        event &&
-        typeof event.preventDefault ===
-        "function"
-    ) {
+    async function submitApplication(event) {
+    if (event) {
         event.preventDefault();
+
+        if (typeof event.stopPropagation === "function") {
+            event.stopPropagation();
+        }
+
+        if (typeof event.stopImmediatePropagation === "function") {
+            event.stopImmediatePropagation();
+        }
     }
 
-    if (
-        event &&
-        typeof event.stopPropagation ===
-        "function"
-    ) {
-        event.stopPropagation();
+    if (state.submitting) {
+        return;
     }
 
-    if (
-        event &&
-        typeof event.stopImmediatePropagation ===
-        "function"
-    ) {
-        event.stopImmediatePropagation();
+    const form = $("applicationForm");
+    const button = $("applicationSubmitButton");
+
+    if (!form) {
+        showToast("Formulário da candidatura não encontrado.", "error");
+        return;
     }
 
+    /*
+     * Não permitimos uma segunda candidatura para o mesmo processo
+     * enquanto a candidatura atual já estiver registada.
+     */
     if (
-        state.submitting
+        state.applicationId ||
+        document.body.dataset.applicationSubmitted === "true"
     ) {
+        showToast(
+            "Esta candidatura já foi enviada para a Administração.",
+            "info"
+        );
         return;
     }
 
     ensurePreferenceFields();
 
-    const clientId =
-        detectClientId();
+    const clientId = detectClientId();
 
     if (!clientId) {
         showToast(
-            "Valide primeiro o passaporte para criar o perfil do viajante.",
+            "Selecione o cliente antes de enviar a candidatura.",
             "error"
         );
-
         return;
     }
 
-    const preferences =
-        getFinalPreferences();
+    const preferences = getFinalPreferences();
 
-    const validation =
-        validatePreferences(
-            preferences
-        );
+    const validation = validatePreferences(preferences);
 
-    if (
-        !validation.valid
-    ) {
-        showToast(
-            validation.message,
-            "error"
-        );
-
+    if (!validation.valid) {
+        showToast(validation.message, "error");
         return;
     }
 
-    state.submitting =
-        true;
+    state.clientId = clientId;
+    form.dataset.clientId = clientId;
 
-    const button =
-        event?.submitter ||
-        $("applicationSubmitButton");
+    state.submitting = true;
 
-    const originalText =
-        button
-            ? button.textContent
-            : "";
+    const originalButtonText = button
+        ? button.innerHTML
+        : "";
 
     if (button) {
-        button.disabled =
-            true;
+        button.disabled = true;
+        button.dataset.originalText = originalButtonText;
 
-        button.dataset.originalText =
-            originalText;
-
-        button.textContent =
-            "A enviar...";
+        button.innerHTML = `
+            <span>Enviando candidatura...</span>
+        `;
     }
 
     try {
         const idempotencyKey =
-            `TA-${clientId}-${Date.now()}-${Math.random()
+            `application-${clientId}-${Date.now()}-${Math.random()
                 .toString(36)
                 .slice(2, 10)}`;
 
-        const data =
-            await api(
-                "/api/applications",
-                {
-                    method:
-                        "POST",
+        const response = await api("/api/applications", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Idempotency-Key": idempotencyKey
+            },
+            body: JSON.stringify({
+                clientId,
 
-                    headers: {
-                        "Idempotency-Key":
-                            idempotencyKey
-                    },
+                visaType: preferences.visaType,
 
-                    body:
-                        JSON.stringify({
-                            clientId,
+                visaCenter: preferences.visaCenter,
 
-                            visaType:
-                                preferences
-                                    .visaType,
+                travelPurpose: preferences.travelPurpose,
 
-                            visaCenter:
-                                preferences
-                                    .visaCenter,
+                serviceType: preferences.serviceType,
 
-                            travelPurpose:
-                                preferences
-                                    .travelPurpose,
+                appointmentMode: preferences.appointmentMode,
 
-                            serviceType:
-                                preferences
-                                    .serviceType,
+                preferredDates: {
+                    start: preferences.preferredStartDate,
+                    end: preferences.preferredEndDate
+                },
 
-                            appointmentMode:
-                                preferences
-                                    .appointmentMode,
+                preferredTime: preferences.preferredTime,
 
-                            preferredDates:
-                                preferences
-                                    .preferredDates,
+                preferredWeekdays:
+                    preferences.preferredWeekdays
+            })
+        });
 
-                            preferredTime:
-                                preferences
-                                    .preferredTime,
+        if (!response.ok) {
+            let errorMessage =
+                "Não foi possível enviar a candidatura.";
 
-                            preferredWeekdays:
-                                preferences
-                                    .preferredWeekdays
-                        })
-                }
-            );
+            try {
+                const errorData = await response.json();
 
-        const application =
-            data?.application;
+                errorMessage =
+                    errorData?.message ||
+                    errorData?.error ||
+                    errorMessage;
+            } catch (_) {
+                // Mantém a mensagem padrão.
+            }
+
+            throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+
+        const application = data?.application;
 
         if (!application) {
             throw new Error(
-                "O backend não devolveu a candidatura criada."
+                "A candidatura foi processada, mas a resposta da API não contém a candidatura."
             );
         }
 
@@ -1848,141 +1837,139 @@ const values = [
             null;
 
         state.clientId =
+            application.client?._id ||
+            application.client?.id ||
+            application.clientId ||
             clientId;
 
-        /*
-         * Marca a candidatura como enviada.
-         * O app.js não deve tratar o formulário
-         * como uma candidatura ainda não enviada.
-         */
-        document.body.dataset.applicationSubmitted =
-            state.applicationId
-                ? "true"
-                : "false";
+        form.dataset.clientId = String(state.clientId);
 
-        /*
-         * Atualiza TODO o estado da candidatura.
-         * Isto inclui PENDING_REVIEW.
-         */
-        updateApplicationInterface(
-            application
-        );
+        document.body.dataset.applicationSubmitted = "true";
+
+        updateApplicationInterface(application);
 
         showToast(
-            "Candidatura enviada para a administração.",
+            "Candidatura enviada com sucesso para a Administração.",
             "success"
         );
 
-        scrollToAdminPanel();
+        const waitingPanel =
+            $("adminWaitingPanel");
+
+        if (waitingPanel) {
+            waitingPanel.scrollIntoView({
+                behavior: "smooth",
+                block: "center"
+            });
+        }
 
     } catch (error) {
-        console.error(
-            "[TRAVEL AUTOMATION] submit",
-            error
-        );
-
         /*
-         * Se o backend criou a candidatura mas
-         * a resposta chegou de forma inesperada,
-         * tentamos recuperar a candidatura mais
-         * recente antes de apresentar erro.
+         * Pode acontecer de o servidor ter criado a candidatura,
+         * mas a resposta ter sido perdida por uma falha de rede.
+         *
+         * Por isso consultamos novamente as candidaturas antes
+         * de informar definitivamente o colaborador que falhou.
          */
         try {
-            const latest =
-                await api(
-                    "/api/applications"
-                );
+            const recoveryResponse =
+                await api("/api/applications", {
+                    method: "GET"
+                });
 
-            const applications =
-                Array.isArray(
-                    latest?.applications
-                )
-                    ? latest.applications
-                    : Array.isArray(
-                        latest
-                    )
-                        ? latest
-                        : [];
+            if (recoveryResponse.ok) {
+                const recoveryData =
+                    await recoveryResponse.json();
 
-            if (
-                applications.length
-            ) {
-                const application =
-                    applications[0];
+                const applications =
+                    Array.isArray(recoveryData)
+                        ? recoveryData
+                        : Array.isArray(
+                            recoveryData?.applications
+                        )
+                            ? recoveryData.applications
+                            : [];
 
-                const recoveredId =
-                    application?._id ||
-                    application?.id ||
-                    null;
+                const recoveredApplication =
+                    applications.find((item) => {
+                        const recoveredClientId =
+                            item?.client?._id ||
+                            item?.client?.id ||
+                            item?.clientId;
 
-                if (
-                    recoveredId
-                ) {
+                        return (
+                            recoveredClientId &&
+                            String(recoveredClientId) ===
+                                String(clientId)
+                        );
+                    });
+
+                if (recoveredApplication) {
                     state.applicationId =
-                        recoveredId;
+                        recoveredApplication._id ||
+                        recoveredApplication.id ||
+                        null;
 
                     state.clientId =
+                        recoveredApplication.client?._id ||
+                        recoveredApplication.client?.id ||
+                        recoveredApplication.clientId ||
                         clientId;
+
+                    form.dataset.clientId =
+                        String(state.clientId);
 
                     document.body.dataset.applicationSubmitted =
                         "true";
 
                     updateApplicationInterface(
-                        application
+                        recoveredApplication
                     );
 
                     showToast(
-                        "Candidatura enviada para a administração.",
+                        "A candidatura já foi recebida pela Administração.",
                         "success"
                     );
-
-                    scrollToAdminPanel();
 
                     return;
                 }
             }
-        } catch (
-            recoveryError
-        ) {
-            console.warn(
-                "[TRAVEL AUTOMATION] application recovery",
-                recoveryError
-            );
+        } catch (_) {
+            // A recuperação também falhou.
+            // O erro original será apresentado abaixo.
         }
+
+        console.error(
+            "Erro ao enviar candidatura:",
+            error
+        );
 
         showToast(
             error?.message ||
-            "Não foi possível enviar a candidatura.",
+                "Não foi possível enviar a candidatura. Tente novamente.",
             "error"
         );
 
     } finally {
-        state.submitting =
-            false;
+        state.submitting = false;
 
-        /*
-         * NÃO desativamos o formulário.
-         *
-         * Apenas restauramos o botão caso
-         * a candidatura não tenha sido criada.
-         */
-        if (
-            button &&
-            !state.applicationId
-        ) {
-            button.disabled =
-                false;
+        if (button) {
+            button.disabled = false;
 
-            if (
-                button.dataset
-                    .originalText
-            ) {
-                button.textContent =
-                    button.dataset
-                        .originalText;
+            if (button.dataset.originalText) {
+                button.innerHTML =
+                    button.dataset.originalText;
+            } else {
+                button.innerHTML = `
+                    Enviar candidatura
+                    <span>→</span>
+                `;
             }
+
+            delete button.dataset.originalText;
         }
     }
+}
 
     function scrollToAdminPanel() {
         window.setTimeout(
