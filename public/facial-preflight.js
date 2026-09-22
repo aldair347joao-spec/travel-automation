@@ -3392,112 +3392,121 @@ safeCall(
 
 async function finish() {
 
-running =
-  false;
+  running = false;
 
-if (
-  animationFrame
-) {
+  if (animationFrame) {
 
-  cancelAnimationFrame(
-    animationFrame
-  );
+    cancelAnimationFrame(
+      animationFrame
+    );
 
-  animationFrame =
-    null;
-}
+    animationFrame = null;
+  }
 
-const scores =
-  capturedPositions.map(
-    item =>
-      Number(
-        item.score || 0
-      )
-  );
+  /*
+   * ==========================================================
+   * APROVAÇÃO DA LIVENESS
+   * ==========================================================
+   *
+   * A regra oficial é simples:
+   *
+   * 10 posições concluídas corretamente
+   *                ↓
+   *        LIVENESS APROVADA
+   *
+   * O score médio continua a ser guardado
+   * como informação técnica para a Administração,
+   * mas NÃO decide a aprovação final.
+   */
 
-const score =
-  average(
-    scores
-  );
+  const scores =
+    capturedPositions.map(
+      item =>
+        Number(
+          item?.score || 0
+        )
+    );
 
-const completed =
-  completedPositions.length ===
-  POSITIONS.length;
+  const score =
+    average(scores);
 
-const success =
-  completed &&
-  score >=
-    CONFIG.overallScoreThreshold;
+  const completed =
+    completedPositions.length ===
+    POSITIONS.length;
 
-/*
- * IMPORTANTE:
- *
- * A UI atual espera "passed".
- * O motor também expõe "success".
- *
- * Assim os dois lados ficam compatíveis.
- */
+  /*
+   * As dez posições já foram validadas individualmente
+   * pelo motor antes de serem adicionadas a
+   * completedPositions.
+   *
+   * Portanto, completar as dez significa aprovação.
+   */
 
-result = {
+  const success =
+    completed;
 
-  completed,
+  result = {
 
-  success,
+    completed,
 
-  passed:
     success,
 
-  clientId,
+    passed:
+      completed,
 
-  completedCount:
-    completedPositions.length,
+    clientId,
 
-  total:
-    POSITIONS.length,
+    completedCount:
+      completedPositions.length,
 
-  score:
-    Number(
-      score.toFixed(
-        4
-      )
-    ),
+    total:
+      POSITIONS.length,
 
-  positions:
-    capturedPositions,
+    score:
+      Number(
+        score.toFixed(4)
+      ),
 
-  completedPositions:
-    completedPositions.slice(),
+    positions:
+      capturedPositions,
 
-  audioReady,
+    completedPositions:
+      completedPositions.slice(),
 
-  completedAt:
-    new Date().toISOString()
-};
+    audioReady,
 
-if (
-  success
-) {
+    completedAt:
+      new Date().toISOString()
+  };
 
-  setStatus(
-    "As dez posições foram concluídas.",
-    "success"
+  /*
+   * ==========================================================
+   * ESTADO FINAL
+   * ==========================================================
+   */
+
+  if (completed) {
+
+    setStatus(
+      "As dez posições foram concluídas. Liveness aprovada.",
+      "success"
+    );
+
+  } else {
+
+    setStatus(
+      "A liveness não foi concluída.",
+      "warning"
+    );
+
+  }
+
+  safeCall(
+    "onComplete",
+    result
   );
 
-} else {
-
-  setStatus(
-    "A preparação facial não atingiu todos os critérios.",
-    "warning"
-  );
-}
-
-safeCall(
-  "onComplete",
-  result
-);
-
-return result;
-
+  return result;
 }
 
 /*
