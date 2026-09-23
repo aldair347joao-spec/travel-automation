@@ -2427,21 +2427,45 @@ function bindApplicationForm() {
     if (form.dataset.frontendFinalBound !== "true") {
         form.dataset.frontendFinalBound = "true";
 
-        form.addEventListener("submit", submitApplication, true);
+        form.addEventListener(
+            "submit",
+            submitApplication,
+            true
+        );
 
-        form.addEventListener("input", () => {
-            updatePreferenceSummary();
-            detectClientId();
-        });
+        form.addEventListener(
+            "input",
+            () => {
+                updatePreferenceSummary();
+                detectClientId();
+            }
+        );
 
-        form.addEventListener("change", () => {
-            updatePreferenceSummary();
-            detectClientId();
-        });
+        form.addEventListener(
+            "change",
+            () => {
+                updatePreferenceSummary();
+                detectClientId();
+            }
+        );
     }
 
     detectClientId();
-    updatePreferenceSummary();
+
+    /*
+     * O resumo só precisa ser atualizado aqui quando
+     * o formulário acaba de ser ligado.
+     *
+     * O MutationObserver não deve ficar a reconstruir
+     * o resumo continuamente.
+     */
+    if (
+        form.dataset.frontendFinalSummaryReady !==
+        "true"
+    ) {
+        form.dataset.frontendFinalSummaryReady = "true";
+        updatePreferenceSummary();
+    }
 }
 
     /* =========================================================
@@ -2449,33 +2473,47 @@ function bindApplicationForm() {
     ========================================================= */
 
     function startObserver() {
-        if (
-            state.observer
-        ) {
-            return;
-        }
-
-        state.observer =
-            new MutationObserver(
-                () => {
-                    ensurePreferenceFields();
-                    ensureAdminWaitingPanel();
-                    ensurePaymentPanel();
-                    bindPassportLimit();
-                    neutralizePrepareButtons();
-                    bindApplicationForm();
-                }
-            );
-
-        state.observer.observe(
-            document.body,
-            {
-                childList: true,
-                subtree: true
-            }
-        );
+    if (state.observer) {
+        return;
     }
 
+    let observerScheduled = false;
+
+    state.observer =
+        new MutationObserver(() => {
+            /*
+             * As funções abaixo podem alterar o DOM.
+             *
+             * Não executamos novamente imediatamente dentro
+             * da mesma sequência de mutações. Agendamos apenas
+             * uma atualização por ciclo do navegador.
+             */
+            if (observerScheduled) {
+                return;
+            }
+
+            observerScheduled = true;
+
+            window.requestAnimationFrame(() => {
+                observerScheduled = false;
+
+                ensurePreferenceFields();
+                ensureAdminWaitingPanel();
+                ensurePaymentPanel();
+                bindPassportLimit();
+                neutralizePrepareButtons();
+                bindApplicationForm();
+            });
+        });
+
+    state.observer.observe(
+        document.body,
+        {
+            childList: true,
+            subtree: true
+        }
+    );
+}
 
     /* =========================================================
        INITIALIZATION
