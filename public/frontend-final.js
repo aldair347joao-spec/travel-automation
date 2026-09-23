@@ -1986,7 +1986,7 @@ const values = [
             "error"
         );
 
-    } finally {
+   } finally {
         state.submitting = false;
 
         delete form.dataset.applicationSubmitting;
@@ -2009,6 +2009,7 @@ const values = [
             delete button.dataset.originalText;
         }
     }
+} 
     function scrollToAdminPanel() {
         window.setTimeout(
             () => {
