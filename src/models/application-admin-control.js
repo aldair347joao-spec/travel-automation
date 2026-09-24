@@ -31,18 +31,23 @@ const applicationAdminControlSchema =
         index: true
       },
 
-      vfsCredentials: {
-        emailEncrypted: {
-          type: String,
-          default: null
-        },
+ vfsCredentials: {
+  emailEncrypted: {
+    type: String,
+    default: null
+  },
 
-        passwordEncrypted: {
-          type: String,
-          default: null
-        },
+  passwordEncrypted: {
+    type: String,
+    default: null
+  },
 
-        configuredAt: {
+  phoneEncrypted: {
+    type: String,
+    default: null
+  },
+
+  configuredAt: {
           type: Date,
           default: null
         },
