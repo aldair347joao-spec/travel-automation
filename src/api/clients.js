@@ -96,16 +96,16 @@ const livenessVideoUpload =
         5 * 1024 * 1024,
 
       files:
-        1,
+        10,
 
       fields:
-        20,
+        25,
 
       fieldSize:
         128 * 1024,
 
       parts:
-        25
+        40
     }
   });
 
@@ -1048,9 +1048,7 @@ router.post(
     "operator",
     "client"
   ),
-  livenessVideoUpload.single(
-    "livenessVideo"
-  ),
+  livenessVideoUpload.any(),
   async (
     req,
     res,
