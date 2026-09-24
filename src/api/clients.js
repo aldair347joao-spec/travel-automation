@@ -6,6 +6,9 @@ const crypto =
 const express =
   require("express");
 
+const multer =
+  require("multer");
+
 const Client =
   require("../models/client");
 
@@ -30,6 +33,12 @@ const FacialService =
 const preflight =
   require("../services/facial/preflight-service");
 
+const LivenessVideoStorageService =
+  require("../services/facial/liveness-video-storage-service");
+
+const livenessVideoStorage =
+  new LivenessVideoStorageService();
+
 const router =
   express.Router();
 
@@ -39,6 +48,66 @@ const facial =
 router.use(
   requireAuth
 );
+
+
+/*
+ * =========================================================
+ * LIVENESS VIDEO UPLOAD
+ * =========================================================
+ *
+ * Recebe SOMENTE os segmentos das posições CORRETAS.
+ *
+ * O frontend envia:
+ *
+ * livenessVideo_1
+ * livenessMeta_1
+ *
+ * ...
+ *
+ * livenessVideo_10
+ * livenessMeta_10
+ *
+ * O backend nunca confia apenas no frontend.
+ *
+ * Antes de guardar:
+ *
+ * 1. confirma o cliente;
+ * 2. confirma a sessão;
+ * 3. confirma que a sessão passou;
+ * 4. confirma que a posição existe;
+ * 5. confirma que a posição foi verificada;
+ * 6. confirma que existe exatamente uma posição correspondente;
+ * 7. só então guarda o vídeo.
+ *
+ * Tentativas erradas não são armazenadas.
+ * =========================================================
+ */
+
+const livenessVideoUpload =
+  multer({
+    storage:
+      multer.memoryStorage(),
+
+    limits: {
+      fileSize:
+        Number(
+          process.env.LIVENESS_VIDEO_MAX_SEGMENT_BYTES
+        ) ||
+        5 * 1024 * 1024,
+
+      files:
+        1,
+
+      fields:
+        20,
+
+      fieldSize:
+        128 * 1024,
+
+      parts:
+        25
+    }
+  });
 
 
 /*
@@ -937,6 +1006,826 @@ router.get(
     } catch (
       error
     ) {
+      next(error);
+    }
+  }
+);
+
+
+/*
+ * =========================================================
+ * RECEBER SEGMENTO REAL DE LIVENESS
+ * =========================================================
+ *
+ * POST:
+ *
+ * /api/clients/:id/liveness-video
+ *
+ * Recebe um segmento correspondente a uma posição que já
+ * foi validada pelo motor local.
+ *
+ * IMPORTANTE:
+ *
+ * O backend NÃO aceita:
+ *
+ * - posição não concluída;
+ * - posição não verificada;
+ * - posição fora de 1..10;
+ * - sessão diferente da sessão persistida;
+ * - vídeo sem sessão;
+ * - vídeo sem metadata;
+ * - vídeo de outro cliente.
+ *
+ * Apenas os segmentos aprovados chegam ao armazenamento.
+ * =========================================================
+ */
+
+router.post(
+  "/:id/liveness-video",
+  requireRole(
+    "owner",
+    "admin",
+    "operator",
+    "client"
+  ),
+  livenessVideoUpload.single(
+    "livenessVideo"
+  ),
+  async (
+    req,
+    res,
+    next
+  ) => {
+    try {
+
+      /*
+       * -----------------------------------------------------
+       * CLIENTE
+       * -----------------------------------------------------
+       */
+
+      const client =
+        await findAccessibleClient(
+          req,
+          req.params.id,
+          {
+            activeOnly:
+              true
+          }
+        );
+
+
+      if (!client) {
+        return res
+          .status(404)
+          .json({
+            success:
+              false,
+
+            error:
+              "Client not found"
+          });
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * FICHEIRO
+       * -----------------------------------------------------
+       */
+
+      if (
+        !req.file ||
+        !Buffer.isBuffer(
+          req.file.buffer
+        ) ||
+        !req.file.buffer.length
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            error:
+              "Nenhum segmento de vídeo de liveness foi recebido."
+          });
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * METADATA
+       * -----------------------------------------------------
+       *
+       * Aceitamos os formatos:
+       *
+       * livenessMeta
+       * metadata
+       * meta
+       *
+       * para manter compatibilidade entre versões do frontend.
+       */
+
+      let metadata =
+        null;
+
+
+      const rawMetadata =
+        req.body?.livenessMeta ||
+        req.body?.metadata ||
+        req.body?.meta ||
+        null;
+
+
+      if (
+        rawMetadata
+      ) {
+        try {
+
+          metadata =
+            typeof rawMetadata ===
+            "string"
+              ? JSON.parse(
+                  rawMetadata
+                )
+              : rawMetadata;
+
+        } catch (
+          metadataError
+        ) {
+
+          return res
+            .status(400)
+            .json({
+              success:
+                false,
+
+              error:
+                "A metadata do segmento de liveness é inválida."
+            });
+        }
+      }
+
+
+      if (
+        !metadata ||
+        typeof metadata !==
+          "object"
+      ) {
+        metadata =
+          {};
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * SESSION ID
+       * -----------------------------------------------------
+       */
+
+      const sessionId =
+        String(
+          metadata.sessionId ||
+          req.body?.sessionId ||
+          ""
+        ).trim();
+
+
+      if (
+        !sessionId
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            error:
+              "sessionId é obrigatório para guardar o segmento de liveness."
+          });
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * SESSÃO PERSISTIDA
+       * -----------------------------------------------------
+       */
+
+      const savedSession =
+        client
+          ?.facialPreflight
+          ?.livenessSession;
+
+
+      if (
+        !savedSession
+      ) {
+        return res
+          .status(409)
+          .json({
+            success:
+              false,
+
+            error:
+              "A sessão de liveness ainda não existe."
+          });
+      }
+
+
+      if (
+        String(
+          savedSession.sessionId
+        ) !==
+        sessionId
+      ) {
+        return res
+          .status(409)
+          .json({
+            success:
+              false,
+
+            error:
+              "O segmento de vídeo pertence a uma sessão de liveness diferente."
+          });
+      }
+
+
+      if (
+        savedSession.status !==
+          "passed" ||
+        savedSession.verified !==
+          true
+      ) {
+        return res
+          .status(409)
+          .json({
+            success:
+              false,
+
+            error:
+              "A sessão de liveness ainda não foi aprovada."
+          });
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * POSIÇÃO
+       * -----------------------------------------------------
+       */
+
+      const requestedPosition =
+        Number(
+          metadata.position ||
+          metadata.sequence ||
+          req.body?.position ||
+          req.body?.sequence
+        );
+
+
+      if (
+        !Number.isInteger(
+          requestedPosition
+        ) ||
+        requestedPosition < 1 ||
+        requestedPosition > 10
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            error:
+              "A posição de liveness deve estar entre 1 e 10."
+          });
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * LOCALIZAR A POSIÇÃO APROVADA
+       * -----------------------------------------------------
+       */
+
+      const approvedPosition =
+        Array.isArray(
+          savedSession.positions
+        )
+          ? savedSession.positions.find(
+              position =>
+                Number(
+                  position?.position
+                ) ===
+                  requestedPosition ||
+                Number(
+                  position?.sequence
+                ) ===
+                  requestedPosition
+            )
+          : null;
+
+
+      if (
+        !approvedPosition
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            error:
+              `A posição ${requestedPosition} não pertence à sessão de liveness.`
+          });
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * GARANTIA FUNDAMENTAL
+       * -----------------------------------------------------
+       *
+       * Só guardamos posições que o backend já confirmou
+       * como verificadas.
+       */
+
+      if (
+        approvedPosition.verified !==
+        true
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            error:
+              `A posição ${requestedPosition} não foi validada pelo motor de liveness.`
+          });
+      }
+
+
+      if (
+        approvedPosition.faceDetected !==
+        true
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            error:
+              `A posição ${requestedPosition} não possui rosto confirmado.`
+          });
+      }
+
+
+      if (
+        approvedPosition.singleFace !==
+        true
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            error:
+              `A posição ${requestedPosition} não possui exatamente um rosto confirmado.`
+          });
+      }
+
+
+      if (
+        !approvedPosition.completedAt
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            error:
+              `A posição ${requestedPosition} não possui conclusão válida.`
+          });
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * MIME
+       * -----------------------------------------------------
+       */
+
+      const mimeType =
+        String(
+          req.file.mimetype ||
+          metadata.mimeType ||
+          ""
+        )
+          .split(";")[0]
+          .trim()
+          .toLowerCase();
+
+
+      if (
+        ![
+          "video/webm",
+          "video/mp4",
+          "video/quicktime"
+        ].includes(
+          mimeType
+        )
+      ) {
+        return res
+          .status(400)
+          .json({
+            success:
+              false,
+
+            error:
+              "Formato de vídeo de liveness não suportado."
+          });
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * GUARDAR NO GRIDFS
+       * -----------------------------------------------------
+       */
+
+      const stored =
+        await livenessVideoStorage.save({
+          accountId:
+            req.user.accountId,
+
+          clientId:
+            client._id.toString(),
+
+          sessionId,
+
+          position:
+            requestedPosition,
+
+          sequence:
+            Number(
+              metadata.sequence ||
+              approvedPosition.sequence ||
+              requestedPosition
+            ),
+
+          label:
+            metadata.label ||
+            approvedPosition.label ||
+            null,
+
+          instruction:
+            metadata.instruction ||
+            approvedPosition.instruction ||
+            null,
+
+          score:
+            metadata.score ??
+            approvedPosition.score ??
+            null,
+
+          positionScore:
+            metadata.positionScore ??
+            approvedPosition.positionScore ??
+            null,
+
+          buffer:
+            req.file.buffer,
+
+          mimeType,
+
+          startedAt:
+            metadata.startedAt ||
+            null,
+
+          completedAt:
+            metadata.completedAt ||
+            approvedPosition.completedAt ||
+            null
+        });
+
+
+      /*
+       * -----------------------------------------------------
+       * ATUALIZAR METADATA DA SESSÃO
+       * -----------------------------------------------------
+       *
+       * O Client não recebe o vídeo.
+       *
+       * Apenas fica marcado que existe vídeo e qual foi o
+       * último segmento guardado.
+       *
+       * Todos os segmentos continuam no GridFS e podem ser
+       * recuperados através do mesmo clientId + sessionId.
+       */
+
+      const videoUpdateResult =
+        await Client.updateOne(
+          {
+            _id:
+              client._id,
+
+            accountId:
+              req.user.accountId
+          },
+
+          {
+            $set: {
+              "facialPreflight.livenessSession.video.available":
+                true,
+
+              "facialPreflight.livenessSession.video.storage":
+                "gridfs",
+
+              "facialPreflight.livenessSession.video.videoId":
+                stored.videoId,
+
+              "facialPreflight.livenessSession.video.mimeType":
+                stored.mimeType,
+
+              "facialPreflight.livenessSession.video.originalSize":
+                stored.originalSize,
+
+              "facialPreflight.livenessSession.video.uploadedAt":
+                stored.uploadedAt,
+
+              "facialPreflight.livenessSession.video.expiresAt":
+                stored.expiresAt
+            }
+          }
+        );
+
+
+      const matchedCount =
+        Number.isFinite(
+          Number(
+            videoUpdateResult?.matchedCount
+          )
+        )
+          ? Number(
+              videoUpdateResult.matchedCount
+            )
+          : Number(
+              videoUpdateResult?.n ||
+              0
+            );
+
+
+      if (
+        matchedCount !==
+        1
+      ) {
+
+        /*
+         * Se o Client não pôde ser atualizado depois de guardar
+         * o vídeo, removemos o segmento recém-criado para não
+         * deixar armazenamento órfão.
+         */
+
+        try {
+
+          await livenessVideoStorage.delete({
+            accountId:
+              req.user.accountId,
+
+            clientId:
+              client._id.toString(),
+
+            sessionId,
+
+            position:
+              requestedPosition
+          });
+
+        } catch (
+          cleanupError
+        ) {
+
+          console.error(
+            "[CLIENTS] Falha ao remover segmento órfão:",
+            cleanupError
+          );
+        }
+
+
+        return res
+          .status(500)
+          .json({
+            success:
+              false,
+
+            error:
+              "O segmento foi recebido mas não foi possível atualizar a sessão de liveness."
+          });
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * CONTAR SEGMENTOS EXISTENTES
+       * -----------------------------------------------------
+       */
+
+      const storedFiles =
+        await livenessVideoStorage.findAll({
+          accountId:
+            req.user.accountId,
+
+          clientId:
+            client._id.toString(),
+
+          sessionId
+        });
+
+
+      const segments =
+        storedFiles
+          .map(
+            file => ({
+              videoId:
+                String(
+                  file._id
+                ),
+
+              position:
+                Number(
+                  file?.metadata
+                    ?.position
+                ),
+
+              sequence:
+                Number(
+                  file?.metadata
+                    ?.sequence
+                ),
+
+              label:
+                file?.metadata
+                  ?.label ||
+                null,
+
+              instruction:
+                file?.metadata
+                  ?.instruction ||
+                null,
+
+              mimeType:
+                file?.metadata
+                  ?.originalMimeType ||
+                null,
+
+              originalSize:
+                Number(
+                  file?.metadata
+                    ?.originalSize ||
+                  0
+                ),
+
+              uploadedAt:
+                file.uploadDate ||
+                null,
+
+              expiresAt:
+                file?.metadata
+                  ?.expiresAt ||
+                null
+            })
+          )
+          .sort(
+            (
+              first,
+              second
+            ) =>
+              Number(
+                first.position
+              ) -
+              Number(
+                second.position
+              )
+          );
+
+
+      /*
+       * -----------------------------------------------------
+       * AUDITORIA
+       * -----------------------------------------------------
+       */
+
+      try {
+
+        await AuditLog.create({
+          actorId:
+            req.user._id,
+
+          action:
+            "client.liveness_video_segment",
+
+          resource:
+            "client",
+
+          resourceId:
+            client._id.toString(),
+
+          ip:
+            req.ip,
+
+          metadata: {
+            sessionId,
+
+            position:
+              requestedPosition,
+
+            videoId:
+              stored.videoId,
+
+            originalSize:
+              stored.originalSize,
+
+            segmentsStored:
+              segments.length
+          }
+        });
+
+      } catch (
+        auditError
+      ) {
+
+        console.error(
+          "[CLIENTS] AuditLog liveness video failed:",
+          auditError
+        );
+      }
+
+
+      /*
+       * -----------------------------------------------------
+       * RESPOSTA
+       * -----------------------------------------------------
+       */
+
+      return res.json({
+        success:
+          true,
+
+        clientId:
+          client._id,
+
+        sessionId,
+
+        livenessPassed:
+          true,
+
+        position:
+          requestedPosition,
+
+        video: {
+          available:
+            true,
+
+          storage:
+            "gridfs",
+
+          videoId:
+            stored.videoId,
+
+          mimeType:
+            stored.mimeType,
+
+          originalSize:
+            stored.originalSize,
+
+          uploadedAt:
+            stored.uploadedAt,
+
+          expiresAt:
+            stored.expiresAt
+        },
+
+        segmentsStored:
+          segments.length,
+
+        segments
+      });
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "[CLIENTS] Liveness video upload error:",
+        error
+      );
+
       next(error);
     }
   }
