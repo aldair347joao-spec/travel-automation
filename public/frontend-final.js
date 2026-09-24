@@ -1715,21 +1715,6 @@ const values = [
         return;
     }
 
-    /*
-     * Não criar uma segunda candidatura enquanto
-     * esta já estiver registada.
-     */
-    if (
-        state.applicationId ||
-        document.body.dataset.applicationSubmitted === "true"
-    ) {
-        showToast(
-            "Esta candidatura já foi enviada para a Administração.",
-            "info"
-        );
-        return;
-    }
-
     ensurePreferenceFields();
 
     const clientId = detectClientId();
@@ -2216,66 +2201,112 @@ const values = [
 
 
     async function restoreLatestApplication() {
-        try {
-            const data =
-                await api(
-                    "/api/applications"
-                );
-
-            const applications =
-                Array.isArray(
-                    data?.applications
-                )
-                    ? data.applications
-                    : Array.isArray(data)
-                        ? data
-                        : [];
-
-            if (
-                !applications.length
-            ) {
-                return;
-            }
-
-            const application =
-                applications[0];
-
-            state.applicationId =
-                application?._id ||
-                application?.id ||
-                null;
-            document.body.dataset.applicationSubmitted =
-    state.applicationId
-        ? "true"
-        : "false";
-
-            const client =
-                application?.client;
-
-            if (
-                client &&
-                typeof client ===
-                    "object"
-            ) {
-                state.clientId =
-                    client._id ||
-                    client.id ||
-                    state.clientId;
-            }
-
-            updateApplicationInterface(
-                application
+    try {
+        const data =
+            await api(
+                "/api/applications"
             );
 
-        } catch (error) {
-            console.warn(
-                "[TRAVEL AUTOMATION] restore",
-                error
-            );
+        const applications =
+            Array.isArray(
+                data?.applications
+            )
+                ? data.applications
+                : Array.isArray(data)
+                    ? data
+                    : [];
+
+        if (
+            !applications.length
+        ) {
+            return;
         }
+
+        /*
+         * Primeiro tentamos descobrir o cliente atualmente
+         * selecionado no formulário.
+         */
+        const currentClientId =
+            detectClientId();
+
+        let application = null;
+
+        /*
+         * Se já existe um cliente selecionado,
+         * recuperamos somente uma candidatura desse cliente.
+         */
+        if (currentClientId) {
+            application =
+                applications.find(
+                    item => {
+                        const applicationClientId =
+                            item?.client?._id ||
+                            item?.client?.id ||
+                            item?.clientId;
+
+                        return (
+                            applicationClientId &&
+                            String(
+                                applicationClientId
+                            ) ===
+                            String(
+                                currentClientId
+                            )
+                        );
+                    }
+                );
+        }
+
+        /*
+         * Se ainda não há cliente selecionado,
+         * NÃO carregamos automaticamente a candidatura
+         * de outro cliente.
+         */
+        if (!application) {
+            state.applicationId =
+                null;
+
+            document.body.dataset.applicationSubmitted =
+                "false";
+
+            return;
+        }
+
+        state.applicationId =
+            application?._id ||
+            application?.id ||
+            null;
+
+        const client =
+            application?.client;
+
+        if (
+            client &&
+            typeof client ===
+                "object"
+        ) {
+            state.clientId =
+                client._id ||
+                client.id ||
+                state.clientId;
+        }
+
+        document.body.dataset.applicationSubmitted =
+            state.applicationId
+                ? "true"
+                : "false";
+
+        updateApplicationInterface(
+            application
+        );
+
+    } catch (error) {
+        console.warn(
+            "[TRAVEL AUTOMATION] restore",
+            error
+        );
     }
-
-
+}
     function updateApplicationInterface(
         application
     ) {
