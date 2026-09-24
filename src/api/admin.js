@@ -1883,20 +1883,23 @@ function createAdminRouter() {
           );
 
         const result =
-          await AdminControlService
-            .configureVfsCredentials({
-              applicationId:
-                req.params.id,
+  await AdminControlService
+    .configureVfsCredentials({
+      applicationId:
+        req.params.id,
 
-              email:
-                req.body?.email,
+      email:
+        req.body?.email,
 
-              password:
-                req.body?.password,
+      password:
+        req.body?.password,
 
-              actorId:
-                req.user._id
-            });
+      phone:
+        req.body?.phone,
+
+      actorId:
+        req.user._id
+    });
 
         return res.json({
           success:
