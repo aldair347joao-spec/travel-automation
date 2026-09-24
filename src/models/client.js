@@ -181,7 +181,11 @@ const livenessPositionSchema =
  * Uma sessão representa uma execução completa do fluxo
  * facial.
  *
- * Não contém imagens.
+ * Os eventos das 10 posições ficam armazenados aqui.
+ *
+ * O vídeo NÃO é colocado diretamente neste documento.
+ * Apenas os metadados e a referência do armazenamento ficam
+ * aqui.
  * ============================================================
  */
 
@@ -251,6 +255,78 @@ const livenessSessionSchema =
           livenessPositionSchema
         ],
         default: []
+      },
+
+      /*
+       * ========================================================
+       * VÍDEO REAL DA SESSÃO
+       * ========================================================
+       *
+       * O ficheiro de vídeo não fica dentro do documento
+       * MongoDB.
+       *
+       * O backend irá armazená-lo externamente, usando o
+       * armazenamento configurado para o projeto.
+       *
+       * Aqui guardamos somente:
+       *
+       * - se existe vídeo
+       * - onde está armazenado
+       * - ID/referência do ficheiro
+       * - tipo MIME
+       * - tamanho original
+       * - data de upload
+       * - data de expiração
+       *
+       * Isto permite à Administração recuperar o vídeo correto
+       * da sessão sem tornar o documento Client pesado.
+       * ========================================================
+       */
+
+      video: {
+        available: {
+          type: Boolean,
+          default: false
+        },
+
+        storage: {
+          type: String,
+
+          enum: [
+            "gridfs",
+            "none"
+          ],
+
+          default: "none"
+        },
+
+        videoId: {
+          type: String,
+          default: null,
+          maxlength: 160
+        },
+
+        mimeType: {
+          type: String,
+          default: null,
+          maxlength: 100
+        },
+
+        originalSize: {
+          type: Number,
+          min: 0,
+          default: null
+        },
+
+        uploadedAt: {
+          type: Date,
+          default: null
+        },
+
+        expiresAt: {
+          type: Date,
+          default: null
+        }
       }
     },
     {
@@ -472,9 +548,8 @@ const facialPreflightSchema =
        * SESSÃO REAL DE LIVENESS
        * ======================================================
        *
-       * Aqui ficam os eventos das 10 posições.
-       *
-       * Nenhuma imagem é armazenada.
+       * Aqui ficam os eventos das 10 posições e a referência
+       * segura do vídeo correspondente à sessão.
        */
 
       livenessSession: {
