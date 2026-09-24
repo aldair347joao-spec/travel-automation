@@ -2154,8 +2154,7 @@ const values = [
                             1024
                         ).toFixed(2)} MB`;
                 }
-            },
-            true
+            }
         );
     }
 
