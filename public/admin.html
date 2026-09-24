@@ -1,1018 +1,997 @@
-<!DOCTYPE html>
-<html lang="pt">
+<!DOCTYPE html><html lang="pt">
 <head>
     <meta charset="UTF-8">
     <meta
         name="viewport"
         content="width=device-width, initial-scale=1.0, maximum-scale=1.0"
-    >
+    ><title>Travel Automation — Administração</title>
 
-    <title>Travel Automation — Administração</title>
+<meta
+    name="description"
+    content="Painel administrativo do Travel Automation"
+>
 
-    <meta
-        name="description"
-        content="Painel administrativo do Travel Automation"
-    >
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
+    rel="stylesheet"
+>
 
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap"
-        rel="stylesheet"
-    >
+<link rel="stylesheet" href="/admin.css">
 
-    <link rel="stylesheet" href="/admin.css">
-</head>
+</head><body><div class="admin-shell"><!-- SIDEBAR -->
+<aside class="admin-sidebar">
 
-<body>
-
-<div class="admin-shell">
-
-    <!-- SIDEBAR -->
-    <aside class="admin-sidebar">
-
-        <div class="brand">
-            <div class="brand-mark">
-                TA
-            </div>
-
-            <div class="brand-copy">
-                <strong>Travel</strong>
-                <span>Automation</span>
-            </div>
+    <div class="brand">
+        <div class="brand-mark">
+            TA
         </div>
 
-        <div class="sidebar-section">
-            <span class="sidebar-label">ADMINISTRAÇÃO</span>
-
-            <button
-                type="button"
-                class="sidebar-item active"
-                data-scroll-target="overviewSection"
-            >
-                <span class="sidebar-icon">⌂</span>
-                <span>Visão geral</span>
-            </button>
-
-            <button
-                type="button"
-                class="sidebar-item"
-                data-scroll-target="applicationsSection"
-            >
-                <span class="sidebar-icon">▣</span>
-                <span>Processos</span>
-            </button>
-
-            <button
-                type="button"
-                class="sidebar-item"
-                data-scroll-target="detailsSection"
-            >
-                <span class="sidebar-icon">◉</span>
-                <span>Processo selecionado</span>
-            </button>
-        </div>
-
-        <div class="sidebar-bottom">
-
-            <div class="admin-user-card">
-                <div class="user-avatar" id="adminAvatar">
-                    A
-                </div>
-
-                <div class="user-info">
-                    <strong id="adminName">Administrador</strong>
-                    <span id="adminRole">Admin</span>
-                </div>
-            </div>
-
-            <button
-                type="button"
-                id="logoutButton"
-                class="sidebar-logout"
-            >
-                <span>↪</span>
-                Sair
-            </button>
-
-        </div>
-
-    </aside>
-
-    <!-- MAIN -->
-    <main class="admin-main">
-
-        <!-- TOPBAR -->
-        <header class="admin-topbar">
-
-            <div>
-                <div class="eyebrow">
-                    PAINEL DE CONTROLO
-                </div>
-
-                <h1>Administração</h1>
-
-                <p>
-                    Controle clientes, automação, VFS e pagamentos num único lugar.
-                </p>
-            </div>
-
-            <div class="topbar-actions">
-
-    <div
-        id="permissionNotice"
-        class="permission-notice"
-        hidden
-    >
-        <span class="permission-dot"></span>
-
-        <div class="permission-copy">
-            <strong id="permissionTitle">
-                Acesso de consulta
-            </strong>
-
-            <span id="permissionDescription">
-                As ações administrativas estão bloqueadas para o seu perfil.
-            </span>
+        <div class="brand-copy">
+            <strong>Travel</strong>
+            <span>Automation</span>
         </div>
     </div>
 
-    <span
-        id="connectionStatus"
-        class="connection-status checking"
-    >
-        <i></i>
-        A verificar...
-    </span>
+    <div class="sidebar-section">
+        <span class="sidebar-label">ADMINISTRAÇÃO</span>
 
-    <button
-        type="button"
-        id="refreshButton"
-        class="btn btn-secondary"
-    >
-        <span class="refresh-icon">↻</span>
-        Atualizar
-    </button>
+        <button
+            type="button"
+            class="sidebar-item active"
+            data-scroll-target="overviewSection"
+        >
+            <span class="sidebar-icon">⌂</span>
+            <span>Visão geral</span>
+        </button>
 
-</div>
+        <button
+            type="button"
+            class="sidebar-item"
+            data-scroll-target="applicationsSection"
+        >
+            <span class="sidebar-icon">▣</span>
+            <span>Processos</span>
+        </button>
 
-        </header>
+        <button
+            type="button"
+            class="sidebar-item"
+            data-scroll-target="detailsSection"
+        >
+            <span class="sidebar-icon">◉</span>
+            <span>Processo selecionado</span>
+        </button>
+    </div>
 
-        <!-- OVERVIEW -->
-        <section id="overviewSection" class="content-section">
+    <div class="sidebar-bottom">
 
-            <div class="section-heading">
-                <div>
-                    <span class="section-kicker">VISÃO GERAL</span>
-                    <h2>Estado dos processos</h2>
+        <div class="admin-user-card">
+            <div class="user-avatar" id="adminAvatar">
+                A
+            </div>
+
+            <div class="user-info">
+                <strong id="adminName">Administrador</strong>
+                <span id="adminRole">Admin</span>
+            </div>
+        </div>
+
+        <button
+            type="button"
+            id="logoutButton"
+            class="sidebar-logout"
+        >
+            <span>↪</span>
+            Sair
+        </button>
+
+    </div>
+
+</aside>
+
+<!-- MAIN -->
+<main class="admin-main">
+
+    <!-- TOPBAR -->
+    <header class="admin-topbar">
+
+        <div>
+            <div class="eyebrow">
+                PAINEL DE CONTROLO
+            </div>
+
+            <h1>Administração</h1>
+
+            <p>
+                Controle clientes, automação, VFS e pagamentos num único lugar.
+            </p>
+        </div>
+
+        <div class="topbar-actions">
+
+            <div
+                id="permissionNotice"
+                class="permission-notice"
+                hidden
+            >
+                <span class="permission-dot"></span>
+
+                <div class="permission-copy">
+                    <strong id="permissionTitle">
+                        Acesso de consulta
+                    </strong>
+
+                    <span id="permissionDescription">
+                        As ações administrativas estão bloqueadas para o seu perfil.
+                    </span>
+                </div>
+            </div>
+
+            <span
+                id="connectionStatus"
+                class="connection-status checking"
+            >
+                <i></i>
+                A verificar...
+            </span>
+
+            <button
+                type="button"
+                id="refreshButton"
+                class="btn btn-secondary"
+            >
+                <span class="refresh-icon">↻</span>
+                Atualizar
+            </button>
+
+        </div>
+
+    </header>
+
+    <!-- OVERVIEW -->
+    <section id="overviewSection" class="content-section">
+
+        <div class="section-heading">
+            <div>
+                <span class="section-kicker">VISÃO GERAL</span>
+                <h2>Estado dos processos</h2>
+            </div>
+
+            <span id="lastUpdated" class="last-updated">
+                Última atualização — —
+            </span>
+        </div>
+
+        <div class="stats-grid">
+
+            <article class="stat-card stat-total">
+                <div class="stat-card-top">
+                    <span class="stat-label">Total de processos</span>
+                    <span class="stat-icon">▣</span>
                 </div>
 
-                <span id="lastUpdated" class="last-updated">
-                    Última atualização — —
+                <strong id="statTotal">—</strong>
+
+                <span class="stat-description">
+                    Aplicações registadas
                 </span>
+            </article>
+
+            <article class="stat-card stat-pending">
+                <div class="stat-card-top">
+                    <span class="stat-label">Aguardando administração</span>
+                    <span class="stat-icon">◷</span>
+                </div>
+
+                <strong id="statPending">—</strong>
+
+                <span class="stat-description">
+                    Ainda não liberadas
+                </span>
+            </article>
+
+            <article class="stat-card stat-active">
+                <div class="stat-card-top">
+                    <span class="stat-label">Automação ativa</span>
+                    <span class="stat-icon">◆</span>
+                </div>
+
+                <strong id="statActive">—</strong>
+
+                <span class="stat-description">
+                    Processos em execução
+                </span>
+            </article>
+
+            <article class="stat-card stat-payment">
+                <div class="stat-card-top">
+                    <span class="stat-label">Pagamento pendente</span>
+                    <span class="stat-icon">¤</span>
+                </div>
+
+                <strong id="statPayment">—</strong>
+
+                <span class="stat-description">
+                    Aguardam pagamento
+                </span>
+            </article>
+
+        </div>
+
+    </section>
+
+    <!-- APPLICATIONS -->
+    <section
+        id="applicationsSection"
+        class="content-section"
+    >
+
+        <div class="section-heading applications-heading">
+
+            <div>
+                <span class="section-kicker">PROCESSOS</span>
+                <h2>Clientes e aplicações</h2>
             </div>
 
-            <div class="stats-grid">
+            <div class="process-counter">
+                <span id="applicationCount">0</span>
+                processos
+            </div>
 
-                <article class="stat-card stat-total">
-                    <div class="stat-card-top">
-                        <span class="stat-label">Total de processos</span>
-                        <span class="stat-icon">▣</span>
-                    </div>
+        </div>
 
-                    <strong id="statTotal">—</strong>
+        <div class="applications-card">
 
-                    <span class="stat-description">
-                        Aplicações registadas
-                    </span>
-                </article>
+            <div class="applications-toolbar">
 
-                <article class="stat-card stat-pending">
-                    <div class="stat-card-top">
-                        <span class="stat-label">Aguardando administração</span>
-                        <span class="stat-icon">◷</span>
-                    </div>
+                <div class="search-box">
 
-                    <strong id="statPending">—</strong>
+                    <span class="search-icon">⌕</span>
 
-                    <span class="stat-description">
-                        Ainda não liberadas
-                    </span>
-                </article>
+                    <input
+                        type="search"
+                        id="applicationSearch"
+                        placeholder="Pesquisar cliente, email, passaporte ou processo..."
+                        autocomplete="off"
+                    >
 
-                <article class="stat-card stat-active">
-                    <div class="stat-card-top">
-                        <span class="stat-label">Automação ativa</span>
-                        <span class="stat-icon">◆</span>
-                    </div>
+                </div>
 
-                    <strong id="statActive">—</strong>
+                <select
+                    id="statusFilter"
+                    class="filter-select"
+                >
+                    <option value="all">Todos os estados</option>
+                    <option value="PENDING_REVIEW">
+                        Aguardando administração
+                    </option>
+                    <option value="READY_FOR_AUTOMATION">
+                        Pronto para automação
+                    </option>
+                    <option value="AUTOMATION_ACTIVE">
+                        Automação ativa
+                    </option>
+                    <option value="PAUSED">
+                        Pausado
+                    </option>
+                    <option value="COMPLETED">
+                        Concluído
+                    </option>
+                    <option value="CANCELLED">
+                        Cancelado
+                    </option>
+                </select>
 
-                    <span class="stat-description">
-                        Processos em execução
-                    </span>
-                </article>
-
-                <article class="stat-card stat-payment">
-                    <div class="stat-card-top">
-                        <span class="stat-label">Pagamento pendente</span>
-                        <span class="stat-icon">¤</span>
-                    </div>
-
-                    <strong id="statPayment">—</strong>
-
-                    <span class="stat-description">
-                        Aguardam pagamento
-                    </span>
-                </article>
+                <button
+                    type="button"
+                    id="clearFiltersButton"
+                    class="btn btn-ghost"
+                >
+                    Limpar
+                </button>
 
             </div>
 
-        </section>
+            <div class="applications-list" id="applicationsList">
 
-        <!-- APPLICATIONS -->
-        <section
-            id="applicationsSection"
-            class="content-section"
+                <div class="loading-state">
+                    <div class="loading-spinner"></div>
+                    <span>A carregar processos...</span>
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+    <!-- DETAILS -->
+    <section
+        id="detailsSection"
+        class="content-section details-section"
+    >
+
+        <div class="section-heading">
+
+            <div>
+                <span class="section-kicker">CONTROLO</span>
+                <h2>Processo selecionado</h2>
+            </div>
+
+            <span
+                id="selectedProcessId"
+                class="process-id"
+            >
+                Nenhum processo selecionado
+            </span>
+
+        </div>
+
+        <div
+            id="emptyDetails"
+            class="empty-details"
         >
 
-            <div class="section-heading applications-heading">
+            <div class="empty-details-icon">
+                ◉
+            </div>
 
-                <div>
-                    <span class="section-kicker">PROCESSOS</span>
-                    <h2>Clientes e aplicações</h2>
+            <h3>Selecione um processo</h3>
+
+            <p>
+                Escolha um cliente na lista acima para consultar os dados,
+                configurar as credenciais VFS e controlar a automação.
+            </p>
+
+        </div>
+
+        <div
+            id="detailsPanel"
+            class="details-panel hidden"
+        >
+
+            <!-- CLIENT -->
+            <div class="detail-card client-summary-card">
+
+                <div class="detail-card-header">
+                    <div>
+                        <span class="section-kicker">CLIENTE</span>
+                        <h3 id="detailClientName">—</h3>
+                    </div>
+
+                    <span
+                        id="detailAdminStatus"
+                        class="status-badge"
+                    >
+                        —
+                    </span>
                 </div>
 
-                <div class="process-counter">
-                    <span id="applicationCount">0</span>
-                    processos
+                <div class="client-summary">
+
+                    <div class="client-avatar" id="detailClientAvatar">
+                        —
+                    </div>
+
+                    <div class="client-main-info">
+
+                        <div class="info-row">
+                            <span>Nome</span>
+                            <strong id="detailClientFullName">—</strong>
+                        </div>
+
+                        <div class="info-row">
+                            <span>Email</span>
+                            <strong id="detailClientEmail">—</strong>
+                        </div>
+
+                        <div class="info-row">
+                            <span>Telefone</span>
+                            <strong id="detailClientPhone">—</strong>
+                        </div>
+
+                        <div class="info-row">
+                            <span>Processo</span>
+                            <strong id="detailApplicationId">—</strong>
+                        </div>
+
+                    </div>
+
                 </div>
 
             </div>
 
-            <div class="applications-card">
+            <!-- WORKFLOW -->
+            <div class="detail-grid">
 
-                <div class="applications-toolbar">
+                <div class="detail-card">
 
-                    <div class="search-box">
+                    <div class="detail-card-header">
+                        <div>
+                            <span class="section-kicker">WORKFLOW</span>
+                            <h3>Estado do processo</h3>
+                        </div>
+                    </div>
 
-                        <span class="search-icon">⌕</span>
+                    <div class="workflow-status">
+
+                        <div class="workflow-main-status">
+                            <span
+                                id="detailWorkflowStatus"
+                                class="workflow-state"
+                            >
+                                —
+                            </span>
+
+                            <span
+                                id="detailLegacyStatus"
+                                class="muted"
+                            >
+                                —
+                            </span>
+                        </div>
+
+                        <div class="workflow-meta">
+
+                            <div>
+                                <span>Estado anterior</span>
+                                <strong id="detailPreviousState">—</strong>
+                            </div>
+
+                            <div>
+                                <span>Última alteração</span>
+                                <strong id="detailStateChangedAt">—</strong>
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="detail-card">
+
+                    <div class="detail-card-header">
+                        <div>
+                            <span class="section-kicker">BOTS</span>
+                            <h3>Automação</h3>
+                        </div>
+                    </div>
+
+                    <div class="bot-status-list">
+
+                        <div class="bot-status-row">
+                            <div>
+                                <strong>Bot 1</strong>
+                                <span>Agendamento</span>
+                            </div>
+
+                            <span
+                                id="detailBot1Status"
+                                class="bot-badge"
+                            >
+                                —
+                            </span>
+                        </div>
+
+                        <div class="bot-status-row">
+                            <div>
+                                <strong>Bot 2</strong>
+                                <span>Radar de vagas</span>
+                            </div>
+
+                            <span
+                                id="detailBot2Status"
+                                class="bot-badge"
+                            >
+                                —
+                            </span>
+                        </div>
+
+                        <div class="bot-status-row">
+                            <div>
+                                <strong>VFS</strong>
+                                <span>Sessão</span>
+                            </div>
+
+                            <span
+                                id="detailVfsStatus"
+                                class="bot-badge"
+                            >
+                                —
+                            </span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- CLIENT DATA -->
+            <div class="detail-card">
+
+                <div class="detail-card-header">
+                    <div>
+                        <span class="section-kicker">DADOS</span>
+                        <h3>Informações do pedido</h3>
+                    </div>
+                </div>
+
+                <div class="data-grid">
+
+                    <div class="data-item">
+                        <span>Tipo de visto</span>
+                        <strong id="detailVisaType">—</strong>
+                    </div>
+
+                    <div class="data-item">
+                        <span>Centro VFS</span>
+                        <strong id="detailVisaCenter">—</strong>
+                    </div>
+
+                    <div class="data-item">
+                        <span>Serviço</span>
+                        <strong id="detailServiceType">—</strong>
+                    </div>
+
+                    <div class="data-item">
+                        <span>Modo de atendimento</span>
+                        <strong id="detailAppointmentMode">—</strong>
+                    </div>
+
+                    <div class="data-item">
+                        <span>Data inicial</span>
+                        <strong id="detailDateStart">—</strong>
+                    </div>
+
+                    <div class="data-item">
+                        <span>Data final</span>
+                        <strong id="detailDateEnd">—</strong>
+                    </div>
+
+                    <div class="data-item">
+                        <span>Horário preferido</span>
+                        <strong id="detailPreferredTime">—</strong>
+                    </div>
+
+                    <div class="data-item">
+                        <span>Dias preferidos</span>
+                        <strong id="detailPreferredWeekdays">—</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- PASSPORT / IDENTITY -->
+            <div class="detail-grid">
+
+                <div class="detail-card">
+
+                    <div class="detail-card-header">
+                        <div>
+                            <span class="section-kicker">PASSAPORTE</span>
+                            <h3>Documento</h3>
+                        </div>
+
+                        <span
+                            id="detailPassportStatus"
+                            class="status-badge"
+                        >
+                            —
+                        </span>
+                    </div>
+
+                    <div class="passport-preview">
+
+                        <div class="passport-icon">
+                            PASSPORT
+                        </div>
+
+                        <div>
+                            <strong id="detailPassportNumber">
+                                —
+                            </strong>
+
+                            <span id="detailPassportName">
+                                —
+                            </span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <div class="detail-card">
+
+                    <div class="detail-card-header">
+                        <div>
+                            <span class="section-kicker">IDENTIDADE</span>
+                            <h3>Verificação facial</h3>
+                        </div>
+
+                        <span
+                            id="detailIdentityStatus"
+                            class="status-badge"
+                        >
+                            —
+                        </span>
+                    </div>
+
+                    <div class="identity-summary">
+
+                        <div class="identity-number">
+                            <strong id="detailFaceCount">0</strong>
+                            <span>posições armazenadas</span>
+                        </div>
+
+                        <div class="identity-progress">
+                            <div class="progress-track">
+                                <div
+                                    id="identityProgressBar"
+                                    class="progress-value"
+                                ></div>
+                            </div>
+
+                            <span>
+                                Requisito: 10 posições
+                            </span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- VFS CREDENTIALS -->
+            <div class="detail-card credentials-card">
+
+                <div class="detail-card-header">
+
+                    <div>
+                        <span class="section-kicker">VFS</span>
+                        <h3>Credenciais do cliente</h3>
+
+                        <p>
+                            Estas credenciais são utilizadas exclusivamente
+                            pelo processo automatizado VFS. Nunca são
+                            apresentadas ao cliente.
+                        </p>
+                    </div>
+
+                    <span
+                        id="credentialsStatus"
+                        class="credentials-status"
+                    >
+                        Não configuradas
+                    </span>
+
+                </div>
+
+                <form
+                    id="credentialsForm"
+                    class="credentials-form"
+                    autocomplete="off"
+                >
+
+                    <div class="form-field">
+
+                        <label for="vfsEmail">
+                            Email VFS
+                        </label>
 
                         <input
-                            type="search"
-                            id="applicationSearch"
-                            placeholder="Pesquisar cliente, email, passaporte ou processo..."
+                            type="email"
+                            id="vfsEmail"
+                            name="email"
+                            placeholder="email utilizado no VFS"
                             autocomplete="off"
+                            required
                         >
 
                     </div>
 
-                    <select
-                        id="statusFilter"
-                        class="filter-select"
+                    <div class="form-field">
+
+                        <label for="vfsPassword">
+                            Password VFS
+                        </label>
+
+                        <div class="password-input">
+
+                            <input
+                                type="password"
+                                id="vfsPassword"
+                                name="password"
+                                placeholder="Password VFS"
+                                autocomplete="new-password"
+                                required
+                            >
+
+                            <button
+                                type="button"
+                                id="togglePassword"
+                                class="password-toggle"
+                                aria-label="Mostrar password"
+                            >
+                                Mostrar
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                    <div class="credentials-actions">
+
+                        <button
+                            type="submit"
+                            id="saveCredentialsButton"
+                            class="btn btn-primary"
+                        >
+                            Guardar credenciais
+                        </button>
+
+                        <span class="secure-note">
+                            🔒 Encriptação no servidor
+                        </span>
+
+                    </div>
+
+                </form>
+
+            </div>
+
+            <!-- ADMIN CONTROL -->
+            <div class="detail-card automation-control-card">
+
+                <div class="detail-card-header">
+
+                    <div>
+                        <span class="section-kicker">CONTROLO</span>
+                        <h3>Liberação da automação</h3>
+
+                        <p id="releaseDescription">
+                            O processo ainda não foi liberado.
+                        </p>
+                    </div>
+
+                    <span
+                        id="releaseStatus"
+                        class="status-badge"
                     >
-                        <option value="all">Todos os estados</option>
-                        <option value="PENDING_REVIEW">
-                            Aguardando administração
-                        </option>
-                        <option value="READY_FOR_AUTOMATION">
-                            Pronto para automação
-                        </option>
-                        <option value="AUTOMATION_ACTIVE">
-                            Automação ativa
-                        </option>
-                        <option value="PAUSED">
-                            Pausado
-                        </option>
-                        <option value="COMPLETED">
-                            Concluído
-                        </option>
-                        <option value="CANCELLED">
-                            Cancelado
-                        </option>
-                    </select>
+                        BLOQUEADO
+                    </span>
+
+                </div>
+
+                <div class="release-warning" id="releaseWarning">
+
+                    <span class="warning-icon">!</span>
+
+                    <div>
+                        <strong>Aguardando administração</strong>
+
+                        <p>
+                            O Bot 1 e o Bot 2 não podem iniciar enquanto
+                            este processo não tiver sido liberado por um
+                            administrador.
+                        </p>
+                    </div>
+
+                </div>
+
+                <div class="control-actions">
 
                     <button
                         type="button"
-                        id="clearFiltersButton"
-                        class="btn btn-ghost"
+                        id="releaseButton"
+                        class="btn btn-primary btn-large"
+                        disabled
                     >
-                        Limpar
+                        LIBERAR PARA AUTOMAÇÃO
+                    </button>
+
+                    <button
+                        type="button"
+                        id="pauseButton"
+                        class="btn btn-danger btn-large"
+                        disabled
+                    >
+                        PAUSAR AUTOMAÇÃO
                     </button>
 
                 </div>
 
-                <div class="applications-list" id="applicationsList">
-
-                    <div class="loading-state">
-                        <div class="loading-spinner"></div>
-                        <span>A carregar processos...</span>
-                    </div>
-
-                </div>
-
             </div>
 
-        </section>
+            <!-- PAYMENT -->
+            <div class="detail-card payment-card">
 
-        <!-- DETAILS -->
-        <section
-            id="detailsSection"
-            class="content-section details-section"
-        >
+                <div class="detail-card-header">
 
-            <div class="section-heading">
-
-                <div>
-                    <span class="section-kicker">CONTROLO</span>
-                    <h2>Processo selecionado</h2>
-                </div>
-
-                <span
-                    id="selectedProcessId"
-                    class="process-id"
-                >
-                    Nenhum processo selecionado
-                </span>
-
-            </div>
-
-            <div
-                id="emptyDetails"
-                class="empty-details"
-            >
-
-                <div class="empty-details-icon">
-                    ◉
-                </div>
-
-                <h3>Selecione um processo</h3>
-
-                <p>
-                    Escolha um cliente na lista acima para consultar os dados,
-                    configurar as credenciais VFS e controlar a automação.
-                </p>
-
-            </div>
-
-            <div
-                id="detailsPanel"
-                class="details-panel hidden"
-            >
-
-                <!-- CLIENT -->
-                <div class="detail-card client-summary-card">
-
-                    <div class="detail-card-header">
-                        <div>
-                            <span class="section-kicker">CLIENTE</span>
-                            <h3 id="detailClientName">—</h3>
-                        </div>
-
-                        <span
-                            id="detailAdminStatus"
-                            class="status-badge"
-                        >
-                            —
-                        </span>
+                    <div>
+                        <span class="section-kicker">PAGAMENTO</span>
+                        <h3>Dados do agendamento</h3>
                     </div>
 
-                    <div class="client-summary">
-
-                        <div class="client-avatar" id="detailClientAvatar">
-                            —
-                        </div>
-
-                        <div class="client-main-info">
-
-                            <div class="info-row">
-                                <span>Nome</span>
-                                <strong id="detailClientFullName">—</strong>
-                            </div>
-
-                            <div class="info-row">
-                                <span>Email</span>
-                                <strong id="detailClientEmail">—</strong>
-                            </div>
-
-                            <div class="info-row">
-                                <span>Telefone</span>
-                                <strong id="detailClientPhone">—</strong>
-                            </div>
-
-                            <div class="info-row">
-                                <span>Processo</span>
-                                <strong id="detailApplicationId">—</strong>
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <!-- WORKFLOW -->
-                <div class="detail-grid">
-
-                    <div class="detail-card">
-
-                        <div class="detail-card-header">
-                            <div>
-                                <span class="section-kicker">WORKFLOW</span>
-                                <h3>Estado do processo</h3>
-                            </div>
-                        </div>
-
-                        <div class="workflow-status">
-
-                            <div class="workflow-main-status">
-                                <span
-                                    id="detailWorkflowStatus"
-                                    class="workflow-state"
-                                >
-                                    —
-                                </span>
-
-                                <span
-                                    id="detailLegacyStatus"
-                                    class="muted"
-                                >
-                                    —
-                                </span>
-                            </div>
-
-                            <div class="workflow-meta">
-
-                                <div>
-                                    <span>Estado anterior</span>
-                                    <strong id="detailPreviousState">—</strong>
-                                </div>
-
-                                <div>
-                                    <span>Última alteração</span>
-                                    <strong id="detailStateChangedAt">—</strong>
-                                </div>
-
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                    <div class="detail-card">
-
-                        <div class="detail-card-header">
-                            <div>
-                                <span class="section-kicker">BOTS</span>
-                                <h3>Automação</h3>
-                            </div>
-                        </div>
-
-                        <div class="bot-status-list">
-
-                            <div class="bot-status-row">
-                                <div>
-                                    <strong>Bot 1</strong>
-                                    <span>Agendamento</span>
-                                </div>
-
-                                <span
-                                    id="detailBot1Status"
-                                    class="bot-badge"
-                                >
-                                    —
-                                </span>
-                            </div>
-
-                            <div class="bot-status-row">
-                                <div>
-                                    <strong>Bot 2</strong>
-                                    <span>Radar de vagas</span>
-                                </div>
-
-                                <span
-                                    id="detailBot2Status"
-                                    class="bot-badge"
-                                >
-                                    —
-                                </span>
-                            </div>
-
-                            <div class="bot-status-row">
-                                <div>
-                                    <strong>VFS</strong>
-                                    <span>Sessão</span>
-                                </div>
-
-                                <span
-                                    id="detailVfsStatus"
-                                    class="bot-badge"
-                                >
-                                    —
-                                </span>
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <!-- CLIENT DATA -->
-                <div class="detail-card">
-
-                    <div class="detail-card-header">
-                        <div>
-                            <span class="section-kicker">DADOS</span>
-                            <h3>Informações do pedido</h3>
-                        </div>
-                    </div>
-
-                    <div class="data-grid">
-
-                        <div class="data-item">
-                            <span>Tipo de visto</span>
-                            <strong id="detailVisaType">—</strong>
-                        </div>
-
-                        <div class="data-item">
-                            <span>Centro VFS</span>
-                            <strong id="detailVisaCenter">—</strong>
-                        </div>
-
-                        <div class="data-item">
-                            <span>Serviço</span>
-                            <strong id="detailServiceType">—</strong>
-                        </div>
-
-                        <div class="data-item">
-                            <span>Modo de atendimento</span>
-                            <strong id="detailAppointmentMode">—</strong>
-                        </div>
-
-                        <div class="data-item">
-                            <span>Data inicial</span>
-                            <strong id="detailDateStart">—</strong>
-                        </div>
-
-                        <div class="data-item">
-                            <span>Data final</span>
-                            <strong id="detailDateEnd">—</strong>
-                        </div>
-
-                        <div class="data-item">
-                            <span>Horário preferido</span>
-                            <strong id="detailPreferredTime">—</strong>
-                        </div>
-
-                        <div class="data-item">
-                            <span>Dias preferidos</span>
-                            <strong id="detailPreferredWeekdays">—</strong>
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <!-- PASSPORT / IDENTITY -->
-                <div class="detail-grid">
-
-                    <div class="detail-card">
-
-                        <div class="detail-card-header">
-                            <div>
-                                <span class="section-kicker">PASSAPORTE</span>
-                                <h3>Documento</h3>
-                            </div>
-
-                            <span
-                                id="detailPassportStatus"
-                                class="status-badge"
-                            >
-                                —
-                            </span>
-                        </div>
-
-                        <div class="passport-preview">
-
-                            <div class="passport-icon">
-                                PASSPORT
-                            </div>
-
-                            <div>
-                                <strong id="detailPassportNumber">
-                                    —
-                                </strong>
-
-                                <span id="detailPassportName">
-                                    —
-                                </span>
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                    <div class="detail-card">
-
-                        <div class="detail-card-header">
-                            <div>
-                                <span class="section-kicker">IDENTIDADE</span>
-                                <h3>Verificação facial</h3>
-                            </div>
-
-                            <span
-                                id="detailIdentityStatus"
-                                class="status-badge"
-                            >
-                                —
-                            </span>
-                        </div>
-
-                        <div class="identity-summary">
-
-                            <div class="identity-number">
-                                <strong id="detailFaceCount">0</strong>
-                                <span>posições armazenadas</span>
-                            </div>
-
-                            <div class="identity-progress">
-                                <div class="progress-track">
-                                    <div
-                                        id="identityProgressBar"
-                                        class="progress-value"
-                                    ></div>
-                                </div>
-
-                                <span>
-                                    Requisito: 10 posições
-                                </span>
-                            </div>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <!-- VFS CREDENTIALS -->
-                <div class="detail-card credentials-card">
-
-                    <div class="detail-card-header">
-
-                        <div>
-                            <span class="section-kicker">VFS</span>
-                            <h3>Credenciais do cliente</h3>
-
-                            <p>
-                                Estas credenciais são utilizadas exclusivamente
-                                pelo processo automatizado VFS. Nunca são
-                                apresentadas ao cliente.
-                            </p>
-                        </div>
-
-                        <span
-                            id="credentialsStatus"
-                            class="credentials-status"
-                        >
-                            Não configuradas
-                        </span>
-
-                    </div>
-
-                    <form
-                        id="credentialsForm"
-                        class="credentials-form"
-                        autocomplete="off"
+                    <span
+                        id="detailPaymentStatus"
+                        class="payment-status"
                     >
-
-                        <div class="form-field">
-
-                            <label for="vfsEmail">
-                                Email VFS
-                            </label>
-
-                            <input
-                                type="email"
-                                id="vfsEmail"
-                                name="email"
-                                placeholder="email utilizado no VFS"
-                                autocomplete="off"
-                                required
-                            >
-
-                        </div>
-
-                        <div class="form-field">
-
-                            <label for="vfsPassword">
-                                Password VFS
-                            </label>
-
-                            <div class="password-input">
-
-                                <input
-                                    type="password"
-                                    id="vfsPassword"
-                                    name="password"
-                                    placeholder="Password VFS"
-                                    autocomplete="new-password"
-                                    required
-                                >
-
-                                <button
-                                    type="button"
-                                    id="togglePassword"
-                                    class="password-toggle"
-                                    aria-label="Mostrar password"
-                                >
-                                    Mostrar
-                                </button>
-
-                            </div>
-
-                        </div>
-
-                        <div class="credentials-actions">
-
-                            <button
-                                type="submit"
-                                id="saveCredentialsButton"
-                                class="btn btn-primary"
-                            >
-                                Guardar credenciais
-                            </button>
-
-                            <span class="secure-note">
-                                🔒 Encriptação no servidor
-                            </span>
-
-                        </div>
-
-                    </form>
+                        —
+                    </span>
 
                 </div>
 
-                <!-- ADMIN CONTROL -->
-                <div class="detail-card automation-control-card">
+                <div class="payment-grid">
 
-                    <div class="detail-card-header">
-
-                        <div>
-                            <span class="section-kicker">CONTROLO</span>
-                            <h3>Liberação da automação</h3>
-
-                            <p id="releaseDescription">
-                                O processo ainda não foi liberado.
-                            </p>
-                        </div>
-
-                        <span
-                            id="releaseStatus"
-                            class="status-badge"
-                        >
-                            BLOQUEADO
-                        </span>
-
-                    </div>
-
-                    <div class="release-warning" id="releaseWarning">
-
-                        <span class="warning-icon">!</span>
-
-                        <div>
-                            <strong>Aguardando administração</strong>
-
-                            <p>
-                                O Bot 1 e o Bot 2 não podem iniciar enquanto
-                                este processo não tiver sido liberado por um
-                                administrador.
-                            </p>
-                        </div>
-
-                    </div>
-
-                    <div class="control-actions">
-
-                        <button
-                            type="button"
-                            id="releaseButton"
-                            class="btn btn-primary btn-large"
-                            disabled
-                        >
-                            LIBERAR PARA AUTOMAÇÃO
-                        </button>
-
-                        <button
-                            type="button"
-                            id="pauseButton"
-                            class="btn btn-danger btn-large"
-                            disabled
-                        >
-                            PAUSAR AUTOMAÇÃO
-                        </button>
-
-                    </div>
-
-                </div>
-
-                <!-- PAYMENT -->
-                <div class="detail-card payment-card">
-
-                    <div class="detail-card-header">
-
-                        <div>
-                            <span class="section-kicker">PAGAMENTO</span>
-                            <h3>Dados do agendamento</h3>
-                        </div>
-
-                        <span
-                            id="detailPaymentStatus"
-                            class="payment-status"
-                        >
+                    <div class="payment-item highlight">
+                        <span>Referência</span>
+                        <strong id="detailPaymentReference">
                             —
-                        </span>
-
+                        </strong>
                     </div>
 
-                    <div class="payment-grid">
-
-                        <div class="payment-item highlight">
-                            <span>Referência</span>
-                            <strong id="detailPaymentReference">
-                                —
-                            </strong>
-                        </div>
-
-                        <div class="payment-item">
-                            <span>Entidade</span>
-                            <strong id="detailPaymentEntity">
-                                —
-                            </strong>
-                        </div>
-
-                        <div class="payment-item">
-                            <span>Valor</span>
-                            <strong id="detailPaymentAmount">
-                                —
-                            </strong>
-                        </div>
-
-                        <div class="payment-item">
-                            <span>Moeda</span>
-                            <strong id="detailPaymentCurrency">
-                                —
-                            </strong>
-                        </div>
-
-                        <div class="payment-item">
-                            <span>Prazo</span>
-                            <strong id="detailPaymentDeadline">
-                                —
-                            </strong>
-                        </div>
-
-                        <div class="payment-item">
-                            <span>Transação</span>
-                            <strong id="detailPaymentTransaction">
-                                —
-                            </strong>
-                        </div>
-
+                    <div class="payment-item">
+                        <span>Entidade</span>
+                        <strong id="detailPaymentEntity">
+                            —
+                        </strong>
                     </div>
 
-                    <div
-                        id="confirmationBox"
-                        class="confirmation-box hidden"
-                    >
-                        <span>Confirmação</span>
+                    <div class="payment-item">
+                        <span>Valor</span>
+                        <strong id="detailPaymentAmount">
+                            —
+                        </strong>
+                    </div>
 
-                        <a
-                            id="confirmationLink"
-                            href="#"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                        >
-                            Abrir confirmação
-                        </a>
+                    <div class="payment-item">
+                        <span>Moeda</span>
+                        <strong id="detailPaymentCurrency">
+                            —
+                        </strong>
+                    </div>
+
+                    <div class="payment-item">
+                        <span>Prazo</span>
+                        <strong id="detailPaymentDeadline">
+                            —
+                        </strong>
+                    </div>
+
+                    <div class="payment-item">
+                        <span>Transação</span>
+                        <strong id="detailPaymentTransaction">
+                            —
+                        </strong>
                     </div>
 
                 </div>
 
-                <!-- ERRORS -->
                 <div
-                    id="errorCard"
-                    class="detail-card error-card hidden"
+                    id="confirmationBox"
+                    class="confirmation-box hidden"
                 >
+                    <span>Confirmação</span>
 
-                    <div class="detail-card-header">
+                    <a
+                        id="confirmationLink"
+                        href="#"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                    >
+                        Abrir confirmação
+                    </a>
+                </div>
 
-                        <div>
-                            <span class="section-kicker">SISTEMA</span>
-                            <h3>Último erro</h3>
-                        </div>
+            </div>
 
-                    </div>
+            <!-- ERRORS -->
+            <div
+                id="errorCard"
+                class="detail-card error-card hidden"
+            >
 
-                    <div class="error-content">
+                <div class="detail-card-header">
 
-                        <strong id="detailErrorCode">—</strong>
-
-                        <p id="detailErrorMessage">
-                            —
-                        </p>
-
-                        <span id="detailErrorAt">
-                            —
-                        </span>
-
+                    <div>
+                        <span class="section-kicker">SISTEMA</span>
+                        <h3>Último erro</h3>
                     </div>
 
                 </div>
 
-                <!-- NOTES -->
-                <div class="detail-card">
+                <div class="error-content">
 
-                    <div class="detail-card-header">
+                    <strong id="detailErrorCode">—</strong>
 
-                        <div>
-                            <span class="section-kicker">ADMINISTRAÇÃO</span>
-                            <h3>Observações</h3>
-                        </div>
+                    <p id="detailErrorMessage">
+                        —
+                    </p>
 
-                    </div>
-
-                    <textarea
-                        id="adminNotes"
-                        class="admin-notes"
-                        rows="4"
-                        placeholder="Observações internas sobre este processo..."
-                    ></textarea>
+                    <span id="detailErrorAt">
+                        —
+                    </span>
 
                 </div>
 
             </div>
 
-        </section>
+            <!-- NOTES -->
+            <div class="detail-card">
 
-    </main>
+                <div class="detail-card-header">
 
-</div>
+                    <div>
+                        <span class="section-kicker">ADMINISTRAÇÃO</span>
+                        <h3>Observações</h3>
+                    </div>
 
-<!-- TOAST -->
-<div
+                </div>
+
+                <textarea
+                    id="adminNotes"
+                    class="admin-notes"
+                    rows="4"
+                    placeholder="Observações internas sobre este processo..."
+                ></textarea>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</main>
+
+</div><!-- TOAST --><div
     id="toastContainer"
     class="toast-container"
     aria-live="polite"
-></div>
-
-<!-- CONFIRMATION MODAL -->
-<div
+></div><!-- CONFIRMATION MODAL --><div
     id="confirmModal"
     class="modal-backdrop hidden"
->
+><div class="confirm-modal">
 
-    <div class="confirm-modal">
+    <div class="modal-icon" id="modalIcon">
+        !
+    </div>
 
-        <div class="modal-icon" id="modalIcon">
-            !
-        </div>
+    <h3 id="modalTitle">
+        Confirmar ação
+    </h3>
 
-        <h3 id="modalTitle">
-            Confirmar ação
-        </h3>
+    <p id="modalMessage">
+        Tem certeza que deseja continuar?
+    </p>
 
-        <p id="modalMessage">
-            Tem certeza que deseja continuar?
-        </p>
+    <div class="modal-actions">
 
-        <div class="modal-actions">
+        <button
+            type="button"
+            id="modalCancel"
+            class="btn btn-secondary"
+        >
+            Cancelar
+        </button>
 
-            <button
-                type="button"
-                id="modalCancel"
-                class="btn btn-secondary"
-            >
-                Cancelar
-            </button>
-
-            <button
-                type="button"
-                id="modalConfirm"
-                class="btn btn-primary"
-            >
-                Confirmar
-            </button>
-
-        </div>
+        <button
+            type="button"
+            id="modalConfirm"
+            class="btn btn-primary"
+        >
+            Confirmar
+        </button>
 
     </div>
 
 </div>
 
-<script src="/admin.js"></script>
-<script src="/admin-access-requests.js"></script>
-
-</body>
+</div><script src="/admin.js"></script><script src="/admin-access-requests.js"></script><script src="/admin-liveness-media.js"></script></body>
 </html>
