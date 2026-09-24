@@ -9,6 +9,8 @@ const Application =
 
 const Client =
   require("../models/client");
+const adminLivenessMedia =
+  require("./admin-liveness-media");
 
 const ApplicationAdminControl =
   require("../models/application-admin-control");
@@ -2122,7 +2124,21 @@ function createAdminRouter() {
       }
     }
   );
+  /*
+   * =========================================================
+   * LIVENESS MEDIA — ADMINISTRAÇÃO
+   * =========================================================
+   *
+   * Permite à Administração consultar e reproduzir
+   * os segmentos reais de vídeo das 10 posições
+   * aprovadas na sessão de liveness.
+   * =========================================================
+   */
 
+  router.use(
+    "/liveness",
+    adminLivenessMedia
+  );
 
   return router;
 }
