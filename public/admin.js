@@ -2902,6 +2902,10 @@ const AdminApp = (() => {
             $(
                 "#vfsPassword"
             )?.value || "";
+        const phone =
+    $(
+        "#vfsPhone"
+    )?.value.trim();
 
         if (!email) {
             showToast(
@@ -2922,6 +2926,15 @@ const AdminApp = (() => {
 
             return;
         }
+        if (!phone) {
+    showToast(
+        "VFS",
+        "Informe o telefone VFS que poderá receber o OTP.",
+        "error"
+    );
+
+    return;
+}
 
         const button =
             $(
@@ -2949,10 +2962,11 @@ const AdminApp = (() => {
                         "POST",
 
                     body:
-                        JSON.stringify({
-                            email,
-                            password
-                        })
+    JSON.stringify({
+        email,
+        password,
+        phone
+    })
                 }
             );
 
@@ -2982,6 +2996,16 @@ const AdminApp = (() => {
                 ).value =
                     "";
             }
+            if (
+    $(
+        "#vfsPhone"
+    )
+) {
+    $(
+        "#vfsPhone"
+    ).value =
+        "";
+}
 
             showToast(
                 "Credenciais",
