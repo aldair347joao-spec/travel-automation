@@ -29,23 +29,6 @@ const VISA_TYPES = [
  * ============================================================
  * ADMIN STATUS SANITIZADO
  * ============================================================
- *
- * O cliente pode saber:
- *
- * - estado administrativo
- * - se as credenciais foram configuradas
- * - se a automação foi liberada
- * - quando foi liberada
- *
- * O cliente NUNCA recebe:
- *
- * - VFS email
- * - VFS password
- * - emailEncrypted
- * - passwordEncrypted
- * - qualquer segredo administrativo
- *
- * ============================================================
  */
 
 function serializeAdminControl(
@@ -98,10 +81,6 @@ function serializeAdminControl(
 /*
  * ============================================================
  * ANEXAR ESTADO ADMINISTRATIVO
- * ============================================================
- *
- * Funciona tanto para uma aplicação como para uma lista.
- *
  * ============================================================
  */
 
@@ -196,14 +175,6 @@ async function attachAdminStatus(
         );
 
 
-      /*
-       * Se for documento Mongoose,
-       * podemos atribuir directamente.
-       *
-       * Se for objeto lean,
-       * também funciona.
-       */
-
       application.admin =
         admin;
     }
@@ -289,6 +260,53 @@ function buildPreparedData(
         })
       )
   };
+}
+
+
+/*
+ * ============================================================
+ * ISOLAMENTO DAS CANDIDATURAS
+ * ============================================================
+ *
+ * IMPORTANTE:
+ *
+ * Todos os colaboradores "client" podem pertencer à mesma
+ * accountId administrativa.
+ *
+ * Por isso accountId sozinho NÃO é suficiente para separar
+ * as candidaturas entre colaboradores.
+ *
+ * Para role "client":
+ *
+ *     accountId
+ *     +
+ *     createdBy
+ *
+ * Owner/admin/operator/viewer continuam a trabalhar sobre
+ * todas as candidaturas da própria accountId.
+ *
+ * ============================================================
+ */
+
+function getApplicationScope(
+  req
+) {
+  const scope = {
+    accountId:
+      req.user.accountId
+  };
+
+
+  if (
+    req.user.role ===
+    "client"
+  ) {
+    scope.createdBy =
+      req.user._id;
+  }
+
+
+  return scope;
 }
 
 
@@ -435,14 +453,14 @@ function createApplicationRouter({
    */
 
   router.post(
-  "/",
+    "/",
 
-  requireRole(
-    "owner",
-    "admin",
-    "operator",
-    "client"
-  ),
+    requireRole(
+      "owner",
+      "admin",
+      "operator",
+      "client"
+    ),
 
     async (
       req,
@@ -690,6 +708,11 @@ function createApplicationRouter({
          * ------------------------------------------------------
          * IDEMPOTENCY
          * ------------------------------------------------------
+         *
+         * A chave continua a impedir apenas duplicações
+         * acidentais da mesma submissão.
+         *
+         * Ela NÃO impede uma nova candidatura.
          */
 
         const idempotencyKey =
@@ -706,8 +729,9 @@ function createApplicationRouter({
 
           const existing =
             await Application.findOne({
-              accountId:
-                req.user.accountId,
+              ...getApplicationScope(
+                req
+              ),
 
               idempotencyKey
             });
@@ -738,25 +762,47 @@ function createApplicationRouter({
 
         /*
          * ------------------------------------------------------
-         * CLIENTS
+         * CLIENTES
          * ------------------------------------------------------
+         *
+         * Para role client:
+         *
+         * - accountId deve coincidir;
+         * - createdBy deve ser o próprio colaborador.
+         *
+         * Assim um colaborador não consegue criar uma
+         * candidatura usando o viajante de outro colaborador.
          */
+
+        const clientQuery = {
+          _id: {
+            $in:
+              uniqueClientIds
+          },
+
+          accountId:
+            req.user.accountId,
+
+          active:
+            true
+        };
+
+
+        if (
+          req.user.role ===
+          "client"
+        ) {
+          clientQuery.createdBy =
+            req.user._id;
+        }
+
 
         const clients =
           await require(
             "../models/client"
-          ).find({
-            _id: {
-              $in:
-                uniqueClientIds
-            },
-
-            accountId:
-              req.user.accountId,
-
-            active:
-              true
-          });
+          ).find(
+            clientQuery
+          );
 
 
         if (
@@ -866,13 +912,6 @@ function createApplicationRouter({
          * ------------------------------------------------------
          * NOVO FLUXO
          * ------------------------------------------------------
-         *
-         * Uma candidatura recém-criada NÃO é liberada.
-         *
-         * O estado administrativo é criado separadamente
-         * como PENDING_REVIEW.
-         *
-         * Nenhum Bot 1 ou Bot 2 deve iniciar aqui.
          */
 
         await application.save();
@@ -999,9 +1038,11 @@ function createApplicationRouter({
    * LIST APPLICATIONS
    * ==========================================================
    *
-   * O cliente recebe o estado administrativo sanitizado.
+   * CLIENT:
+   * somente candidaturas criadas pelo próprio colaborador.
    *
-   * NUNCA recebe as credenciais VFS.
+   * ADMIN:
+   * candidaturas da account administrativa.
    * ==========================================================
    */
 
@@ -1017,10 +1058,11 @@ function createApplicationRouter({
       try {
 
         const applications =
-          await Application.find({
-            accountId:
-              req.user.accountId
-          })
+          await Application.find(
+            getApplicationScope(
+              req
+            )
+          )
             .populate(
               "client",
               "fullName email passportNumber"
@@ -1061,6 +1103,12 @@ function createApplicationRouter({
    * ==========================================================
    * GET ONE
    * ==========================================================
+   *
+   * O mesmo isolamento usado na lista é aplicado aqui.
+   *
+   * Isto impede que um colaborador tente abrir directamente
+   * uma candidatura de outro colaborador através do ID.
+   * ==========================================================
    */
 
   router.get(
@@ -1075,10 +1123,29 @@ function createApplicationRouter({
       try {
 
         const application =
-          await ApplicationService.getById(
-            req.params.id,
-            req.user.accountId
-          );
+          await Application.findOne({
+            _id:
+              req.params.id,
+
+            ...getApplicationScope(
+              req
+            )
+          });
+
+
+        if (
+          !application
+        ) {
+          const error =
+            new Error(
+              "Aplicação não encontrada."
+            );
+
+          error.code =
+            "APPLICATION_NOT_FOUND";
+
+          throw error;
+        }
 
 
         await application.populate(
@@ -1136,16 +1203,6 @@ function createApplicationRouter({
    * ==========================================================
    * PREPARE
    * ==========================================================
-   *
-   * Mantido para compatibilidade com o sistema existente.
-   *
-   * IMPORTANTE:
-   *
-   * O novo frontend NÃO chama este endpoint.
-   *
-   * A liberação normal agora acontece através
-   * da administração.
-   * ==========================================================
    */
 
   router.post(
@@ -1176,7 +1233,8 @@ function createApplicationRouter({
           success: true,
 
           ready:
-            result.ready === true,
+            result.ready ===
+            true,
 
           application:
             result.application,
