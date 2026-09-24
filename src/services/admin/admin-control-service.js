@@ -155,6 +155,7 @@ async function configureVfsCredentials({
   applicationId,
   email,
   password,
+  phone,
   actorId
 }) {
   const normalizedEmail =
@@ -223,22 +224,14 @@ async function configureVfsCredentials({
     );
 
   control.vfsCredentials = {
-    emailEncrypted:
-      encrypt(
-        normalizedEmail
-      ),
-
-    passwordEncrypted:
-      encrypt(
-        normalizedPassword
-      ),
-
-    configuredAt:
-      new Date(),
-
-    configuredBy:
-      actorId || null
-  };
+  emailEncrypted: encrypt(email),
+  passwordEncrypted: encrypt(password),
+  phoneEncrypted: phone
+    ? encrypt(phone)
+    : null,
+  configuredAt: new Date(),
+  configuredBy: actorId
+};
 
   /*
    * Configurar credenciais NÃO libera
@@ -873,18 +866,27 @@ async function getCredentialsForAutomation(
   }
 
   return {
-    email:
-      decrypt(
-        control.vfsCredentials
-          .emailEncrypted
-      ),
+  email:
+    decrypt(
+      control.vfsCredentials
+        .emailEncrypted
+    ),
 
-    password:
-      decrypt(
-        control.vfsCredentials
-          .passwordEncrypted
-      )
-  };
+  password:
+    decrypt(
+      control.vfsCredentials
+        .passwordEncrypted
+    ),
+
+  phone:
+    control.vfsCredentials
+      .phoneEncrypted
+      ? decrypt(
+          control.vfsCredentials
+            .phoneEncrypted
+        )
+      : null
+};
 }
 
 
