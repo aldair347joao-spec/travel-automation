@@ -5206,3 +5206,10 @@ button {
       .01ms !important;
   }
 }
+/* ============================================================
+   PERFIL — MANTER LÓGICA, OCULTAR INTERFACE
+   ============================================================ */
+
+#clientSection.passport-first-hidden {
+  display: none !important;
+}
