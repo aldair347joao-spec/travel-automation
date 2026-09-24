@@ -1168,20 +1168,6 @@ chooseButton?.addEventListener(
     }
 
 
-    if (
-      !state.selectedClientId
-    ) {
-
-      showToast(
-        "Selecione primeiro o cliente.",
-        "error"
-      );
-
-      return;
-
-    }
-
-
     const allowed = [
       "image/jpeg",
       "image/png"
@@ -1591,19 +1577,6 @@ chooseButton?.addEventListener(
 
   async function uploadPassport() {
 
-    if (
-      !state.selectedClientId
-    ) {
-
-      showToast(
-        "Selecione um cliente antes de validar o passaporte.",
-        "error"
-      );
-
-      return;
-
-    }
-
 
     if (
       !state.passportFile
@@ -1658,19 +1631,57 @@ chooseButton?.addEventListener(
       );
 
 
-      const response =
-        await api(
-          `/api/passports/${encodeURIComponent(
-            state.selectedClientId
-          )}`,
-          {
-            method:
-              "POST",
+  const endpoint = state.selectedClientId
+  ? `/api/passports/${encodeURIComponent(state.selectedClientId)}`
+  : "/api/passports/import";
 
-            body:
-              formData
-          }
-        );
+const response = await api(
+  endpoint,
+  {
+    method: "POST",
+    body: formData
+  }
+);
+      if (
+  !state.selectedClientId &&
+  response?.clientId &&
+  response?.client
+) {
+  const createdClient = {
+    ...response.client,
+    _id:
+      response.client._id ||
+      response.client.id ||
+      response.clientId
+  };
+
+  state.clients = [
+    createdClient,
+    ...state.clients.filter(
+      client =>
+        String(client._id || client.id) !==
+        String(createdClient._id)
+    )
+  ];
+
+  state.selectedClientId =
+    String(createdClient._id);
+
+  state.selectedClient =
+    createdClient;
+
+  renderClientSelectors();
+  updateSelectedClient();
+  updateClientCount();
+
+  const passportSelect =
+    $("passportClientSelect");
+
+  if (passportSelect) {
+    passportSelect.value =
+      state.selectedClientId;
+  }
+}
 
 
       processPassportResponse(
