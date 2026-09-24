@@ -1,38 +1,72 @@
-const crypto = require("crypto");
-const mongoose = require("mongoose");
+"use strict";
+
+const mongoose =
+  require("mongoose");
 
 const {
   encrypt,
   decrypt
-} = require("../../utils/crypto");
+} =
+  require("../../utils/crypto");
+
 
 /*
  * ============================================================
+ * TRAVEL AUTOMATION
  * LIVENESS VIDEO STORAGE SERVICE
  * ============================================================
  *
- * Guarda o vídeo completo da sessão de liveness.
+ * Guarda SOMENTE os segmentos das posições CORRETAS.
  *
- * O vídeo:
+ * NÃO guarda:
  *
- * - NÃO fica dentro do documento Client;
- * - NÃO fica dentro da Application;
- * - NÃO fica exposto através de URL pública;
- * - é associado ao accountId + clientId + sessionId;
- * - é cifrado antes de entrar no GridFS;
- * - só pode ser recuperado por uma rota administrativa
- *   autorizada.
+ * - tentativa errada;
+ * - sessão completa;
+ * - vídeo contínuo;
+ * - vídeo dentro do Client;
+ * - vídeo dentro da Application.
  *
- * O objetivo é permitir que a Administração veja a sessão
- * facial real do cliente executando as 10 posições.
+ * Cada posição correta é armazenada como um segmento
+ * independente no GridFS.
+ *
+ * Estrutura:
+ *
+ * accountId
+ *    +
+ * clientId
+ *    +
+ * sessionId
+ *    +
+ * position
+ *
+ * Assim a Administração pode recuperar:
+ *
+ * 1 - frontal
+ * 2 - esquerda
+ * 3 - direita
+ * ...
+ * 10 - sorriso
+ *
+ * sem receber as tentativas erradas.
+ *
+ * O conteúdo binário é cifrado antes de entrar no GridFS.
  * ============================================================
  */
 
-const DEFAULT_MAX_BYTES =
+
+const DEFAULT_MAX_SEGMENT_BYTES =
+  Number(
+    process.env.LIVENESS_VIDEO_MAX_SEGMENT_BYTES
+  ) ||
+  5 * 1024 * 1024;
+
+
+const DEFAULT_MAX_SESSION_BYTES =
   Number(
     process.env.LIVENESS_VIDEO_MAX_STORAGE_BYTES
   ) ||
   25 * 1024 * 1024;
+
 
 const DEFAULT_RETENTION_DAYS =
   Number(
@@ -40,11 +74,23 @@ const DEFAULT_RETENTION_DAYS =
   ) ||
   30;
 
+
 const BUCKET_NAME =
   "travel_liveness_videos";
 
 
+const MAX_POSITIONS =
+  10;
+
+
+/*
+ * ============================================================
+ * GRIDFS
+ * ============================================================
+ */
+
 function getBucket() {
+
   if (
     !mongoose.connection ||
     mongoose.connection.readyState !== 1 ||
@@ -54,6 +100,7 @@ function getBucket() {
       "MongoDB não está disponível para armazenamento do vídeo de liveness."
     );
   }
+
 
   return new mongoose.mongo.GridFSBucket(
     mongoose.connection.db,
@@ -69,39 +116,50 @@ function getBucket() {
  * ============================================================
  * CIFRAGEM
  * ============================================================
- *
- * O crypto.js existente trabalha com strings.
- *
- * O vídeo é convertido para base64 antes da cifragem.
- *
- * Isto significa que o GridFS nunca recebe o vídeo original.
- * ============================================================
  */
 
-function encryptBuffer(buffer) {
-  if (!Buffer.isBuffer(buffer)) {
+function encryptBuffer(
+  buffer
+) {
+
+  if (
+    !Buffer.isBuffer(
+      buffer
+    )
+  ) {
     throw new TypeError(
-      "Liveness video must be a Buffer"
+      "O vídeo de liveness deve ser um Buffer."
     );
   }
 
+
   return encrypt(
-    buffer.toString("base64")
+    buffer.toString(
+      "base64"
+    )
   );
 }
 
 
-function decryptBuffer(value) {
+function decryptBuffer(
+  value
+) {
+
   if (!value) {
     return null;
   }
 
+
   const base64 =
-    decrypt(value);
+    decrypt(
+      value
+    );
+
 
   if (!base64) {
     return null;
   }
+
 
   return Buffer.from(
     base64,
@@ -119,6 +177,7 @@ function decryptBuffer(value) {
 function normalizeMimeType(
   mimeType
 ) {
+
   const value =
     String(
       mimeType ||
@@ -127,27 +186,30 @@ function normalizeMimeType(
       .trim()
       .toLowerCase();
 
-  const aliases = {
-    "video/webm":
-      "video/webm",
 
-    "video/webm;codecs=vp8,opus":
-      "video/webm",
+  const base =
+    value.split(
+      ";"
+    )[0].trim();
 
-    "video/webm;codecs=vp9,opus":
-      "video/webm",
 
-    "video/mp4":
-      "video/mp4",
+  const allowed = [
+    "video/webm",
+    "video/mp4",
+    "video/quicktime"
+  ];
 
-    "video/quicktime":
-      "video/quicktime"
-  };
 
-  return (
-    aliases[value] ||
-    null
-  );
+  if (
+    allowed.includes(
+      base
+    )
+  ) {
+    return base;
+  }
+
+
+  return null;
 }
 
 
@@ -160,16 +222,20 @@ function normalizeMimeType(
 function extensionForMime(
   mimeType
 ) {
+
   switch (
     normalizeMimeType(
       mimeType
     )
   ) {
+
     case "video/mp4":
       return "mp4";
 
+
     case "video/quicktime":
       return "mov";
+
 
     case "video/webm":
     default:
@@ -187,6 +253,7 @@ function extensionForMime(
 function getExpirationDate(
   retentionDays
 ) {
+
   const days =
     Number.isFinite(
       Number(
@@ -198,8 +265,10 @@ function getExpirationDate(
         )
       : DEFAULT_RETENTION_DAYS;
 
+
   const expires =
     new Date();
+
 
   expires.setDate(
     expires.getDate() +
@@ -209,7 +278,45 @@ function getExpirationDate(
       )
   );
 
+
   return expires;
+}
+
+
+/*
+ * ============================================================
+ * NORMALIZAÇÃO DA POSIÇÃO
+ * ============================================================
+ */
+
+function normalizePosition(
+  value
+) {
+
+  const number =
+    Number(
+      value
+    );
+
+
+  if (
+    !Number.isInteger(
+      number
+    )
+  ) {
+    return null;
+  }
+
+
+  if (
+    number < 1 ||
+    number > MAX_POSITIONS
+  ) {
+    return null;
+  }
+
+
+  return number;
 }
 
 
@@ -222,8 +329,14 @@ function getExpirationDate(
 class LivenessVideoStorageService {
 
   constructor() {
-    this.maxBytes =
-      DEFAULT_MAX_BYTES;
+
+    this.maxSegmentBytes =
+      DEFAULT_MAX_SEGMENT_BYTES;
+
+
+    this.maxSessionBytes =
+      DEFAULT_MAX_SESSION_BYTES;
+
 
     this.retentionDays =
       DEFAULT_RETENTION_DAYS;
@@ -232,7 +345,7 @@ class LivenessVideoStorageService {
 
   /*
    * ==========================================================
-   * VALIDAR
+   * VALIDAR INPUT
    * ==========================================================
    */
 
@@ -240,6 +353,7 @@ class LivenessVideoStorageService {
     accountId,
     clientId,
     sessionId,
+    position,
     buffer,
     mimeType
   }) {
@@ -271,6 +385,21 @@ class LivenessVideoStorageService {
     }
 
 
+    const normalizedPosition =
+      normalizePosition(
+        position
+      );
+
+
+    if (
+      !normalizedPosition
+    ) {
+      throw new Error(
+        "A posição de liveness deve ser um número entre 1 e 10."
+      );
+    }
+
+
     if (
       !Buffer.isBuffer(
         buffer
@@ -286,18 +415,18 @@ class LivenessVideoStorageService {
       !buffer.length
     ) {
       throw new Error(
-        "O vídeo de liveness está vazio."
+        "O segmento de vídeo de liveness está vazio."
       );
     }
 
 
     if (
       buffer.length >
-      this.maxBytes
+      this.maxSegmentBytes
     ) {
       throw new Error(
-        `O vídeo de liveness excede o limite de ${Math.round(
-          this.maxBytes /
+        `O segmento da posição ${normalizedPosition} excede o limite de ${Math.round(
+          this.maxSegmentBytes /
             1024 /
             1024
         )} MB.`
@@ -320,263 +449,23 @@ class LivenessVideoStorageService {
     }
 
 
-    return normalizedMime;
-  }
-
-
-  /*
-   * ==========================================================
-   * GUARDAR
-   * ==========================================================
-   */
-
-  async save({
-    accountId,
-    clientId,
-    sessionId,
-    buffer,
-    mimeType,
-    startedAt = null,
-    completedAt = null
-  }) {
-
-    const normalizedMime =
-      this.validateInput({
-        accountId,
-        clientId,
-        sessionId,
-        buffer,
-        mimeType
-      });
-
-
-    const bucket =
-      getBucket();
-
-
-    /*
-     * --------------------------------------------------------
-     * Remover vídeo anterior da mesma sessão.
-     * --------------------------------------------------------
-     */
-
-    const existingFiles =
-      await bucket
-        .find({
-          "metadata.accountId":
-            String(
-              accountId
-            ),
-
-          "metadata.clientId":
-            String(
-              clientId
-            ),
-
-          "metadata.sessionId":
-            String(
-              sessionId
-            )
-        })
-        .toArray();
-
-
-    for (
-      const file
-      of existingFiles
-    ) {
-
-      try {
-
-        await bucket.delete(
-          file._id
-        );
-
-      } catch (
-        error
-      ) {
-
-        console.warn(
-          "[LivenessVideoStorage] Não foi possível remover vídeo anterior:",
-          error?.message ||
-            error
-        );
-
-      }
-    }
-
-
-    /*
-     * --------------------------------------------------------
-     * Cifrar antes de guardar.
-     * --------------------------------------------------------
-     */
-
-    const encryptedData =
-      encryptBuffer(
-        buffer
-      );
-
-
-    const encryptedBuffer =
-      Buffer.from(
-        encryptedData,
-        "utf8"
-      );
-
-
-    const fileId =
-      new mongoose.Types.ObjectId();
-
-
-    const extension =
-      extensionForMime(
-        normalizedMime
-      );
-
-
-    const filename =
-      `liveness-${String(
-        clientId
-      )}-${String(
-        sessionId
-      )}.${extension}`;
-
-
-    const expiresAt =
-      getExpirationDate(
-        this.retentionDays
-      );
-
-
-    /*
-     * --------------------------------------------------------
-     * Upload GridFS
-     * --------------------------------------------------------
-     */
-
-    await new Promise(
-      (
-        resolve,
-        reject
-      ) => {
-
-        const uploadStream =
-          bucket.openUploadStreamWithId(
-            fileId,
-            filename,
-            {
-              contentType:
-                "application/octet-stream",
-
-              metadata: {
-
-                type:
-                  "travel_automation_liveness_video",
-
-                accountId:
-                  String(
-                    accountId
-                  ),
-
-                clientId:
-                  String(
-                    clientId
-                  ),
-
-                sessionId:
-                  String(
-                    sessionId
-                  ),
-
-                originalMimeType:
-                  normalizedMime,
-
-                originalSize:
-                  buffer.length,
-
-                encrypted:
-                  true,
-
-                expiresAt,
-
-                startedAt:
-                  startedAt
-                    ? new Date(
-                        startedAt
-                      )
-                    : null,
-
-                completedAt:
-                  completedAt
-                    ? new Date(
-                        completedAt
-                      )
-                    : null
-              }
-            }
-          );
-
-
-        uploadStream.once(
-          "error",
-          reject
-        );
-
-
-        uploadStream.once(
-          "finish",
-          resolve
-        );
-
-
-        uploadStream.end(
-          encryptedBuffer
-        );
-
-      }
-    );
-
-
-    /*
-     * --------------------------------------------------------
-     * Resultado seguro.
-     * --------------------------------------------------------
-     */
-
     return {
-      videoId:
-        fileId.toString(),
-
-      sessionId:
-        String(
-          sessionId
-        ),
+      position:
+        normalizedPosition,
 
       mimeType:
-        normalizedMime,
-
-      originalSize:
-        buffer.length,
-
-      storedSize:
-        encryptedBuffer.length,
-
-      expiresAt,
-
-      bucket:
-        BUCKET_NAME
+        normalizedMime
     };
   }
 
 
   /*
    * ==========================================================
-   * LOCALIZAR
+   * LISTAR SEGMENTOS DA SESSÃO
    * ==========================================================
    */
 
-  async find({
+  async findAll({
     accountId,
     clientId,
     sessionId
@@ -586,43 +475,85 @@ class LivenessVideoStorageService {
       getBucket();
 
 
-    const query = {};
-
-
-    if (
-      accountId
-    ) {
-      query[
-        "metadata.accountId"
-      ] =
+    const query = {
+      "metadata.accountId":
         String(
           accountId
-        );
-    }
+        ),
 
-
-    if (
-      clientId
-    ) {
-      query[
-        "metadata.clientId"
-      ] =
+      "metadata.clientId":
         String(
           clientId
-        );
-    }
+        ),
+
+      "metadata.sessionId":
+        String(
+          sessionId
+        )
+    };
+
+
+    return bucket
+      .find(
+        query
+      )
+      .sort({
+        "metadata.position":
+          1
+      })
+      .toArray();
+  }
+
+
+  /*
+   * ==========================================================
+   * LOCALIZAR UMA POSIÇÃO
+   * ==========================================================
+   */
+
+  async find({
+    accountId,
+    clientId,
+    sessionId,
+    position
+  }) {
+
+    const normalizedPosition =
+      normalizePosition(
+        position
+      );
+
+
+    const query = {
+      "metadata.accountId":
+        String(
+          accountId
+        ),
+
+      "metadata.clientId":
+        String(
+          clientId
+        ),
+
+      "metadata.sessionId":
+        String(
+          sessionId
+        )
+    };
 
 
     if (
-      sessionId
+      normalizedPosition
     ) {
       query[
-        "metadata.sessionId"
+        "metadata.position"
       ] =
-        String(
-          sessionId
-        );
+        normalizedPosition;
     }
+
+
+    const bucket =
+      getBucket();
 
 
     const files =
@@ -647,28 +578,622 @@ class LivenessVideoStorageService {
 
   /*
    * ==========================================================
-   * LER VÍDEO
+   * REMOVER UMA POSIÇÃO
+   * ==========================================================
+   *
+   * Só é usada quando o mesmo segmento precisa ser substituído.
+   * Não remove as outras posições.
    * ==========================================================
    */
 
-  async get({
+  async deletePosition({
     accountId,
     clientId,
-    sessionId
+    sessionId,
+    position
   }) {
 
-    const file =
-      await this.find({
+    const normalizedPosition =
+      normalizePosition(
+        position
+      );
+
+
+    if (
+      !normalizedPosition
+    ) {
+      return {
+        deleted:
+          0
+      };
+    }
+
+
+    const bucket =
+      getBucket();
+
+
+    const files =
+      await bucket
+        .find({
+          "metadata.accountId":
+            String(
+              accountId
+            ),
+
+          "metadata.clientId":
+            String(
+              clientId
+            ),
+
+          "metadata.sessionId":
+            String(
+              sessionId
+            ),
+
+          "metadata.position":
+            normalizedPosition
+        })
+        .toArray();
+
+
+    let deleted =
+      0;
+
+
+    for (
+      const file
+      of files
+    ) {
+
+      try {
+
+        await bucket.delete(
+          file._id
+        );
+
+
+        deleted +=
+          1;
+
+      } catch (
+        error
+      ) {
+
+        console.warn(
+          "[LivenessVideoStorage] Falha ao apagar segmento:",
+          error?.message ||
+            error
+        );
+      }
+    }
+
+
+    return {
+      deleted
+    };
+  }
+
+
+  /*
+   * ==========================================================
+   * GUARDAR SEGMENTO
+   * ==========================================================
+   *
+   * IMPORTANTE:
+   *
+   * Não grava tentativas erradas.
+   *
+   * O frontend só chama este método depois de uma posição
+   * ter sido validada.
+   *
+   * Cada posição possui o seu próprio ficheiro GridFS.
+   * ==========================================================
+   */
+
+  async save({
+    accountId,
+    clientId,
+    sessionId,
+    position,
+    label = null,
+    instruction = null,
+    score = null,
+    positionScore = null,
+    sequence = null,
+    buffer,
+    mimeType,
+    startedAt = null,
+    completedAt = null
+  }) {
+
+    const validation =
+      this.validateInput({
+        accountId,
+        clientId,
+        sessionId,
+        position,
+        buffer,
+        mimeType
+      });
+
+
+    const normalizedPosition =
+      validation.position;
+
+
+    const normalizedMime =
+      validation.mimeType;
+
+
+    /*
+     * --------------------------------------------------------
+     * VERIFICAR TAMANHO TOTAL DA SESSÃO
+     * --------------------------------------------------------
+     */
+
+    const existingFiles =
+      await this.findAll({
         accountId,
         clientId,
         sessionId
       });
 
 
+    let currentSessionBytes =
+      0;
+
+
+    for (
+      const file
+      of existingFiles
+    ) {
+
+      const filePosition =
+        normalizePosition(
+          file?.metadata
+            ?.position
+        );
+
+
+      /*
+       * Se estamos substituindo a mesma posição,
+       * não contamos o tamanho antigo.
+       */
+
+      if (
+        filePosition ===
+        normalizedPosition
+      ) {
+        continue;
+      }
+
+
+      currentSessionBytes +=
+        Number(
+          file?.metadata
+            ?.originalSize ||
+            0
+        );
+    }
+
+
+    const newSessionSize =
+      currentSessionBytes +
+      buffer.length;
+
+
+    if (
+      newSessionSize >
+      this.maxSessionBytes
+    ) {
+      throw new Error(
+        `Os segmentos de liveness desta sessão excedem o limite total de ${Math.round(
+          this.maxSessionBytes /
+            1024 /
+            1024
+        )} MB.`
+      );
+    }
+
+
+    /*
+     * --------------------------------------------------------
+     * SUBSTITUIR APENAS A MESMA POSIÇÃO
+     * --------------------------------------------------------
+     */
+
+    await this.deletePosition({
+      accountId,
+      clientId,
+      sessionId,
+      position:
+        normalizedPosition
+    });
+
+
+    /*
+     * --------------------------------------------------------
+     * CIFRAR
+     * --------------------------------------------------------
+     */
+
+    const encryptedData =
+      encryptBuffer(
+        buffer
+      );
+
+
+    const encryptedBuffer =
+      Buffer.from(
+        encryptedData,
+        "utf8"
+      );
+
+
+    /*
+     * --------------------------------------------------------
+     * ID
+     * --------------------------------------------------------
+     */
+
+    const fileId =
+      new mongoose.Types.ObjectId();
+
+
+    const extension =
+      extensionForMime(
+        normalizedMime
+      );
+
+
+    const filename =
+      `liveness-${String(
+        clientId
+      )}-${String(
+        sessionId
+      )}-position-${normalizedPosition}.${extension}`;
+
+
+    const expiresAt =
+      getExpirationDate(
+        this.retentionDays
+      );
+
+
+    /*
+     * --------------------------------------------------------
+     * METADADOS
+     * --------------------------------------------------------
+     */
+
+    const metadata = {
+
+      type:
+        "travel_automation_liveness_segment",
+
+
+      accountId:
+        String(
+          accountId
+        ),
+
+
+      clientId:
+        String(
+          clientId
+        ),
+
+
+      sessionId:
+        String(
+          sessionId
+        ),
+
+
+      position:
+        normalizedPosition,
+
+
+      sequence:
+        Number.isInteger(
+          Number(
+            sequence
+          )
+        )
+          ? Number(
+              sequence
+            )
+          : normalizedPosition,
+
+
+      label:
+        label
+          ? String(
+              label
+            ).slice(
+              0,
+              200
+            )
+          : null,
+
+
+      instruction:
+        instruction
+          ? String(
+              instruction
+            ).slice(
+              0,
+              300
+            )
+          : null,
+
+
+      score:
+        Number.isFinite(
+          Number(
+            score
+          )
+        )
+          ? Number(
+              score
+            )
+          : null,
+
+
+      positionScore:
+        Number.isFinite(
+          Number(
+            positionScore
+          )
+        )
+          ? Number(
+              positionScore
+            )
+          : null,
+
+
+      originalMimeType:
+        normalizedMime,
+
+
+      originalSize:
+        buffer.length,
+
+
+      encrypted:
+        true,
+
+
+      expiresAt,
+
+
+      startedAt:
+        startedAt
+          ? new Date(
+              startedAt
+            )
+          : null,
+
+
+      completedAt:
+        completedAt
+          ? new Date(
+              completedAt
+            )
+          : null
+    };
+
+
+    /*
+     * --------------------------------------------------------
+     * GRIDFS
+     * --------------------------------------------------------
+     */
+
+    const bucket =
+      getBucket();
+
+
+    await new Promise(
+      (
+        resolve,
+        reject
+      ) => {
+
+        const uploadStream =
+          bucket.openUploadStreamWithId(
+            fileId,
+            filename,
+            {
+              contentType:
+                "application/octet-stream",
+
+              metadata
+            }
+          );
+
+
+        uploadStream.once(
+          "error",
+          reject
+        );
+
+
+        uploadStream.once(
+          "finish",
+          resolve
+        );
+
+
+        uploadStream.end(
+          encryptedBuffer
+        );
+      }
+    );
+
+
+    /*
+     * --------------------------------------------------------
+     * RESULTADO
+     * --------------------------------------------------------
+     */
+
+    return {
+
+      videoId:
+        fileId.toString(),
+
+
+      clientId:
+        String(
+          clientId
+        ),
+
+
+      sessionId:
+        String(
+          sessionId
+        ),
+
+
+      position:
+        normalizedPosition,
+
+
+      sequence:
+        metadata.sequence,
+
+
+      label:
+        metadata.label,
+
+
+      instruction:
+        metadata.instruction,
+
+
+      score:
+        metadata.score,
+
+
+      positionScore:
+        metadata.positionScore,
+
+
+      mimeType:
+        normalizedMime,
+
+
+      originalSize:
+        buffer.length,
+
+
+      storedSize:
+        encryptedBuffer.length,
+
+
+      uploadedAt:
+        new Date(),
+
+
+      expiresAt,
+
+
+      bucket:
+        BUCKET_NAME
+    };
+  }
+
+
+  /*
+   * ==========================================================
+   * LER UM SEGMENTO
+   * ==========================================================
+   */
+
+  async get({
+    accountId,
+    clientId,
+    sessionId,
+    position,
+    videoId
+  }) {
+
+    const bucket =
+      getBucket();
+
+
+    let file =
+      null;
+
+
+    /*
+     * --------------------------------------------------------
+     * POR VIDEO ID
+     * --------------------------------------------------------
+     */
+
+    if (
+      videoId &&
+      mongoose.isValidObjectId(
+        videoId
+      )
+    ) {
+
+      const files =
+        await bucket
+          .find({
+            _id:
+              new mongoose.Types.ObjectId(
+                videoId
+              ),
+
+            "metadata.accountId":
+              String(
+                accountId
+              ),
+
+            "metadata.clientId":
+              String(
+                clientId
+              ),
+
+            "metadata.sessionId":
+              String(
+                sessionId
+              )
+          })
+          .limit(1)
+          .toArray();
+
+
+      file =
+        files[0] ||
+        null;
+
+    } else {
+
+      file =
+        await this.find({
+          accountId,
+          clientId,
+          sessionId,
+          position
+        });
+    }
+
+
     if (!file) {
       return null;
     }
 
+
+    /*
+     * --------------------------------------------------------
+     * EXPIRAÇÃO
+     * --------------------------------------------------------
+     */
 
     const expiresAt =
       file?.metadata
@@ -687,9 +1212,6 @@ class LivenessVideoStorageService {
 
       try {
 
-        const bucket =
-          getBucket();
-
         await bucket.delete(
           file._id
         );
@@ -703,7 +1225,6 @@ class LivenessVideoStorageService {
           error?.message ||
             error
         );
-
       }
 
 
@@ -711,9 +1232,11 @@ class LivenessVideoStorageService {
     }
 
 
-    const bucket =
-      getBucket();
-
+    /*
+     * --------------------------------------------------------
+     * DOWNLOAD GRIDFS
+     * --------------------------------------------------------
+     */
 
     const chunks =
       [];
@@ -751,7 +1274,6 @@ class LivenessVideoStorageService {
           "end",
           resolve
         );
-
       }
     );
 
@@ -766,10 +1288,16 @@ class LivenessVideoStorageService {
       !encryptedBuffer.length
     ) {
       throw new Error(
-        "O vídeo de liveness armazenado está vazio."
+        "O segmento de vídeo de liveness armazenado está vazio."
       );
     }
 
+
+    /*
+     * --------------------------------------------------------
+     * DESENCRIPTAR
+     * --------------------------------------------------------
+     */
 
     const decrypted =
       decryptBuffer(
@@ -784,19 +1312,28 @@ class LivenessVideoStorageService {
       !decrypted.length
     ) {
       throw new Error(
-        "Não foi possível desencriptar o vídeo de liveness."
+        "Não foi possível desencriptar o segmento de vídeo de liveness."
       );
     }
 
 
+    /*
+     * --------------------------------------------------------
+     * RESULTADO
+     * --------------------------------------------------------
+     */
+
     return {
+
       buffer:
         decrypted,
+
 
       mimeType:
         file?.metadata
           ?.originalMimeType ||
         "video/webm",
+
 
       filename:
         String(
@@ -808,19 +1345,90 @@ class LivenessVideoStorageService {
             "_"
           ),
 
+
       videoId:
         file._id.toString(),
+
+
+      clientId:
+        file?.metadata
+          ?.clientId ||
+        String(
+          clientId
+        ),
+
 
       sessionId:
         file?.metadata
           ?.sessionId ||
+        String(
+          sessionId
+        ),
+
+
+      position:
+        normalizePosition(
+          file?.metadata
+            ?.position
+        ),
+
+
+      sequence:
+        Number(
+          file?.metadata
+            ?.sequence ||
+            file?.metadata
+              ?.position ||
+            0
+        ),
+
+
+      label:
+        file?.metadata
+          ?.label ||
         null,
+
+
+      instruction:
+        file?.metadata
+          ?.instruction ||
+        null,
+
+
+      score:
+        Number.isFinite(
+          Number(
+            file?.metadata
+              ?.score
+          )
+        )
+          ? Number(
+              file.metadata.score
+            )
+          : null,
+
+
+      positionScore:
+        Number.isFinite(
+          Number(
+            file?.metadata
+              ?.positionScore
+          )
+        )
+          ? Number(
+              file.metadata
+                .positionScore
+            )
+          : null,
+
 
       uploadedAt:
         file.uploadDate ||
         null,
 
+
       expiresAt,
+
 
       originalSize:
         Number(
@@ -834,7 +1442,89 @@ class LivenessVideoStorageService {
 
   /*
    * ==========================================================
-   * APAGAR
+   * LER TODOS OS SEGMENTOS
+   * ==========================================================
+   *
+   * Retorna apenas as posições que realmente foram guardadas.
+   * Tentativas erradas nunca entram aqui porque não são
+   * armazenadas.
+   * ==========================================================
+   */
+
+  async getAll({
+    accountId,
+    clientId,
+    sessionId
+  }) {
+
+    const files =
+      await this.findAll({
+        accountId,
+        clientId,
+        sessionId
+      });
+
+
+    const result =
+      [];
+
+
+    for (
+      const file
+      of files
+    ) {
+
+      const position =
+        normalizePosition(
+          file?.metadata
+            ?.position
+        );
+
+
+      if (
+        !position
+      ) {
+        continue;
+      }
+
+
+      const video =
+        await this.get({
+          accountId,
+          clientId,
+          sessionId,
+          position
+        });
+
+
+      if (
+        video
+      ) {
+        result.push(
+          video
+        );
+      }
+    }
+
+
+    return result.sort(
+      (
+        first,
+        second
+      ) =>
+        Number(
+          first.position
+        ) -
+        Number(
+          second.position
+        )
+    );
+  }
+
+
+  /*
+   * ==========================================================
+   * APAGAR SESSÃO
    * ==========================================================
    */
 
@@ -849,28 +1539,11 @@ class LivenessVideoStorageService {
 
 
     const files =
-      await bucket
-        .find({
-          "metadata.accountId":
-            String(
-              accountId
-            ),
-
-          "metadata.clientId":
-            String(
-              clientId
-            ),
-
-          ...(sessionId
-            ? {
-                "metadata.sessionId":
-                  String(
-                    sessionId
-                  )
-              }
-            : {})
-        })
-        .toArray();
+      await this.findAll({
+        accountId,
+        clientId,
+        sessionId
+      });
 
 
     let deleted =
@@ -888,18 +1561,19 @@ class LivenessVideoStorageService {
           file._id
         );
 
-        deleted += 1;
+
+        deleted +=
+          1;
 
       } catch (
         error
       ) {
 
         console.warn(
-          "[LivenessVideoStorage] Falha ao apagar vídeo:",
+          "[LivenessVideoStorage] Falha ao apagar segmento:",
           error?.message ||
             error
         );
-
       }
     }
 
@@ -912,7 +1586,7 @@ class LivenessVideoStorageService {
 
   /*
    * ==========================================================
-   * LIMPEZA DE VÍDEOS EXPIRADOS
+   * LIMPEZA DE EXPIRADOS
    * ==========================================================
    */
 
@@ -961,7 +1635,9 @@ class LivenessVideoStorageService {
           file._id
         );
 
-        deleted += 1;
+
+        deleted +=
+          1;
 
       } catch (
         error
@@ -972,7 +1648,6 @@ class LivenessVideoStorageService {
           error?.message ||
             error
         );
-
       }
     }
 
