@@ -104,23 +104,75 @@ class VfsPuppeteerAdapter extends SiteAdapter {
       return true;
     }
 
-    this.browser =
-      await puppeteer.launch({
-        headless:
-          process.env.PUPPETEER_HEADLESS !==
-          "false",
+    const proxyHost =
+  String(
+    process.env.VFS_PROXY_HOST || ""
+  ).trim();
 
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage"
-        ],
+const proxyPort =
+  String(
+    process.env.VFS_PROXY_PORT || ""
+  ).trim();
 
-        defaultViewport: {
-          width: 1440,
-          height: 900
-        }
-      });
+const proxyUsername =
+  String(
+    process.env.VFS_PROXY_USERNAME || ""
+  ).trim();
+
+const proxyPassword =
+  String(
+    process.env.VFS_PROXY_PASSWORD || ""
+  ).trim();
+
+const proxyConfigured =
+  Boolean(
+    proxyHost &&
+    proxyPort
+  );
+
+const browserArgs = [
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage"
+];
+
+if (proxyConfigured) {
+  browserArgs.push(
+    `--proxy-server=http://${proxyHost}:${proxyPort}`
+  );
+}
+
+this.browser =
+  await puppeteer.launch({
+    headless: true,
+
+    args:
+      browserArgs,
+
+    defaultViewport: {
+      width: 1440,
+      height: 900
+    }
+  });
+
+this.context =
+  await this.browser.createBrowserContext();
+
+this.page =
+  await this.context.newPage();
+
+if (
+  proxyConfigured &&
+  proxyUsername &&
+  proxyPassword
+) {
+  await this.page.authenticate({
+    username:
+      proxyUsername,
+    password:
+      proxyPassword
+  });
+}
 
     this.context =
       await this.browser.createBrowserContext();
