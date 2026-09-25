@@ -764,7 +764,58 @@ class Bot1 {
     );
   }
 
+  async waitForOtpCodeWithLock(
+    applicationId,
+    request
+  ) {
 
+    const heartbeatIntervalMs =
+      Math.max(
+        5000,
+        Math.floor(
+          config.lockMs / 2
+        )
+      );
+
+    let heartbeatTimer =
+      null;
+
+    try {
+
+      await this.refreshLock(
+        applicationId
+      );
+
+      heartbeatTimer =
+        setInterval(
+          () => {
+
+            this.refreshLock(
+              applicationId
+            ).catch(
+              () => {}
+            );
+
+          },
+          heartbeatIntervalMs
+        );
+
+      return await this.otp.waitForCode(
+        request
+      );
+
+    } finally {
+
+      if (
+        heartbeatTimer
+      ) {
+        clearInterval(
+          heartbeatTimer
+        );
+      }
+
+    }
+  }
   async releaseLock(
     applicationId
   ) {
@@ -2370,9 +2421,24 @@ class Bot1 {
        * ---------------------------------------------------
        */
 
-      if (
+            if (
         otpRequired
       ) {
+
+        /*
+         * ---------------------------------------------------
+         * OTP REQUIRED
+         * ---------------------------------------------------
+         *
+         * VFS pediu OTP.
+         *
+         * O OTP é enviado para o e-mail VFS configurado
+         * pela Administração.
+         *
+         * O Bot 1 permanece com o lock ativo enquanto
+         * aguarda a chegada do e-mail.
+         * ---------------------------------------------------
+         */
 
         await moveState(
           application,
@@ -2401,54 +2467,386 @@ class Bot1 {
         application.otp.requestId =
           otp.requestId;
 
+
         application.otp.status =
           "waiting";
 
+
         application.otp.expiresAt =
           otp.expiresAt;
+
 
         application.otp.attempts =
           0;
 
 
-        await this.otp.requestCode(
-          otp,
-          application.client?.phone ||
-          application.client?.email ||
-          null
-        );
+        /*
+         * ---------------------------------------------------
+         * SOLICITAR OTP
+         * ---------------------------------------------------
+         *
+         * IMPORTANTE:
+         *
+         * Não usamos telefone nem e-mail do cliente.
+         *
+         * O OtpService vai buscar as credenciais VFS
+         * configuradas pela Administração.
+         * ---------------------------------------------------
+         */
+
+        const requestResult =
+          await this.otp.requestCode(
+            otp,
+            null
+          );
 
 
         application.status =
           "otp_required";
 
+
         application.bot1.status =
           "waiting";
 
+
         application.bot1.lastAction =
-          "waiting_for_otp";
+          "waiting_for_otp_email";
 
 
         await application.save();
 
-        await this.releaseLock(
-          applicationId
+
+        /*
+         * ---------------------------------------------------
+         * AGUARDAR OTP NO E-MAIL VFS
+         * ---------------------------------------------------
+         *
+         * waitForOtpCodeWithLock()
+         * mantém o lock do Bot 1 renovado enquanto
+         * o OtpService procura o e-mail.
+         * ---------------------------------------------------
+         */
+
+        const receivedOtp =
+          await this.waitForOtpCodeWithLock(
+            applicationId,
+            otp
+          );
+
+
+        /*
+         * ---------------------------------------------------
+         * OTP NÃO RECEBIDO
+         * ---------------------------------------------------
+         */
+
+        if (
+          !receivedOtp ||
+          receivedOtp.status !==
+            "received"
+        ) {
+
+          if (
+            receivedOtp?.status ===
+            "expired"
+          ) {
+
+            application.otp.status =
+              "expired";
+
+            application.bot1.status =
+              "error";
+
+            application.bot1.lastAction =
+              "otp_email_expired";
+
+            await application.save();
+
+            throw new Error(
+              "OTP email was not received before expiration."
+            );
+          }
+
+
+          throw new Error(
+            "OTP email could not be retrieved."
+          );
+        }
+
+
+        const otpCode =
+          receivedOtp.code;
+
+
+        /*
+         * ---------------------------------------------------
+         * VALIDAR FORMATO DO OTP
+         * ---------------------------------------------------
+         */
+
+        const validCode =
+          this.otp.validateCode(
+            otpCode
+          );
+
+
+        if (
+          !validCode
+        ) {
+
+          application.otp.status =
+            "failed";
+
+          application.bot1.status =
+            "error";
+
+          application.bot1.lastAction =
+            "otp_invalid_format";
+
+          await application.save();
+
+          throw new Error(
+            "OTP received from VFS email has an invalid format."
+          );
+        }
+
+
+        /*
+         * ---------------------------------------------------
+         * VERIFICAR OTP
+         * ---------------------------------------------------
+         */
+
+        const verification =
+          await this.otp.verifyCode({
+            request: otp,
+            code: otpCode,
+            attempts:
+              Number(
+                application.otp.attempts ||
+                0
+              )
+          });
+
+
+        if (
+          verification.status ===
+          "expired"
+        ) {
+
+          application.otp.status =
+            "expired";
+
+          application.bot1.status =
+            "error";
+
+          application.bot1.lastAction =
+            "otp_expired";
+
+          await application.save();
+
+          throw new Error(
+            "OTP expired before verification."
+          );
+        }
+
+
+        if (
+          !verification.verified
+        ) {
+
+          application.otp.attempts =
+            Number(
+              application.otp.attempts ||
+              0
+            ) + 1;
+
+          application.otp.status =
+            "failed";
+
+          application.bot1.status =
+            "error";
+
+          application.bot1.lastAction =
+            "otp_verification_failed";
+
+          await application.save();
+
+          throw new Error(
+            "OTP verification failed."
+          );
+        }
+
+
+        /*
+         * ---------------------------------------------------
+         * OTP VERIFICADO
+         * ---------------------------------------------------
+         */
+
+        await moveState(
+          application,
+          STATES.OTP_VERIFIED,
+          {
+            event:
+              "OTP_VERIFIED"
+          }
         );
 
 
-        return {
+        /*
+         * ---------------------------------------------------
+         * SUBMETER OTP AO VFS
+         * ---------------------------------------------------
+         */
 
-          success:
-            true,
+        await moveState(
+          application,
+          STATES.OTP_SUBMITTING,
+          {
+            event:
+              "OTP_SUBMITTING"
+          }
+        );
 
-          otpRequired:
-            true,
 
+        application.otp.status =
+          "verified";
+
+
+        application.otp.verifiedAt =
+          new Date();
+
+
+        application.bot1.status =
+          "running";
+
+
+        application.bot1.lastAction =
+          "submitting_otp";
+
+
+        await application.save();
+
+
+        if (
+          typeof this.site.submitOtp !==
+          "function"
+        ) {
+
+          throw new Error(
+            "VFS adapter does not provide submitOtp()."
+          );
+        }
+
+
+        const otpResult =
+          await withTimeout(
+            this.site.submitOtp(
+              otpCode
+            ),
+            config.timeoutMs,
+            "VFS OTP submission"
+          );
+
+
+        /*
+         * ---------------------------------------------------
+         * VFS PEDIU INTERVENÇÃO OFICIAL
+         * ---------------------------------------------------
+         */
+
+        if (
+          otpResult?.requiresUser ===
+          true
+        ) {
+
+          application.bot1.status =
+            "waiting";
+
+          application.bot1.lastAction =
+            "otp_official_checkpoint";
+
+
+          await application.save();
+
+
+          await this.releaseLock(
+            applicationId
+          );
+
+
+          return {
+            success:
+              true,
+
+            requiresUser:
+              true,
+
+            officialCheckpoint:
+              true,
+
+            application
+          };
+        }
+
+
+        /*
+         * ---------------------------------------------------
+         * FALHA AO SUBMETER OTP
+         * ---------------------------------------------------
+         */
+
+        if (
+          otpResult?.success ===
+            false
+        ) {
+
+          throw new Error(
+            otpResult.reason ||
+            "VFS OTP submission failed."
+          );
+        }
+
+
+        /*
+         * ---------------------------------------------------
+         * CONTINUAR FLUXO NORMAL
+         * ---------------------------------------------------
+         */
+
+        await moveState(
+          application,
+          STATES.REVIEW,
+          {
+            event:
+              "REVIEW_STARTED",
+
+            reason:
+              "VFS OTP was received from the configured mailbox and submitted successfully."
+          }
+        );
+
+
+        application.status =
+          "review_pay";
+
+
+        application.bot1.status =
+          "running";
+
+
+        application.bot1.lastAction =
+          "review_pay";
+
+
+        await application.save();
+
+
+        return await this.processPaymentStage(
           application
-
-        };
+        );
       }
-
 
       /*
        * ---------------------------------------------------
