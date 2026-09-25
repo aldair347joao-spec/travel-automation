@@ -97,126 +97,125 @@ class VfsPuppeteerAdapter extends SiteAdapter {
    */
 
   async initialize() {
-    if (
-      this.initialized &&
-      this.page
-    ) {
-      return true;
-    }
-
-    const proxyHost =
-  String(
-    process.env.VFS_PROXY_HOST || ""
-  ).trim();
-
-const proxyPort =
-  String(
-    process.env.VFS_PROXY_PORT || ""
-  ).trim();
-
-const proxyUsername =
-  String(
-    process.env.VFS_PROXY_USERNAME || ""
-  ).trim();
-
-const proxyPassword =
-  String(
-    process.env.VFS_PROXY_PASSWORD || ""
-  ).trim();
-
-const proxyConfigured =
-  Boolean(
-    proxyHost &&
-    proxyPort
-  );
-
-const browserArgs = [
-  "--no-sandbox",
-  "--disable-setuid-sandbox",
-  "--disable-dev-shm-usage"
-];
-
-if (proxyConfigured) {
-  browserArgs.push(
-    `--proxy-server=http://${proxyHost}:${proxyPort}`
-  );
-}
-
-this.browser =
-  await puppeteer.launch({
-    headless: true,
-
-    args:
-      browserArgs,
-
-    defaultViewport: {
-      width: 1440,
-      height: 900
-    }
-  });
-
-this.context =
-  await this.browser.createBrowserContext();
-
-this.page =
-  await this.context.newPage();
-
-if (
-  proxyConfigured &&
-  proxyUsername &&
-  proxyPassword
-) {
-  await this.page.authenticate({
-    username:
-      proxyUsername,
-    password:
-      proxyPassword
-  });
-}
-
-    this.context =
-      await this.browser.createBrowserContext();
-
-    this.page =
-      await this.context.newPage();
-
-    this.page.setDefaultTimeout(
-      DEFAULT_TIMEOUT
-    );
-
-    this.page.setDefaultNavigationTimeout(
-      DEFAULT_TIMEOUT
-    );
-
-    this.page.on(
-      "framenavigated",
-      () => {
-        this.detectState()
-          .catch(() => {});
-      }
-    );
-
-    this.page.on(
-      "close",
-      () => {
-        this.initialized = false;
-        this.page = null;
-      }
-    );
-
-    this.initialized = true;
-
-    logger.info(
-      "VFS browser initialized",
-      {
-        applicationId:
-          this.applicationId
-      }
-    );
-
+  if (
+    this.initialized &&
+    this.page
+  ) {
     return true;
   }
 
+  const proxyHost =
+    String(
+      process.env.VFS_PROXY_HOST || ""
+    ).trim();
+
+  const proxyPort =
+    String(
+      process.env.VFS_PROXY_PORT || ""
+    ).trim();
+
+  const proxyUsername =
+    String(
+      process.env.VFS_PROXY_USERNAME || ""
+    ).trim();
+
+  const proxyPassword =
+    String(
+      process.env.VFS_PROXY_PASSWORD || ""
+    ).trim();
+
+  const proxyConfigured =
+    Boolean(
+      proxyHost &&
+      proxyPort
+    );
+
+  const browserArgs = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage"
+  ];
+
+  if (proxyConfigured) {
+    browserArgs.push(
+      `--proxy-server=http://${proxyHost}:${proxyPort}`
+    );
+  }
+
+  this.browser =
+    await puppeteer.launch({
+      headless:
+        process.env.PUPPETEER_HEADLESS !==
+        "false",
+
+      args:
+        browserArgs,
+
+      defaultViewport: {
+        width: 1440,
+        height: 900
+      }
+    });
+
+  this.context =
+    await this.browser.createBrowserContext();
+
+  this.page =
+    await this.context.newPage();
+
+  if (
+    proxyConfigured &&
+    proxyUsername &&
+    proxyPassword
+  ) {
+    await this.page.authenticate({
+      username:
+        proxyUsername,
+
+      password:
+        proxyPassword
+    });
+  }
+
+  this.page.setDefaultTimeout(
+    DEFAULT_TIMEOUT
+  );
+
+  this.page.setDefaultNavigationTimeout(
+    DEFAULT_TIMEOUT
+  );
+
+  this.page.on(
+    "framenavigated",
+    () => {
+      this.detectState()
+        .catch(() => {});
+    }
+  );
+
+  this.page.on(
+    "close",
+    () => {
+      this.initialized = false;
+      this.page = null;
+    }
+  );
+
+  this.initialized = true;
+
+  logger.info(
+    "VFS browser initialized",
+    {
+      applicationId:
+        this.applicationId,
+
+      proxyEnabled:
+        proxyConfigured
+    }
+  );
+
+  return true;
+}
   async ensurePage() {
     if (
       !this.initialized ||
