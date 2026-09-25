@@ -216,6 +216,148 @@ class VfsPuppeteerAdapter extends SiteAdapter {
 
   return true;
 }
+    async testProxyConnection() {
+    const page =
+      await this.ensurePage();
+
+    const proxyHost =
+      String(
+        process.env.VFS_PROXY_HOST || ""
+      ).trim();
+
+    const proxyPort =
+      String(
+        process.env.VFS_PROXY_PORT || ""
+      ).trim();
+
+    const proxyConfigured =
+      Boolean(
+        proxyHost &&
+        proxyPort
+      );
+
+    if (!proxyConfigured) {
+      return {
+        success: false,
+        proxyEnabled: false,
+        error:
+          "VFS residential proxy is not configured"
+      };
+    }
+
+    try {
+      await page.goto(
+        "https://ipapi.co/json/",
+        {
+          waitUntil:
+            "domcontentloaded",
+
+          timeout:
+            DEFAULT_TIMEOUT
+        }
+      );
+
+      const result =
+        await page.evaluate(
+          () => {
+            try {
+              return JSON.parse(
+                document.body.innerText
+              );
+            } catch {
+              return {
+                raw:
+                  document.body.innerText
+              };
+            }
+          }
+        );
+
+      logger.info(
+        "VFS proxy connection test",
+        {
+          applicationId:
+            this.applicationId,
+
+          proxyEnabled:
+            true,
+
+          ip:
+            result?.ip ||
+            null,
+
+          country:
+            result?.country_name ||
+            result?.country ||
+            null,
+
+          city:
+            result?.city ||
+            null,
+
+          region:
+            result?.region ||
+            null,
+
+          success:
+            Boolean(
+              result?.ip
+            )
+        }
+      );
+
+      return {
+        success:
+          Boolean(
+            result?.ip
+          ),
+
+        proxyEnabled:
+          true,
+
+        ip:
+          result?.ip ||
+          null,
+
+        country:
+          result?.country_name ||
+          result?.country ||
+          null,
+
+        city:
+          result?.city ||
+          null,
+
+        region:
+          result?.region ||
+          null
+      };
+    } catch (error) {
+      logger.error(
+        "VFS proxy connection test failed",
+        {
+          applicationId:
+            this.applicationId,
+
+          proxyEnabled:
+            true,
+
+          error:
+            error.message
+        }
+      );
+
+      return {
+        success: false,
+
+        proxyEnabled:
+          true,
+
+        error:
+          error.message
+      };
+    }
+  }
   async ensurePage() {
     if (
       !this.initialized ||
