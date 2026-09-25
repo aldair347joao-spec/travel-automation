@@ -144,14 +144,17 @@ class VfsPuppeteerAdapter extends SiteAdapter {
 
   /*
    * ============================================================
-   * FIND CHROME EXECUTABLE
+   * RESOLUÇÃO DO CHROME
    * ============================================================
    *
-   * O Render pode instalar o Chrome no cache configurado pelo
-   * Puppeteer, mas o caminho pode variar entre builds.
+   * O Chrome já foi confirmado no build do Render em:
    *
-   * Procuramos explicitamente o executável "chrome" dentro
-   * do cache configurado e só depois iniciamos o navegador.
+   * node_modules/.puppeteer_cache/chrome/
+   *
+   * Aqui usamos primeiro o caminho calculado pelo próprio
+   * Puppeteer. Depois verificamos diretamente o cache.
+   *
+   * Isto evita depender apenas de uma procura recursiva.
    */
 
   const cacheDirectory =
@@ -162,68 +165,52 @@ class VfsPuppeteerAdapter extends SiteAdapter {
       ".puppeteer_cache"
     );
 
-  const findChromeExecutable =
-    async (directory) => {
-      const entries =
-        await fs.promises.readdir(
-          directory,
-          {
-            withFileTypes:
-              true
-          }
-        );
+  let executablePath = null;
 
-      for (
-        const entry of entries
-      ) {
-        const fullPath =
-          path.join(
-            directory,
-            entry.name
-          );
-
-        if (
-          entry.isDirectory()
-        ) {
-          const found =
-            await findChromeExecutable(
-              fullPath
-            );
-
-          if (found) {
-            return found;
-          }
-
-          continue;
-        }
-
-        if (
-          entry.name ===
-            "chrome" &&
-          fullPath.includes(
-            "chrome-linux"
-          )
-        ) {
-          return fullPath;
-        }
-      }
-
-      return null;
-    };
-
-  let executablePath =
-    null;
+  /*
+   * ------------------------------------------------------------
+   * 1. CAMINHO OFICIAL DO PUPPETEER
+   * ------------------------------------------------------------
+   */
 
   try {
-    executablePath =
-      await findChromeExecutable(
+    const puppeteerPath =
+      puppeteer.executablePath();
+
+    logger.info(
+      "Puppeteer executable path",
+      {
+        applicationId:
+          this.applicationId,
+
+        puppeteerPath,
+
+        exists:
+          Boolean(
+            puppeteerPath &&
+            fs.existsSync(
+              puppeteerPath
+            )
+          ),
+
         cacheDirectory
-      );
+      }
+    );
+
+    if (
+      puppeteerPath &&
+      fs.existsSync(
+        puppeteerPath
+      )
+    ) {
+      executablePath =
+        puppeteerPath;
+    }
   } catch (
     error
   ) {
     logger.warn(
-      "Unable to scan Puppeteer Chrome cache",
+      "Puppeteer executable path could not be resolved",
       {
         applicationId:
           this.applicationId,
@@ -238,33 +225,162 @@ class VfsPuppeteerAdapter extends SiteAdapter {
   }
 
   /*
-   * Se não encontramos o executável, tentamos o caminho
-   * padrão calculado pelo próprio Puppeteer.
+   * ------------------------------------------------------------
+   * 2. PROCURA DIRETA NO CACHE
+   * ------------------------------------------------------------
    */
+
   if (
     !executablePath
   ) {
-    try {
-      const puppeteerPath =
-        puppeteer.executablePath();
+    const findChromeExecutable =
+      async directory => {
+        let entries;
 
-      if (
-        puppeteerPath &&
-        fs.existsSync(
-          puppeteerPath
-        )
-      ) {
-        executablePath =
-          puppeteerPath;
-      }
+        try {
+          entries =
+            await fs.promises.readdir(
+              directory,
+              {
+                withFileTypes:
+                  true
+              }
+            );
+        } catch (
+          error
+        ) {
+          logger.warn(
+            "Unable to read Puppeteer cache directory",
+            {
+              applicationId:
+                this.applicationId,
+
+              directory,
+
+              error:
+                error?.message ||
+                String(error)
+            }
+          );
+
+          return null;
+        }
+
+        for (
+          const entry of entries
+        ) {
+          const fullPath =
+            path.join(
+              directory,
+              entry.name
+            );
+
+          if (
+            entry.isDirectory()
+          ) {
+            const found =
+              await findChromeExecutable(
+                fullPath
+              );
+
+            if (
+              found
+            ) {
+              return found;
+            }
+
+            continue;
+          }
+
+          if (
+            entry.name ===
+              "chrome" &&
+            fullPath.includes(
+              "chrome-linux"
+            )
+          ) {
+            try {
+              const stat =
+                await fs.promises.stat(
+                  fullPath
+                );
+
+              if (
+                stat.isFile()
+              ) {
+                return fullPath;
+              }
+            } catch (
+              error
+            ) {
+              logger.warn(
+                "Chrome file could not be inspected",
+                {
+                  applicationId:
+                    this.applicationId,
+
+                  fullPath,
+
+                  error:
+                    error?.message ||
+                    String(error)
+                }
+              );
+            }
+          }
+        }
+
+        return null;
+      };
+
+    executablePath =
+      await findChromeExecutable(
+        cacheDirectory
+      );
+  }
+
+  /*
+   * ------------------------------------------------------------
+   * 3. VERIFICAÇÃO FINAL
+   * ------------------------------------------------------------
+   */
+
+  if (
+    executablePath
+  ) {
+    try {
+      const stat =
+        await fs.promises.stat(
+          executablePath
+        );
+
+      logger.info(
+        "VFS Chrome executable resolved",
+        {
+          applicationId:
+            this.applicationId,
+
+          executablePath,
+
+          cacheDirectory,
+
+          isFile:
+            stat.isFile(),
+
+          mode:
+            stat.mode.toString(8)
+        }
+      );
     } catch (
       error
     ) {
       logger.warn(
-        "Puppeteer executable path could not be resolved",
+        "Resolved Chrome executable could not be inspected",
         {
           applicationId:
             this.applicationId,
+
+          executablePath,
 
           cacheDirectory,
 
@@ -279,6 +395,72 @@ class VfsPuppeteerAdapter extends SiteAdapter {
   if (
     !executablePath
   ) {
+    let cacheContents = [];
+
+    try {
+      cacheContents =
+        await fs.promises.readdir(
+          cacheDirectory,
+          {
+            recursive:
+              true
+          }
+        );
+    } catch (
+      error
+    ) {
+      logger.warn(
+        "Unable to inspect Puppeteer cache after Chrome resolution failure",
+        {
+          applicationId:
+            this.applicationId,
+
+          cacheDirectory,
+
+          error:
+            error?.message ||
+            String(error)
+        }
+      );
+    }
+
+    const chromeEntries =
+      cacheContents.filter(
+        entry =>
+          String(
+            entry
+          ).toLowerCase()
+          .includes(
+            "chrome"
+          )
+      );
+
+    logger.error(
+      "Chrome executable not found",
+      {
+        applicationId:
+          this.applicationId,
+
+        cacheDirectory,
+
+        cwd:
+          process.cwd(),
+
+        puppeteerExecutablePath:
+          (() => {
+            try {
+              return puppeteer.executablePath();
+            } catch (
+              error
+            ) {
+              return null;
+            }
+          })(),
+
+        chromeEntries
+      }
+    );
+
     const error =
       new Error(
         `Chrome executable not found. Puppeteer cache: ${cacheDirectory}`
@@ -290,17 +472,11 @@ class VfsPuppeteerAdapter extends SiteAdapter {
     throw error;
   }
 
-  logger.info(
-    "VFS Chrome executable resolved",
-    {
-      applicationId:
-        this.applicationId,
-
-      executablePath,
-
-      cacheDirectory
-    }
-  );
+  /*
+   * ============================================================
+   * INICIAR BROWSER
+   * ============================================================
+   */
 
   this.browser =
     await puppeteer.launch({
@@ -370,63 +546,33 @@ class VfsPuppeteerAdapter extends SiteAdapter {
         }
       );
 
-      const proxyInfo =
-        await this.page.evaluate(
-          () => {
-            try {
-              return JSON.parse(
-                document.body.innerText
-              );
-            } catch {
-              return {
-                raw:
-                  document.body.innerText
-              };
-            }
-          }
-        );
+      const proxyTestBody =
+        await this.page
+          .evaluate(
+            () =>
+              document.body
+                ?.innerText ||
+              ""
+          );
 
       logger.info(
-        "VFS RESIDENTIAL PROXY TEST",
+        "VFS proxy test completed",
         {
           applicationId:
             this.applicationId,
 
-          proxyEnabled:
-            proxyConfigured,
-
-          ip:
-            proxyInfo?.ip ||
-            null,
-
-          country:
-            proxyInfo?.country_name ||
-            null,
-
-          countryCode:
-            proxyInfo?.country_code ||
-            null,
-
-          city:
-            proxyInfo?.city ||
-            null,
-
-          region:
-            proxyInfo?.region ||
-            null
+          response:
+            proxyTestBody
         }
       );
     } catch (
       error
     ) {
-      logger.error(
-        "VFS RESIDENTIAL PROXY TEST FAILED",
+      logger.warn(
+        "VFS proxy test failed",
         {
           applicationId:
             this.applicationId,
-
-          proxyEnabled:
-            proxyConfigured,
 
           error:
             error?.message ||
@@ -436,39 +582,23 @@ class VfsPuppeteerAdapter extends SiteAdapter {
     }
   }
 
-  this.page.on(
-    "framenavigated",
-    () => {
-      this.detectState()
-        .catch(() => {});
-    }
-  );
+  this.initialized =
+    true;
 
-  this.page.on(
-    "close",
-    () => {
-      this.initialized = false;
-      this.page = null;
-    }
-  );
-
-  this.initialized = true;
+  this.state =
+    "INITIALIZED";
 
   logger.info(
-    "VFS browser initialized",
+    "VFS Puppeteer adapter initialized",
     {
       applicationId:
-        this.applicationId,
-
-      proxyEnabled:
-        proxyConfigured,
-
-      executablePath
+        this.applicationId
     }
   );
 
   return true;
 }
+
   async ensurePage() {
     if (
       !this.initialized ||
