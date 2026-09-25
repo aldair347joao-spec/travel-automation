@@ -25,7 +25,9 @@ const AdminControlService =
   require("../services/admin/admin-control-service");
 
 
-function createAdminRouter() {
+function createAdminRouter({
+  supervisor
+} = {}) {
   const router =
     express.Router();
 
@@ -1927,8 +1929,7 @@ function createAdminRouter() {
    * RELEASE
    * =========================================================
    */
-
-  router.post(
+    router.post(
     "/applications/:id/release",
     requireRole(
       "owner",
@@ -1956,6 +1957,22 @@ function createAdminRouter() {
             });
         }
 
+        if (
+          !supervisor ||
+          typeof supervisor.prepare !==
+            "function"
+        ) {
+          const error =
+            new Error(
+              "Automation Supervisor is not available"
+            );
+
+          error.statusCode =
+            503;
+
+          throw error;
+        }
+
         const result =
           await AdminControlService
             .releaseForAutomation({
@@ -1969,12 +1986,57 @@ function createAdminRouter() {
                 req.user._id
             });
 
+        /*
+         * =====================================================
+         * START AUTOMATION
+         * =====================================================
+         *
+         * O release administrativo apenas autoriza
+         * a candidatura.
+         *
+         * Depois do release precisamos iniciar
+         * explicitamente o Bot 1 através do Supervisor.
+         *
+         * O Bot 1 será responsável por:
+         *
+         * - reivindicar a candidatura;
+         * - preparar a identidade;
+         * - abrir/inicializar o VFS;
+         * - executar a preparação;
+         * - colocar a candidatura no estado correto;
+         * - ativar o Bot 2 e o Radar quando estiver pronta.
+         *
+         * Sem esta chamada a candidatura fica apenas
+         * "liberada", enquanto os bots continuam parados.
+         * =====================================================
+         */
+
+        try {
+          await supervisor.prepare(
+            req.params.id
+          );
+        } catch (
+          automationError
+        ) {
+          automationError.statusCode =
+            automationError.statusCode ||
+            500;
+
+          automationError.message =
+            `Application released, but automation could not be started: ${
+              automationError.message ||
+              "unknown automation error"
+            }`;
+
+          throw automationError;
+        }
+
         return res.json({
           success:
             true,
 
           message:
-            "Application released for automation",
+            "Application released and automation started",
 
           admin:
             result
@@ -1988,7 +2050,6 @@ function createAdminRouter() {
       }
     }
   );
-
 
   /*
    * =========================================================
