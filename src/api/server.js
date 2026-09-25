@@ -364,9 +364,11 @@ function createApp({
    * =========================================================
    */
 
-  app.use(
+    app.use(
     "/api/admin",
-    createAdminRouter()
+    createAdminRouter({
+      supervisor
+    })
   );
 
 
