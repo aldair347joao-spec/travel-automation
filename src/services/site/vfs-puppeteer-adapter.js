@@ -142,11 +142,173 @@ class VfsPuppeteerAdapter extends SiteAdapter {
     );
   }
 
+  /*
+   * ============================================================
+   * FIND CHROME EXECUTABLE
+   * ============================================================
+   *
+   * O Render pode instalar o Chrome no cache configurado pelo
+   * Puppeteer, mas o caminho pode variar entre builds.
+   *
+   * Procuramos explicitamente o executável "chrome" dentro
+   * do cache configurado e só depois iniciamos o navegador.
+   */
+
+  const cacheDirectory =
+    process.env.PUPPETEER_CACHE_DIR ||
+    path.join(
+      process.cwd(),
+      "node_modules",
+      ".puppeteer_cache"
+    );
+
+  const findChromeExecutable =
+    async (directory) => {
+      const entries =
+        await fs.promises.readdir(
+          directory,
+          {
+            withFileTypes:
+              true
+          }
+        );
+
+      for (
+        const entry of entries
+      ) {
+        const fullPath =
+          path.join(
+            directory,
+            entry.name
+          );
+
+        if (
+          entry.isDirectory()
+        ) {
+          const found =
+            await findChromeExecutable(
+              fullPath
+            );
+
+          if (found) {
+            return found;
+          }
+
+          continue;
+        }
+
+        if (
+          entry.name ===
+            "chrome" &&
+          fullPath.includes(
+            "chrome-linux"
+          )
+        ) {
+          return fullPath;
+        }
+      }
+
+      return null;
+    };
+
+  let executablePath =
+    null;
+
+  try {
+    executablePath =
+      await findChromeExecutable(
+        cacheDirectory
+      );
+  } catch (
+    error
+  ) {
+    logger.warn(
+      "Unable to scan Puppeteer Chrome cache",
+      {
+        applicationId:
+          this.applicationId,
+
+        cacheDirectory,
+
+        error:
+          error?.message ||
+          String(error)
+      }
+    );
+  }
+
+  /*
+   * Se não encontramos o executável, tentamos o caminho
+   * padrão calculado pelo próprio Puppeteer.
+   */
+  if (
+    !executablePath
+  ) {
+    try {
+      const puppeteerPath =
+        puppeteer.executablePath();
+
+      if (
+        puppeteerPath &&
+        fs.existsSync(
+          puppeteerPath
+        )
+      ) {
+        executablePath =
+          puppeteerPath;
+      }
+    } catch (
+      error
+    ) {
+      logger.warn(
+        "Puppeteer executable path could not be resolved",
+        {
+          applicationId:
+            this.applicationId,
+
+          cacheDirectory,
+
+          error:
+            error?.message ||
+            String(error)
+        }
+      );
+    }
+  }
+
+  if (
+    !executablePath
+  ) {
+    const error =
+      new Error(
+        `Chrome executable not found. Puppeteer cache: ${cacheDirectory}`
+      );
+
+    error.code =
+      "CHROME_EXECUTABLE_NOT_FOUND";
+
+    throw error;
+  }
+
+  logger.info(
+    "VFS Chrome executable resolved",
+    {
+      applicationId:
+        this.applicationId,
+
+      executablePath,
+
+      cacheDirectory
+    }
+  );
+
   this.browser =
     await puppeteer.launch({
       headless:
         process.env.PUPPETEER_HEADLESS !==
         "false",
+
+      executablePath,
 
       args:
         browserArgs,
@@ -187,14 +349,8 @@ class VfsPuppeteerAdapter extends SiteAdapter {
 
   /*
    * ============================================================
-   * TEMPORARY PROXY TEST
+   * RESIDENTIAL PROXY TEST
    * ============================================================
-   *
-   * Only runs when:
-   *
-   * VFS_PROXY_TEST=true
-   *
-   * Remove the environment variable after the test.
    */
 
   if (
@@ -260,7 +416,9 @@ class VfsPuppeteerAdapter extends SiteAdapter {
             null
         }
       );
-    } catch (error) {
+    } catch (
+      error
+    ) {
       logger.error(
         "VFS RESIDENTIAL PROXY TEST FAILED",
         {
@@ -303,7 +461,9 @@ class VfsPuppeteerAdapter extends SiteAdapter {
         this.applicationId,
 
       proxyEnabled:
-        proxyConfigured
+        proxyConfigured,
+
+      executablePath
     }
   );
 
