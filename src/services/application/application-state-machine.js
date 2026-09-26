@@ -335,8 +335,29 @@ const TRANSITIONS = Object.freeze({
   ]),
 
 
+  /*
+   * ----------------------------------------------------------
+   * ALTERAÇÃO IMPORTANTE
+   * ----------------------------------------------------------
+   *
+   * Depois que a candidatura foi liberada/preparada,
+   * o Bot 1 pode colocá-la diretamente no RADAR.
+   *
+   * Antes:
+   *
+   * READY_FOR_AUTOMATION -> VFS_SESSION
+   *
+   * Agora também:
+   *
+   * READY_FOR_AUTOMATION -> RADAR_ACTIVE
+   *
+   * Isto permite que o fluxo Admin -> Bot 1 -> Bot 2
+   * seja reconhecido pela máquina de estados.
+   */
+
   [STATES.READY_FOR_AUTOMATION]: new Set([
     STATES.VFS_SESSION,
+    STATES.RADAR_ACTIVE,
     STATES.CANCELLED,
     STATES.ERROR
   ]),
@@ -793,6 +814,7 @@ function canTransition(from, to) {
   }
 
   return TRANSITIONS[from]?.has(to) === true;
+
 }
 
 
