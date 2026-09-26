@@ -224,14 +224,29 @@ async function configureVfsCredentials({
     );
 
   control.vfsCredentials = {
-  emailEncrypted: encrypt(email),
-  passwordEncrypted: encrypt(password),
-  phoneEncrypted: phone
-    ? encrypt(phone)
-    : null,
-  configuredAt: new Date(),
-  configuredBy: actorId
-};
+    emailEncrypted:
+      encrypt(
+        normalizedEmail
+      ),
+
+    passwordEncrypted:
+      encrypt(
+        normalizedPassword
+      ),
+
+    phoneEncrypted:
+      phone
+        ? encrypt(
+            phone
+          )
+        : null,
+
+    configuredAt:
+      new Date(),
+
+    configuredBy:
+      actorId || null
+  };
 
   /*
    * Configurar credenciais NÃO libera
@@ -306,6 +321,35 @@ async function assertApplicationAccount(
  * ============================================================
  * LIBERAR PARA AUTOMAÇÃO
  * ============================================================
+ *
+ * IMPORTANTE:
+ *
+ * Esta função NÃO executa mais
+ * ApplicationService.prepare().
+ *
+ * A responsabilidade desta função é somente:
+ *
+ * 1. confirmar que a aplicação pertence à conta;
+ * 2. confirmar que as credenciais VFS existem;
+ * 3. confirmar que passaporte, liveness e preferências
+ *    estão prontos;
+ * 4. registrar a autorização administrativa.
+ *
+ * Depois desta função retornar, o fluxo é:
+ *
+ * ADMIN
+ *   ↓
+ * RELEASE
+ *   ↓
+ * SUPERVISOR
+ *   ↓
+ * BOT 1
+ *   ↓
+ * VFS
+ *
+ * Assim o Bot 1 recebe a candidatura ainda em
+ * estado "created" e consegue fazer o claim.
+ * ============================================================
  */
 
 async function releaseForAutomation({
@@ -348,8 +392,16 @@ async function releaseForAutomation({
 
   /*
    * ----------------------------------------------------------
-   * VALIDAR DADOS DO PROCESSO
+   * VALIDAR PRONTIDÃO
    * ----------------------------------------------------------
+   *
+   * A validação continua sendo feita aqui.
+   *
+   * O que foi removido é somente a chamada
+   * ApplicationService.prepare().
+   *
+   * Portanto o administrador continua impedido
+   * de liberar uma candidatura incompleta.
    */
 
   const ApplicationService =
@@ -395,90 +447,61 @@ async function releaseForAutomation({
 
   /*
    * ----------------------------------------------------------
-   * PREPARAR WORKFLOW
+   * IMPORTANTE
    * ----------------------------------------------------------
+   *
+   * NÃO chamar:
+   *
+   * ApplicationService.prepare(...)
+   *
+   * aqui.
+   *
+   * O Bot 1 precisa ser o responsável pela
+   * preparação operacional.
+   *
+   * A aplicação deve permanecer no estado em
+   * que o Bot 1 consegue reivindicá-la.
    */
 
-  const prepared =
-    await ApplicationService.prepare(
-      application._id,
-      application.accountId
-    );
-
-  if (
-    prepared &&
-    prepared.ready === false
-  ) {
-    const error =
-      new Error(
-        prepared.message ||
-        "Application could not be prepared for automation"
-      );
-
-    error.code =
-      prepared.code ||
-      "APPLICATION_NOT_READY";
-
-    error.statusCode =
-      400;
-
-    error.details = {
-      passportErrors:
-        prepared.passportErrors ||
-        [],
-
-      facialErrors:
-        prepared.facialErrors ||
-        [],
-
-      preferenceErrors:
-        prepared.preferenceErrors ||
-        []
-    };
-
-    throw error;
-  }
-
-  const refreshedApplication =
-    await Application.findOne({
-      _id:
-        applicationId,
-
-      accountId
-    });
-
-  if (!refreshedApplication) {
-    const error =
-      new Error(
-        "Application disappeared during preparation"
-      );
-
-    error.code =
-      "APPLICATION_PREPARATION_FAILED";
-
-    error.statusCode =
-      500;
-
-    throw error;
-  }
-
   const workflowState =
-    typeof refreshedApplication.getWorkflowState ===
+    typeof application.getWorkflowState ===
     "function"
-      ? refreshedApplication.getWorkflowState()
-      : refreshedApplication.workflowState;
+      ? application.getWorkflowState()
+      : application.workflowState;
+
+  /*
+   * Uma candidatura nova deve continuar
+   * disponível para o Bot 1.
+   *
+   * Se já estiver sendo processada por outro
+   * fluxo, não vamos sobrescrever o estado.
+   */
+
+  const allowedReleaseStates = [
+    "CREATED",
+    "created",
+    "PASSPORT_PENDING",
+    "PASSPORT_VERIFIED",
+    "IDENTITY_PREPARATION",
+    "IDENTITY_READY",
+    "PREFERENCES_PENDING",
+    "READY_FOR_AUTOMATION",
+    "RADAR_ACTIVE"
+  ];
 
   if (
-    workflowState !==
-    "READY_FOR_AUTOMATION"
+    workflowState &&
+    !allowedReleaseStates.includes(
+      workflowState
+    )
   ) {
     const error =
       new Error(
-        `Application preparation finished in state ${workflowState || "UNKNOWN"} instead of READY_FOR_AUTOMATION`
+        `Application cannot be released from workflow state ${workflowState}`
       );
 
     error.code =
-      "APPLICATION_WORKFLOW_NOT_READY";
+      "APPLICATION_WORKFLOW_NOT_RELEASEABLE";
 
     error.statusCode =
       400;
@@ -488,7 +511,7 @@ async function releaseForAutomation({
 
   /*
    * ----------------------------------------------------------
-   * LIBERTAÇÃO
+   * LIBERTAÇÃO ADMINISTRATIVA
    * ----------------------------------------------------------
    */
 
@@ -866,27 +889,27 @@ async function getCredentialsForAutomation(
   }
 
   return {
-  email:
-    decrypt(
-      control.vfsCredentials
-        .emailEncrypted
-    ),
+    email:
+      decrypt(
+        control.vfsCredentials
+          .emailEncrypted
+      ),
 
-  password:
-    decrypt(
-      control.vfsCredentials
-        .passwordEncrypted
-    ),
+    password:
+      decrypt(
+        control.vfsCredentials
+          .passwordEncrypted
+      ),
 
-  phone:
-    control.vfsCredentials
-      .phoneEncrypted
-      ? decrypt(
-          control.vfsCredentials
-            .phoneEncrypted
-        )
-      : null
-};
+    phone:
+      control.vfsCredentials
+        .phoneEncrypted
+        ? decrypt(
+            control.vfsCredentials
+              .phoneEncrypted
+          )
+        : null
+  };
 }
 
 
