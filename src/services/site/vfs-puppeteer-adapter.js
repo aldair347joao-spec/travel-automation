@@ -96,7 +96,6 @@ class VfsPuppeteerAdapter extends SiteAdapter {
    * BROWSER
    * ============================================================
    */
-
   async initialize() {
   if (
     this.initialized &&
@@ -135,11 +134,6 @@ class VfsPuppeteerAdapter extends SiteAdapter {
    * ============================================================
    * CHROMIUM
    * ============================================================
-   *
-   * No Render não dependemos mais do cache do Puppeteer.
-   *
-   * O @sparticuz/chromium fornece o executável Chromium
-   * apropriado para ambientes serverless/Linux.
    */
 
   let executablePath;
@@ -147,6 +141,14 @@ class VfsPuppeteerAdapter extends SiteAdapter {
   try {
     executablePath =
       await chromium.executablePath();
+
+    const executableExists =
+      Boolean(
+        executablePath &&
+        fs.existsSync(
+          executablePath
+        )
+      );
 
     logger.info(
       "Chromium executable resolved",
@@ -157,136 +159,29 @@ class VfsPuppeteerAdapter extends SiteAdapter {
         executablePath,
 
         exists:
-          Boolean(
-            executablePath &&
-            fs.existsSync(
-              executablePath
-            )
-          )
+          executableExists
       }
     );
+
+    if (!executableExists) {
+      const error =
+        new Error(
+          `Chromium executable not found: ${
+            executablePath || "unknown"
+          }`
+        );
+
+      error.code =
+        "CHROMIUM_EXECUTABLE_NOT_FOUND";
+
+      throw error;
+    }
   } catch (error) {
     logger.error(
-      "Could not resolve @sparticuz/chromium executable",
+      "Could not resolve Chromium executable",
       {
         applicationId:
           this.applicationId,
-
-        error:
-          error?.message ||
-          String(error)
-      }
-    );
-
-    const chromiumError =
-      new Error(
-        "Could not resolve Chromium executable from @sparticuz/chromium."
-      );
-
-    chromiumError.code =
-      "CHROMIUM_EXECUTABLE_NOT_FOUND";
-
-    throw chromiumError;
-  }
-
-  if (
-    !executablePath ||
-    !fs.existsSync(
-      executablePath
-    )
-  ) {
-    logger.error(
-      "Chromium executable does not exist",
-      {
-        applicationId:
-          this.applicationId,
-
-        executablePath:
-          executablePath || null
-      }
-    );
-
-    const chromiumError =
-      new Error(
-        `Chromium executable not found: ${
-          executablePath || "unknown"
-        }`
-      );
-
-    chromiumError.code =
-      "CHROMIUM_EXECUTABLE_NOT_FOUND";
-
-    throw chromiumError;
-  }
-
-  /*
-   * ============================================================
-   * BROWSER ARGUMENTS
-   * ============================================================
-   */
-
-  const browserArgs = [
-    ...(Array.isArray(
-      chromium.args
-    )
-      ? chromium.args
-      : []),
-
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-gpu",
-    "--no-first-run",
-    "--no-zygote",
-    "--disable-background-networking",
-    "--disable-background-timer-throttling",
-    "--disable-renderer-backgrounding",
-    "--disable-features=Translate,BackForwardCache"
-  ];
-
-  /*
-   * ============================================================
-   * PROXY
-   * ============================================================
-   */
-
-  if (
-    proxyConfigured
-  ) {
-    browserArgs.push(
-      `--proxy-server=http://${proxyHost}:${proxyPort}`
-    );
-  }
-
-  /*
-   * ============================================================
-   * INICIAR BROWSER
-   * ============================================================
-   */
-
-  try {
-    this.browser =
-      await puppeteer.launch({
-        executablePath,
-
-        headless: true,
-
-        args:
-          browserArgs,
-
-        defaultViewport: {
-          width: 1440,
-          height: 900
-        }
-      });
-  } catch (error) {
-    logger.error(
-      "Failed to launch Chromium",
-      {
-        applicationId:
-          this.applicationId,
-
-        executablePath,
 
         error:
           error?.message ||
@@ -299,15 +194,175 @@ class VfsPuppeteerAdapter extends SiteAdapter {
 
   /*
    * ============================================================
-   * BROWSER CONTEXT
+   * ARGUMENTOS DO CHROMIUM
+   * ============================================================
+   *
+   * Usamos os argumentos oficiais fornecidos pelo
+   * @sparticuz/chromium juntamente com os argumentos
+   * padrão do Puppeteer.
+   *
+   * Isto é importante no Chromium headless-shell.
+   */
+
+  const chromiumArgs =
+    Array.isArray(
+      chromium.args
+    )
+      ? chromium.args
+      : [];
+
+  if (
+    proxyConfigured
+  ) {
+    chromiumArgs.push(
+      `--proxy-server=http://${proxyHost}:${proxyPort}`
+    );
+  }
+
+  const browserArgs =
+    await puppeteer.defaultArgs({
+      args: chromiumArgs,
+      headless: "shell"
+    });
+
+  /*
+   * Garantir argumentos essenciais do Render
+   * sem duplicar argumentos já fornecidos.
+   */
+
+  const requiredArgs = [
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-zygote"
+  ];
+
+  const finalArgs = [
+    ...new Set([
+      ...browserArgs,
+      ...requiredArgs
+    ])
+  ];
+
+  logger.info(
+    "Launching Chromium",
+    {
+      applicationId:
+        this.applicationId,
+
+      headless:
+        "shell",
+
+      argsCount:
+        finalArgs.length,
+
+      proxyConfigured
+    }
+  );
+
+  /*
+   * ============================================================
+   * INICIAR CHROMIUM
    * ============================================================
    */
 
-  this.context =
-    await this.browser.createBrowserContext();
+  try {
+    this.browser =
+      await puppeteer.launch({
+        executablePath,
 
-  this.page =
-    await this.context.newPage();
+        headless:
+          "shell",
+
+        args:
+          finalArgs,
+
+        defaultViewport:
+          chromium.defaultViewport || {
+            width: 1440,
+            height: 900
+          },
+
+        timeout: 60000,
+
+        handleSIGINT: false,
+        handleSIGTERM: false,
+        handleSIGHUP: false
+      });
+  } catch (error) {
+    logger.error(
+      "Failed to launch Chromium",
+      {
+        applicationId:
+          this.applicationId,
+
+        executablePath,
+
+        error:
+          error?.message ||
+          String(error),
+
+        stack:
+          error?.stack ||
+          null
+      }
+    );
+
+    throw error;
+  }
+
+  /*
+   * ============================================================
+   * PÁGINA PRINCIPAL
+   * ============================================================
+   *
+   * IMPORTANTE:
+   *
+   * NÃO usamos:
+   *
+   * this.browser.createBrowserContext()
+   *
+   * porque @sparticuz/chromium documenta que a criação
+   * de um novo BrowserContext pode provocar Target.closed.
+   *
+   * Usamos diretamente o contexto padrão do navegador.
+   */
+
+  try {
+    const pages =
+      await this.browser.pages();
+
+    this.page =
+      pages.length > 0
+        ? pages[0]
+        : await this.browser.newPage();
+  } catch (error) {
+    logger.error(
+      "Failed to create Chromium page",
+      {
+        applicationId:
+          this.applicationId,
+
+        error:
+          error?.message ||
+          String(error)
+      }
+    );
+
+    try {
+      await this.browser.close();
+    } catch {}
+
+    this.browser =
+      null;
+
+    throw error;
+  }
+
+  this.context =
+    this.page.browserContext();
 
   /*
    * ============================================================
