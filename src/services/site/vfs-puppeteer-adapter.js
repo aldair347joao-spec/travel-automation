@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const puppeteer = require("puppeteer");
+const chromium = require("@sparticuz/chromium");
 const {
   getCredentialsForAutomation,
   markAutomationActive
@@ -130,346 +131,131 @@ class VfsPuppeteerAdapter extends SiteAdapter {
       proxyPort
     );
 
-  const browserArgs = [
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage"
-  ];
-
-  if (proxyConfigured) {
-    browserArgs.push(
-      `--proxy-server=http://${proxyHost}:${proxyPort}`
-    );
-  }
-
   /*
    * ============================================================
-   * RESOLUÇÃO DO CHROME
+   * CHROMIUM
    * ============================================================
    *
-   * O Chrome já foi confirmado no build do Render em:
+   * No Render não dependemos mais do cache do Puppeteer.
    *
-   * node_modules/.puppeteer_cache/chrome/
-   *
-   * Aqui usamos primeiro o caminho calculado pelo próprio
-   * Puppeteer. Depois verificamos diretamente o cache.
-   *
-   * Isto evita depender apenas de uma procura recursiva.
+   * O @sparticuz/chromium fornece o executável Chromium
+   * apropriado para ambientes serverless/Linux.
    */
 
-  const cacheDirectory =
-    process.env.PUPPETEER_CACHE_DIR ||
-    path.join(
-      process.cwd(),
-      "node_modules",
-      ".puppeteer_cache"
-    );
-
-  let executablePath = null;
-
-  /*
-   * ------------------------------------------------------------
-   * 1. CAMINHO OFICIAL DO PUPPETEER
-   * ------------------------------------------------------------
-   */
+  let executablePath;
 
   try {
-    const puppeteerPath =
-      puppeteer.executablePath();
+    executablePath =
+      await chromium.executablePath();
 
     logger.info(
-      "Puppeteer executable path",
+      "Chromium executable resolved",
       {
         applicationId:
           this.applicationId,
 
-        puppeteerPath,
+        executablePath,
 
         exists:
           Boolean(
-            puppeteerPath &&
+            executablePath &&
             fs.existsSync(
-              puppeteerPath
+              executablePath
             )
-          ),
-
-        cacheDirectory
+          )
       }
     );
-
-    if (
-      puppeteerPath &&
-      fs.existsSync(
-        puppeteerPath
-      )
-    ) {
-      executablePath =
-        puppeteerPath;
-    }
-  } catch (
-    error
-  ) {
-    logger.warn(
-      "Puppeteer executable path could not be resolved",
+  } catch (error) {
+    logger.error(
+      "Could not resolve @sparticuz/chromium executable",
       {
         applicationId:
           this.applicationId,
-
-        cacheDirectory,
 
         error:
           error?.message ||
           String(error)
       }
     );
-  }
 
-  /*
-   * ------------------------------------------------------------
-   * 2. PROCURA DIRETA NO CACHE
-   * ------------------------------------------------------------
-   */
-
-  if (
-    !executablePath
-  ) {
-    const findChromeExecutable =
-      async directory => {
-        let entries;
-
-        try {
-          entries =
-            await fs.promises.readdir(
-              directory,
-              {
-                withFileTypes:
-                  true
-              }
-            );
-        } catch (
-          error
-        ) {
-          logger.warn(
-            "Unable to read Puppeteer cache directory",
-            {
-              applicationId:
-                this.applicationId,
-
-              directory,
-
-              error:
-                error?.message ||
-                String(error)
-            }
-          );
-
-          return null;
-        }
-
-        for (
-          const entry of entries
-        ) {
-          const fullPath =
-            path.join(
-              directory,
-              entry.name
-            );
-
-          if (
-            entry.isDirectory()
-          ) {
-            const found =
-              await findChromeExecutable(
-                fullPath
-              );
-
-            if (
-              found
-            ) {
-              return found;
-            }
-
-            continue;
-          }
-
-          if (
-            entry.name ===
-              "chrome" &&
-            fullPath.includes(
-              "chrome-linux"
-            )
-          ) {
-            try {
-              const stat =
-                await fs.promises.stat(
-                  fullPath
-                );
-
-              if (
-                stat.isFile()
-              ) {
-                return fullPath;
-              }
-            } catch (
-              error
-            ) {
-              logger.warn(
-                "Chrome file could not be inspected",
-                {
-                  applicationId:
-                    this.applicationId,
-
-                  fullPath,
-
-                  error:
-                    error?.message ||
-                    String(error)
-                }
-              );
-            }
-          }
-        }
-
-        return null;
-      };
-
-    executablePath =
-      await findChromeExecutable(
-        cacheDirectory
+    const chromiumError =
+      new Error(
+        "Could not resolve Chromium executable from @sparticuz/chromium."
       );
-  }
 
-  /*
-   * ------------------------------------------------------------
-   * 3. VERIFICAÇÃO FINAL
-   * ------------------------------------------------------------
-   */
+    chromiumError.code =
+      "CHROMIUM_EXECUTABLE_NOT_FOUND";
 
-  if (
-    executablePath
-  ) {
-    try {
-      const stat =
-        await fs.promises.stat(
-          executablePath
-        );
-
-      logger.info(
-        "VFS Chrome executable resolved",
-        {
-          applicationId:
-            this.applicationId,
-
-          executablePath,
-
-          cacheDirectory,
-
-          isFile:
-            stat.isFile(),
-
-          mode:
-            stat.mode.toString(8)
-        }
-      );
-    } catch (
-      error
-    ) {
-      logger.warn(
-        "Resolved Chrome executable could not be inspected",
-        {
-          applicationId:
-            this.applicationId,
-
-          executablePath,
-
-          cacheDirectory,
-
-          error:
-            error?.message ||
-            String(error)
-        }
-      );
-    }
+    throw chromiumError;
   }
 
   if (
-    !executablePath
+    !executablePath ||
+    !fs.existsSync(
+      executablePath
+    )
   ) {
-    let cacheContents = [];
-
-    try {
-      cacheContents =
-        await fs.promises.readdir(
-          cacheDirectory,
-          {
-            recursive:
-              true
-          }
-        );
-    } catch (
-      error
-    ) {
-      logger.warn(
-        "Unable to inspect Puppeteer cache after Chrome resolution failure",
-        {
-          applicationId:
-            this.applicationId,
-
-          cacheDirectory,
-
-          error:
-            error?.message ||
-            String(error)
-        }
-      );
-    }
-
-    const chromeEntries =
-      cacheContents.filter(
-        entry =>
-          String(
-            entry
-          ).toLowerCase()
-          .includes(
-            "chrome"
-          )
-      );
-
     logger.error(
-      "Chrome executable not found",
+      "Chromium executable does not exist",
       {
         applicationId:
           this.applicationId,
 
-        cacheDirectory,
-
-        cwd:
-          process.cwd(),
-
-        puppeteerExecutablePath:
-          (() => {
-            try {
-              return puppeteer.executablePath();
-            } catch (
-              error
-            ) {
-              return null;
-            }
-          })(),
-
-        chromeEntries
+        executablePath:
+          executablePath || null
       }
     );
 
-    const error =
+    const chromiumError =
       new Error(
-        `Chrome executable not found. Puppeteer cache: ${cacheDirectory}`
+        `Chromium executable not found: ${
+          executablePath || "unknown"
+        }`
       );
 
-    error.code =
-      "CHROME_EXECUTABLE_NOT_FOUND";
+    chromiumError.code =
+      "CHROMIUM_EXECUTABLE_NOT_FOUND";
 
-    throw error;
+    throw chromiumError;
+  }
+
+  /*
+   * ============================================================
+   * BROWSER ARGUMENTS
+   * ============================================================
+   */
+
+  const browserArgs = [
+    ...(Array.isArray(
+      chromium.args
+    )
+      ? chromium.args
+      : []),
+
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-zygote",
+    "--disable-background-networking",
+    "--disable-background-timer-throttling",
+    "--disable-renderer-backgrounding",
+    "--disable-features=Translate,BackForwardCache"
+  ];
+
+  /*
+   * ============================================================
+   * PROXY
+   * ============================================================
+   */
+
+  if (
+    proxyConfigured
+  ) {
+    browserArgs.push(
+      `--proxy-server=http://${proxyHost}:${proxyPort}`
+    );
   }
 
   /*
@@ -478,28 +264,56 @@ class VfsPuppeteerAdapter extends SiteAdapter {
    * ============================================================
    */
 
-  this.browser =
-    await puppeteer.launch({
-      headless:
-        process.env.PUPPETEER_HEADLESS !==
-        "false",
+  try {
+    this.browser =
+      await puppeteer.launch({
+        executablePath,
 
-      executablePath,
+        headless: true,
 
-      args:
-        browserArgs,
+        args:
+          browserArgs,
 
-      defaultViewport: {
-        width: 1440,
-        height: 900
+        defaultViewport: {
+          width: 1440,
+          height: 900
+        }
+      });
+  } catch (error) {
+    logger.error(
+      "Failed to launch Chromium",
+      {
+        applicationId:
+          this.applicationId,
+
+        executablePath,
+
+        error:
+          error?.message ||
+          String(error)
       }
-    });
+    );
+
+    throw error;
+  }
+
+  /*
+   * ============================================================
+   * BROWSER CONTEXT
+   * ============================================================
+   */
 
   this.context =
     await this.browser.createBrowserContext();
 
   this.page =
     await this.context.newPage();
+
+  /*
+   * ============================================================
+   * PROXY AUTHENTICATION
+   * ============================================================
+   */
 
   if (
     proxyConfigured &&
@@ -514,6 +328,12 @@ class VfsPuppeteerAdapter extends SiteAdapter {
         proxyPassword
     });
   }
+
+  /*
+   * ============================================================
+   * TIMEOUTS
+   * ============================================================
+   */
 
   this.page.setDefaultTimeout(
     DEFAULT_TIMEOUT
@@ -547,13 +367,12 @@ class VfsPuppeteerAdapter extends SiteAdapter {
       );
 
       const proxyTestBody =
-        await this.page
-          .evaluate(
-            () =>
-              document.body
-                ?.innerText ||
-              ""
-          );
+        await this.page.evaluate(
+          () =>
+            document.body
+              ?.innerText ||
+            ""
+        );
 
       logger.info(
         "VFS proxy test completed",
@@ -565,9 +384,7 @@ class VfsPuppeteerAdapter extends SiteAdapter {
             proxyTestBody
         }
       );
-    } catch (
-      error
-    ) {
+    } catch (error) {
       logger.warn(
         "VFS proxy test failed",
         {
@@ -582,6 +399,12 @@ class VfsPuppeteerAdapter extends SiteAdapter {
     }
   }
 
+  /*
+   * ============================================================
+   * FINAL STATE
+   * ============================================================
+   */
+
   this.initialized =
     true;
 
@@ -589,10 +412,12 @@ class VfsPuppeteerAdapter extends SiteAdapter {
     "INITIALIZED";
 
   logger.info(
-    "VFS Puppeteer adapter initialized",
+    "VFS Puppeteer adapter initialized with Sparticuz Chromium",
     {
       applicationId:
-        this.applicationId
+        this.applicationId,
+
+      executablePath
     }
   );
 
