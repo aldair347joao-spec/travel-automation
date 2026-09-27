@@ -2504,62 +2504,213 @@
    */
 
   async function handleComplete(result) {
-  running = false;
-
-  setCameraState(false);
+  /*
+   * NÃO considerar a liveness aprovada apenas porque
+   * as 10 posições foram reconhecidas.
+   *
+   * A aprovação final depende dos 10 vídeos.
+   */
 
   const positionsComplete =
-    completedPositions.size >= POSITIONS.length ||
-    Number(result?.completedCount) >= POSITIONS.length ||
-    Number(result?.total) === POSITIONS.length &&
-      Array.isArray(result?.positions) &&
-      result.positions.length === POSITIONS.length;
+    completedPositions.size >=
+      POSITIONS.length ||
+    Number(
+      result?.completedCount
+    ) >= POSITIONS.length ||
+    (
+      Number(result?.total) ===
+        POSITIONS.length &&
+      Array.isArray(
+        result?.positions
+      ) &&
+      result.positions.length ===
+        POSITIONS.length
+    );
 
-  if (positionsComplete) {
-    completed = true;
+  const video =
+    result?.video || {};
 
-    activePositionIndex =
-      POSITIONS.length - 1;
+  const videoCount =
+    Number(
+      video?.segmentCount || 0
+    );
 
-    updateProgress({
-      current: 10,
-      total: 10
-    });
+  const videoComplete =
+    video?.complete === true &&
+    video?.verified === true &&
+    videoCount ===
+      POSITIONS.length;
+
+  /*
+   * ==========================================================
+   * CASO 1
+   * ==========================================================
+   *
+   * As posições ainda não terminaram.
+   *
+   * Não guardar.
+   * Não aprovar.
+   */
+
+  if (!positionsComplete) {
+    running = false;
+
+    setCameraState(
+      false
+    );
+
+    completed = false;
 
     setState(
-      "LIVENESS APROVADA",
-      "success"
+      "LIVENESS NÃO CONCLUÍDA",
+      "warning"
     );
 
     setStatus(
-      "As 10 posições foram validadas. A guardar a sessão de liveness..."
+      "Os movimentos não foram todos validados. Será necessário concluir a preparação."
     );
-
-    await saveResult({
-      ...result,
-      passed: true,
-      completed: true,
-      completedCount: 10,
-      total: 10
-    });
 
     return;
   }
 
-  completed = false;
+  /*
+   * ==========================================================
+   * CASO 2
+   * ==========================================================
+   *
+   * As posições terminaram, mas os vídeos ainda não estão
+   * completos.
+   *
+   * ISTO NÃO É ERRO.
+   *
+   * O motor pode estar a recuperar apenas os vídeos que
+   * faltam.
+   */
+
+  if (!videoComplete) {
+    completed = false;
+
+    /*
+     * Mantemos a câmera/engine ativos se o motor ainda estiver
+     * em recuperação.
+     */
+
+    setState(
+      "A GUARDAR VÍDEOS",
+      "warning"
+    );
+
+    const missing =
+      Math.max(
+        0,
+        POSITIONS.length -
+          videoCount
+      );
+
+    if (
+      missing > 0
+    ) {
+      setStatus(
+        missing === 1
+          ? "Falta guardar 1 vídeo. Vamos recuperar apenas essa posição."
+          : `Faltam guardar ${missing} vídeos. Vamos recuperar apenas as posições necessárias.`
+      );
+    } else {
+      setStatus(
+        "A confirmar os vídeos da sessão..."
+      );
+    }
+
+    /*
+     * NÃO chamar saveResult().
+     *
+     * Não enviar uma sessão incompleta para o backend.
+     * Não mostrar ERRO AO GUARDAR LIVENESS.
+     */
+    return;
+  }
+
+  /*
+   * ==========================================================
+   * CASO 3
+   * ==========================================================
+   *
+   * Temos:
+   *
+   * - 10 posições;
+   * - 10 vídeos;
+   * - vídeos marcados como completos/verificados.
+   *
+   * Agora sim podemos parar a interface e enviar.
+   */
+
+  running = false;
+
+  setCameraState(
+    false
+  );
+
+  completed = true;
+
+  updateProgress({
+    current:
+      POSITIONS.length,
+
+    total:
+      POSITIONS.length
+  });
 
   setState(
-    "LIVENESS NÃO CONCLUÍDA",
-    "warning"
+    "VÍDEOS CONFIRMADOS",
+    "success"
   );
 
   setStatus(
-    "Os movimentos não foram todos validados. Será necessário repetir a verificação."
+    "As 10 posições e os 10 vídeos foram guardados. A confirmar a sessão..."
   );
+
+  /*
+   * Só agora o resultado pode ser enviado ao backend.
+   *
+   * IMPORTANTE:
+   * não forçamos passed=true aqui.
+   *
+   * O servidor é quem confirma a aprovação final.
+   */
 
   await saveResult({
     ...result,
-    passed: false
+
+    passed:
+      false,
+
+    completed:
+      true,
+
+    completedCount:
+      POSITIONS.length,
+
+    total:
+      POSITIONS.length,
+
+    video: {
+      ...video,
+
+      available:
+        true,
+
+      complete:
+        true,
+
+      verified:
+        true,
+
+      segmentCount:
+        POSITIONS.length,
+
+      expectedSegments:
+        POSITIONS.length
+    }
   });
 }
   /*
@@ -2627,6 +2778,37 @@
         "O módulo de liveness não está disponível."
       );
     }
+      const video =
+    result?.video || {};
+
+  const videosComplete =
+    video?.complete === true &&
+    video?.verified === true &&
+    Number(
+      video?.segmentCount || 0
+    ) === POSITIONS.length;
+
+  if (
+    !videosComplete
+  ) {
+    if (applicationForm) {
+      applicationForm.dataset.facialPreflight =
+        "pending";
+    }
+
+    saving = false;
+
+    setState(
+      "A GUARDAR VÍDEOS",
+      "warning"
+    );
+
+    setStatus(
+      "Os movimentos foram concluídos, mas os 10 vídeos ainda não foram confirmados. Aguardar recuperação."
+    );
+
+    return;
+  }
 
     /*
      * ======================================================
