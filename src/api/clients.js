@@ -1014,8 +1014,7 @@ router.get(
  * Tentativas erradas nunca são guardadas.
  * =========================================================
  */
-
-router.post(
+ router.post(
   "/:id/liveness-video",
   requireRole(
     "owner",
@@ -1029,326 +1028,218 @@ router.post(
     res,
     next
   ) => {
-
     try {
-
-      /*
-       * -----------------------------------------------------
-       * CLIENTE
-       * -----------------------------------------------------
-       */
-
       const client =
         await findAccessibleClient(
           req,
           req.params.id,
           {
-            activeOnly:
-              true
+            activeOnly: true
           }
         );
 
       if (!client) {
-        return res
-          .status(404)
-          .json({
-            success:
-              false,
-
-            error:
-              "Client not found"
-          });
+        return res.status(404).json({
+          success: false,
+          error: "Client not found"
+        });
       }
 
-
-      /*
-       * -----------------------------------------------------
-       * FICHEIROS
-       * -----------------------------------------------------
-       */
-
       const files =
-        Array.isArray(
-          req.files
-        )
+        Array.isArray(req.files)
           ? req.files
           : [];
 
-      if (
-        !files.length
-      ) {
-        return res
-          .status(400)
-          .json({
-            success:
-              false,
-
-            error:
-              "Nenhum segmento de vídeo de liveness foi recebido."
-          });
+      if (!files.length) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "Nenhum segmento de vídeo de liveness foi recebido."
+        });
       }
 
-      if (
-        files.length >
-        10
-      ) {
-        return res
-          .status(400)
-          .json({
-            success:
-              false,
-
-            error:
-              "A sessão pode conter no máximo 10 segmentos de vídeo."
-          });
+      if (files.length !== 10) {
+        return res.status(400).json({
+          success: false,
+          error:
+            "A liveness final exige exatamente 10 segmentos de vídeo.",
+          segmentsReceived: files.length,
+          expectedSegments: 10
+        });
       }
-
-
-      /*
-       * -----------------------------------------------------
-       * SESSION ID
-       * -----------------------------------------------------
-       *
-       * O sessionId vem do frontend e também é persistido
-       * pelo endpoint facial-preflight.
-       */
 
       const sessionId =
         String(
-          req.body?.sessionId ||
-          ""
+          req.body?.sessionId || ""
         ).trim();
 
       if (
         !sessionId ||
-        sessionId.length >
-          128
+        sessionId.length > 128
       ) {
-        return res
-          .status(400)
-          .json({
-            success:
-              false,
-
-            error:
-              "sessionId é obrigatório para guardar os segmentos de liveness."
-          });
+        return res.status(400).json({
+          success: false,
+          error:
+            "sessionId é obrigatório para guardar os segmentos de liveness."
+        });
       }
-
-
-      /*
-       * -----------------------------------------------------
-       * SESSÃO PERSISTIDA
-       * -----------------------------------------------------
-       */
 
       const savedSession =
         client
           ?.facialPreflight
           ?.livenessSession;
 
-      if (
-        !savedSession
-      ) {
-        return res
-          .status(409)
-          .json({
-            success:
-              false,
-
-            error:
-              "A sessão de liveness ainda não existe."
-          });
+      if (!savedSession) {
+        return res.status(409).json({
+          success: false,
+          error:
+            "A sessão de liveness ainda não existe."
+        });
       }
 
       if (
-        String(
-          savedSession.sessionId
-        ) !==
+        String(savedSession.sessionId) !==
         sessionId
       ) {
-        return res
-          .status(409)
-          .json({
-            success:
-              false,
-
-            error:
-              "O vídeo pertence a uma sessão de liveness diferente."
-          });
+        return res.status(409).json({
+          success: false,
+          error:
+            "O vídeo pertence a uma sessão de liveness diferente."
+        });
       }
-
-      if (
-        savedSession.status !==
-          "passed" ||
-        savedSession.verified !==
-          true
-      ) {
-        return res
-          .status(409)
-          .json({
-            success:
-              false,
-
-            error:
-              "A sessão de liveness ainda não foi aprovada."
-          });
-      }
-
 
       /*
-       * -----------------------------------------------------
-       * MAPEAR OS FICHEIROS
-       * -----------------------------------------------------
+       * A sessão deve estar em video_pending.
+       *
+       * NÃO exigimos "passed" aqui.
+       *
+       * Este é o ponto fundamental da correção:
+       * a liveness só passa depois de os 10 vídeos
+       * terem sido realmente armazenados.
        */
 
-      const entries =
-        [];
-
-      const usedPositions =
-        new Set();
-
-      for (
-        const file
-        of files
+      if (
+        ![
+          "video_pending",
+          "passed"
+        ].includes(
+          savedSession.status
+        )
       ) {
+        return res.status(409).json({
+          success: false,
+          error:
+            "A sessão de liveness não está pronta para receber os vídeos.",
+          status:
+            savedSession.status
+        });
+      }
 
+      /*
+       * Se por algum motivo uma sessão já estiver passada,
+       * não aceitamos uma segunda submissão diferente.
+       *
+       * O frontend normalmente só chegará aqui uma vez.
+       */
+
+      const entries = [];
+      const usedPositions = new Set();
+
+      for (const file of files) {
         const match =
           String(
-            file.fieldname ||
-            ""
+            file.fieldname || ""
           ).match(
             /^livenessVideo_(\d+)$/
           );
 
-        if (
-          !match
-        ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `Campo de vídeo inválido: ${file.fieldname}`
-            });
+        if (!match) {
+          return res.status(400).json({
+            success: false,
+            error:
+              `Campo de vídeo inválido: ${file.fieldname}`
+          });
         }
 
         const index =
-          Number(
-            match[1]
-          );
+          Number(match[1]);
 
         const metadataField =
           `livenessMeta_${index}`;
 
         const rawMetadata =
-          req.body?.[
-            metadataField
-          ];
+          req.body?.[metadataField];
 
         if (
-          rawMetadata ===
-            undefined ||
-          rawMetadata ===
-            null
+          rawMetadata === undefined ||
+          rawMetadata === null
         ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `Metadata ausente para o segmento ${index}.`
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              `Metadata ausente para o segmento ${index}.`
+          });
         }
 
         let metadata;
 
         try {
-
           metadata =
-            typeof rawMetadata ===
-            "string"
-              ? JSON.parse(
-                  rawMetadata
-                )
+            typeof rawMetadata === "string"
+              ? JSON.parse(rawMetadata)
               : rawMetadata;
-
-        } catch (
-          metadataError
-        ) {
-
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `A metadata do segmento ${index} é inválida.`
-            });
+        } catch (_) {
+          return res.status(400).json({
+            success: false,
+            error:
+              `A metadata do segmento ${index} é inválida.`
+          });
         }
 
         if (
           !metadata ||
-          typeof metadata !==
-            "object"
+          typeof metadata !== "object"
         ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `A metadata do segmento ${index} é inválida.`
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              `A metadata do segmento ${index} é inválida.`
+          });
         }
 
         if (
-          !Buffer.isBuffer(
-            file.buffer
-          ) ||
+          !Buffer.isBuffer(file.buffer) ||
           !file.buffer.length
         ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `O segmento ${index} está vazio.`
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              `O segmento ${index} está vazio.`
+          });
         }
 
+        /*
+         * O frontend novo envia SEMPRE posição numérica.
+         * Não aceitamos IDs textuais aqui.
+         */
+
         const requestedPosition =
-          Number(
-            metadata.position ||
-            metadata.sequence
-          );
+          Number(metadata.position);
 
         if (
           !Number.isInteger(
             requestedPosition
           ) ||
-          requestedPosition <
-            1 ||
-          requestedPosition >
-            10
+          requestedPosition < 1 ||
+          requestedPosition > 10
         ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `A posição do segmento ${index} deve estar entre 1 e 10.`
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              `A posição do segmento ${index} deve estar entre 1 e 10.`,
+            received:
+              metadata.position
+          });
         }
 
         if (
@@ -1356,15 +1247,11 @@ router.post(
             requestedPosition
           )
         ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `A posição ${requestedPosition} foi enviada mais de uma vez.`
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              `A posição ${requestedPosition} foi enviada mais de uma vez.`
+          });
         }
 
         usedPositions.add(
@@ -1380,85 +1267,56 @@ router.post(
                   Number(
                     position?.position
                   ) ===
-                    requestedPosition ||
-                  Number(
-                    position?.sequence
-                  ) ===
-                    requestedPosition
+                  requestedPosition
               )
             : null;
 
-        if (
-          !approvedPosition
-        ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `A posição ${requestedPosition} não pertence à sessão de liveness.`
-            });
+        if (!approvedPosition) {
+          return res.status(400).json({
+            success: false,
+            error:
+              `A posição ${requestedPosition} não pertence à sessão de liveness.`
+          });
         }
 
         if (
-          approvedPosition.verified !==
-          true
+          approvedPosition.verified !== true
         ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `A posição ${requestedPosition} não foi validada pelo motor de liveness.`
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              `A posição ${requestedPosition} não foi validada pelo motor de liveness.`
+          });
         }
 
         if (
-          approvedPosition.faceDetected !==
-          true
+          approvedPosition.faceDetected !== true
         ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `A posição ${requestedPosition} não possui rosto confirmado.`
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              `A posição ${requestedPosition} não possui rosto confirmado.`
+          });
         }
 
         if (
-          approvedPosition.singleFace !==
-          true
+          approvedPosition.singleFace !== true
         ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `A posição ${requestedPosition} não possui exatamente um rosto confirmado.`
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              `A posição ${requestedPosition} não possui exatamente um rosto confirmado.`
+          });
         }
 
         if (
           !approvedPosition.completedAt
         ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
-
-              error:
-                `A posição ${requestedPosition} não possui conclusão válida.`
-            });
+          return res.status(400).json({
+            success: false,
+            error:
+              `A posição ${requestedPosition} não possui conclusão válida.`
+          });
         }
 
         const mimeType =
@@ -1476,68 +1334,85 @@ router.post(
             "video/webm",
             "video/mp4",
             "video/quicktime"
-          ].includes(
-            mimeType
-          )
+          ].includes(mimeType)
         ) {
-          return res
-            .status(400)
-            .json({
-              success:
-                false,
+          return res.status(400).json({
+            success: false,
+            error:
+              `Formato de vídeo não suportado no segmento ${index}.`,
+            mimeType
+          });
+        }
 
-              error:
-                `Formato de vídeo não suportado no segmento ${index}.`
-            });
+        /*
+         * Tamanho mínimo real.
+         */
+
+        const minimumVideoBytes = 500;
+
+        if (
+          file.buffer.length <
+          minimumVideoBytes
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              `O segmento ${index} é demasiado pequeno para ser um vídeo válido.`,
+            size:
+              file.buffer.length
+          });
         }
 
         entries.push({
           index,
-
           file,
-
           metadata,
-
           position:
             requestedPosition,
-
           approvedPosition,
-
           mimeType
         });
       }
 
-
       /*
-       * -----------------------------------------------------
-       * GUARDAR TODOS OS SEGMENTOS
-       * -----------------------------------------------------
-       *
-       * Fazemos a validação de TODOS primeiro.
-       * Só depois começamos a gravar.
-       *
-       * Isto impede que uma posição inválida deixe metade
-       * da sessão armazenada.
+       * Garantir que as 10 posições estão presentes.
        */
 
-      const storedSegments =
-        [];
+      for (
+        let position = 1;
+        position <= 10;
+        position += 1
+      ) {
+        if (
+          !usedPositions.has(position)
+        ) {
+          return res.status(400).json({
+            success: false,
+            error:
+              `A posição ${position} não foi enviada.`
+          });
+        }
+      }
+
+      /*
+       * =====================================================
+       * GUARDAR OS 10 SEGMENTOS
+       * =====================================================
+       */
+
+      const storedSegments = [];
 
       try {
-
         for (
-          const entry
-          of entries
+          const entry of entries
         ) {
-
           const {
             file,
             metadata,
             position,
             approvedPosition,
             mimeType
-          } =
-            entry;
+          } = entry;
 
           const stored =
             await livenessVideoStorage.save({
@@ -1593,37 +1468,26 @@ router.post(
                 null
             });
 
-          storedSegments.push(
-            {
-              stored,
-
-              position
-            }
-          );
+          storedSegments.push({
+            stored,
+            position
+          });
         }
-
-      } catch (
-        storageError
-      ) {
-
+      } catch (storageError) {
         console.error(
           "[CLIENTS] Liveness video batch storage error:",
           storageError
         );
 
         /*
-         * Remover apenas as posições desta requisição.
-         *
-         * Se o mesmo segmento já existia, o serviço de storage
-         * trata a substituição conforme a sua política atual.
+         * Limpar o que eventualmente tenha sido
+         * armazenado nesta tentativa.
          */
 
         for (
-          const item
-          of storedSegments
+          const item of storedSegments
         ) {
           try {
-
             await livenessVideoStorage.delete({
               accountId:
                 req.user.accountId,
@@ -1636,11 +1500,7 @@ router.post(
               position:
                 item.position
             });
-
-          } catch (
-            cleanupError
-          ) {
-
+          } catch (cleanupError) {
             console.error(
               "[CLIENTS] Falha ao limpar segmento após erro de batch:",
               cleanupError
@@ -1648,22 +1508,18 @@ router.post(
           }
         }
 
-        return res
-          .status(500)
-          .json({
-            success:
-              false,
-
-            error:
-              "Não foi possível guardar todos os segmentos de liveness."
-          });
+        return res.status(500).json({
+          success: false,
+          livenessPassed: false,
+          error:
+            "Não foi possível guardar todos os segmentos de liveness."
+        });
       }
 
-
       /*
-       * -----------------------------------------------------
-       * SEGMENTOS EXISTENTES
-       * -----------------------------------------------------
+       * =====================================================
+       * CONFIRMAR O GRIDFS
+       * =====================================================
        */
 
       const storedFiles =
@@ -1677,34 +1533,93 @@ router.post(
           sessionId
         });
 
+      const storedPositions =
+        new Set(
+          storedFiles.map(
+            file =>
+              Number(
+                file?.metadata?.position
+              )
+          )
+        );
+
+      const allTenStored =
+        storedFiles.length === 10 &&
+        storedPositions.size === 10 &&
+        [...Array(10)].every(
+          (_, index) =>
+            storedPositions.has(
+              index + 1
+            )
+        );
+
+      if (!allTenStored) {
+        return res.status(500).json({
+          success: false,
+          livenessPassed: false,
+          error:
+            "Os vídeos foram recebidos, mas a confirmação de armazenamento não encontrou os 10 segmentos.",
+          segmentsReceived:
+            entries.length,
+          segmentsStored:
+            storedFiles.length,
+          expectedSegments: 10
+        });
+      }
 
       /*
-       * -----------------------------------------------------
-       * ATUALIZAR METADATA DA SESSÃO
-       * -----------------------------------------------------
+       * =====================================================
+       * AGORA SIM: LIVENESS PASSADA
+       * =====================================================
        */
 
       const lastStored =
         storedSegments[
-          storedSegments.length -
-            1
-        ]?.stored ||
-        null;
+          storedSegments.length - 1
+        ]?.stored || null;
 
-      const videoUpdate =
-        {
-          "facialPreflight.livenessSession.video.available":
-            storedFiles.length >
-            0,
+      const now =
+        new Date();
 
-          "facialPreflight.livenessSession.video.storage":
-            "gridfs"
-        };
+      const videoUpdate = {
+        "facialPreflight.livenessSession.video.available":
+          true,
 
-      if (
-        lastStored
-      ) {
+        "facialPreflight.livenessSession.video.storage":
+          "gridfs",
 
+        "facialPreflight.livenessSession.video.segmentCount":
+          10,
+
+        "facialPreflight.livenessSession.video.expectedSegments":
+          10,
+
+        "facialPreflight.livenessSession.video.storedCount":
+          10,
+
+        "facialPreflight.livenessSession.video.verified":
+          true,
+
+        "facialPreflight.livenessSession.video.uploadedAt":
+          now,
+
+        "facialPreflight.livenessSession.video.verifiedAt":
+          now,
+
+        "facialPreflight.livenessSession.status":
+          "passed",
+
+        "facialPreflight.livenessSession.verified":
+          true,
+
+        "facialPreflight.livenessSession.completedAt":
+          now,
+
+        "facialPreflight.status":
+          "passed"
+      };
+
+      if (lastStored) {
         videoUpdate[
           "facialPreflight.livenessSession.video.videoId"
         ] =
@@ -1721,11 +1636,6 @@ router.post(
           lastStored.originalSize;
 
         videoUpdate[
-          "facialPreflight.livenessSession.video.uploadedAt"
-        ] =
-          lastStored.uploadedAt;
-
-        videoUpdate[
           "facialPreflight.livenessSession.video.expiresAt"
         ] =
           lastStored.expiresAt;
@@ -1738,9 +1648,11 @@ router.post(
               client._id,
 
             accountId:
-              req.user.accountId
-          },
+              req.user.accountId,
 
+            "facialPreflight.livenessSession.sessionId":
+              sessionId
+          },
           {
             $set:
               videoUpdate
@@ -1757,108 +1669,84 @@ router.post(
               videoUpdateResult.matchedCount
             )
           : Number(
-              videoUpdateResult?.n ||
-              0
+              videoUpdateResult?.n || 0
             );
 
       if (
-        matchedCount !==
-        1
+        matchedCount !== 1
       ) {
-
-        return res
-          .status(500)
-          .json({
-            success:
-              false,
-
-            error:
-              "Os vídeos foram recebidos, mas não foi possível atualizar a sessão de liveness."
-          });
+        return res.status(500).json({
+          success: false,
+          livenessPassed: false,
+          error:
+            "Os 10 vídeos foram armazenados, mas não foi possível finalizar a sessão de liveness."
+        });
       }
 
-
       /*
-       * -----------------------------------------------------
-       * SERIALIZAÇÃO
-       * -----------------------------------------------------
+       * =====================================================
+       * CONFIRMAÇÃO FINAL NO MONGODB
+       * =====================================================
        */
 
-      const segments =
-        storedFiles
-          .map(
-            file => ({
-              videoId:
-                String(
-                  file._id
-                ),
+      const finalClient =
+        await Client.findOne({
+          _id:
+            client._id,
 
-              position:
-                Number(
-                  file?.metadata
-                    ?.position
-                ),
-
-              sequence:
-                Number(
-                  file?.metadata
-                    ?.sequence
-                ),
-
-              label:
-                file?.metadata
-                  ?.label ||
-                null,
-
-              instruction:
-                file?.metadata
-                  ?.instruction ||
-                null,
-
-              mimeType:
-                file?.metadata
-                  ?.originalMimeType ||
-                null,
-
-              originalSize:
-                Number(
-                  file?.metadata
-                    ?.originalSize ||
-                  0
-                ),
-
-              uploadedAt:
-                file.uploadDate ||
-                null,
-
-              expiresAt:
-                file?.metadata
-                  ?.expiresAt ||
-                null
-            })
+          accountId:
+            req.user.accountId
+        })
+          .select(
+            "facialPreflight"
           )
-          .sort(
-            (
-              first,
-              second
-            ) =>
-              Number(
-                first.position
-              ) -
-              Number(
-                second.position
-              )
-          );
+          .lean();
 
+      const finalSession =
+        finalClient
+          ?.facialPreflight
+          ?.livenessSession;
+
+      if (
+        !finalSession ||
+        finalSession.sessionId !==
+          sessionId ||
+        finalSession.status !==
+          "passed" ||
+        finalSession.verified !==
+          true ||
+        Number(
+          finalSession.completedCount
+        ) !== 10 ||
+        Number(
+          finalSession.total
+        ) !== 10 ||
+        !Array.isArray(
+          finalSession.positions
+        ) ||
+        finalSession.positions.length !==
+          10 ||
+        finalSession.video?.verified !==
+          true ||
+        Number(
+          finalSession.video?.storedCount
+        ) !== 10
+      ) {
+        return res.status(500).json({
+          success: false,
+          livenessPassed: false,
+          error:
+            "A confirmação final da liveness falhou."
+        });
+      }
 
       /*
-       * -----------------------------------------------------
+       * =====================================================
        * AUDITORIA
-       * -----------------------------------------------------
+       * =====================================================
        */
 
       try {
-
         await AuditLog.create({
           actorId:
             req.user._id,
@@ -1882,44 +1770,93 @@ router.post(
               entries.length,
 
             segmentsStored:
-              segments.length,
+              storedFiles.length,
 
             positions:
-              entries.map(
-                entry =>
-                  entry.position
-              )
+              [...usedPositions].sort(
+                (a, b) => a - b
+              ),
+
+            livenessPassed:
+              true
           }
         });
-
       } catch (
         auditError
       ) {
-
         console.error(
           "[CLIENTS] AuditLog liveness video batch failed:",
           auditError
         );
       }
 
-
       /*
-       * -----------------------------------------------------
-       * RESPOSTA
-       * -----------------------------------------------------
+       * =====================================================
+       * RESPOSTA FINAL
+       * =====================================================
        */
 
+      const segments =
+        storedFiles
+          .map(
+            file => ({
+              videoId:
+                String(
+                  file._id
+                ),
+
+              position:
+                Number(
+                  file?.metadata?.position
+                ),
+
+              sequence:
+                Number(
+                  file?.metadata?.sequence
+                ),
+
+              label:
+                file?.metadata?.label ||
+                null,
+
+              instruction:
+                file?.metadata?.instruction ||
+                null,
+
+              mimeType:
+                file?.metadata?.originalMimeType ||
+                null,
+
+              originalSize:
+                Number(
+                  file?.metadata?.originalSize ||
+                  0
+                ),
+
+              uploadedAt:
+                file.uploadDate ||
+                null,
+
+              expiresAt:
+                file?.metadata?.expiresAt ||
+                null
+            })
+          )
+          .sort(
+            (a, b) =>
+              Number(a.position) -
+              Number(b.position)
+          );
+
       return res.json({
-        success:
-          true,
+        success: true,
+
+        livenessPassed: true,
 
         clientId:
           client._id,
 
         sessionId,
-
-        livenessPassed:
-          true,
 
         segmentsReceived:
           entries.length,
@@ -1928,21 +1865,17 @@ router.post(
           segments.length,
 
         video: {
-          available:
-            segments.length >
-            0,
-
-          storage:
-            "gridfs"
+          available: true,
+          storage: "gridfs",
+          segmentCount: 10,
+          expectedSegments: 10,
+          verified: true
         },
 
         segments
       });
 
-    } catch (
-      error
-    ) {
-
+    } catch (error) {
       console.error(
         "[CLIENTS] Liveness video upload error:",
         error
@@ -1951,9 +1884,7 @@ router.post(
       next(error);
     }
   }
-);
-
-
+); 
 /*
  * =========================================================
  * FACIAL PREFLIGHT INSTRUCTIONS
@@ -2503,113 +2434,127 @@ router.post(
        */
 
       const livenessSession =
-        {
-          sessionId,
+  {
+    sessionId,
 
-          status:
-            result.passed
-              ? "passed"
-              : "requires_user",
+    /*
+     * A aprovação final só acontece depois
+     * de os 10 vídeos serem armazenados.
+     */
+    status:
+      result.passed
+        ? "video_pending"
+        : "requires_user",
 
-          source:
-            "local_liveness",
+    source:
+      "local_liveness",
 
-          startedAt,
+    startedAt,
 
-          completedAt,
+    completedAt:
+      null,
 
-          score:
-            result.score,
+    score:
+      result.score,
 
-          completedCount:
-            result.positionsCompleted,
+    completedCount:
+      result.positionsCompleted,
 
-          total:
-            result.positionsRequired,
+    total:
+      result.positionsRequired,
 
-          verified:
-            result.passed,
+    verified:
+      false,
 
-          positions:
-            normalizedPositions
-        };
+    positions:
+      normalizedPositions,
 
-
-      client.facialConsent =
-        {
-          accepted:
-            true,
-
-          acceptedAt:
-            client
-              .facialConsent
-              ?.acceptedAt ||
-            new Date()
-        };
+    video: {
+      available: false,
+      storage: "gridfs",
+      segmentCount: 0,
+      expectedSegments: 10,
+      storedCount: 0,
+      verified: false
+    }
+  };
 
 
-      client.facialPreflight =
-        {
-          status:
-            result.passed
-              ? "passed"
-              : "requires_user",
+client.facialConsent =
+  {
+    accepted:
+      true,
 
-          score:
-            result.score,
+    acceptedAt:
+      client
+        .facialConsent
+        ?.acceptedAt ||
+      new Date()
+  };
 
-          minimumScore:
-            result.minimumScore,
 
-          minimumPositionScore:
-            result.minimumPositionScore,
+client.facialPreflight =
+  {
+    status:
+      result.passed
+        ? "video_pending"
+        : "requires_user",
 
-          positionsCompleted:
-            result.positionsCompleted,
+    score:
+      result.score,
 
-          positionsRequired:
-            result.positionsRequired,
+    minimumScore:
+      result.minimumScore,
 
-          smileDetected:
-            result.smileDetected,
+    minimumPositionScore:
+      result.minimumPositionScore,
 
-          passportMatch:
-            {
-              name:
-                passportMatch
-                  ?.name ??
-                null,
+    positionsCompleted:
+      result.positionsCompleted,
 
-              dateOfBirth:
-                passportMatch
-                  ?.dateOfBirth ??
-                null,
+    positionsRequired:
+      result.positionsRequired,
 
-              passportNumber:
-                passportMatch
-                  ?.passportNumber ??
-                null,
+    smileDetected:
+      result.smileDetected,
 
-              nationality:
-                passportMatch
-                  ?.nationality ??
-                null
-            },
+    passportMatch:
+      {
+        name:
+          passportMatch
+            ?.name ??
+          null,
 
-          livenessSession,
+        dateOfBirth:
+          passportMatch
+            ?.dateOfBirth ??
+          null,
 
-          issues:
-            result.issues,
+        passportNumber:
+          passportMatch
+            ?.passportNumber ??
+          null,
 
-          checkedAt:
-            result.checkedAt,
+        nationality:
+          passportMatch
+            ?.nationality ??
+          null
+      },
 
-          consentAcceptedAt:
-            client
-              .facialConsent
-              ?.acceptedAt ||
-            new Date()
-        };
+    livenessSession,
+
+    issues:
+      result.issues,
+
+    checkedAt:
+      result.checkedAt,
+
+    consentAcceptedAt:
+      client
+        .facialConsent
+        ?.acceptedAt ||
+      new Date()
+  };
 
 
       /*
@@ -2701,48 +2646,47 @@ router.post(
 
 
       const savedSession =
-        savedClient
-          ?.facialPreflight
-          ?.livenessSession;
+  savedClient
+    ?.facialPreflight
+    ?.livenessSession;
 
+if (
+  !savedSession ||
+  savedSession.sessionId !==
+    sessionId ||
+  ![
+    "video_pending",
+    "passed"
+  ].includes(
+    savedSession.status
+  ) ||
+  savedSession.verified !==
+    false ||
+  Number(
+    savedSession.completedCount
+  ) !== 10 ||
+  Number(
+    savedSession.total
+  ) !== 10 ||
+  !Array.isArray(
+    savedSession.positions
+  ) ||
+  savedSession.positions.length !==
+    10
+) {
+  return res.status(500).json({
+    success: false,
 
-      if (
-        !savedSession ||
-        savedSession.status !==
-          "passed" ||
-        savedSession.verified !==
-          true ||
-        Number(
-          savedSession.completedCount
-        ) !==
-          10 ||
-        Number(
-          savedSession.total
-        ) !==
-          10 ||
-        !Array.isArray(
-          savedSession.positions
-        ) ||
-        savedSession.positions.length !==
-          10
-      ) {
-        return res
-          .status(500)
-          .json({
-            success:
-              false,
+    livenessPassed: false,
 
-            livenessPassed:
-              false,
+    error:
+      "A sessão de liveness não foi persistida corretamente.",
 
-            error:
-              "A sessão de liveness não foi persistida corretamente.",
-
-            issues: [
-              "MongoDB não confirmou uma sessão de liveness aprovada com as 10 posições."
-            ]
-          });
-      }
+    issues: [
+      "MongoDB não confirmou as 10 posições antes do armazenamento dos vídeos."
+    ]
+  });
+}
 
 
       /*
@@ -2816,8 +2760,11 @@ router.post(
         success:
           true,
 
-        livenessPassed:
-          true,
+    livenessPassed:
+    false,
+
+   livenessVideoPending:
+   true,
 
         clientId:
           client._id,
@@ -2830,12 +2777,21 @@ router.post(
             savedSession.sessionId,
 
           status:
-            savedSession.status,
+  savedSession.status,
 
-          verified:
-            savedSession.verified,
+verified:
+  savedSession.verified,
 
-          score:
+videoRequired:
+  true,
+
+expectedVideoSegments:
+  10,
+
+storedVideoSegments:
+  0,
+
+            score:
             savedSession.score,
 
           completedCount:
