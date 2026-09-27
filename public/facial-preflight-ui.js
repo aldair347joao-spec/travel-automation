@@ -2718,7 +2718,7 @@
    * GUARDAR RESULTADO
    * ==========================================================
    */
-
+     
   async function saveResult(result) {
   const applicationForm =
     document.getElementById(
@@ -2741,19 +2741,18 @@
 
   /*
    * ======================================================
-   * A APROVAÇÃO É DETERMINADA PELAS 10 POSIÇÕES.
-   *
-   * Não existe uma segunda barreira de score aqui.
-   * Não existe captura de imagem.
+   * VALIDAR AS 10 POSIÇÕES
    * ======================================================
    */
 
   const positionsComplete =
     completedPositions.size >= POSITIONS.length ||
     Number(result?.completedCount) >= POSITIONS.length ||
-    Number(result?.total) === POSITIONS.length &&
+    (
+      Number(result?.total) === POSITIONS.length &&
       Array.isArray(result?.positions) &&
-      result.positions.length === POSITIONS.length;
+      result.positions.length === POSITIONS.length
+    );
 
   if (!positionsComplete) {
     if (applicationForm) {
@@ -2763,22 +2762,25 @@
 
     saving = false;
 
+    setState(
+      "LIVENESS NÃO CONCLUÍDA",
+      "warning"
+    );
+
+    setStatus(
+      "As 10 posições faciais ainda não foram concluídas."
+    );
+
     return;
   }
 
-  try {
-    if (
-      !window.TravelFacialPreflight ||
-      typeof window
-        .TravelFacialPreflight
-        .submitToBackend !==
-        "function"
-    ) {
-      throw new Error(
-        "O módulo de liveness não está disponível."
-      );
-    }
-      const video =
+  /*
+   * ======================================================
+   * VALIDAR OS 10 VÍDEOS ANTES DO ENVIO
+   * ======================================================
+   */
+
+  const video =
     result?.video || {};
 
   const videosComplete =
@@ -2788,9 +2790,7 @@
       video?.segmentCount || 0
     ) === POSITIONS.length;
 
-  if (
-    !videosComplete
-  ) {
+  if (!videosComplete) {
     if (applicationForm) {
       applicationForm.dataset.facialPreflight =
         "pending";
@@ -2804,27 +2804,72 @@
     );
 
     setStatus(
-      "Os movimentos foram concluídos, mas os 10 vídeos ainda não foram confirmados. Aguardar recuperação."
+      "Os movimentos foram concluídos, mas os 10 vídeos ainda não foram confirmados. Aguarde a recuperação dos vídeos."
     );
 
     return;
   }
 
+  /*
+   * ======================================================
+   * VERIFICAR MOTOR
+   * ======================================================
+   */
+
+  if (
+    !window.TravelFacialPreflight ||
+    typeof window
+      .TravelFacialPreflight
+      .submitToBackend !==
+      "function"
+  ) {
+    if (applicationForm) {
+      applicationForm.dataset.facialPreflight =
+        "failed";
+    }
+
+    saving = false;
+
+    setState(
+      "ERRO NO MOTOR",
+      "error"
+    );
+
+    setStatus(
+      "O módulo de liveness não está disponível."
+    );
+
+    return;
+  }
+
+  /*
+   * ======================================================
+   * ESTADO VISUAL
+   * ======================================================
+   */
+
+  setState(
+    "A CONFIRMAR",
+    "warning"
+  );
+
+  setStatus(
+    "Os 10 vídeos foram preparados. A confirmar o armazenamento no servidor..."
+  );
+
+  try {
     /*
-     * ======================================================
-     * GUARDAR SOMENTE A SESSÃO DE LIVENESS
-     * ======================================================
+     * ====================================================
+     * ENVIO DEFINITIVO
+     * ====================================================
      *
-     * Nenhuma fotografia é enviada.
+     * O submitToBackend() é responsável por:
      *
-     * A sessão contém:
-     * - posições;
-     * - movimentos validados;
-     * - qualidade;
-     * - detecção facial;
-     * - pose;
-     * - sorriso;
-     * - timestamps.
+     * 1. criar/confirmar a sessão;
+     * 2. enviar os 10 vídeos;
+     * 3. confirmar GridFS;
+     * 4. confirmar MongoDB;
+     * 5. somente então devolver livenessPassed=true.
      */
 
     const data =
@@ -2835,21 +2880,169 @@
             selectedClient.id
         });
 
+    /*
+     * ====================================================
+     * DIAGNÓSTICO DA RESPOSTA
+     * ====================================================
+     */
+
+    console.info(
+      "[IdentityCenter] Resposta final da liveness:",
+      data
+    );
+
+    /*
+     * ====================================================
+     * CONFIRMAÇÃO FINAL
+     * ====================================================
+     */
+
+    const success =
+      data?.success === true;
+
+    const livenessPassed =
+      data?.livenessPassed === true;
+
+    const segmentsStored =
+      Number(
+        data?.segmentsStored ??
+        data?.livenessVideo?.data?.segmentsStored ??
+        data?.livenessVideo?.segmentsStored ??
+        0
+      );
+
+    const segmentsReceived =
+      Number(
+        data?.segmentsReceived ??
+        data?.livenessVideo?.data?.segmentsReceived ??
+        data?.livenessVideo?.segmentsReceived ??
+        0
+      );
+
+    const videoVerified =
+      data?.video?.verified === true ||
+      data?.livenessVideo?.data?.video?.verified === true ||
+      data?.livenessVideo?.video?.verified === true;
+
+    /*
+     * ====================================================
+     * SE O BACKEND NÃO CONFIRMOU
+     * ====================================================
+     */
+
     if (
-      data?.success !== true ||
-      data?.livenessPassed !== true
+      !success ||
+      !livenessPassed ||
+      segmentsStored !== 10 ||
+      !videoVerified
     ) {
-      throw new Error(
+      const diagnostics = {
+        success,
+        livenessPassed,
+        segmentsReceived,
+        segmentsStored,
+        videoVerified,
+        sessionId:
+          data?.sessionId ||
+          data?.livenessVideo?.data?.sessionId ||
+          data?.livenessVideo?.sessionId ||
+          null,
+
+        status:
+          data?.status ||
+          data?.livenessVideo?.data?.status ||
+          null,
+
+        video:
+          data?.video ||
+          data?.livenessVideo?.data?.video ||
+          data?.livenessVideo?.video ||
+          null,
+
+        error:
+          data?.error ||
+          null,
+
+        message:
+          data?.message ||
+          null,
+
+        issues:
+          Array.isArray(data?.issues)
+            ? data.issues
+            : []
+      };
+
+      console.error(
+        "[IdentityCenter] CONFIRMAÇÃO FINAL DA LIVENESS FALHOU:",
+        diagnostics
+      );
+
+      /*
+       * Construir uma mensagem útil para sabermos
+       * exatamente qual confirmação falhou.
+       */
+
+      const reasons = [];
+
+      if (!success) {
+        reasons.push(
+          "success não confirmado"
+        );
+      }
+
+      if (!livenessPassed) {
+        reasons.push(
+          "livenessPassed não confirmado"
+        );
+      }
+
+      if (
+        segmentsReceived !== 10
+      ) {
+        reasons.push(
+          `servidor recebeu ${segmentsReceived}/10 vídeos`
+        );
+      }
+
+      if (
+        segmentsStored !== 10
+      ) {
+        reasons.push(
+          `servidor armazenou ${segmentsStored}/10 vídeos`
+        );
+      }
+
+      if (!videoVerified) {
+        reasons.push(
+          "vídeos não foram marcados como verificados"
+        );
+      }
+
+      const serverMessage =
         data?.error ||
         data?.message ||
-        "A sessão de liveness não foi aprovada pelo servidor."
+        (
+          Array.isArray(data?.issues) &&
+          data.issues.length
+            ? data.issues.join(" ")
+            : ""
+        );
+
+      const diagnosticMessage =
+        serverMessage ||
+        reasons.join("; ") ||
+        "O servidor não confirmou a aprovação final.";
+
+      throw new Error(
+        `A confirmação final da liveness falhou. ${diagnosticMessage}`
       );
     }
 
     /*
-     * ======================================================
+     * ====================================================
      * LIVENESS APROVADA
-     * ======================================================
+     * ====================================================
      */
 
     if (applicationForm) {
@@ -2865,16 +3058,19 @@
     );
 
     setStatus(
-      "PRONTO PARA ENVIO À ADMINISTRAÇÃO"
+      "Liveness aprovada. As 10 posições e os 10 vídeos foram confirmados no servidor."
     );
 
     updateProgress({
-      current: 10,
-      total: 10
+      current:
+        POSITIONS.length,
+
+      total:
+        POSITIONS.length
     });
 
     /*
-     * O resultado biométrico antigo não é mais utilizado.
+     * Não mostrar resultado biométrico adicional.
      */
 
     const resultBox =
@@ -2889,23 +3085,27 @@
         "identity-result";
     }
 
-    /*
-     * Não mostramos score.
-     * Não mostramos captura.
-     * Não mostramos fotografia.
-     * Não criamos uma segunda aprovação.
-     */
-
   } catch (error) {
+
     if (applicationForm) {
       applicationForm.dataset.facialPreflight =
         "failed";
     }
 
     console.error(
-      "[IdentityCenter] liveness backend",
+      "[IdentityCenter] ERRO DEFINITIVO NA LIVENESS:",
       error
     );
+
+    /*
+     * ====================================================
+     * MOSTRAR A CAUSA REAL
+     * ====================================================
+     */
+
+    const message =
+      error?.message ||
+      "Não foi possível confirmar a sessão de liveness.";
 
     setState(
       "ERRO AO GUARDAR LIVENESS",
@@ -2913,8 +3113,7 @@
     );
 
     setStatus(
-      error?.message ||
-      "Não foi possível guardar a sessão de liveness."
+      message
     );
 
   } finally {
