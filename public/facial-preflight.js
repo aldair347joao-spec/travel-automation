@@ -3647,97 +3647,34 @@ async function beginVideoRecoveryOrFinish() {
    *
    * O sistema recupera somente os vídeos ausentes.
    */
+    /*
+   * Se as 10 posições foram reconhecidas, mas ainda existem
+   * vídeos em falta, NÃO entregamos um resultado final à UI.
+   *
+   * A sessão continua viva e recupera somente os vídeos
+   * que faltam.
+   *
+   * IMPORTANTE:
+   * - não resetamos a sessão;
+   * - não apagamos posições já reconhecidas;
+   * - não apagamos vídeos já válidos;
+   * - não chamamos onComplete();
+   * - não permitimos que a UI tente guardar a liveness;
+   * - só haverá resultado final depois dos 10 vídeos.
+   */
   if (
     completed &&
     !allTenVideosValid
   ) {
     await beginVideoRecoveryOrFinish();
 
-    return {
-      completed: true,
-
-      success: false,
-
-      passed: false,
-
-      clientId,
-
-      sessionId,
-
-      completedCount:
-        completedPositions.length,
-
-      total:
-        POSITIONS.length,
-
-      score:
-        Number(
-          score.toFixed(4)
-        ),
-
-      positions:
-        capturedPositions,
-
-      completedPositions:
-        completedPositions.slice(),
-
-      audioReady,
-
-      video: {
-        available: false,
-
-        supported:
-          videoRecordingSupported,
-
-        segmentCount:
-          validVideoSegments.length,
-
-        expectedSegments:
-          POSITIONS.length,
-
-        complete: false,
-
-        verified: false,
-
-        positions:
-          validVideoSegments.map(
-            segment => ({
-              position:
-                Number(
-                  segment.position
-                ),
-
-              positionId:
-                segment.positionId ||
-                null,
-
-              sequence:
-                Number(
-                  segment.sequence
-                ),
-
-              mimeType:
-                segment.mimeType,
-
-              size:
-                Number(
-                  segment.size
-                ),
-
-              durationMs:
-                Number(
-                  segment.durationMs
-                ),
-
-              startedAt:
-                segment.startedAt,
-
-              completedAt:
-                segment.completedAt
-            })
-          )
-      }
-    };
+    /*
+     * NÃO devolver aqui um objeto com completed=true.
+     *
+     * Para a camada UI, a sessão ainda NÃO terminou.
+     * O motor continua a trabalhar na recuperação.
+     */
+    return null;
   }
 
   /*
