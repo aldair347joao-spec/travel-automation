@@ -3881,110 +3881,144 @@ async function beginVideoRecoveryOrFinish() {
    */
 
     async function uploadVideoSegments(
-    targetClientId
-  ) {
-    if (!targetClientId) {
-      throw new Error(
-        "ID do cliente não encontrado para envio dos vídeos."
-      );
-    }
+  targetClientId
+) {
+  if (!targetClientId) {
+    throw new Error(
+      "ID do cliente não encontrado para envio dos vídeos."
+    );
+  }
 
-    /*
-     * Só enviamos quando existem exatamente
-     * os 10 vídeos obrigatórios.
-     */
+  /*
+   * ==========================================================
+   * VALIDAR OS 10 SEGMENTOS ANTES DO UPLOAD
+   * ==========================================================
+   */
+
+  const validSegments =
+    videoSegments
+      .filter(
+        segment =>
+          segment &&
+          segment.blob &&
+          segment.blob.size >=
+            CONFIG.minimumVideoSegmentBytes
+      )
+      .slice()
+      .sort(
+        (a, b) =>
+          Number(a.position) -
+          Number(b.position)
+      );
+
+  if (
+    validSegments.length !==
+    POSITIONS.length
+  ) {
+    throw new Error(
+      `A liveness possui ${validSegments.length} vídeos válidos, mas são necessários exatamente ${POSITIONS.length}.`
+    );
+  }
+
+  const positions =
+    new Set();
+
+  for (
+    const segment of validSegments
+  ) {
+    const position =
+      Number(
+        segment.position
+      );
 
     if (
-      videoSegments.length !==
-      POSITIONS.length
-    ) {
-      throw new Error(
-        `A liveness possui ${videoSegments.length} vídeos, mas são necessários exatamente ${POSITIONS.length}.`
-      );
-    }
-
-    const positions =
-      new Set();
-
-    for (
-      const segment of videoSegments
-    ) {
-      const position =
-        Number(
-          segment?.position
-        );
-
-      if (
-        !segment?.blob ||
-        segment.blob.size <
-          CONFIG.minimumVideoSegmentBytes
-      ) {
-        throw new Error(
-          `O vídeo da posição ${position || "desconhecida"} está vazio ou inválido.`
-        );
-      }
-
-      if (
-        !Number.isInteger(
-          position
-        ) ||
-        position < 1 ||
-        position > 10
-      ) {
-        throw new Error(
-          `Posição de vídeo inválida: ${segment?.position}`
-        );
-      }
-
-      if (
-        positions.has(
-          position
-        )
-      ) {
-        throw new Error(
-          `O vídeo da posição ${position} foi duplicado.`
-        );
-      }
-
-      positions.add(
+      !Number.isInteger(
         position
-      );
-    }
-
-    for (
-      let position = 1;
-      position <= 10;
-      position += 1
+      ) ||
+      position < 1 ||
+      position > 10
     ) {
-      if (
-        !positions.has(position)
-      ) {
-        throw new Error(
-          `O vídeo da posição ${position} não existe.`
-        );
-      }
-    }
-
-    const csrfToken =
-      getCsrfToken();
-
-    if (!csrfToken) {
       throw new Error(
-        "Token de segurança da sessão não encontrado. Atualize a página e tente novamente."
+        `Posição de vídeo inválida: ${segment?.position}`
       );
     }
 
+    if (
+      positions.has(
+        position
+      )
+    ) {
+      throw new Error(
+        `O vídeo da posição ${position} foi duplicado.`
+      );
+    }
+
+    positions.add(
+      position
+    );
+
+    if (
+      !segment.blob ||
+      segment.blob.size <
+        CONFIG.minimumVideoSegmentBytes
+    ) {
+      throw new Error(
+        `O vídeo da posição ${position} está vazio ou inválido.`
+      );
+    }
+  }
+
+  for (
+    let position = 1;
+    position <= 10;
+    position += 1
+  ) {
+    if (
+      !positions.has(
+        position
+      )
+    ) {
+      throw new Error(
+        `O vídeo da posição ${position} não existe.`
+      );
+    }
+  }
+
+  const csrfToken =
+    getCsrfToken();
+
+  if (!csrfToken) {
+    throw new Error(
+      "Token de segurança da sessão não encontrado. Atualize a página e tente novamente."
+    );
+  }
+
+  /*
+   * ==========================================================
+   * UMA TENTATIVA = UM FORMDATA NOVO
+   * ==========================================================
+   *
+   * Isto é fundamental.
+   *
+   * Nunca reutilizamos FormData depois de um fetch().
+   */
+
+  async function performUpload() {
     const formData =
       new FormData();
 
     formData.append(
       "clientId",
-      targetClientId
+      String(
+        targetClientId
+      )
     );
 
     formData.append(
       "sessionId",
-      sessionId
+      String(
+        sessionId
+      )
     );
 
     formData.append(
@@ -3992,20 +4026,7 @@ async function beginVideoRecoveryOrFinish() {
       "10"
     );
 
-    /*
-     * Enviar sempre pela ordem canónica 1..10.
-     */
-
-    const orderedSegments =
-      videoSegments
-        .slice()
-        .sort(
-          (a, b) =>
-            Number(a.position) -
-            Number(b.position)
-        );
-
-    orderedSegments.forEach(
+    validSegments.forEach(
       (
         segment,
         index
@@ -4015,10 +4036,27 @@ async function beginVideoRecoveryOrFinish() {
             segment.position
           );
 
+        const blob =
+          segment.blob;
+
+        const mimeType =
+          blob.type ||
+          segment.mimeType ||
+          "video/webm";
+
+        const extension =
+          mimeType
+            .toLowerCase()
+            .includes(
+              "mp4"
+            )
+            ? "mp4"
+            : "webm";
+
         formData.append(
           `livenessVideo_${index}`,
-          segment.blob,
-          `liveness-${sessionId}-position-${position}.webm`
+          blob,
+          `liveness-${sessionId}-position-${position}.${extension}`
         );
 
         formData.append(
@@ -4033,25 +4071,265 @@ async function beginVideoRecoveryOrFinish() {
               segment.positionId ||
               null,
 
-            mimeType:
-              segment.mimeType,
+            label:
+              segment.label ||
+              null,
+
+            instruction:
+              segment.instruction ||
+              null,
+
+            score:
+              segment.score ??
+              null,
+
+            positionScore:
+              segment.positionScore ??
+              null,
+
+            mimeType,
 
             size:
-              segment.size,
+              Number(
+                blob.size
+              ),
 
             durationMs:
-              segment.durationMs,
+              Number(
+                segment.durationMs ||
+                0
+              ),
 
             startedAt:
-              segment.startedAt,
+              segment.startedAt ||
+              null,
 
             completedAt:
-              segment.completedAt
+              segment.completedAt ||
+              null
           })
         );
       }
     );
 
+    console.info(
+      "[FacialPreflight] Enviando 10 vídeos:",
+      validSegments.map(
+        segment => ({
+          position:
+            Number(
+              segment.position
+            ),
+
+          size:
+            Number(
+              segment.blob?.size ||
+              0
+            ),
+
+          type:
+            segment.blob?.type ||
+            segment.mimeType ||
+            "video/webm"
+        })
+      )
+    );
+
+    const response =
+      await fetch(
+        `/api/clients/${encodeURIComponent(
+          targetClientId
+        )}/liveness-video`,
+        {
+          method:
+            "POST",
+
+          credentials:
+            "include",
+
+          headers: {
+            Accept:
+              "application/json",
+
+            "x-csrf-token":
+              csrfToken
+          },
+
+          body:
+            formData
+        }
+      );
+
+    const rawText =
+      await response.text();
+
+    let data = null;
+
+    try {
+      data =
+        rawText
+          ? JSON.parse(
+              rawText
+            )
+          : null;
+    } catch (_) {
+      data = null;
+    }
+
+    console.info(
+      "[FacialPreflight] Resposta do servidor:",
+      {
+        httpStatus:
+          response.status,
+
+        ok:
+          response.ok,
+
+        data
+      }
+    );
+
+    if (
+      !response.ok
+    ) {
+      throw new Error(
+        data?.message ||
+        data?.error ||
+        `O servidor recusou os vídeos de liveness. HTTP ${response.status}`
+      );
+    }
+
+    if (
+      data?.success !==
+      true
+    ) {
+      throw new Error(
+        data?.error ||
+        data?.message ||
+        "O servidor não confirmou o armazenamento dos vídeos."
+      );
+    }
+
+    if (
+      Number(
+        data?.segmentsStored
+      ) !== 10
+    ) {
+      throw new Error(
+        `O servidor armazenou ${Number(
+          data?.segmentsStored || 0
+        )} vídeos, mas eram esperados 10.`
+      );
+    }
+
+    if (
+      data?.video?.verified !==
+      true
+    ) {
+      throw new Error(
+        "O servidor recebeu os vídeos, mas não confirmou a verificação dos 10 vídeos."
+      );
+    }
+
+    if (
+      data?.livenessPassed !==
+      true
+    ) {
+      throw new Error(
+        "Os vídeos foram recebidos, mas a confirmação final da liveness falhou."
+      );
+    }
+
+    return data;
+  }
+
+  /*
+   * ==========================================================
+   * PRIMEIRA TENTATIVA
+   * ==========================================================
+   */
+
+  try {
+    const data =
+      await performUpload();
+
+    console.info(
+      "[FacialPreflight] Upload confirmado na primeira tentativa."
+    );
+
+    return {
+      uploaded:
+        true,
+
+      verified:
+        true,
+
+      segmentCount:
+        10,
+
+      data
+    };
+
+  } catch (
+    firstError
+  ) {
+    console.warn(
+      "[FacialPreflight] Primeira tentativa falhou:",
+      firstError
+    );
+  }
+
+  /*
+   * ==========================================================
+   * SEGUNDA TENTATIVA
+   * ==========================================================
+   *
+   * O FormData é reconstruído dentro de performUpload().
+   */
+
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        1500
+      )
+  );
+
+  try {
+    const data =
+      await performUpload();
+
+    console.info(
+      "[FacialPreflight] Upload confirmado na segunda tentativa."
+    );
+
+    return {
+      uploaded:
+        true,
+
+      verified:
+        true,
+
+      segmentCount:
+        10,
+
+      data
+    };
+
+  } catch (
+    secondError
+  ) {
+    console.error(
+      "[FacialPreflight] Segunda tentativa de upload falhou:",
+      secondError
+    );
+
+    throw new Error(
+      secondError?.message ||
+      "Não foi possível armazenar os 10 vídeos de liveness."
+    );
+  }
+}
     /*
      * Pequena função interna para uma tentativa.
      */
