@@ -199,15 +199,16 @@ const livenessSessionSchema =
       },
 
       status: {
-        type: String,
-        enum: [
-          "in_progress",
-          "passed",
-          "failed",
-          "requires_user"
-        ],
-        default: "in_progress"
-      },
+  type: String,
+  enum: [
+    "in_progress",
+    "video_pending",
+    "passed",
+    "failed",
+    "requires_user"
+  ],
+  default: "in_progress"
+},
 
       source: {
         type: String,
@@ -284,50 +285,93 @@ const livenessSessionSchema =
        */
 
       video: {
-        available: {
-          type: Boolean,
-          default: false
-        },
+  available: {
+    type: Boolean,
+    default: false
+  },
 
-        storage: {
-          type: String,
+  storage: {
+    type: String,
 
-          enum: [
-            "gridfs",
-            "none"
-          ],
+    enum: [
+      "gridfs",
+      "none"
+    ],
 
-          default: "none"
-        },
+    default: "none"
+  },
 
-        videoId: {
-          type: String,
-          default: null,
-          maxlength: 160
-        },
+  videoId: {
+    type: String,
+    default: null,
+    maxlength: 160
+  },
 
-        mimeType: {
-          type: String,
-          default: null,
-          maxlength: 100
-        },
+  mimeType: {
+    type: String,
+    default: null,
+    maxlength: 100
+  },
 
-        originalSize: {
-          type: Number,
-          min: 0,
-          default: null
-        },
+  originalSize: {
+    type: Number,
+    min: 0,
+    default: null
+  },
 
-        uploadedAt: {
-          type: Date,
-          default: null
-        },
+  uploadedAt: {
+    type: Date,
+    default: null
+  },
 
-        expiresAt: {
-          type: Date,
-          default: null
-        }
-      }
+  expiresAt: {
+    type: Date,
+    default: null
+  },
+
+  /*
+   * ========================================================
+   * CONTROLO DOS SEGMENTOS DA LIVENESS
+   * ========================================================
+   *
+   * Estes campos são obrigatórios porque o upload não é
+   * considerado concluído apenas por existir um ficheiro.
+   *
+   * O backend confirma:
+   *
+   * 10 recebidos
+   * 10 armazenados
+   * 10 verificados
+   *
+   * Somente depois disso a sessão pode ser aprovada.
+   */
+
+  segmentCount: {
+    type: Number,
+    min: 0,
+    max: 10,
+    default: 0
+  },
+
+  expectedSegments: {
+    type: Number,
+    min: 0,
+    max: 10,
+    default: 10
+  },
+
+  storedCount: {
+    type: Number,
+    min: 0,
+    max: 10,
+    default: 0
+  },
+
+  verified: {
+    type: Boolean,
+    default: false
+  }
+}
     },
     {
       _id: false
