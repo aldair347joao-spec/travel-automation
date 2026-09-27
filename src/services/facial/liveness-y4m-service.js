@@ -1,226 +1,84 @@
 "use strict";
 
-/*
- * ============================================================
- * TRAVEL AUTOMATION
- * LIVENESS Y4M SERVICE
- * ============================================================
- *
- * Converte um segmento REAL de liveness já aprovado
- * para Y4M, formato que o Chromium pode utilizar como
- * fonte de câmera através de:
- *
- * --use-file-for-fake-video-capture
- *
- * IMPORTANTE:
- *
- * Este serviço NÃO:
- *
- * - cria movimentos artificiais;
- * - altera a posição do rosto;
- * - gera uma pessoa;
- * - modifica o conteúdo biométrico;
- * - substitui o liveness original;
- * - grava novamente no GridFS.
- *
- * Ele apenas:
- *
- *   vídeo real armazenado
- *          ↓
- *       FFmpeg
- *          ↓
- *     arquivo Y4M
- *
- * O vídeo original continua intacto no GridFS.
- * ============================================================
- */
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const crypto = require("crypto");
+const { spawn } = require("child_process");
 
-const fs =
-  require("fs");
+const logger = require("../../utils/logger");
 
-const fsp =
-  fs.promises;
+let ffmpegStaticPath = null;
 
-const path =
-  require("path");
+try {
+  ffmpegStaticPath = require("ffmpeg-static");
+} catch (error) {
+  logger.warn(
+    "ffmpeg-static could not be loaded",
+    {
+      error:
+        error?.message ||
+        String(error)
+    }
+  );
+}
 
-const os =
-  require("os");
+const DEFAULT_WIDTH = 640;
+const DEFAULT_HEIGHT = 480;
+const DEFAULT_FPS = 30;
 
-const crypto =
-  require("crypto");
-
-const {
-  spawn
-} =
-  require("child_process");
-
-const logger =
-  require("../../utils/logger");
-
-
-/*
- * ============================================================
- * CONFIGURAÇÃO
- * ============================================================
- */
-
-/*
- * Resolução padrão.
- *
- * 640x480 reduz bastante o tamanho do Y4M comparado com
- * 1280x720 e continua sendo uma resolução de webcam válida.
- *
- * Pode ser alterado por:
- *
- * LIVENESS_Y4M_WIDTH
- * LIVENESS_Y4M_HEIGHT
- */
-
-const DEFAULT_WIDTH =
+const WIDTH =
   Number(
     process.env.LIVENESS_Y4M_WIDTH
   ) ||
-  640;
+  DEFAULT_WIDTH;
 
-
-const DEFAULT_HEIGHT =
+const HEIGHT =
   Number(
     process.env.LIVENESS_Y4M_HEIGHT
   ) ||
-  480;
+  DEFAULT_HEIGHT;
 
-
-/*
- * Framerate utilizado pela câmera virtual.
- */
-
-const DEFAULT_FPS =
+const FPS =
   Number(
     process.env.LIVENESS_Y4M_FPS
   ) ||
-  30;
+  DEFAULT_FPS;
 
+const FFMPEG_TIMEOUT_MS =
+  Number(
+    process.env.LIVENESS_Y4M_FFMPEG_TIMEOUT_MS
+  ) ||
+  120000;
 
-/*
- * Diretório temporário.
- *
- * Nunca usamos uma pasta pública do projeto.
- */
-
-const DEFAULT_DIRECTORY =
+const CACHE_DIRECTORY =
   process.env.LIVENESS_Y4M_DIRECTORY ||
   path.join(
     os.tmpdir(),
     "travel-automation-liveness-y4m"
   );
 
-
-/*
- * Tempo máximo de execução do FFmpeg.
- */
-
-const DEFAULT_FFMPEG_TIMEOUT =
-  Number(
-    process.env.LIVENESS_Y4M_FFMPEG_TIMEOUT_MS
-  ) ||
-  120000;
-
-
-/*
- * ============================================================
- * MIME
- * ============================================================
- */
-
-function normalizeMimeType(
-  mimeType
-) {
-
-  const value =
-    String(
-      mimeType ||
-        ""
-    )
-      .trim()
-      .toLowerCase()
-      .split(";")[0]
-      .trim();
-
-
-  if (
-    value ===
-    "video/webm"
-  ) {
-    return "video/webm";
-  }
-
-
-  if (
-    value ===
-    "video/mp4"
-  ) {
-    return "video/mp4";
-  }
-
-
-  if (
-    value ===
-    "video/quicktime"
-  ) {
-    return "video/quicktime";
-  }
-
-
-  return null;
+function ensureDirectory(directory) {
+  fs.mkdirSync(
+    directory,
+    {
+      recursive: true
+    }
+  );
 }
 
-
-/*
- * ============================================================
- * EXTENSÃO
- * ============================================================
- */
-
-function extensionForMime(
-  mimeType
-) {
-
-  switch (
-    normalizeMimeType(
-      mimeType
-    )
-  ) {
-
-    case "video/mp4":
-      return ".mp4";
-
-    case "video/quicktime":
-      return ".mov";
-
-    case "video/webm":
-    default:
-      return ".webm";
-  }
+function safeString(value) {
+  return String(
+    value || ""
+  )
+    .trim()
+    .replace(
+      /[^a-zA-Z0-9._-]/g,
+      "_"
+    );
 }
 
-
-/*
- * ============================================================
- * FFmpeg
- * ============================================================
- *
- * Ordem:
- *
- * 1. LIVENESS_FFMPEG_PATH
- * 2. FFMPEG_PATH
- * 3. "ffmpeg" no PATH do sistema
- *
- * Não usamos shell.
- */
-
-function getFfmpegBinary() {
-
+function resolveFfmpegPath() {
   const configured =
     String(
       process.env.LIVENESS_FFMPEG_PATH ||
@@ -228,143 +86,567 @@ function getFfmpegBinary() {
       ""
     ).trim();
 
+  if (configured) {
+    if (
+      fs.existsSync(configured)
+    ) {
+      return configured;
+    }
 
-  if (
-    configured
-  ) {
-    return configured;
+    throw new Error(
+      `Configured FFmpeg path does not exist: ${configured}`
+    );
   }
 
+  if (
+    ffmpegStaticPath &&
+    fs.existsSync(
+      ffmpegStaticPath
+    )
+  ) {
+    return ffmpegStaticPath;
+  }
 
   return "ffmpeg";
 }
-
-
-/*
- * ============================================================
- * HASH
- * ============================================================
- *
- * Gera uma chave estável para o arquivo temporário.
- *
- * Assim, se a mesma posição já tiver sido convertida,
- * não precisamos executar FFmpeg novamente.
- */
 
 function createCacheKey({
   videoId,
   position,
   buffer
 }) {
-
   const hash =
     crypto
-      .createHash("sha256");
+      .createHash("sha256")
+      .update(
+        buffer
+      )
+      .digest("hex");
 
+  return crypto
+    .createHash("sha256")
+    .update(
+      JSON.stringify({
+        videoId:
+          videoId || null,
 
-  hash.update(
-    String(
-      videoId ||
-      ""
+        position:
+          Number(position) || null,
+
+        width:
+          WIDTH,
+
+        height:
+          HEIGHT,
+
+        fps:
+          FPS,
+
+        sourceHash:
+          hash
+      })
     )
-  );
+    .digest("hex");
+}
 
-
-  hash.update(
-    "|"
-  );
-
-
-  hash.update(
-    String(
-      position ||
-      ""
-    )
-  );
-
-
-  /*
-   * O conteúdo também participa da chave.
-   *
-   * Isso evita reutilizar um Y4M antigo se o vídeo tiver
-   * sido substituído mantendo o mesmo identificador lógico.
-   */
-
+function validateConfiguration() {
   if (
-    Buffer.isBuffer(
-      buffer
-    )
+    !Number.isInteger(WIDTH) ||
+    WIDTH <= 0
   ) {
-
-    hash.update(
-      buffer
+    throw new Error(
+      `Invalid LIVENESS_Y4M_WIDTH: ${WIDTH}`
     );
   }
 
-
-  return hash.digest(
-    "hex"
-  );
-}
-
-
-/*
- * ============================================================
- * DIRETÓRIO
- * ============================================================
- */
-
-async function ensureDirectory() {
-
-  await fsp.mkdir(
-    DEFAULT_DIRECTORY,
-    {
-      recursive:
-        true
-    }
-  );
-
-
-  return DEFAULT_DIRECTORY;
-}
-
-
-/*
- * ============================================================
- * LIMPEZA SEGURA
- * ============================================================
- */
-
-async function safeUnlink(
-  filePath
-) {
-
   if (
-    !filePath
+    !Number.isInteger(HEIGHT) ||
+    HEIGHT <= 0
   ) {
-    return;
+    throw new Error(
+      `Invalid LIVENESS_Y4M_HEIGHT: ${HEIGHT}`
+    );
   }
 
+  if (
+    !Number.isInteger(FPS) ||
+    FPS <= 0
+  ) {
+    throw new Error(
+      `Invalid LIVENESS_Y4M_FPS: ${FPS}`
+    );
+  }
+}
 
-  try {
+function validateY4mFile(filePath) {
+  if (
+    !fs.existsSync(filePath)
+  ) {
+    throw new Error(
+      `Y4M file was not created: ${filePath}`
+    );
+  }
 
-    await fsp.unlink(
+  const stats =
+    fs.statSync(
       filePath
     );
 
-  } catch (
-    error
+  if (
+    !stats.isFile() ||
+    stats.size < 32
   ) {
+    throw new Error(
+      `Y4M file is empty or invalid: ${filePath}`
+    );
+  }
+
+  const fd =
+    fs.openSync(
+      filePath,
+      "r"
+    );
+
+  try {
+    const headerBuffer =
+      Buffer.alloc(512);
+
+    const bytesRead =
+      fs.readSync(
+        fd,
+        headerBuffer,
+        0,
+        headerBuffer.length,
+        0
+      );
+
+    const header =
+      headerBuffer
+        .subarray(
+          0,
+          bytesRead
+        )
+        .toString(
+          "ascii"
+        );
 
     if (
-      error?.code !==
-      "ENOENT"
+      !header.startsWith(
+        "YUV4MPEG2"
+      )
     ) {
+      throw new Error(
+        "Generated file does not contain a valid YUV4MPEG2 header."
+      );
+    }
 
-      logger.warn(
-        "Could not remove temporary liveness file",
+    const expectedWidth =
+      `W${WIDTH}`;
+
+    const expectedHeight =
+      `H${HEIGHT}`;
+
+    if (
+      !header.includes(
+        expectedWidth
+      ) ||
+      !header.includes(
+        expectedHeight
+      )
+    ) {
+      throw new Error(
+        `Generated Y4M dimensions are not ${WIDTH}x${HEIGHT}.`
+      );
+    }
+
+    return {
+      valid: true,
+
+      size:
+        stats.size,
+
+      header:
+        header
+          .split("\n")[0]
+          .trim()
+    };
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function runFfmpeg({
+  inputPath,
+  outputPath
+}) {
+  return new Promise(
+    (resolve, reject) => {
+      const ffmpeg =
+        resolveFfmpegPath();
+
+      const args = [
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+
+        "-i",
+        inputPath,
+
+        "-vf",
+        [
+          `scale=${WIDTH}:${HEIGHT}:force_original_aspect_ratio=decrease`,
+          `pad=${WIDTH}:${HEIGHT}:(ow-iw)/2:(oh-ih)/2`,
+          "format=yuv420p"
+        ].join(","),
+
+        "-r",
+        String(FPS),
+
+        "-an",
+
+        "-f",
+        "yuv4mpegpipe",
+
+        outputPath
+      ];
+
+      logger.info(
+        "Starting liveness video conversion to Y4M",
         {
-          filePath,
+          inputPath,
+          outputPath,
+          width: WIDTH,
+          height: HEIGHT,
+          fps: FPS,
+          ffmpeg:
+            ffmpeg ===
+            "ffmpeg"
+              ? "system"
+              : ffmpeg
+        }
+      );
+
+      const child =
+        spawn(
+          ffmpeg,
+          args,
+          {
+            stdio: [
+              "ignore",
+              "ignore",
+              "pipe"
+            ]
+          }
+        );
+
+      let stderr = "";
+
+      let finished = false;
+
+      const timer =
+        setTimeout(
+          () => {
+            if (finished) {
+              return;
+            }
+
+            finished = true;
+
+            try {
+              child.kill(
+                "SIGKILL"
+              );
+            } catch {
+              // Ignore process termination errors.
+            }
+
+            reject(
+              new Error(
+                `FFmpeg conversion timed out after ${FFMPEG_TIMEOUT_MS}ms.`
+              )
+            );
+          },
+          FFMPEG_TIMEOUT_MS
+        );
+
+      child.stderr.on(
+        "data",
+        chunk => {
+          stderr +=
+            chunk.toString();
+
+          if (
+            stderr.length >
+            10000
+          ) {
+            stderr =
+              stderr.slice(
+                -10000
+              );
+          }
+        }
+      );
+
+      child.once(
+        "error",
+        error => {
+          if (finished) {
+            return;
+          }
+
+          finished = true;
+
+          clearTimeout(
+            timer
+          );
+
+          reject(
+            new Error(
+              `FFmpeg could not be started: ${
+                error?.message ||
+                String(error)
+              }`
+            )
+          );
+        }
+      );
+
+      child.once(
+        "close",
+        code => {
+          if (finished) {
+            return;
+          }
+
+          finished = true;
+
+          clearTimeout(
+            timer
+          );
+
+          if (
+            code !== 0
+          ) {
+            reject(
+              new Error(
+                `FFmpeg exited with code ${code}. ${
+                  stderr.trim()
+                }`
+              )
+            );
+
+            return;
+          }
+
+          resolve({
+            success: true
+          });
+        }
+      );
+    }
+  );
+}
+
+async function convert({
+  buffer,
+  videoId = null,
+  position = null,
+  filename = "liveness.webm",
+  mimeType = "video/webm"
+}) {
+  validateConfiguration();
+
+  if (
+    !Buffer.isBuffer(buffer) ||
+    buffer.length === 0
+  ) {
+    throw new Error(
+      "A non-empty video buffer is required."
+    );
+  }
+
+  ensureDirectory(
+    CACHE_DIRECTORY
+  );
+
+  const cacheKey =
+    createCacheKey({
+      videoId,
+      position,
+      buffer
+    });
+
+  const cachePath =
+    path.join(
+      CACHE_DIRECTORY,
+      `${safeString(
+        videoId ||
+          `position-${position || "unknown"}`
+      )}-${cacheKey}.y4m`
+    );
+
+  if (
+    fs.existsSync(
+      cachePath
+    )
+  ) {
+    try {
+      const validation =
+        validateY4mFile(
+          cachePath
+        );
+
+      logger.info(
+        "Using cached liveness Y4M",
+        {
+          applicationId:
+            null,
+
+          videoId,
+          position,
+          cachePath,
+          size:
+            validation.size
+        }
+      );
+
+      return {
+        success: true,
+        path: cachePath,
+        cached: true,
+        width: WIDTH,
+        height: HEIGHT,
+        fps: FPS,
+        videoId,
+        position
+      };
+    } catch {
+      try {
+        fs.unlinkSync(
+          cachePath
+        );
+      } catch {
+        // Ignore cleanup failure.
+      }
+    }
+  }
+
+  const temporaryDirectory =
+    fs.mkdtempSync(
+      path.join(
+        os.tmpdir(),
+        "travel-liveness-"
+      )
+    );
+
+  const extension =
+    path.extname(
+      filename ||
+        ""
+    ) ||
+    ".webm";
+
+  const inputPath =
+    path.join(
+      temporaryDirectory,
+      `input${extension}`
+    );
+
+  const temporaryY4mPath =
+    path.join(
+      temporaryDirectory,
+      "output.y4m"
+    );
+
+  try {
+    fs.writeFileSync(
+      inputPath,
+      buffer
+    );
+
+    logger.info(
+      "Converting decrypted liveness video",
+      {
+        videoId,
+        position,
+        filename,
+        mimeType,
+        inputBytes:
+          buffer.length
+      }
+    );
+
+    await runFfmpeg({
+      inputPath,
+      outputPath:
+        temporaryY4mPath
+    });
+
+    const validation =
+      validateY4mFile(
+        temporaryY4mPath
+      );
+
+    /*
+     * Move atomically into the cache.
+     * This prevents another process from seeing
+     * a partially generated Y4M file.
+     */
+    const temporaryCachePath =
+      `${cachePath}.tmp-${process.pid}-${Date.now()}`;
+
+    fs.copyFileSync(
+      temporaryY4mPath,
+      temporaryCachePath
+    );
+
+    validateY4mFile(
+      temporaryCachePath
+    );
+
+    fs.renameSync(
+      temporaryCachePath,
+      cachePath
+    );
+
+    logger.info(
+      "Liveness video successfully converted to Y4M",
+      {
+        videoId,
+        position,
+        cachePath,
+        size:
+          validation.size,
+        width: WIDTH,
+        height: HEIGHT,
+        fps: FPS
+      }
+    );
+
+    return {
+      success: true,
+      path: cachePath,
+      cached: false,
+      width: WIDTH,
+      height: HEIGHT,
+      fps: FPS,
+      videoId,
+      position
+    };
+  } finally {
+    try {
+      fs.rmSync(
+        temporaryDirectory,
+        {
+          recursive: true,
+          force: true
+        }
+      );
+    } catch (error) {
+      logger.warn(
+        "Could not remove temporary liveness conversion directory",
+        {
           error:
             error?.message ||
             String(error)
@@ -374,933 +656,102 @@ async function safeUnlink(
   }
 }
 
+function clearCache() {
+  if (
+    !fs.existsSync(
+      CACHE_DIRECTORY
+    )
+  ) {
+    return {
+      success: true,
+      removed: 0
+    };
+  }
 
-/*
- * ============================================================
- * EXECUTAR FFmpeg
- * ============================================================
- */
+  let removed = 0;
 
-function runFfmpeg({
-  inputPath,
-  outputPath,
-  width,
-  height,
-  fps,
-  timeoutMs
-}) {
-
-  return new Promise(
-    (
-      resolve,
-      reject
-    ) => {
-
-      const ffmpeg =
-        getFfmpegBinary();
-
-
-      const args = [
-        "-hide_banner",
-        "-loglevel",
-        "error",
-
-        "-y",
-
-        "-i",
-        inputPath,
-
-        /*
-         * Padronizar framerate.
-         */
-
-        "-vf",
-        `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2,format=yuv420p`,
-
-        "-r",
-        String(
-          fps
-        ),
-
-        /*
-         * Y4M não precisa de áudio.
-         */
-
-        "-an",
-
-        /*
-         * Formato de saída exigido pelo Chromium.
-         */
-
-        "-f",
-        "yuv4mpegpipe",
-
-        outputPath
-      ];
-
-
-      logger.info(
-        "Starting liveness video to Y4M conversion",
-        {
-          ffmpeg,
-          inputPath,
-          outputPath,
-          width,
-          height,
-          fps
-        }
+  for (
+    const filename of
+    fs.readdirSync(
+      CACHE_DIRECTORY
+    )
+  ) {
+    const filePath =
+      path.join(
+        CACHE_DIRECTORY,
+        filename
       );
 
+    try {
+      const stats =
+        fs.statSync(
+          filePath
+        );
 
-      let stderr =
-        "";
-
-
-      let settled =
-        false;
-
-
-      const finishError =
-        error => {
-
-          if (
-            settled
-          ) {
-            return;
-          }
-
-
-          settled =
-            true;
-
-
-          reject(
-            error
-          );
-        };
-
-
-      const finishSuccess =
-        result => {
-
-          if (
-            settled
-          ) {
-            return;
-          }
-
-
-          settled =
-            true;
-
-
-          resolve(
-            result
-          );
-        };
-
-
-      let child;
-
-
-      try {
-
-        /*
-         * shell:false é intencional.
-         *
-         * Nenhum argumento vem de shell.
-         */
-
-        child =
-          spawn(
-            ffmpeg,
-            args,
-            {
-              shell:
-                false,
-
-              windowsHide:
-                true
-            }
-          );
-
-      } catch (
-        error
+      if (
+        stats.isFile()
       ) {
-
-        finishError(
-          error
+        fs.unlinkSync(
+          filePath
         );
 
-        return;
+        removed += 1;
       }
-
-
-      const timer =
-        setTimeout(
-          () => {
-
-            try {
-
-              child.kill(
-                "SIGKILL"
-              );
-
-            } catch {}
-
-
-            const error =
-              new Error(
-                `FFmpeg excedeu o tempo máximo de ${timeoutMs} ms.`
-              );
-
-
-            error.code =
-              "LIVENESS_Y4M_FFMPEG_TIMEOUT";
-
-
-            finishError(
-              error
-            );
-
-          },
-          timeoutMs
-        );
-
-
-      child.stderr.on(
-        "data",
-        chunk => {
-
-          stderr +=
-            chunk.toString();
-
-          /*
-           * Evitar crescimento ilimitado do log.
-           */
-
-          if (
-            stderr.length >
-            20000
-          ) {
-
-            stderr =
-              stderr.slice(
-                -20000
-              );
-          }
-        }
-      );
-
-
-      child.once(
-        "error",
-        error => {
-
-          clearTimeout(
-            timer
-          );
-
-
-          if (
-            error?.code ===
-            "ENOENT"
-          ) {
-
-            const ffmpegError =
-              new Error(
-                "FFmpeg não foi encontrado. Configure LIVENESS_FFMPEG_PATH ou instale FFmpeg no ambiente do servidor."
-              );
-
-
-            ffmpegError.code =
-              "LIVENESS_Y4M_FFMPEG_NOT_FOUND";
-
-
-            finishError(
-              ffmpegError
-            );
-
-            return;
-          }
-
-
-          finishError(
-            error
-          );
-        }
-      );
-
-
-      child.once(
-        "close",
-        code => {
-
-          clearTimeout(
-            timer
-          );
-
-
-          if (
-            code === 0
-          ) {
-
-            finishSuccess({
-              code,
-              stderr
-            });
-
-            return;
-          }
-
-
-          const error =
-            new Error(
-              `FFmpeg falhou ao converter o vídeo para Y4M. Código: ${code}. ${stderr || "Sem detalhes adicionais."}`
-            );
-
-
-          error.code =
-            "LIVENESS_Y4M_FFMPEG_FAILED";
-
-
-          error.ffmpegExitCode =
-            code;
-
-
-          error.stderr =
-            stderr;
-
-
-          finishError(
-            error
-          );
+    } catch (error) {
+      logger.warn(
+        "Could not remove Y4M cache file",
+        {
+          filePath,
+          error:
+            error?.message ||
+            String(error)
         }
       );
     }
-  );
-}
-
-
-/*
- * ============================================================
- * VALIDAR Y4M
- * ============================================================
- */
-
-async function validateY4M(
-  filePath,
-  width,
-  height
-) {
-
-  const stat =
-    await fsp.stat(
-      filePath
-    );
-
-
-  if (
-    !stat.isFile()
-  ) {
-
-    throw new Error(
-      "O resultado Y4M não é um ficheiro válido."
-    );
   }
-
-
-  if (
-    stat.size <
-    20
-  ) {
-
-    throw new Error(
-      "O arquivo Y4M gerado está vazio ou incompleto."
-    );
-  }
-
-
-  /*
-   * Lemos apenas o cabeçalho.
-   */
-
-  const handle =
-    await fsp.open(
-      filePath,
-      "r"
-    );
-
-
-  try {
-
-    const buffer =
-      Buffer.alloc(
-        256
-      );
-
-
-    const result =
-      await handle.read(
-        buffer,
-        0,
-        buffer.length,
-        0
-      );
-
-
-    const header =
-      buffer
-        .subarray(
-          0,
-          result.bytesRead
-        )
-        .toString(
-          "ascii"
-        );
-
-
-    if (
-      !header.startsWith(
-        "YUV4MPEG2"
-      )
-    ) {
-
-      throw new Error(
-        "O FFmpeg não produziu um arquivo Y4M válido."
-      );
-    }
-
-
-    /*
-     * Verificação adicional da resolução.
-     */
-
-    const expectedResolution =
-      `W${width} H${height}`;
-
-
-    if (
-      !header.includes(
-        expectedResolution
-      )
-    ) {
-
-      throw new Error(
-        `O Y4M possui resolução diferente da esperada (${expectedResolution}).`
-      );
-    }
-
-  } finally {
-
-    await handle.close();
-  }
-
 
   return {
-    path:
-      filePath,
-
-    size:
-      stat.size,
-
-    width,
-
-    height
+    success: true,
+    removed
   };
 }
 
+function getConfig() {
+  let ffmpegPath;
 
-/*
- * ============================================================
- * SERVIÇO
- * ============================================================
- */
-
-class LivenessY4MService {
-
-  constructor({
-    width =
-      DEFAULT_WIDTH,
-
-    height =
-      DEFAULT_HEIGHT,
-
-    fps =
-      DEFAULT_FPS,
-
-    directory =
-      DEFAULT_DIRECTORY,
-
-    timeoutMs =
-      DEFAULT_FFMPEG_TIMEOUT
-  } = {}) {
-
-    this.width =
-      Number(
-        width
-      );
-
-    this.height =
-      Number(
-        height
-      );
-
-    this.fps =
-      Number(
-        fps
-      );
-
-    this.directory =
-      directory;
-
-    this.timeoutMs =
-      Number(
-        timeoutMs
-      );
-
-
-    if (
-      !Number.isInteger(
-        this.width
-      ) ||
-      this.width <= 0
-    ) {
-
-      throw new Error(
-        "Liveness Y4M width inválida."
-      );
-    }
-
-
-    if (
-      !Number.isInteger(
-        this.height
-      ) ||
-      this.height <= 0
-    ) {
-
-      throw new Error(
-        "Liveness Y4M height inválida."
-      );
-    }
-
-
-    if (
-      !Number.isInteger(
-        this.fps
-      ) ||
-      this.fps <= 0
-    ) {
-
-      throw new Error(
-        "Liveness Y4M FPS inválido."
-      );
-    }
+  try {
+    ffmpegPath =
+      resolveFfmpegPath();
+  } catch (error) {
+    ffmpegPath = null;
   }
 
-
-  /*
-   * ==========================================================
-   * CONVERTER SEGMENTO
-   * ==========================================================
-   */
-
-  async convert({
-    buffer,
-    mimeType,
-    videoId = null,
-    position = null,
-    force = false
-  }) {
-
-    if (
-      !Buffer.isBuffer(
-        buffer
-      )
-    ) {
-
-      throw new TypeError(
-        "O segmento de liveness para conversão deve ser um Buffer."
-      );
-    }
-
-
-    if (
-      !buffer.length
-    ) {
-
-      throw new Error(
-        "O segmento de liveness para conversão está vazio."
-      );
-    }
-
-
-    const normalizedMime =
-      normalizeMimeType(
-        mimeType
-      );
-
-
-    if (
-      !normalizedMime
-    ) {
-
-      throw new Error(
-        "O MIME do segmento de liveness não é suportado para conversão Y4M."
-      );
-    }
-
-
-    await ensureDirectory();
-
-
-    const cacheKey =
-      createCacheKey({
-        videoId,
-        position,
-        buffer
-      });
-
-
-    const y4mPath =
-      path.join(
-        this.directory,
-        `liveness-${cacheKey}-${this.width}x${this.height}-${this.fps}.y4m`
-      );
-
-
-    /*
-     * --------------------------------------------------------
-     * CACHE
-     * --------------------------------------------------------
-     */
-
-    if (
-      !force
-    ) {
-
-      try {
-
-        const cached =
-          await validateY4M(
-            y4mPath,
-            this.width,
-            this.height
-          );
-
-
-        logger.info(
-          "Using cached liveness Y4M",
-          {
-            videoId,
-            position,
-            path:
-              y4mPath,
-            size:
-              cached.size
-          }
-        );
-
-
-        return {
-          ...cached,
-
-          videoId,
-          position,
-          mimeType:
-            normalizedMime,
-
-          cached:
-            true
-        };
-
-      } catch {
-        /*
-         * Cache inexistente ou inválido.
-         * Continuamos com a conversão.
-         */
-      }
-    }
-
-
-    /*
-     * --------------------------------------------------------
-     * ARQUIVO DE ENTRADA
-     * --------------------------------------------------------
-     */
-
-    const inputExtension =
-      extensionForMime(
-        normalizedMime
-      );
-
-
-    const inputPath =
-      path.join(
-        this.directory,
-        `input-${cacheKey}${inputExtension}`
-      );
-
-
-    /*
-     * Arquivo temporário de saída.
-     *
-     * Só renomeamos para o nome definitivo depois que
-     * a conversão e validação terminarem.
-     */
-
-    const temporaryOutputPath =
-      path.join(
-        this.directory,
-        `output-${cacheKey}-${Date.now()}.y4m`
-      );
-
-
-    try {
-
-      await fsp.writeFile(
-        inputPath,
-        buffer
-      );
-
-
-      logger.info(
-        "Converting real liveness segment to Y4M",
-        {
-          videoId,
-          position,
-          mimeType:
-            normalizedMime,
-          inputSize:
-            buffer.length,
-          output:
-            y4mPath,
-          width:
-            this.width,
-          height:
-            this.height,
-          fps:
-            this.fps
-        }
-      );
-
-
-      await runFfmpeg({
-        inputPath,
-        outputPath:
-          temporaryOutputPath,
-
-        width:
-          this.width,
-
-        height:
-          this.height,
-
-        fps:
-          this.fps,
-
-        timeoutMs:
-          this.timeoutMs
-      });
-
-
-      const validated =
-        await validateY4M(
-          temporaryOutputPath,
-          this.width,
-          this.height
-        );
-
-
-      /*
-       * ------------------------------------------------------
-       * ATOMICIDADE
-       * ------------------------------------------------------
-       *
-       * O arquivo só aparece no cache definitivo depois
-       * que o FFmpeg terminou e o Y4M foi validado.
-       */
-
-      await safeUnlink(
-        y4mPath
-      );
-
-
-      await fsp.rename(
-        temporaryOutputPath,
-        y4mPath
-      );
-
-
-      const finalValidated =
-        await validateY4M(
-          y4mPath,
-          this.width,
-          this.height
-        );
-
-
-      return {
-        ...finalValidated,
-
-        videoId,
-        position,
-
-        mimeType:
-          normalizedMime,
-
-        cached:
-          false
-      };
-
-    } catch (
-      error
-    ) {
-
-      logger.error(
-        "Failed to convert liveness segment to Y4M",
-        {
-          videoId,
-          position,
-          mimeType:
-            normalizedMime,
-
-          error:
-            error?.message ||
-            String(error),
-
-          code:
-            error?.code ||
-            null
-        }
-      );
-
-
-      throw error;
-
-    } finally {
-
-      /*
-       * Nunca deixamos o vídeo WebM/MP4 descriptografado
-       * no diretório temporário depois da conversão.
-       */
-
-      await safeUnlink(
-        inputPath
-      );
-
-
-      await safeUnlink(
-        temporaryOutputPath
-      );
-    }
-  }
-
-
-  /*
-   * ==========================================================
-   * LIMPAR CACHE
-   * ==========================================================
-   *
-   * Não é chamado automaticamente durante cada conversão.
-   * O cache pode ser reutilizado enquanto a automação estiver
-   * utilizando a mesma sessão.
-   */
-
-  async clearCache() {
-
-    await ensureDirectory();
-
-
-    const entries =
-      await fsp.readdir(
-        this.directory,
-        {
-          withFileTypes:
-            true
-        }
-      );
-
-
-    let removed =
-      0;
-
-
-    for (
-      const entry
-      of entries
-    ) {
-
-      if (
-        !entry.isFile()
-      ) {
-        continue;
-      }
-
-
-      if (
-        !entry.name.endsWith(
-          ".y4m"
+  return {
+    width: WIDTH,
+    height: HEIGHT,
+    fps: FPS,
+
+    directory:
+      CACHE_DIRECTORY,
+
+    ffmpeg:
+      ffmpegPath,
+
+    ffmpegStatic:
+      Boolean(
+        ffmpegStaticPath &&
+        fs.existsSync(
+          ffmpegStaticPath
         )
-      ) {
-        continue;
-      }
+      ),
 
-
-      const filePath =
-        path.join(
-          this.directory,
-          entry.name
-        );
-
-
-      await safeUnlink(
-        filePath
-      );
-
-
-      removed +=
-        1;
-    }
-
-
-    return {
-      removed
-    };
-  }
-
-
-  /*
-   * ==========================================================
-   * INFO
-   * ==========================================================
-   */
-
-  getConfig() {
-
-    return {
-      width:
-        this.width,
-
-      height:
-        this.height,
-
-      fps:
-        this.fps,
-
-      directory:
-        this.directory,
-
-      timeoutMs:
-        this.timeoutMs,
-
-      ffmpeg:
-        getFfmpegBinary()
-    };
-  }
+    timeoutMs:
+      FFMPEG_TIMEOUT_MS
+  };
 }
 
-
-module.exports =
-  LivenessY4MService;
+module.exports = {
+  convert,
+  clearCache,
+  getConfig
+};
