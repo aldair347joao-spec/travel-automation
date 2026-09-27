@@ -293,6 +293,26 @@ function normalizePosition(
   value
 ) {
 
+  const POSITION_MAP = {
+    frontal: 1,
+    left: 2,
+    right: 3,
+    up: 4,
+    down: 5,
+    left_up: 6,
+    right_up: 7,
+    left_down: 8,
+    right_down: 9,
+    smile: 10
+  };
+
+
+  /*
+   * ----------------------------------------------------------
+   * Já recebeu uma posição numérica?
+   * ----------------------------------------------------------
+   */
+
   const number =
     Number(
       value
@@ -300,25 +320,44 @@ function normalizePosition(
 
 
   if (
-    !Number.isInteger(
+    Number.isInteger(
       number
-    )
+    ) &&
+    number >= 1 &&
+    number <= MAX_POSITIONS
   ) {
-    return null;
+    return number;
   }
+
+
+  /*
+   * ----------------------------------------------------------
+   * Recebeu o ID textual usado pelo motor facial?
+   * ----------------------------------------------------------
+   */
+
+  const normalized =
+    String(
+      value ?? ""
+    )
+      .trim()
+      .toLowerCase();
 
 
   if (
-    number < 1 ||
-    number > MAX_POSITIONS
+    Object.prototype.hasOwnProperty.call(
+      POSITION_MAP,
+      normalized
+    )
   ) {
-    return null;
+    return POSITION_MAP[
+      normalized
+    ];
   }
 
 
-  return number;
+  return null;
 }
-
 
 /*
  * ============================================================
