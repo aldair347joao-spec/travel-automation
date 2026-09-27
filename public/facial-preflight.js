@@ -94,7 +94,42 @@
         "Agora sorria e mantenha o sorriso por alguns segundos."
     }
   ];
+  /*
+   * ==========================================================
+   * MAPA CANÓNICO DAS POSIÇÕES
+   * ==========================================================
+   *
+   * O motor facial continua a trabalhar com IDs textuais.
+   * O backend trabalha exclusivamente com posições 1..10.
+   *
+   * Nunca enviar "frontal", "left", "right", etc. para a API.
+   */
 
+  const LIVENESS_POSITION_NUMBER = {
+    frontal: 1,
+    left: 2,
+    right: 3,
+    up: 4,
+    down: 5,
+    left_up: 6,
+    right_up: 7,
+    left_down: 8,
+    right_down: 9,
+    smile: 10
+  };
+
+  function getCanonicalPositionNumber(
+    positionId
+  ) {
+    const number =
+      LIVENESS_POSITION_NUMBER[
+        String(positionId || "")
+      ];
+
+    return Number.isInteger(number)
+      ? number
+      : null;
+  }
   const CONFIG = {
     detectorInputSize: 320,
     detectorScoreThreshold: 0.45,
@@ -1735,7 +1770,7 @@
     }
   }
 
-  function stopCorrectPositionRecording(
+    function stopCorrectPositionRecording(
     saveSegment
   ) {
     return new Promise(
@@ -1748,19 +1783,18 @@
           recorder.state ===
             "inactive"
         ) {
-          const empty =
-            saveSegment
-              ? null
-              : null;
-
           resetActiveRecorder();
-
-          resolve(empty);
+          resolve(null);
           return;
         }
 
         const positionId =
           activePositionRecordingId;
+
+        const canonicalPosition =
+          getCanonicalPositionNumber(
+            positionId
+          );
 
         const startedAt =
           activePositionRecordingStartedAt;
@@ -1796,8 +1830,14 @@
 
               resetActiveRecorder();
 
+              /*
+               * Nunca guardar segmento inválido.
+               */
+
               if (
                 !saveSegment ||
+                !canonicalPosition ||
+                !blob ||
                 !blob.size ||
                 blob.size <
                   CONFIG.minimumVideoSegmentBytes
@@ -1806,13 +1846,20 @@
                 return;
               }
 
+              /*
+               * A posição enviada ao backend é SEMPRE
+               * numérica de 1 a 10.
+               */
+
               const segment = {
                 position:
+                  canonicalPosition,
+
+                positionId:
                   positionId,
 
                 sequence:
-                  videoSegments.length +
-                  1,
+                  canonicalPosition,
 
                 mimeType:
                   blob.type ||
@@ -1843,6 +1890,21 @@
               videoRecordingAvailable =
                 videoSegments.length >
                 0;
+
+              console.info(
+                "[FacialPreflight] Segmento válido guardado:",
+                {
+                  position:
+                    canonicalPosition,
+
+                  positionId,
+
+                  size:
+                    blob.size,
+
+                  durationMs
+                }
+              );
 
               resolve(
                 segment
@@ -2800,10 +2862,64 @@
      * foi realmente aprovada.
      */
 
-    const videoSegment =
+        const videoSegment =
       await stopCorrectPositionRecording(
         true
       );
+
+    /*
+     * A posição NÃO pode ser concluída sem um vídeo real.
+     *
+     * Isto é obrigatório:
+     * - Blob existente
+     * - posição numérica válida
+     * - tamanho mínimo
+     * - duração
+     */
+
+    if (
+      !videoSegment ||
+      !videoSegment.blob ||
+      !videoSegment.blob.size ||
+      videoSegment.size <
+        CONFIG.minimumVideoSegmentBytes ||
+      !Number.isInteger(
+        Number(
+          videoSegment.position
+        )
+      ) ||
+      Number(
+        videoSegment.position
+      ) < 1 ||
+      Number(
+        videoSegment.position
+      ) > 10
+    ) {
+      stableFrames = 0;
+
+      setStatus(
+        "A posição foi detectada, mas o vídeo não foi gravado corretamente. Vamos repetir esta posição.",
+        "warning"
+      );
+
+      emitError(
+        `O vídeo da posição ${currentPositionIndex + 1} não foi gravado corretamente.`
+      );
+
+      /*
+       * Repetimos a mesma posição.
+       * NÃO avançamos para a próxima.
+       */
+
+      positionStartedAt =
+        Date.now();
+
+      speakInstruction(
+        position.instruction
+      );
+
+      return;
+    }
 
     const completedAt =
       new Date().toISOString();
@@ -2926,35 +3042,41 @@
        * exclusivamente à posição correta.
        */
 
-      video: videoSegment
-        ? {
-            available: true,
+            video: {
+        available: true,
 
-            position:
-              videoSegment.position,
+        position:
+          Number(
+            videoSegment.position
+          ),
 
-            sequence:
-              videoSegment.sequence,
+        positionId:
+          position.id,
 
-            mimeType:
-              videoSegment.mimeType,
+        sequence:
+          Number(
+            videoSegment.sequence
+          ),
 
-            size:
-              videoSegment.size,
+        mimeType:
+          videoSegment.mimeType,
 
-            durationMs:
-              videoSegment.durationMs
-          }
-        : {
-            available: false,
+        size:
+          Number(
+            videoSegment.size
+          ),
 
-            position:
-              position.id,
+        durationMs:
+          Number(
+            videoSegment.durationMs
+          ),
 
-            sequence:
-              completedPositions.length +
-              1
-          }
+        startedAt:
+          videoSegment.startedAt,
+
+        completedAt:
+          videoSegment.completedAt
+      }
     };
 
     completedPositions.push(
@@ -3132,12 +3254,64 @@
     const score =
       average(scores);
 
-    const completed =
+        const completed =
       completedPositions.length ===
       POSITIONS.length;
 
+    /*
+     * ========================================================
+     * VALIDAÇÃO FINAL DOS VÍDEOS
+     * ========================================================
+     */
+
+    const validVideoSegments =
+      videoSegments.filter(
+        segment =>
+          segment &&
+          segment.blob &&
+          segment.blob.size >=
+            CONFIG.minimumVideoSegmentBytes &&
+          Number.isInteger(
+            Number(
+              segment.position
+            )
+          ) &&
+          Number(
+            segment.position
+          ) >= 1 &&
+          Number(
+            segment.position
+          ) <= 10 &&
+          Number(
+            segment.durationMs
+          ) > 0
+      );
+
+    const videoPositions =
+      new Set(
+        validVideoSegments.map(
+          segment =>
+            Number(
+              segment.position
+            )
+        )
+      );
+
+    const allTenVideosValid =
+      validVideoSegments.length ===
+        POSITIONS.length &&
+      videoPositions.size ===
+        POSITIONS.length &&
+      [...Array(10)].every(
+        (_, index) =>
+          videoPositions.has(
+            index + 1
+          )
+      );
+
     const success =
-      completed;
+      completed &&
+      allTenVideosValid;
 
     result = {
       completed,
@@ -3170,34 +3344,74 @@
 
       audioReady,
 
-      video: {
+            video: {
         available:
-          videoRecordingAvailable,
+          allTenVideosValid,
 
         supported:
           videoRecordingSupported,
 
         segmentCount:
-          videoSegments.length,
+          validVideoSegments.length,
 
         expectedSegments:
           POSITIONS.length,
 
         complete:
-          videoSegments.length ===
-          POSITIONS.length,
+          allTenVideosValid,
+
+        verified:
+          allTenVideosValid,
 
         positions:
-          getVideoMetadata().positions
+          validVideoSegments.map(
+            segment => ({
+              position:
+                Number(
+                  segment.position
+                ),
+
+              positionId:
+                segment.positionId ||
+                null,
+
+              sequence:
+                Number(
+                  segment.sequence
+                ),
+
+              mimeType:
+                segment.mimeType,
+
+              size:
+                Number(
+                  segment.size
+                ),
+
+              durationMs:
+                Number(
+                  segment.durationMs
+                ),
+
+              startedAt:
+                segment.startedAt,
+
+              completedAt:
+                segment.completedAt
+            })
+          )
       },
 
       completedAt:
         new Date().toISOString()
     };
 
-    if (completed) {
+        if (
+      completed &&
+      allTenVideosValid
+    ) {
       setStatus(
-        "As dez posições foram concluídas. Liveness aprovada.",
+        "As dez posições e os dez vídeos foram concluídos corretamente.",
         "success"
       );
     } else {
@@ -3292,19 +3506,89 @@
    * do JSON principal.
    */
 
-  async function uploadVideoSegments(
+    async function uploadVideoSegments(
     targetClientId
   ) {
+    if (!targetClientId) {
+      throw new Error(
+        "ID do cliente não encontrado para envio dos vídeos."
+      );
+    }
+
+    /*
+     * Só enviamos quando existem exatamente
+     * os 10 vídeos obrigatórios.
+     */
+
     if (
-      !targetClientId ||
-      !videoSegments.length
+      videoSegments.length !==
+      POSITIONS.length
     ) {
-      return {
-        uploaded: false,
-        skipped: true,
-        segmentCount:
-          videoSegments.length
-      };
+      throw new Error(
+        `A liveness possui ${videoSegments.length} vídeos, mas são necessários exatamente ${POSITIONS.length}.`
+      );
+    }
+
+    const positions =
+      new Set();
+
+    for (
+      const segment of videoSegments
+    ) {
+      const position =
+        Number(
+          segment?.position
+        );
+
+      if (
+        !segment?.blob ||
+        segment.blob.size <
+          CONFIG.minimumVideoSegmentBytes
+      ) {
+        throw new Error(
+          `O vídeo da posição ${position || "desconhecida"} está vazio ou inválido.`
+        );
+      }
+
+      if (
+        !Number.isInteger(
+          position
+        ) ||
+        position < 1 ||
+        position > 10
+      ) {
+        throw new Error(
+          `Posição de vídeo inválida: ${segment?.position}`
+        );
+      }
+
+      if (
+        positions.has(
+          position
+        )
+      ) {
+        throw new Error(
+          `O vídeo da posição ${position} foi duplicado.`
+        );
+      }
+
+      positions.add(
+        position
+      );
+    }
+
+    for (
+      let position = 1;
+      position <= 10;
+      position += 1
+    ) {
+      if (
+        !positions.has(position)
+      ) {
+        throw new Error(
+          `O vídeo da posição ${position} não existe.`
+        );
+      }
     }
 
     const csrfToken =
@@ -3331,30 +3615,49 @@
 
     formData.append(
       "segmentCount",
-      String(
-        videoSegments.length
-      )
+      "10"
     );
 
-    videoSegments.forEach(
+    /*
+     * Enviar sempre pela ordem canónica 1..10.
+     */
+
+    const orderedSegments =
+      videoSegments
+        .slice()
+        .sort(
+          (a, b) =>
+            Number(a.position) -
+            Number(b.position)
+        );
+
+    orderedSegments.forEach(
       (
         segment,
         index
       ) => {
+        const position =
+          Number(
+            segment.position
+          );
+
         formData.append(
           `livenessVideo_${index}`,
           segment.blob,
-          `liveness-${sessionId}-${segment.sequence}-${segment.position}.webm`
+          `liveness-${sessionId}-position-${position}.webm`
         );
 
         formData.append(
           `livenessMeta_${index}`,
           JSON.stringify({
-            position:
-              segment.position,
+            position,
 
             sequence:
-              segment.sequence,
+              position,
+
+            positionId:
+              segment.positionId ||
+              null,
 
             mimeType:
               segment.mimeType,
@@ -3375,45 +3678,154 @@
       }
     );
 
-    const response =
-      await fetch(
-        `/api/clients/${encodeURIComponent(
-          targetClientId
-        )}/liveness-video`,
-        {
-          method: "POST",
+    /*
+     * Pequena função interna para uma tentativa.
+     */
 
-          credentials: "include",
+    async function performUpload() {
+      const response =
+        await fetch(
+          `/api/clients/${encodeURIComponent(
+            targetClientId
+          )}/liveness-video`,
+          {
+            method: "POST",
 
-          headers: {
-            Accept:
-              "application/json",
+            credentials: "include",
 
-            "x-csrf-token":
-              csrfToken
-          },
+            headers: {
+              Accept:
+                "application/json",
 
-          body:
-            formData
-        }
-      );
+              "x-csrf-token":
+                csrfToken
+            },
 
-    const data =
-      await response
-        .json()
-        .catch(
-          () => null
+            body:
+              formData
+          }
         );
 
-    if (!response.ok) {
-      throw new Error(
-        data?.message ||
-        data?.error ||
-        `O servidor recusou os vídeos de liveness. HTTP ${response.status}`
-      );
+      const data =
+        await response
+          .json()
+          .catch(
+            () => null
+          );
+
+      if (!response.ok) {
+        throw new Error(
+          data?.message ||
+          data?.error ||
+          `O servidor recusou os vídeos de liveness. HTTP ${response.status}`
+        );
+      }
+
+      if (
+        data?.success !== true
+      ) {
+        throw new Error(
+          data?.error ||
+          "O servidor não confirmou o armazenamento dos vídeos."
+        );
+      }
+
+      if (
+        data?.livenessPassed !==
+        true
+      ) {
+        throw new Error(
+          "O servidor recebeu os vídeos, mas não confirmou a aprovação final da liveness."
+        );
+      }
+
+      if (
+        Number(
+          data?.segmentsStored
+        ) !== 10
+      ) {
+        throw new Error(
+          `O servidor armazenou ${Number(data?.segmentsStored || 0)} vídeos, mas eram esperados 10.`
+        );
+      }
+
+      if (
+        data?.video?.verified !==
+        true
+      ) {
+        throw new Error(
+          "O servidor não confirmou a verificação dos 10 vídeos."
+        );
+      }
+
+      return data;
     }
 
-    return data;
+    /*
+     * Primeira tentativa.
+     */
+
+    try {
+      const data =
+        await performUpload();
+
+      console.info(
+        "[FacialPreflight] 10 vídeos armazenados e confirmados.",
+        data
+      );
+
+      return {
+        uploaded: true,
+        verified: true,
+        segmentCount: 10,
+        data
+      };
+    } catch (firstError) {
+      console.warn(
+        "[FacialPreflight] Primeira tentativa de upload falhou:",
+        firstError
+      );
+
+      /*
+       * Segunda tentativa controlada.
+       */
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            1200
+          )
+      );
+
+      try {
+        const data =
+          await performUpload();
+
+        console.info(
+          "[FacialPreflight] Upload confirmado na segunda tentativa.",
+          data
+        );
+
+        return {
+          uploaded: true,
+          verified: true,
+          segmentCount: 10,
+          data
+        };
+      } catch (secondError) {
+        console.error(
+          "[FacialPreflight] As duas tentativas de upload falharam:",
+          secondError
+        );
+
+        throw new Error(
+          secondError?.message ||
+          firstError?.message ||
+          "Não foi possível armazenar os 10 vídeos de liveness."
+        );
+      }
+    }
   }
 
   /*
@@ -3421,8 +3833,7 @@
    * BACKEND
    * ==========================================================
    */
-
-  async function submitToBackend(
+        async function submitToBackend(
     payload = {}
   ) {
     const targetClientId =
@@ -3441,6 +3852,73 @@
       );
     }
 
+    /*
+     * ========================================================
+     * BLOQUEIO ABSOLUTO
+     * ========================================================
+     *
+     * Nunca enviamos para o backend uma liveness completa
+     * sem os 10 vídeos reais.
+     */
+
+    if (
+      !result.completed
+    ) {
+      throw new Error(
+        "A liveness ainda não foi concluída nas 10 posições."
+      );
+    }
+
+    if (
+      videoSegments.length !==
+      POSITIONS.length
+    ) {
+      throw new Error(
+        `A liveness foi concluída, mas existem apenas ${videoSegments.length} vídeos. São necessários 10.`
+      );
+    }
+
+    const videoPositions =
+      new Set(
+        videoSegments.map(
+          segment =>
+            Number(
+              segment?.position
+            )
+        )
+      );
+
+    if (
+      videoPositions.size !==
+      10
+    ) {
+      throw new Error(
+        "Os vídeos de liveness não correspondem às 10 posições únicas."
+      );
+    }
+
+    for (
+      let position = 1;
+      position <= 10;
+      position += 1
+    ) {
+      if (
+        !videoPositions.has(
+          position
+        )
+      ) {
+        throw new Error(
+          `O vídeo da posição ${position} está em falta.`
+        );
+      }
+    }
+
+    /*
+     * ========================================================
+     * CSRF
+     * ========================================================
+     */
+
     const csrfToken =
       getCsrfToken();
 
@@ -3451,11 +3929,13 @@
     }
 
     /*
-     * Primeiro guardamos a informação oficial
-     * de liveness.
+     * ========================================================
+     * PRIMEIRA ETAPA
+     * ========================================================
      *
-     * Os vídeos são enviados separadamente
-     * logo depois.
+     * O backend cria a sessão como video_pending.
+     *
+     * Ainda NÃO é livenessPassed.
      */
 
     const body = {
@@ -3469,19 +3949,13 @@
         true,
 
       completed:
-        Boolean(
-          result.completed
-        ),
+        true,
 
       success:
-        Boolean(
-          result.success
-        ),
+        true,
 
       passed:
-        Boolean(
-          result.passed
-        ),
+        false,
 
       score:
         result.score,
@@ -3495,21 +3969,18 @@
       positions:
         result.positions,
 
-      video:
-        {
-          available:
-            Boolean(
-              videoSegments.length
-            ),
+      video: {
+        available:
+          false,
 
-          segmentCount:
-            videoSegments.length,
+        segmentCount:
+          0,
 
-          expectedSegments:
-            POSITIONS.length,
+        expectedSegments:
+          POSITIONS.length,
 
-          sessionId
-        },
+        sessionId
+      },
 
       passportMatch:
         payload.passportMatch ||
@@ -3567,51 +4038,165 @@
       throw new Error(
         data?.message ||
         data?.error ||
-        `O servidor recusou o resultado facial. HTTP ${response.status}.${issueText}`
+        `O servidor recusou a sessão de liveness. HTTP ${response.status}.${issueText}`
+      );
+    }
+
+    if (
+      data?.success !== true
+    ) {
+      throw new Error(
+        data?.error ||
+        "O servidor não confirmou a criação da sessão de liveness."
       );
     }
 
     /*
-     * O liveness já foi guardado.
-     *
-     * Agora enviamos os 10 segmentos reais.
+     * O primeiro endpoint DEVE deixar a sessão
+     * pendente dos vídeos.
      */
 
-    let videoUpload =
-      null;
+    if (
+      data?.livenessPassed ===
+      true
+    ) {
+      throw new Error(
+        "O servidor tentou aprovar a liveness antes de armazenar os 10 vídeos."
+      );
+    }
+
+    /*
+     * ========================================================
+     * SEGUNDA ETAPA
+     * ========================================================
+     *
+     * Agora enviamos os 10 vídeos.
+     */
+
+    setStatus(
+      "A guardar os 10 vídeos de liveness...",
+      "info"
+    );
+
+    let videoUpload;
+
+    try {
+      videoUpload =
+        await uploadVideoSegments(
+          targetClientId
+        );
+    } catch (videoError) {
+      console.error(
+        "[FacialPreflight] Falha definitiva ao guardar vídeos:",
+        videoError
+      );
+
+      setStatus(
+        "Não foi possível guardar os vídeos. A liveness não foi aprovada. Tente novamente.",
+        "warning"
+      );
+
+      throw videoError;
+    }
+
+    /*
+     * ========================================================
+     * CONFIRMAÇÃO FINAL
+     * ========================================================
+     */
 
     if (
-      result.completed &&
-      videoSegments.length
+      videoUpload?.uploaded !==
+      true ||
+      videoUpload?.verified !==
+      true ||
+      Number(
+        videoUpload?.segmentCount
+      ) !== 10
     ) {
-      try {
-        videoUpload =
-          await uploadVideoSegments(
-            targetClientId
-          );
-      } catch (videoError) {
-        /*
-         * Não transformamos um problema temporário
-         * do armazenamento do vídeo em "liveness
-         * falhou".
-         *
-         * O resultado facial já foi aprovado.
-         */
-
-        console.error(
-          "[FacialPreflight] Falha ao enviar vídeo de liveness:",
-          videoError
-        );
-
-        videoUpload = {
-          uploaded: false,
-          pending: true,
-          error:
-            videoError?.message ||
-            "Não foi possível enviar os vídeos de liveness."
-        };
-      }
+      throw new Error(
+        "Os 10 vídeos não foram confirmados pelo servidor."
+      );
     }
+
+    const serverData =
+      videoUpload.data;
+
+    if (
+      serverData?.livenessPassed !==
+      true
+    ) {
+      throw new Error(
+        "A liveness não foi aprovada pelo servidor após o armazenamento dos vídeos."
+      );
+    }
+
+    if (
+      Number(
+        serverData?.segmentsStored
+      ) !== 10
+    ) {
+      throw new Error(
+        "O servidor não confirmou os 10 vídeos armazenados."
+      );
+    }
+
+    if (
+      serverData?.video?.verified !==
+      true
+    ) {
+      throw new Error(
+        "O servidor não confirmou a verificação final dos vídeos."
+      );
+    }
+
+    /*
+     * ========================================================
+     * RESULTADO DEFINITIVO
+     * ========================================================
+     */
+
+    result.video = {
+      ...result.video,
+
+      available:
+        true,
+
+      supported:
+        videoRecordingSupported,
+
+      segmentCount:
+        10,
+
+      expectedSegments:
+        10,
+
+      complete:
+        true,
+
+      verified:
+        true,
+
+      positions:
+        getVideoMetadata().positions
+    };
+
+    result.passed =
+      true;
+
+    result.success =
+      true;
+
+    result.completed =
+      true;
+
+    result.videoUploadVerified =
+      true;
+
+    setStatus(
+      "Liveness aprovada. As 10 posições e os 10 vídeos foram guardados com sucesso.",
+      "success"
+    );
 
     return {
       ...data,
@@ -3619,13 +4204,17 @@
       livenessVideo:
         videoUpload,
 
+      livenessPassed:
+        true,
+
       sessionId,
 
       video:
-        getVideoMetadata()
+        result.video,
+
+      result
     };
   }
-
   /*
    * ==========================================================
    * ESTADO
