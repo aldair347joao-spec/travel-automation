@@ -864,193 +864,895 @@
      * INICIALIZAR PLAYERS
      * ========================================================
      */
+      function initializePlayers(
+    section
+) {
 
-    function initializePlayers(
-        section
+    const videos =
+        section.querySelectorAll(
+            ".admin-liveness-video"
+        );
+
+
+    /*
+     * ========================================================
+     * CACHE DOS BLOB URLs
+     * ========================================================
+     *
+     * Cada <video> recebe o conteúdo real retornado pela API.
+     *
+     * Não dependemos mais do <video> fazer diretamente uma
+     * requisição autenticada + Range ao endpoint.
+     */
+
+    videos.forEach(
+        video => {
+
+            video.dataset.loaded =
+                "false";
+
+            video.dataset.loading =
+                "false";
+
+            video._adminBlobUrl =
+                null;
+
+        }
+    );
+
+
+    /*
+     * ========================================================
+     * CARREGAR UM VÍDEO
+     * ========================================================
+     */
+
+    async function loadVideo(
+        video
     ) {
 
-        const videos =
-            section.querySelectorAll(
-                ".admin-liveness-video"
+        if (!video) {
+            return;
+        }
+
+
+        const url =
+            video.dataset.videoUrl;
+
+
+        if (!url) {
+            return;
+        }
+
+
+        const player =
+            video.closest(
+                ".admin-liveness-player"
             );
 
 
-        videos.forEach(
-            video => {
-
-                const url =
-                    video.dataset.videoUrl;
-
-                if (!url) {
-                    return;
-                }
-
-
-                const player =
-                    video.closest(
-                        ".admin-liveness-player"
-                    );
-
-                const loading =
-                    player?.querySelector(
-                        ".admin-video-loading"
-                    );
-
-                const errorElement =
-                    player?.querySelector(
-                        ".admin-video-error"
-                    );
-
-
-                video.addEventListener(
-                    "loadedmetadata",
-                    () => {
-
-                        if (loading) {
-                            loading.hidden =
-                                true;
-                        }
-
-                        video.classList.add(
-                            "ready"
-                        );
-
-                    },
-                    {
-                        once:
-                            true
-                    }
-                );
-
-
-                video.addEventListener(
-                    "error",
-                    () => {
-
-                        if (loading) {
-                            loading.hidden =
-                                true;
-                        }
-
-                        if (errorElement) {
-                            errorElement.hidden =
-                                false;
-                        }
-
-                    }
-                );
-
-
-                video.src =
-                    url;
-
-                video.load();
-            }
-        );
-
-
-        /*
-         * Só um vídeo pode tocar de cada vez.
-         */
-
-        videos.forEach(
-            currentVideo => {
-
-                currentVideo.addEventListener(
-                    "play",
-                    () => {
-
-                        videos.forEach(
-                            otherVideo => {
-
-                                if (
-                                    otherVideo !==
-                                    currentVideo
-                                ) {
-                                    otherVideo.pause();
-                                }
-
-                            }
-                        );
-
-                    }
-                );
-
-            }
-        );
-
-
-        /*
-         * Passaporte.
-         */
-
-        const passportImage =
-            section.querySelector(
-                ".admin-passport-image"
+        const loading =
+            player?.querySelector(
+                ".admin-video-loading"
             );
 
+
+        const errorElement =
+            player?.querySelector(
+                ".admin-video-error"
+            );
+
+
+        /*
+         * Evitar duas requisições simultâneas.
+         */
 
         if (
-            passportImage
+            video.dataset.loading ===
+            "true"
+        ) {
+            return;
+        }
+
+
+        /*
+         * Se já foi carregado, não baixar novamente.
+         */
+
+        if (
+            video.dataset.loaded ===
+            "true" &&
+            video._adminBlobUrl
         ) {
 
-            const loading =
-                section.querySelector(
-                    ".admin-passport-image-loading"
+            try {
+                await video.play();
+            } catch (_) {
+                /*
+                 * O navegador pode bloquear autoplay.
+                 * Neste caso os controles continuam disponíveis.
+                 */
+            }
+
+            return;
+        }
+
+
+        video.dataset.loading =
+            "true";
+
+
+        if (loading) {
+            loading.hidden =
+                false;
+
+            loading.textContent =
+                "A carregar vídeo...";
+        }
+
+
+        if (errorElement) {
+            errorElement.hidden =
+                true;
+
+            errorElement.textContent =
+                "Não foi possível reproduzir este movimento.";
+        }
+
+
+        try {
+
+            console.info(
+                "[ADMIN-LIVENESS] A carregar vídeo:",
+                url
+            );
+
+
+            /*
+             * ------------------------------------------------
+             * BUSCAR COM A SESSÃO DO ADMINISTRADOR
+             * ------------------------------------------------
+             */
+
+            const response =
+                await fetch(
+                    url,
+                    {
+                        method:
+                            "GET",
+
+                        credentials:
+                            "include",
+
+                        headers: {
+                            Accept:
+                                "video/webm, video/mp4, video/quicktime, video/*"
+                        },
+
+                        cache:
+                            "no-store"
+                    }
                 );
 
-            const error =
-                section.querySelector(
-                    ".admin-passport-image-error"
-                );
+
+            console.info(
+                "[ADMIN-LIVENESS] Resposta do vídeo:",
+                {
+                    status:
+                        response.status,
+
+                    ok:
+                        response.ok,
+
+                    contentType:
+                        response.headers.get(
+                            "content-type"
+                        ),
+
+                    contentLength:
+                        response.headers.get(
+                            "content-length"
+                        ),
+
+                    contentRange:
+                        response.headers.get(
+                            "content-range"
+                        ),
+
+                    position:
+                        video.closest(
+                            "[data-liveness-position]"
+                        )?.dataset
+                            ?.livenessPosition ||
+                        null
+                }
+            );
 
 
-            passportImage.addEventListener(
-                "load",
-                () => {
+            /*
+             * ------------------------------------------------
+             * VALIDAR RESPOSTA
+             * ------------------------------------------------
+             */
 
-                    if (loading) {
-                        loading.hidden =
-                            true;
+            if (
+                !response.ok
+            ) {
+
+                let serverMessage =
+                    `HTTP ${response.status}`;
+
+                try {
+
+                    const contentType =
+                        response.headers.get(
+                            "content-type"
+                        ) ||
+                        "";
+
+                    if (
+                        contentType.includes(
+                            "application/json"
+                        )
+                    ) {
+
+                        const data =
+                            await response.json();
+
+                        serverMessage =
+                            data?.error ||
+                            data?.message ||
+                            serverMessage;
+
+                    } else {
+
+                        const text =
+                            await response.text();
+
+                        if (
+                            text &&
+                            text.length <
+                                500
+                        ) {
+                            serverMessage =
+                                text.trim() ||
+                                serverMessage;
+                        }
+
                     }
 
-                    passportImage.classList.add(
-                        "loaded"
+                } catch (_) {
+                    /*
+                     * Mantemos HTTP status.
+                     */
+                }
+
+
+                throw new Error(
+                    `Servidor recusou o vídeo: ${serverMessage}`
+                );
+            }
+
+
+            /*
+             * ------------------------------------------------
+             * LER BYTES
+             * ------------------------------------------------
+             */
+
+            const blob =
+                await response.blob();
+
+
+            if (
+                !blob ||
+                blob.size <= 0
+            ) {
+
+                throw new Error(
+                    "O servidor respondeu, mas o vídeo veio vazio."
+                );
+            }
+
+
+            console.info(
+                "[ADMIN-LIVENESS] Vídeo recebido:",
+                {
+                    size:
+                        blob.size,
+
+                    type:
+                        blob.type ||
+                        response.headers.get(
+                            "content-type"
+                        ) ||
+                        "video/webm"
+                }
+            );
+
+
+            /*
+             * ------------------------------------------------
+             * DETERMINAR MIME TYPE
+             * ------------------------------------------------
+             */
+
+            let mimeType =
+                blob.type ||
+                response.headers.get(
+                    "content-type"
+                ) ||
+                "video/webm";
+
+
+            /*
+             * Nunca aceitar JSON/HTML como vídeo.
+             *
+             * Isso captura imediatamente situações em que
+             * o servidor devolveu uma página de login ou
+             * mensagem de erro em vez do vídeo.
+             */
+
+            if (
+                mimeType.includes(
+                    "application/json"
+                ) ||
+                mimeType.includes(
+                    "text/html"
+                )
+            ) {
+
+                throw new Error(
+                    `O servidor não devolveu um vídeo. Content-Type recebido: ${mimeType}`
+                );
+            }
+
+
+            /*
+             * Se o servidor não informou corretamente o MIME,
+             * reconstruímos o Blob como WebM.
+             */
+
+            if (
+                !mimeType.startsWith(
+                    "video/"
+                )
+            ) {
+                mimeType =
+                    "video/webm";
+            }
+
+
+            const videoBlob =
+                new Blob(
+                    [
+                        blob
+                    ],
+                    {
+                        type:
+                            mimeType
+                    }
+                );
+
+
+            /*
+             * ------------------------------------------------
+             * LIBERTAR BLOB ANTERIOR
+             * ------------------------------------------------
+             */
+
+            if (
+                video._adminBlobUrl
+            ) {
+
+                try {
+
+                    URL.revokeObjectURL(
+                        video._adminBlobUrl
                     );
 
-                },
-                {
-                    once:
-                        true
+                } catch (_) {}
+
+            }
+
+
+            /*
+             * ------------------------------------------------
+             * CRIAR URL LOCAL
+             * ------------------------------------------------
+             */
+
+            const blobUrl =
+                URL.createObjectURL(
+                    videoBlob
+                );
+
+
+            video._adminBlobUrl =
+                blobUrl;
+
+
+            /*
+             * ------------------------------------------------
+             * PREPARAR PLAYER
+             * ------------------------------------------------
+             */
+
+            video.dataset.loaded =
+                "false";
+
+
+            video.src =
+                blobUrl;
+
+
+            video.load();
+
+
+            /*
+             * ------------------------------------------------
+             * AGUARDAR METADATA
+             * ------------------------------------------------
+             */
+
+            await new Promise(
+                (
+                    resolve,
+                    reject
+                ) => {
+
+                    let finished =
+                        false;
+
+
+                    const cleanup =
+                        () => {
+
+                            video.removeEventListener(
+                                "loadedmetadata",
+                                onLoaded
+                            );
+
+                            video.removeEventListener(
+                                "error",
+                                onError
+                            );
+
+                        };
+
+
+                    const onLoaded =
+                        () => {
+
+                            if (
+                                finished
+                            ) {
+                                return;
+                            }
+
+                            finished =
+                                true;
+
+                            cleanup();
+
+                            resolve();
+
+                        };
+
+
+                    const onError =
+                        () => {
+
+                            if (
+                                finished
+                            ) {
+                                return;
+                            }
+
+                            finished =
+                                true;
+
+                            cleanup();
+
+                            reject(
+                                new Error(
+                                    "O navegador recebeu o vídeo, mas não conseguiu descodificar o formato."
+                                )
+                            );
+
+                        };
+
+
+                    video.addEventListener(
+                        "loadedmetadata",
+                        onLoaded,
+                        {
+                            once:
+                                true
+                        }
+                    );
+
+
+                    video.addEventListener(
+                        "error",
+                        onError,
+                        {
+                            once:
+                                true
+                        }
+                    );
+
+
+                    /*
+                     * Alguns navegadores podem já ter
+                     * carregado a metadata antes do listener.
+                     */
+
+                    if (
+                        video.readyState >=
+                        1
+                    ) {
+
+                        onLoaded();
+
+                    }
+
                 }
             );
 
 
-            passportImage.addEventListener(
-                "error",
-                () => {
+            video.dataset.loaded =
+                "true";
 
-                    if (loading) {
-                        loading.hidden =
-                            true;
-                    }
 
-                    if (error) {
-                        error.hidden =
-                            false;
-                    }
+            if (loading) {
+                loading.hidden =
+                    true;
+            }
 
-                },
+
+            video.classList.add(
+                "ready"
+            );
+
+
+            /*
+             * Mostrar informação real de duração.
+             */
+
+            const duration =
+                Number(
+                    video.duration
+                );
+
+
+            if (
+                Number.isFinite(
+                    duration
+                ) &&
+                duration > 0
+            ) {
+
+                video.dataset.duration =
+                    String(
+                        duration
+                    );
+
+            }
+
+
+            console.info(
+                "[ADMIN-LIVENESS] Player pronto:",
                 {
-                    once:
-                        true
+                    url,
+                    blobSize:
+                        videoBlob.size,
+                    mimeType,
+                    duration:
+                        video.duration
                 }
             );
+
+
+            /*
+             * NÃO iniciar automaticamente.
+             *
+             * O administrador decide quando reproduzir.
+             */
+
+        } catch (
+            error
+        ) {
+
+            console.error(
+                "[ADMIN-LIVENESS] Falha ao preparar vídeo:",
+                {
+                    url,
+                    error:
+                        error?.message ||
+                        error
+                }
+            );
+
+
+            video.dataset.loaded =
+                "false";
+
+
+            if (loading) {
+                loading.hidden =
+                    true;
+            }
+
+
+            if (errorElement) {
+
+                errorElement.hidden =
+                    false;
+
+                errorElement.textContent =
+                    error?.message ||
+                    "Não foi possível reproduzir este movimento.";
+
+            }
+
+
+            /*
+             * Remover eventual Blob inválido.
+             */
+
+            if (
+                video._adminBlobUrl
+            ) {
+
+                try {
+
+                    URL.revokeObjectURL(
+                        video._adminBlobUrl
+                    );
+
+                } catch (_) {}
+
+                video._adminBlobUrl =
+                    null;
+            }
+
+        } finally {
+
+            video.dataset.loading =
+                "false";
 
         }
     }
 
 
+    /*
+     * ========================================================
+     * EVENTOS DOS PLAYERS
+     * ========================================================
+     */
+
+    videos.forEach(
+        video => {
+
+            /*
+             * Quando o administrador toca no vídeo,
+             * garantimos que o conteúdo esteja carregado.
+             */
+
+            video.addEventListener(
+                "play",
+                async event => {
+
+                    const currentVideo =
+                        event.currentTarget;
+
+
+                    if (
+                        currentVideo.dataset.loaded !==
+                        "true"
+                    ) {
+
+                        currentVideo.pause();
+
+
+                        await loadVideo(
+                            currentVideo
+                        );
+
+
+                        if (
+                            currentVideo.dataset.loaded ===
+                            "true"
+                        ) {
+
+                            try {
+
+                                await currentVideo.play();
+
+                            } catch (
+                                playError
+                            ) {
+
+                                console.warn(
+                                    "[ADMIN-LIVENESS] Reprodução bloqueada pelo navegador:",
+                                    playError
+                                );
+
+                            }
+
+                        }
+
+                    }
+
+
+                    /*
+                     * Apenas um vídeo pode tocar
+                     * simultaneamente.
+                     */
+
+                    videos.forEach(
+                        otherVideo => {
+
+                            if (
+                                otherVideo !==
+                                currentVideo
+                            ) {
+
+                                try {
+
+                                    otherVideo.pause();
+
+                                } catch (_) {}
+
+                            }
+
+                        }
+                    );
+
+                }
+            );
+
+
+            /*
+             * Também carregamos o vídeo antecipadamente,
+             * para o administrador não precisar esperar depois
+             * de clicar.
+             */
+
+            loadVideo(
+                video
+            );
+
+        }
+    );
+
+
+    /*
+     * ========================================================
+     * LIBERTAR BLOB URLs AO SAIR DA PÁGINA
+     * ========================================================
+     */
+
+    if (
+        !section.dataset.blobCleanupInstalled
+    ) {
+
+        section.dataset.blobCleanupInstalled =
+            "true";
+
+
+        window.addEventListener(
+            "beforeunload",
+            () => {
+
+                section
+                    .querySelectorAll(
+                        ".admin-liveness-video"
+                    )
+                    .forEach(
+                        video => {
+
+                            if (
+                                video._adminBlobUrl
+                            ) {
+
+                                try {
+
+                                    URL.revokeObjectURL(
+                                        video._adminBlobUrl
+                                    );
+
+                                } catch (_) {}
+
+                                video._adminBlobUrl =
+                                    null;
+                            }
+
+                        }
+                    );
+
+            },
+            {
+                once:
+                    true
+            }
+        );
+
+    }
+
+
+    /*
+     * ========================================================
+     * PASSAPORTE
+     * ========================================================
+     */
+
+    const passportImage =
+        section.querySelector(
+            ".admin-passport-image"
+        );
+
+
+    if (
+        passportImage
+    ) {
+
+        const loading =
+            section.querySelector(
+                ".admin-passport-image-loading"
+            );
+
+        const error =
+            section.querySelector(
+                ".admin-passport-image-error"
+            );
+
+
+        passportImage.addEventListener(
+            "load",
+            () => {
+
+                if (loading) {
+                    loading.hidden =
+                        true;
+                }
+
+                passportImage.classList.add(
+                    "loaded"
+                );
+
+            },
+            {
+                once:
+                    true
+            }
+        );
+
+
+        passportImage.addEventListener(
+            "error",
+            () => {
+
+                if (loading) {
+                    loading.hidden =
+                        true;
+                }
+
+                if (error) {
+                    error.hidden =
+                        false;
+                }
+
+            },
+            {
+                once:
+                    true
+            }
+        );
+
+    }
+}      
     /*
      * ========================================================
      * RENDER COMPLETO
