@@ -231,13 +231,24 @@ class VfsPuppeteerAdapter extends SiteAdapter {
    */
 
   const requiredArgs = [
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-gpu",
-    "--no-first-run",
-    "--no-zygote"
-  ];
+  "--no-sandbox",
+  "--disable-setuid-sandbox",
+  "--disable-dev-shm-usage",
+  "--disable-gpu",
+  "--no-first-run",
+  "--no-zygote",
+
+  /*
+   * MediaStream / câmera
+   */
+  "--enable-media-stream",
+
+  /*
+   * Permitir que a página solicite
+   * acesso aos dispositivos de mídia.
+   */
+  "--use-fake-ui-for-media-stream"
+];
 
   const finalArgs = [
     ...new Set([
@@ -338,6 +349,59 @@ class VfsPuppeteerAdapter extends SiteAdapter {
       pages.length > 0
         ? pages[0]
         : await this.browser.newPage();
+    try {
+  await this.page.evaluateOnNewDocument(() => {
+    window.__travelAutomationMediaState = {
+      requested: false,
+      constraints: null,
+      requestedAt: null
+    };
+
+    if (
+      navigator.mediaDevices &&
+      typeof navigator.mediaDevices.getUserMedia ===
+        "function"
+    ) {
+      const original =
+        navigator.mediaDevices.getUserMedia.bind(
+          navigator.mediaDevices
+        );
+
+      navigator.mediaDevices.getUserMedia =
+        function (constraints) {
+          window.__travelAutomationMediaState = {
+            requested: true,
+            constraints:
+              constraints || null,
+            requestedAt:
+              new Date().toISOString()
+          };
+
+          return original(constraints);
+        };
+    }
+  });
+
+  logger.info(
+    "VFS getUserMedia monitor installed",
+    {
+      applicationId:
+        this.applicationId
+    }
+  );
+} catch (error) {
+  logger.warn(
+    "Could not install getUserMedia monitor",
+    {
+      applicationId:
+        this.applicationId,
+
+      error:
+        error?.message ||
+        String(error)
+    }
+  );
+}
   } catch (error) {
     logger.error(
       "Failed to create Chromium page",
@@ -363,6 +427,47 @@ class VfsPuppeteerAdapter extends SiteAdapter {
 
   this.context =
     this.page.browserContext();
+    /*
+ * ============================================================
+ * MEDIA PERMISSIONS
+ * ============================================================
+ */
+
+try {
+  const cameraOrigin =
+    new URL(VFS_BASE_URL).origin;
+
+  await this.context.overridePermissions(
+    cameraOrigin,
+    [
+      "camera",
+      "microphone"
+    ]
+  );
+
+  logger.info(
+    "VFS camera/microphone permissions configured",
+    {
+      applicationId:
+        this.applicationId,
+
+      origin:
+        cameraOrigin
+    }
+  );
+} catch (error) {
+  logger.warn(
+    "Could not configure VFS media permissions",
+    {
+      applicationId:
+        this.applicationId,
+
+      error:
+        error?.message ||
+        String(error)
+    }
+  );
+}
 
   /*
    * ============================================================
