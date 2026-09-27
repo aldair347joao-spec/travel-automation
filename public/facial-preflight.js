@@ -3889,16 +3889,26 @@ async function uploadVideoSegments(
   }
 
   /*
-   * Só enviamos quando existem exatamente
-   * os 10 vídeos obrigatórios.
+   * ==========================================================
+   * VALIDAR OS 10 VÍDEOS
+   * ==========================================================
    */
 
+  const orderedSegments =
+    videoSegments
+      .slice()
+      .sort(
+        (a, b) =>
+          Number(a.position) -
+          Number(b.position)
+      );
+
   if (
-    videoSegments.length !==
+    orderedSegments.length !==
     POSITIONS.length
   ) {
     throw new Error(
-      `A liveness possui ${videoSegments.length} vídeos, mas são necessários exatamente ${POSITIONS.length}.`
+      `A liveness possui ${orderedSegments.length} vídeos, mas são necessários exatamente ${POSITIONS.length}.`
     );
   }
 
@@ -3906,7 +3916,7 @@ async function uploadVideoSegments(
     new Set();
 
   for (
-    const segment of videoSegments
+    const segment of orderedSegments
   ) {
     const position =
       Number(
@@ -3966,6 +3976,12 @@ async function uploadVideoSegments(
     }
   }
 
+  /*
+   * ==========================================================
+   * CSRF
+   * ==========================================================
+   */
+
   const csrfToken =
     getCsrfToken();
 
@@ -3975,98 +3991,145 @@ async function uploadVideoSegments(
     );
   }
 
-  const formData =
-    new FormData();
-
-  formData.append(
-    "clientId",
-    targetClientId
-  );
-
-  formData.append(
-    "sessionId",
-    sessionId
-  );
-
-  formData.append(
-    "segmentCount",
-    "10"
-  );
-
   /*
-   * Enviar sempre pela ordem canónica 1..10.
+   * ==========================================================
+   * CRIAR FORMDATA NOVO PARA CADA TENTATIVA
+   * ==========================================================
    */
 
-  const orderedSegments =
-    videoSegments
-      .slice()
-      .sort(
-        (a, b) =>
-          Number(a.position) -
-          Number(b.position)
-      );
+  function createVideoFormData() {
+    const formData =
+      new FormData();
 
-  orderedSegments.forEach(
-    (
-      segment,
-      index
-    ) => {
-      const position =
-        Number(
-          segment.position
+    formData.append(
+      "clientId",
+      String(
+        targetClientId
+      )
+    );
+
+    formData.append(
+      "sessionId",
+      String(
+        sessionId
+      )
+    );
+
+    formData.append(
+      "segmentCount",
+      "10"
+    );
+
+    orderedSegments.forEach(
+      (
+        segment,
+        index
+      ) => {
+        const position =
+          Number(
+            segment.position
+          );
+
+        const blob =
+          segment.blob;
+
+        const mimeType =
+          blob?.type ||
+          segment.mimeType ||
+          "video/webm";
+
+        const extension =
+          mimeType
+            .toLowerCase()
+            .includes(
+              "mp4"
+            )
+            ? "mp4"
+            : "webm";
+
+        formData.append(
+          `livenessVideo_${index}`,
+          blob,
+          `liveness-${sessionId}-position-${position}.${extension}`
         );
 
-      formData.append(
-        `livenessVideo_${index}`,
-        segment.blob,
-        `liveness-${sessionId}-position-${position}.webm`
-      );
-
-      formData.append(
-        `livenessMeta_${index}`,
-        JSON.stringify({
-          position,
-
-          sequence:
+        formData.append(
+          `livenessMeta_${index}`,
+          JSON.stringify({
             position,
 
-          positionId:
-            segment.positionId ||
-            null,
+            sequence:
+              position,
 
-          mimeType:
-            segment.mimeType,
+            positionId:
+              segment.positionId ||
+              null,
 
-          size:
-            segment.size,
+            label:
+              segment.label ||
+              null,
 
-          durationMs:
-            segment.durationMs,
+            instruction:
+              segment.instruction ||
+              null,
 
-          startedAt:
-            segment.startedAt,
+            score:
+              segment.score ??
+              null,
 
-          completedAt:
-            segment.completedAt
-        })
-      );
-    }
-  );
+            positionScore:
+              segment.positionScore ??
+              null,
+
+            mimeType,
+
+            size:
+              Number(
+                blob.size
+              ),
+
+            durationMs:
+              Number(
+                segment.durationMs ||
+                0
+              ),
+
+            startedAt:
+              segment.startedAt ||
+              null,
+
+            completedAt:
+              segment.completedAt ||
+              null
+          })
+        );
+      }
+    );
+
+    return formData;
+  }
 
   /*
-   * Pequena função interna para uma tentativa.
+   * ==========================================================
+   * UMA TENTATIVA DE UPLOAD
+   * ==========================================================
    */
 
   async function performUpload() {
+    const formData =
+      createVideoFormData();
+
     const response =
       await fetch(
         `/api/clients/${encodeURIComponent(
           targetClientId
         )}/liveness-video`,
         {
-          method: "POST",
+          method:
+            "POST",
 
-          credentials: "include",
+          credentials:
+            "include",
 
           headers: {
             Accept:
@@ -4081,14 +4144,38 @@ async function uploadVideoSegments(
         }
       );
 
-    const data =
-      await response
-        .json()
-        .catch(
-          () => null
-        );
+    const rawText =
+      await response.text();
 
-    if (!response.ok) {
+    let data = null;
+
+    try {
+      data =
+        rawText
+          ? JSON.parse(
+              rawText
+            )
+          : null;
+    } catch (_) {
+      data = null;
+    }
+
+    console.info(
+      "[FacialPreflight] Resposta do upload:",
+      {
+        status:
+          response.status,
+
+        ok:
+          response.ok,
+
+        data
+      }
+    );
+
+    if (
+      !response.ok
+    ) {
       throw new Error(
         data?.message ||
         data?.error ||
@@ -4097,20 +4184,25 @@ async function uploadVideoSegments(
     }
 
     if (
-      data?.success !== true
+      data?.success !==
+      true
     ) {
       throw new Error(
         data?.error ||
+        data?.message ||
         "O servidor não confirmou o armazenamento dos vídeos."
       );
     }
 
     if (
-      data?.livenessPassed !==
-      true
+      Number(
+        data?.segmentsReceived
+      ) !== 10
     ) {
       throw new Error(
-        "O servidor recebeu os vídeos, mas não confirmou a aprovação final da liveness."
+        `O servidor recebeu ${Number(
+          data?.segmentsReceived || 0
+        )} vídeos, mas eram esperados 10.`
       );
     }
 
@@ -4120,7 +4212,9 @@ async function uploadVideoSegments(
       ) !== 10
     ) {
       throw new Error(
-        `O servidor armazenou ${Number(data?.segmentsStored || 0)} vídeos, mas eram esperados 10.`
+        `O servidor armazenou ${Number(
+          data?.segmentsStored || 0
+        )} vídeos, mas eram esperados 10.`
       );
     }
 
@@ -4129,7 +4223,16 @@ async function uploadVideoSegments(
       true
     ) {
       throw new Error(
-        "O servidor não confirmou a verificação dos 10 vídeos."
+        "O servidor recebeu os vídeos, mas não confirmou a verificação dos 10 vídeos."
+      );
+    }
+
+    if (
+      data?.livenessPassed !==
+      true
+    ) {
+      throw new Error(
+        "Os vídeos foram recebidos, mas a liveness não foi confirmada pelo servidor."
       );
     }
 
@@ -4137,7 +4240,9 @@ async function uploadVideoSegments(
   }
 
   /*
-   * Primeira tentativa.
+   * ==========================================================
+   * PRIMEIRA TENTATIVA
+   * ==========================================================
    */
 
   try {
@@ -4145,61 +4250,82 @@ async function uploadVideoSegments(
       await performUpload();
 
     console.info(
-      "[FacialPreflight] 10 vídeos armazenados e confirmados.",
+      "[FacialPreflight] Upload confirmado.",
       data
     );
 
     return {
-      uploaded: true,
-      verified: true,
-      segmentCount: 10,
+      uploaded:
+        true,
+
+      verified:
+        true,
+
+      segmentCount:
+        10,
+
       data
     };
-  } catch (firstError) {
+
+  } catch (
+    firstError
+  ) {
     console.warn(
-      "[FacialPreflight] Primeira tentativa de upload falhou:",
+      "[FacialPreflight] Primeira tentativa falhou:",
       firstError
     );
+  }
 
-    /*
-     * Segunda tentativa controlada.
-     */
+  /*
+   * ==========================================================
+   * SEGUNDA TENTATIVA
+   * ==========================================================
+   *
+   * Um FormData completamente novo será criado.
+   */
 
-    await new Promise(
-      resolve =>
-        setTimeout(
-          resolve,
-          1200
-        )
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        1200
+      )
+  );
+
+  try {
+    const data =
+      await performUpload();
+
+    console.info(
+      "[FacialPreflight] Upload confirmado na segunda tentativa.",
+      data
     );
 
-    try {
-      const data =
-        await performUpload();
+    return {
+      uploaded:
+        true,
 
-      console.info(
-        "[FacialPreflight] Upload confirmado na segunda tentativa.",
-        data
-      );
+      verified:
+        true,
 
-      return {
-        uploaded: true,
-        verified: true,
-        segmentCount: 10,
-        data
-      };
-    } catch (secondError) {
-      console.error(
-        "[FacialPreflight] As duas tentativas de upload falharam:",
-        secondError
-      );
+      segmentCount:
+        10,
 
-      throw new Error(
-        secondError?.message ||
-        firstError?.message ||
-        "Não foi possível armazenar os 10 vídeos de liveness."
-      );
-    }
+      data
+    };
+
+  } catch (
+    secondError
+  ) {
+    console.error(
+      "[FacialPreflight] As duas tentativas falharam.",
+      secondError
+    );
+
+    throw new Error(
+      secondError?.message ||
+      "Não foi possível armazenar os 10 vídeos de liveness."
+    );
   }
 }
   /*
