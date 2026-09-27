@@ -1884,8 +1884,7 @@ const AdminApp = (() => {
      * IDENTITY
      * ========================================================
      */
-
-    function renderIdentityDetails(
+      function renderIdentityDetails(
     application
 ) {
     const identity =
@@ -1924,12 +1923,6 @@ const AdminApp = (() => {
                 : "IDENTITY_PREPARATION"
         );
 
-    /*
-     * ========================================================
-     * RESUMO PRINCIPAL
-     * ========================================================
-     */
-
     setText(
         "#detailFaceCount",
         count
@@ -1942,13 +1935,6 @@ const AdminApp = (() => {
         ),
         status
     );
-
-
-    /*
-     * ========================================================
-     * PROGRESSO
-     * ========================================================
-     */
 
     const progress =
         $(
@@ -1970,19 +1956,6 @@ const AdminApp = (() => {
             `${percentage}%`;
     }
 
-
-    /*
-     * ========================================================
-     * INFORMAÇÃO EXTRA DA SESSÃO DE LIVENESS
-     * ========================================================
-     *
-     * O painel antigo não tinha elementos específicos
-     * para estes dados.
-     *
-     * Por isso criamos dinamicamente um bloco dentro
-     * do cartão de identidade, sem alterar o HTML existente.
-     */
-
     const identityCard =
         document
             .querySelector(
@@ -1995,7 +1968,6 @@ const AdminApp = (() => {
     if (!identityCard) {
         return;
     }
-
 
     let livenessPanel =
         identityCard.querySelector(
@@ -2016,13 +1988,6 @@ const AdminApp = (() => {
         );
     }
 
-
-    /*
-     * ========================================================
-     * SEM LIVENESS
-     * ========================================================
-     */
-
     if (!liveness) {
         livenessPanel.innerHTML =
             `
@@ -2040,13 +2005,6 @@ const AdminApp = (() => {
 
         return;
     }
-
-
-    /*
-     * ========================================================
-     * DADOS DA SESSÃO
-     * ========================================================
-     */
 
     const score =
         Number(
@@ -2077,25 +2035,26 @@ const AdminApp = (() => {
                         ? "Em processamento"
                         : "Não iniciado";
 
-
-    /*
-     * ========================================================
-     * POSIÇÕES
-     * ========================================================
-     */
-
     const orderedPositions =
         [...positions]
             .sort(
                 (a, b) =>
                     Number(
-                        a?.position || 0
+                        a?.position ||
+                        0
                     ) -
                     Number(
-                        b?.position || 0
+                        b?.position ||
+                        0
                     )
             );
 
+    const applicationId =
+        String(
+            application?.id ||
+            state.selectedApplicationId ||
+            ""
+        );
 
     const positionItems =
         Array.from(
@@ -2157,15 +2116,37 @@ const AdminApp = (() => {
 
                 const positionVerified =
                     position.verified === true &&
-                    position.faceDetected === true &&
-                    position.singleFace === true;
+                    (
+                        position.faceDetected ===
+                            undefined ||
+                        position.faceDetected ===
+                            true
+                    ) &&
+                    (
+                        position.singleFace ===
+                            undefined ||
+                        position.singleFace ===
+                            true
+                    );
 
                 const smile =
-                    position.smileDetected === true;
+                    position.smileDetected ===
+                    true;
 
                 const positionLabel =
                     position.label ||
                     `Posição ${expected}`;
+
+                /*
+                 * URL DO VÍDEO
+                 *
+                 * O backend já possui esta rota.
+                 */
+
+                const videoUrl =
+                    `/api/admin/liveness/${encodeURIComponent(
+                        applicationId
+                    )}/${expected}`;
 
                 return `
                     <div class="admin-liveness-position ${
@@ -2234,18 +2215,28 @@ const AdminApp = (() => {
 
                         </div>
 
+                        ${
+                            positionVerified
+                                ? `
+                                    <button
+                                        type="button"
+                                        class="admin-liveness-play"
+                                        data-liveness-video="${escapeHtml(
+                                            videoUrl
+                                        )}"
+                                        data-liveness-position="${expected}"
+                                    >
+                                        ▶ Reproduzir
+                                    </button>
+                                `
+                                : ""
+                        }
+
                     </div>
                 `;
             }
         )
         .join("");
-
-
-    /*
-     * ========================================================
-     * RENDER
-     * ========================================================
-     */
 
     livenessPanel.innerHTML =
         `
@@ -2272,7 +2263,6 @@ const AdminApp = (() => {
                 </span>
 
             </div>
-
 
             <div class="admin-liveness-summary">
 
@@ -2316,7 +2306,8 @@ const AdminApp = (() => {
 
                     <strong>
                         ${
-                            liveness.verified === true
+                            liveness.verified ===
+                            true
                                 ? "SIM"
                                 : "NÃO"
                         }
@@ -2324,7 +2315,6 @@ const AdminApp = (() => {
                 </div>
 
             </div>
-
 
             <div class="admin-liveness-times">
 
@@ -2354,7 +2344,6 @@ const AdminApp = (() => {
 
             </div>
 
-
             <div class="admin-liveness-positions">
 
                 <div class="admin-liveness-positions-title">
@@ -2370,9 +2359,180 @@ const AdminApp = (() => {
                 ${positionItems}
 
             </div>
-        `;
-}
 
+            <div
+                class="admin-liveness-player"
+                id="adminLivenessPlayer"
+                hidden
+            >
+                <div class="admin-liveness-player-header">
+
+                    <div>
+                        <span class="section-kicker">
+                            VÍDEO
+                        </span>
+
+                        <strong
+                            id="adminLivenessPlayerTitle"
+                        >
+                            Posição
+                        </strong>
+                    </div>
+
+                    <button
+                        type="button"
+                        class="admin-liveness-player-close"
+                        id="adminLivenessPlayerClose"
+                    >
+                        Fechar
+                    </button>
+
+                </div>
+
+                <video
+                    id="adminLivenessVideo"
+                    class="admin-liveness-video"
+                    controls
+                    playsinline
+                    preload="metadata"
+                ></video>
+
+                <div
+                    class="admin-liveness-player-status"
+                    id="adminLivenessPlayerStatus"
+                >
+                    Vídeo pronto para reprodução.
+                </div>
+            </div>
+        `;
+
+    /*
+     * ========================================================
+     * PLAYER
+     * ========================================================
+     */
+
+    const player =
+        document.getElementById(
+            "adminLivenessPlayer"
+        );
+
+    const video =
+        document.getElementById(
+            "adminLivenessVideo"
+        );
+
+    const playerTitle =
+        document.getElementById(
+            "adminLivenessPlayerTitle"
+        );
+
+    const playerStatus =
+        document.getElementById(
+            "adminLivenessPlayerStatus"
+        );
+
+    const closeButton =
+        document.getElementById(
+            "adminLivenessPlayerClose"
+        );
+
+    function closePlayer() {
+        if (!player) {
+            return;
+        }
+
+        if (video) {
+            video.pause();
+            video.removeAttribute(
+                "src"
+            );
+            video.load();
+        }
+
+        player.hidden =
+            true;
+    }
+
+    if (closeButton) {
+        closeButton.onclick =
+            closePlayer;
+    }
+
+    livenessPanel
+        .querySelectorAll(
+            "[data-liveness-video]"
+        )
+        .forEach(
+            button => {
+                button.addEventListener(
+                    "click",
+                    () => {
+                        const url =
+                            button.dataset
+                                .livenessVideo;
+
+                        const position =
+                            button.dataset
+                                .livenessPosition;
+
+                        if (
+                            !url ||
+                            !video
+                        ) {
+                            return;
+                        }
+
+                        if (player) {
+                            player.hidden =
+                                false;
+                        }
+
+                        if (playerTitle) {
+                            playerTitle.textContent =
+                                `Posição ${position}`;
+                        }
+
+                        if (playerStatus) {
+                            playerStatus.textContent =
+                                "A carregar vídeo...";
+                        }
+
+                        video.pause();
+
+                        video.src =
+                            url;
+
+                        video.load();
+
+                        video.onloadedmetadata =
+                            () => {
+                                if (playerStatus) {
+                                    playerStatus.textContent =
+                                        "Vídeo carregado. Pode reproduzir.";
+                                }
+                            };
+
+                        video.onerror =
+                            () => {
+                                if (playerStatus) {
+                                    playerStatus.textContent =
+                                        "Não foi possível carregar este vídeo.";
+                                }
+                            };
+
+                        player.scrollIntoView({
+                            behavior:
+                                "smooth",
+
+                            block:
+                                "nearest"
+                        });
+                    }
+                );
+            }
+        );
+} 
     /*
      * ========================================================
      * BOTS / VFS
