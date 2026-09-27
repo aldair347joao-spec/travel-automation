@@ -1610,6 +1610,21 @@
    * GRAVAÇÃO SELETIVA
    * ==========================================================
    */
+  /*
+   * ==========================================================
+   * GRAVAÇÃO SELETIVA
+   * ==========================================================
+   *
+   * Cada posição aprovada gera exatamente um segmento.
+   *
+   * Regras:
+   * - somente grava quando a posição está correta;
+   * - nunca guarda Blob vazio;
+   * - espera o último dataavailable antes de finalizar;
+   * - mantém posição numérica 1..10;
+   * - nunca substitui silenciosamente um segmento válido;
+   * - o backend continua responsável pela confirmação final.
+   */
 
   function getSupportedVideoMimeType() {
     if (
@@ -1726,13 +1741,20 @@
 
       recorder.ondataavailable =
         event => {
-          if (
-            event &&
-            event.data &&
-            event.data.size > 0
-          ) {
-            activePositionChunks.push(
-              event.data
+          try {
+            if (
+              event &&
+              event.data &&
+              event.data.size > 0
+            ) {
+              activePositionChunks.push(
+                event.data
+              );
+            }
+          } catch (error) {
+            console.warn(
+              "[FacialPreflight] Falha ao receber bloco de vídeo:",
+              error
             );
           }
         };
@@ -1745,13 +1767,16 @@
           );
         };
 
+      recorder.onstart =
+        () => {
+          console.info(
+            "[FacialPreflight] Gravação iniciada:",
+            position.id
+          );
+        };
+
       recorder.start(
         CONFIG.recordingTimesliceMs
-      );
-
-      console.info(
-        "[FacialPreflight] Gravação iniciada:",
-        position.id
       );
 
       return true;
@@ -1770,7 +1795,7 @@
     }
   }
 
-    function stopCorrectPositionRecording(
+  function stopCorrectPositionRecording(
     saveSegment
   ) {
     return new Promise(
@@ -1779,14 +1804,17 @@
           activePositionRecorder;
 
         if (
-          !recorder ||
-          recorder.state ===
-            "inactive"
+          !recorder
         ) {
           resetActiveRecorder();
           resolve(null);
           return;
         }
+
+        /*
+         * Guardamos todas as informações da sessão
+         * ANTES de limpar o estado global.
+         */
 
         const positionId =
           activePositionRecordingId;
@@ -1804,11 +1832,30 @@
           recorder.mimeType ||
           "video/webm";
 
-        const finishRecorder =
+        let finished =
+          false;
+
+        const finalize =
           () => {
+            if (finished) {
+              return;
+            }
+
+            finished = true;
+
             try {
               const chunks =
-                activePositionChunks.slice();
+                Array.isArray(
+                  activePositionChunks
+                )
+                  ? activePositionChunks.slice()
+                  : [];
+
+              /*
+               * O onstop só é executado depois do último
+               * dataavailable. Portanto este Blob representa
+               * todo o material entregue pelo MediaRecorder.
+               */
 
               const blob =
                 new Blob(
@@ -1828,28 +1875,65 @@
                     )
                   : 0;
 
+              /*
+               * Capturar os dados antes de resetar.
+               */
+
+              const blobSize =
+                Number(
+                  blob?.size ||
+                  0
+                );
+
+              const validPosition =
+                Number.isInteger(
+                  canonicalPosition
+                ) &&
+                canonicalPosition >= 1 &&
+                canonicalPosition <= 10;
+
+              const validBlob =
+                blobSize >=
+                CONFIG.minimumVideoSegmentBytes;
+
+              /*
+               * Agora podemos limpar o recorder.
+               */
+
               resetActiveRecorder();
 
               /*
-               * Nunca guardar segmento inválido.
+               * Nunca guardar gravação inválida.
                */
 
               if (
                 !saveSegment ||
-                !canonicalPosition ||
-                !blob ||
-                !blob.size ||
-                blob.size <
-                  CONFIG.minimumVideoSegmentBytes
+                !validPosition ||
+                !validBlob
               ) {
+                console.warn(
+                  "[FacialPreflight] Segmento descartado:",
+                  {
+                    position:
+                      canonicalPosition,
+
+                    positionId,
+
+                    saveSegment,
+
+                    blobSize,
+
+                    minimumRequired:
+                      CONFIG.minimumVideoSegmentBytes
+                  }
+                );
+
                 resolve(null);
                 return;
               }
 
-              /*
-               * A posição enviada ao backend é SEMPRE
-               * numérica de 1 a 10.
-               */
+              const completedAt =
+                new Date().toISOString();
 
               const segment = {
                 position:
@@ -1866,7 +1950,7 @@
                   mimeType,
 
                 size:
-                  blob.size,
+                  blobSize,
 
                 durationMs,
 
@@ -1877,15 +1961,43 @@
                       ).toISOString()
                     : null,
 
-                completedAt:
-                  new Date().toISOString(),
+                completedAt,
 
                 blob
               };
 
-              videoSegments.push(
-                segment
-              );
+              /*
+               * Segurança adicional:
+               * se por algum erro interno já existir um
+               * segmento desta posição, não criamos duplicado.
+               */
+
+              const existingIndex =
+                videoSegments.findIndex(
+                  item =>
+                    Number(
+                      item?.position
+                    ) ===
+                    canonicalPosition
+                );
+
+              if (
+                existingIndex >= 0
+              ) {
+                console.warn(
+                  "[FacialPreflight] Segmento existente substituído:",
+                  canonicalPosition
+                );
+
+                videoSegments[
+                  existingIndex
+                ] =
+                  segment;
+              } else {
+                videoSegments.push(
+                  segment
+                );
+              }
 
               videoRecordingAvailable =
                 videoSegments.length >
@@ -1900,9 +2012,12 @@
                   positionId,
 
                   size:
-                    blob.size,
+                    blobSize,
 
-                  durationMs
+                  durationMs,
+
+                  totalSegments:
+                    videoSegments.length
                 }
               );
 
@@ -1910,28 +2025,72 @@
                 segment
               );
             } catch (error) {
-              console.warn(
+              console.error(
                 "[FacialPreflight] Erro ao finalizar segmento:",
                 error
               );
 
               resetActiveRecorder();
+
               resolve(null);
             }
           };
 
+        /*
+         * O evento final de stop ocorre depois do último
+         * dataavailable.
+         */
+
         recorder.onstop =
-          finishRecorder;
+          finalize;
+
+        /*
+         * Se o recorder ainda estiver gravando,
+         * solicitamos explicitamente o último bloco
+         * antes de parar.
+         *
+         * requestData() gera um dataavailable com os
+         * dados acumulados até aquele momento.
+         */
 
         try {
-          recorder.stop();
+          if (
+            recorder.state ===
+            "recording"
+          ) {
+            try {
+              recorder.requestData();
+            } catch (
+              requestError
+            ) {
+              console.warn(
+                "[FacialPreflight] requestData não disponível:",
+                requestError
+              );
+            }
+
+            recorder.stop();
+
+            return;
+          }
+
+          /*
+           * Se o browser já tornou o recorder inactive,
+           * não devemos chamar stop() novamente.
+           *
+           * O conteúdo disponível ainda pode ser aproveitado
+           * através do mesmo processo de finalização.
+           */
+
+          finalize();
         } catch (error) {
-          console.warn(
+          console.error(
             "[FacialPreflight] Falha ao parar gravação:",
             error
           );
 
           resetActiveRecorder();
+
           resolve(null);
         }
       }
@@ -3318,8 +3477,7 @@
 
       success,
 
-      passed:
-        completed,
+      passed: success,
 
       clientId,
 
