@@ -2997,247 +2997,271 @@
    */
 
   async function completePosition(
-    evaluation,
-    analysis
+  evaluation,
+  analysis
+) {
+  const position =
+    POSITIONS[
+      currentPositionIndex
+    ];
+
+  if (
+    !position ||
+    !running
   ) {
-    const position =
-      POSITIONS[
-        currentPositionIndex
-      ];
+    return;
+  }
 
-    if (
-      !position ||
-      !running
-    ) {
-      return;
-    }
+  stableFrames = 0;
 
-    stableFrames = 0;
+  /*
+   * A posição facial já foi validada.
+   *
+   * O vídeo é importante, mas uma falha de gravação
+   * NÃO invalida o movimento que o cliente acabou
+   * de executar.
+   *
+   * Se o vídeo falhar:
+   * - a posição continua aprovada;
+   * - avançamos normalmente;
+   * - no final pedimos SOMENTE os vídeos em falta.
+   */
 
-    /*
-     * Primeiro fechamos o vídeo.
-     *
-     * Neste ponto sabemos que a posição
-     * foi realmente aprovada.
-     */
+  const videoSegment =
+    await stopCorrectPositionRecording(
+      true
+    );
 
-        const videoSegment =
-      await stopCorrectPositionRecording(
-        true
-      );
+  const canonicalPosition =
+    currentPositionIndex + 1;
 
-    /*
-     * A posição NÃO pode ser concluída sem um vídeo real.
-     *
-     * Isto é obrigatório:
-     * - Blob existente
-     * - posição numérica válida
-     * - tamanho mínimo
-     * - duração
-     */
-
-    if (
-      !videoSegment ||
-      !videoSegment.blob ||
-      !videoSegment.blob.size ||
-      videoSegment.size <
-        CONFIG.minimumVideoSegmentBytes ||
-      !Number.isInteger(
+  const hasValidVideo =
+    Boolean(
+      videoSegment &&
+      videoSegment.blob &&
+      videoSegment.blob.size >=
+        CONFIG.minimumVideoSegmentBytes &&
+      Number.isInteger(
         Number(
           videoSegment.position
         )
-      ) ||
+      ) &&
       Number(
         videoSegment.position
-      ) < 1 ||
+      ) === canonicalPosition &&
       Number(
-        videoSegment.position
-      ) > 10
-    ) {
-      stableFrames = 0;
+        videoSegment.durationMs
+      ) > 0
+    );
 
-      setStatus(
-        "A posição foi detectada, mas o vídeo não foi gravado corretamente. Vamos repetir esta posição.",
-        "warning"
-      );
+  const completedAt =
+    new Date().toISOString();
 
-      emitError(
-        `O vídeo da posição ${currentPositionIndex + 1} não foi gravado corretamente.`
-      );
+  /*
+   * Verifica se esta posição já tinha sido
+   * aprovada anteriormente.
+   *
+   * Isto acontece quando estamos a recuperar
+   * somente um vídeo que faltou.
+   */
 
-      /*
-       * Repetimos a mesma posição.
-       * NÃO avançamos para a próxima.
-       */
-
-      positionStartedAt =
-        Date.now();
-
-      speakInstruction(
-        position.instruction
-      );
-
-      return;
-    }
-
-    const completedAt =
-      new Date().toISOString();
-
-    const livenessPosition = {
-      position:
-        currentPositionIndex + 1,
-
-      label:
-        position.label,
-
-      instruction:
-        position.instruction,
-
-      sequence:
-        completedPositions.length + 1,
-
-      score:
+  const existingCapturedIndex =
+    capturedPositions.findIndex(
+      item =>
         Number(
-          Number(
-            evaluation?.score || 0
-          ).toFixed(4)
-        ),
+          item?.position
+        ) === canonicalPosition
+    );
 
-      positionScore:
+  const existingCaptured =
+    existingCapturedIndex >= 0
+      ? capturedPositions[
+          existingCapturedIndex
+        ]
+      : null;
+
+  const sequence =
+    existingCaptured
+      ? Number(
+          existingCaptured.sequence ||
+            canonicalPosition
+        )
+      : completedPositions.length + 1;
+
+  const livenessPosition = {
+    position:
+      canonicalPosition,
+
+    label:
+      position.label,
+
+    instruction:
+      position.instruction,
+
+    sequence,
+
+    score:
+      Number(
         Number(
-          Number(
-            evaluation?.score || 0
-          ).toFixed(4)
-        ),
+          evaluation?.score || 0
+        ).toFixed(4)
+      ),
 
-      faceDetected:
-        Boolean(
-          analysis?.faceDetected
-        ),
-
-      singleFace:
-        Boolean(
-          analysis?.singleFace
-        ),
-
-      faceCount:
+    positionScore:
+      Number(
         Number(
-          analysis?.faceCount || 0
+          evaluation?.score || 0
+        ).toFixed(4)
+      ),
+
+    faceDetected:
+      Boolean(
+        analysis?.faceDetected
+      ),
+
+    singleFace:
+      Boolean(
+        analysis?.singleFace
+      ),
+
+    faceCount:
+      Number(
+        analysis?.faceCount || 0
+      ),
+
+    faceArea:
+      Number(
+        analysis?.faceArea || 0
+      ),
+
+    detectionScore:
+      Number(
+        analysis?.detectionScore || 0
+      ),
+
+    pose: {
+      yaw:
+        Number(
+          analysis?.pose?.yaw || 0
         ),
 
-      faceArea:
+      pitch:
         Number(
-          analysis?.faceArea || 0
+          analysis?.pose?.pitch || 0
+        ),
+
+      roll:
+        Number(
+          analysis?.pose?.roll || 0
+        )
+    },
+
+    quality: {
+      brightness:
+        Number(
+          analysis?.quality?.brightness || 0
+        ),
+
+      brightnessScore:
+        Number(
+          analysis?.quality?.brightnessScore || 0
+        ),
+
+      sharpnessScore:
+        Number(
+          analysis?.quality?.sharpnessScore || 0
+        ),
+
+      faceSizeScore:
+        Number(
+          analysis?.quality?.faceSizeScore || 0
         ),
 
       detectionScore:
         Number(
-          analysis?.detectionScore || 0
-        ),
+          analysis?.quality?.detectionScore || 0
+        )
+    },
 
-      pose: {
-        yaw:
-          Number(
-            analysis?.pose?.yaw || 0
-          ),
+    smileDetected:
+      position.id === "smile"
+        ? Number(
+            evaluation?.smileScore || 0
+          ) >=
+          CONFIG.smileThreshold
+        : false,
 
-        pitch:
-          Number(
-            analysis?.pose?.pitch || 0
-          ),
+    smileScore:
+      Number(
+        evaluation?.smileScore || 0
+      ),
 
-        roll:
-          Number(
-            analysis?.pose?.roll || 0
-          )
-      },
+    /*
+     * A posição facial é válida mesmo quando
+     * o vídeo ainda precisa de recuperação.
+     */
+    verified: true,
 
-      quality: {
-        brightness:
-          Number(
-            analysis?.quality?.brightness || 0
-          ),
+    completedAt,
 
-        brightnessScore:
-          Number(
-            analysis?.quality?.brightnessScore || 0
-          ),
+    video:
+      hasValidVideo
+        ? {
+            available: true,
 
-        sharpnessScore:
-          Number(
-            analysis?.quality?.sharpnessScore || 0
-          ),
+            position:
+              Number(
+                videoSegment.position
+              ),
 
-        faceSizeScore:
-          Number(
-            analysis?.quality?.faceSizeScore || 0
-          ),
+            positionId:
+              position.id,
 
-        detectionScore:
-          Number(
-            analysis?.quality?.detectionScore || 0
-          )
-      },
+            sequence:
+              Number(
+                videoSegment.sequence
+              ),
 
-      smileDetected:
-        position.id === "smile"
-          ? Number(
-              evaluation?.smileScore || 0
-            ) >=
-            CONFIG.smileThreshold
-          : false,
+            mimeType:
+              videoSegment.mimeType,
 
-      smileScore:
-        Number(
-          evaluation?.smileScore || 0
-        ),
+            size:
+              Number(
+                videoSegment.size
+              ),
 
-      verified: true,
+            durationMs:
+              Number(
+                videoSegment.durationMs
+              ),
 
-      completedAt,
+            startedAt:
+              videoSegment.startedAt,
 
-      /*
-       * A referência do vídeo pertence
-       * exclusivamente à posição correta.
-       */
+            completedAt:
+              videoSegment.completedAt
+          }
+        : {
+            available: false,
 
-            video: {
-        available: true,
+            position:
+              canonicalPosition,
 
-        position:
-          Number(
-            videoSegment.position
-          ),
+            positionId:
+              position.id,
 
-        positionId:
-          position.id,
+            sequence,
 
-        sequence:
-          Number(
-            videoSegment.sequence
-          ),
+            retryRequired: true
+          }
+  };
 
-        mimeType:
-          videoSegment.mimeType,
-
-        size:
-          Number(
-            videoSegment.size
-          ),
-
-        durationMs:
-          Number(
-            videoSegment.durationMs
-          ),
-
-        startedAt:
-          videoSegment.startedAt,
-
-        completedAt:
-          videoSegment.completedAt
-      }
-    };
-
+  /*
+   * Primeira aprovação da posição.
+   */
+  if (
+    !existingCaptured
+  ) {
     completedPositions.push(
       position.id
     );
@@ -3245,87 +3269,250 @@
     capturedPositions.push(
       livenessPosition
     );
-
-    safeCall(
-      "onPosition",
-      {
-        completed: true,
-
-        completedCount:
-          completedPositions.length,
-
-        total:
-          POSITIONS.length,
-
-        position:
-          position.id,
-
-        positionData: {
-          id:
-            position.id,
-
-          label:
-            position.label,
-
-          sequence:
-            livenessPosition.sequence,
-
-          score:
-            livenessPosition.score,
-
-          verified: true,
-
-          video:
-            livenessPosition.video
-        },
-
-        score:
-          evaluation.score,
-
-        analysis,
-
-        liveness:
-          livenessPosition
-      }
-    );
-
-    const nextIndex =
-      currentPositionIndex +
-      1;
-
-    if (
-      nextIndex >=
-      POSITIONS.length
-    ) {
-      await finish();
-      return;
-    }
-
-    currentPositionIndex =
-      nextIndex;
-
-    positionStartedAt =
-      Date.now();
-
-    const next =
-      POSITIONS[
-        currentPositionIndex
-      ];
-
-    if (next) {
-      setStatus(
-        next.instruction,
-        "instruction"
-      );
-
-      speakInstruction(
-        next.instruction
-      );
-    }
-
-    emitProgress();
+  } else {
+    /*
+     * Recuperação:
+     * substituímos somente os dados desta posição.
+     *
+     * As outras posições permanecem intactas.
+     */
+    capturedPositions[
+      existingCapturedIndex
+    ] = livenessPosition;
   }
 
+  if (
+    hasValidVideo
+  ) {
+    setStatus(
+      existingCaptured
+        ? "Vídeo recuperado. Continuando."
+        : "Posição concluída. Continuando.",
+      "success"
+    );
+  } else {
+    setStatus(
+      "Posição concluída. O vídeo será recuperado no final, sem repetir esta sessão.",
+      "warning"
+    );
+  }
+
+  safeCall(
+    "onPosition",
+    {
+      completed: true,
+
+      completedCount:
+        completedPositions.length,
+
+      total:
+        POSITIONS.length,
+
+      position:
+        position.id,
+
+      positionData: {
+        id:
+          position.id,
+
+        label:
+          position.label,
+
+        sequence,
+
+        score:
+          livenessPosition.score,
+
+        verified: true,
+
+        video:
+          livenessPosition.video
+      },
+
+      score:
+        evaluation.score,
+
+      analysis,
+
+      liveness:
+        livenessPosition,
+
+      videoStored:
+        hasValidVideo,
+
+      videoRetryRequired:
+        !hasValidVideo
+    }
+  );
+
+  /*
+   * Se as 10 posições já foram reconhecidas,
+   * não começamos uma nova posição.
+   *
+   * Primeiro recuperamos apenas os vídeos
+   * que estiverem em falta.
+   */
+  if (
+    completedPositions.length >=
+    POSITIONS.length
+  ) {
+    await beginVideoRecoveryOrFinish();
+    return;
+  }
+
+  const nextIndex =
+    currentPositionIndex +
+    1;
+
+  currentPositionIndex =
+    nextIndex;
+
+  positionStartedAt =
+    Date.now();
+
+  const next =
+    POSITIONS[
+      currentPositionIndex
+    ];
+
+  if (next) {
+    setStatus(
+      next.instruction,
+      "instruction"
+    );
+
+    speakInstruction(
+      next.instruction
+    );
+  }
+
+  emitProgress();
+}  
+/*
+ * ==========================================================
+ * RECUPERAÇÃO SELETIVA DOS VÍDEOS
+ * ==========================================================
+ *
+ * As posições faciais aprovadas são preservadas.
+ *
+ * Se algum vídeo não existir, somente essa posição
+ * volta a ser gravada.
+ */
+
+function getMissingVideoPositions() {
+  const validPositions =
+    new Set(
+      videoSegments
+        .filter(
+          segment =>
+            segment &&
+            segment.blob &&
+            segment.blob.size >=
+              CONFIG.minimumVideoSegmentBytes &&
+            Number.isInteger(
+              Number(
+                segment.position
+              )
+            ) &&
+            Number(
+              segment.position
+            ) >= 1 &&
+            Number(
+              segment.position
+            ) <= 10 &&
+            Number(
+              segment.durationMs
+            ) > 0
+        )
+        .map(
+          segment =>
+            Number(
+              segment.position
+            )
+        )
+    );
+
+  return POSITIONS
+    .map(
+      (position, index) => ({
+        position,
+        index
+      })
+    )
+    .filter(
+      item =>
+        completedPositions.includes(
+          item.position.id
+        ) &&
+        !validPositions.has(
+          item.index + 1
+        )
+    );
+}
+
+async function beginVideoRecoveryOrFinish() {
+  const missing =
+    getMissingVideoPositions();
+
+  /*
+   * Não falta nenhum vídeo.
+   * Agora podemos finalizar.
+   */
+  if (!missing.length) {
+    await finish();
+    return;
+  }
+
+  /*
+   * Mantemos a sessão viva.
+   *
+   * Não fazemos reset().
+   * Não apagamos completedPositions.
+   * Não apagamos capturedPositions.
+   * Não voltamos para a posição 1.
+   */
+
+  running = true;
+
+  const firstMissing =
+    missing[0];
+
+  currentPositionIndex =
+    firstMissing.index;
+
+  stableFrames = 0;
+
+  positionStartedAt =
+    Date.now();
+
+  const remaining =
+    missing.length;
+
+  const position =
+    firstMissing.position;
+
+  setStatus(
+    remaining === 1
+      ? `Só falta guardar o vídeo da posição ${firstMissing.index + 1}. Repita apenas esta posição.`
+      : `Faltam ${remaining} vídeos. Vamos recuperar apenas esta posição: ${firstMissing.index + 1} de 10.`,
+    "warning"
+  );
+
+  speakInstruction(
+    position.instruction
+  );
+
+  emitProgress();
+
+  if (
+    !animationFrame
+  ) {
+    animationFrame =
+      requestAnimationFrame(
+        processFrame
+      );
+  }
+}
   /*
    * ==========================================================
    * PROGRESSO
@@ -3377,107 +3564,101 @@
    * FINALIZAÇÃO
    * ==========================================================
    */
+   async function finish() {
+  running = false;
 
-  async function finish() {
-    running = false;
+  if (animationFrame) {
+    cancelAnimationFrame(
+      animationFrame
+    );
 
-    if (animationFrame) {
-      cancelAnimationFrame(
-        animationFrame
-      );
+    animationFrame = null;
+  }
 
-      animationFrame = null;
-    }
+  if (
+    activePositionRecorder
+  ) {
+    await discardActivePositionRecording();
+  }
 
-    /*
-     * Nunca deixamos uma gravação aberta.
-     *
-     * Se existir, só será guardada se houver
-     * uma posição oficialmente aprovada.
-     */
-
-    if (
-      activePositionRecorder
-    ) {
-      await discardActivePositionRecording();
-    }
-
-    const scores =
-      capturedPositions.map(
-        item =>
-          Number(
-            item?.score || 0
-          )
-      );
-
-    const score =
-      average(scores);
-
-        const completed =
-      completedPositions.length ===
-      POSITIONS.length;
-
-    /*
-     * ========================================================
-     * VALIDAÇÃO FINAL DOS VÍDEOS
-     * ========================================================
-     */
-
-    const validVideoSegments =
-      videoSegments.filter(
-        segment =>
-          segment &&
-          segment.blob &&
-          segment.blob.size >=
-            CONFIG.minimumVideoSegmentBytes &&
-          Number.isInteger(
-            Number(
-              segment.position
-            )
-          ) &&
-          Number(
-            segment.position
-          ) >= 1 &&
-          Number(
-            segment.position
-          ) <= 10 &&
-          Number(
-            segment.durationMs
-          ) > 0
-      );
-
-    const videoPositions =
-      new Set(
-        validVideoSegments.map(
-          segment =>
-            Number(
-              segment.position
-            )
+  const scores =
+    capturedPositions.map(
+      item =>
+        Number(
+          item?.score || 0
         )
-      );
+    );
 
-    const allTenVideosValid =
-      validVideoSegments.length ===
-        POSITIONS.length &&
-      videoPositions.size ===
-        POSITIONS.length &&
-      [...Array(10)].every(
-        (_, index) =>
-          videoPositions.has(
-            index + 1
+  const score =
+    average(scores);
+
+  const completed =
+    completedPositions.length ===
+    POSITIONS.length;
+
+  const validVideoSegments =
+    videoSegments.filter(
+      segment =>
+        segment &&
+        segment.blob &&
+        segment.blob.size >=
+          CONFIG.minimumVideoSegmentBytes &&
+        Number.isInteger(
+          Number(
+            segment.position
           )
-      );
+        ) &&
+        Number(
+          segment.position
+        ) >= 1 &&
+        Number(
+          segment.position
+        ) <= 10 &&
+        Number(
+          segment.durationMs
+        ) > 0
+    );
 
-    const success =
-      completed &&
-      allTenVideosValid;
+  const videoPositions =
+    new Set(
+      validVideoSegments.map(
+        segment =>
+          Number(
+            segment.position
+          )
+      )
+    );
 
-    result = {
-      completed,
+  const allTenVideosValid =
+    validVideoSegments.length ===
+      POSITIONS.length &&
+    videoPositions.size ===
+      POSITIONS.length &&
+    [...Array(10)].every(
+      (_, index) =>
+        videoPositions.has(
+          index + 1
+        )
+    );
 
-      success,
+  /*
+   * Se os movimentos terminaram mas existem vídeos
+   * em falta, NÃO encerramos a liveness.
+   *
+   * O sistema recupera somente os vídeos ausentes.
+   */
+  if (
+    completed &&
+    !allTenVideosValid
+  ) {
+    await beginVideoRecoveryOrFinish();
 
-      passed: success,
+    return {
+      completed: true,
+
+      success: false,
+
+      passed: false,
 
       clientId,
 
@@ -3502,9 +3683,8 @@
 
       audioReady,
 
-            video: {
-        available:
-          allTenVideosValid,
+      video: {
+        available: false,
 
         supported:
           videoRecordingSupported,
@@ -3515,11 +3695,9 @@
         expectedSegments:
           POSITIONS.length,
 
-        complete:
-          allTenVideosValid,
+        complete: false,
 
-        verified:
-          allTenVideosValid,
+        verified: false,
 
         positions:
           validVideoSegments.map(
@@ -3558,35 +3736,136 @@
                 segment.completedAt
             })
           )
-      },
-
-      completedAt:
-        new Date().toISOString()
+      }
     };
-
-        if (
-      completed &&
-      allTenVideosValid
-    ) {
-      setStatus(
-        "As dez posições e os dez vídeos foram concluídos corretamente.",
-        "success"
-      );
-    } else {
-      setStatus(
-        "A liveness não foi concluída.",
-        "warning"
-      );
-    }
-
-    safeCall(
-      "onComplete",
-      result
-    );
-
-    return result;
   }
 
+  /*
+   * Só existe aprovação final quando:
+   *
+   * - 10 posições foram reconhecidas;
+   * - 10 vídeos válidos existem;
+   * - as posições dos vídeos são 1..10.
+   */
+
+  const success =
+    completed &&
+    allTenVideosValid;
+
+  result = {
+    completed,
+
+    success,
+
+    /*
+     * IMPORTANTE:
+     * nunca marcar passed=true apenas porque
+     * as posições faciais foram concluídas.
+     */
+    passed:
+      success,
+
+    clientId,
+
+    sessionId,
+
+    completedCount:
+      completedPositions.length,
+
+    total:
+      POSITIONS.length,
+
+    score:
+      Number(
+        score.toFixed(4)
+      ),
+
+    positions:
+      capturedPositions,
+
+    completedPositions:
+      completedPositions.slice(),
+
+    audioReady,
+
+    video: {
+      available:
+        allTenVideosValid,
+
+      supported:
+        videoRecordingSupported,
+
+      segmentCount:
+        validVideoSegments.length,
+
+      expectedSegments:
+        POSITIONS.length,
+
+      complete:
+        allTenVideosValid,
+
+      verified:
+        allTenVideosValid,
+
+      positions:
+        validVideoSegments.map(
+          segment => ({
+            position:
+              Number(
+                segment.position
+              ),
+
+            positionId:
+              segment.positionId ||
+              null,
+
+            sequence:
+              Number(
+                segment.sequence
+              ),
+
+            mimeType:
+              segment.mimeType,
+
+            size:
+              Number(
+                segment.size
+              ),
+
+            durationMs:
+              Number(
+                segment.durationMs
+              ),
+
+            startedAt:
+              segment.startedAt,
+
+            completedAt:
+              segment.completedAt
+          })
+        )
+    },
+
+    completedAt:
+      new Date().toISOString()
+  };
+
+  if (
+    success
+  ) {
+    setStatus(
+      "As dez posições e os dez vídeos foram concluídos corretamente.",
+      "success"
+    );
+  }
+
+  safeCall(
+    "onComplete",
+    result
+  );
+
+  return result;
+} 
   /*
    * ==========================================================
    * STOP
