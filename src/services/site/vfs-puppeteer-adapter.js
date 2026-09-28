@@ -475,24 +475,79 @@ if (
       navigator.mediaDevices
     );
 
+  /*
+   * ============================================================
+   * CÂMERA PERSISTENTE VFS
+   * ============================================================
+   *
+   * O VFS chama getUserMedia() uma única vez.
+   *
+   * A partir daí mantemos o mesmo MediaStream.
+   *
+   * O conteúdo visual será controlado posteriormente pelo
+   * backend através da sessão facial persistente.
+   */
+
+  window.__travelAutomationCamera = {
+    initialized: false,
+    stream: null,
+
+    canvas: null,
+    context: null,
+
+    video: null,
+
+    width: 640,
+    height: 480,
+    fps: 30,
+
+    active: false,
+    streamId: null,
+
+    currentPosition: null,
+    currentVideoId: null,
+
+    lastFrameAt: null
+  };
+
+  window.__travelAutomationMediaState = {
+    requested: false,
+    opened: false,
+    active: false,
+    constraints: null,
+    requestedAt: null,
+    openedAt: null,
+    tracks: [],
+    error: null
+  };
+
   navigator.mediaDevices.getUserMedia =
     async function (constraints) {
-      window.__travelAutomationMediaState = {
-        ...window.__travelAutomationMediaState,
+      const mediaState =
+        window.__travelAutomationMediaState;
 
-        requested: true,
-        constraints:
-          constraints || null,
-        requestedAt:
-          new Date().toISOString()
-      };
+      mediaState.requested = true;
+      mediaState.constraints =
+        constraints || null;
+      mediaState.requestedAt =
+        new Date().toISOString();
 
-      try {
+      /*
+       * Se a câmera persistente já foi criada,
+       * NÃO chamamos getUserMedia novamente.
+       *
+       * Isso é fundamental porque o VFS mantém
+       * a mesma sessão de câmera durante toda
+       * a etapa facial.
+       */
+      if (
+        window.__travelAutomationCamera.initialized &&
+        window.__travelAutomationCamera.stream
+      ) {
         const stream =
-          await original(constraints);
+          window.__travelAutomationCamera.stream;
 
         const tracks =
-          stream &&
           typeof stream.getTracks ===
             "function"
             ? stream.getTracks()
@@ -505,43 +560,159 @@ if (
               track.kind === "video"
           );
 
-        window.__travelAutomationMediaState = {
-          ...window.__travelAutomationMediaState,
+        mediaState.opened =
+          videoTracks.length > 0;
 
-          requested: true,
-          opened: videoTracks.length > 0,
-          active: videoTracks.length > 0,
-          openedAt:
-            videoTracks.length > 0
-              ? new Date().toISOString()
-              : null,
-          tracks:
-            videoTracks.map(
-              track => ({
-                id: track.id || null,
-                kind: track.kind || null,
-                readyState:
-                  track.readyState ||
-                  null,
-                label:
-                  track.label ||
-                  null
-              })
-            )
+        mediaState.active =
+          videoTracks.some(
+            track =>
+              track.readyState === "live"
+          );
+
+        mediaState.openedAt =
+          mediaState.openedAt ||
+          new Date().toISOString();
+
+        mediaState.tracks =
+          videoTracks.map(
+            track => ({
+              id: track.id || null,
+              kind: track.kind || null,
+              readyState:
+                track.readyState || null,
+              label:
+                track.label || null
+            })
+          );
+
+        return stream;
+      }
+
+      try {
+        /*
+         * Canvas permanente.
+         *
+         * Ele será a fonte visual do MediaStream.
+         */
+        const canvas =
+          document.createElement("canvas");
+
+        canvas.width = 640;
+        canvas.height = 480;
+
+        const context =
+          canvas.getContext("2d", {
+            alpha: false
+          });
+
+        if (!context) {
+          throw new Error(
+            "Não foi possível criar o contexto da câmera persistente."
+          );
+        }
+
+        /*
+         * Frame inicial neutro.
+         *
+         * Posteriormente será substituído
+         * pelo vídeo da posição solicitada.
+         */
+        context.fillStyle = "#000000";
+        context.fillRect(
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+
+        /*
+         * O stream permanece ligado ao canvas.
+         */
+        const stream =
+          canvas.captureStream(30);
+
+        if (
+          !stream ||
+          typeof stream.getTracks !==
+            "function"
+        ) {
+          throw new Error(
+            "Canvas não produziu um MediaStream válido."
+          );
+        }
+
+        const videoTracks =
+          stream
+            .getTracks()
+            .filter(
+              track =>
+                track &&
+                track.kind === "video"
+            );
+
+        if (!videoTracks.length) {
+          throw new Error(
+            "O MediaStream persistente não possui faixa de vídeo."
+          );
+        }
+
+        /*
+         * Guardamos tudo globalmente para que o Node
+         * possa controlar esta câmera posteriormente.
+         */
+        window.__travelAutomationCamera = {
+          ...window.__travelAutomationCamera,
+
+          initialized: true,
+          stream,
+
+          canvas,
+          context,
+
+          width: canvas.width,
+          height: canvas.height,
+          fps: 30,
+
+          active: true,
+
+          streamId:
+            videoTracks[0].id || null,
+
+          currentPosition: null,
+          currentVideoId: null,
+
+          lastFrameAt:
+            new Date().toISOString()
         };
+
+        mediaState.opened = true;
+        mediaState.active = true;
+
+        mediaState.openedAt =
+          new Date().toISOString();
+
+        mediaState.tracks =
+          videoTracks.map(
+            track => ({
+              id: track.id || null,
+              kind: track.kind || null,
+              readyState:
+                track.readyState || null,
+              label:
+                track.label ||
+                "Travel Automation Persistent Camera"
+            })
+          );
 
         return stream;
       } catch (error) {
-        window.__travelAutomationMediaState = {
-          ...window.__travelAutomationMediaState,
+        mediaState.opened = false;
+        mediaState.active = false;
 
-          opened: false,
-          active: false,
-          error:
-            error?.name ||
-            error?.message ||
-            "getUserMedia failed"
-        };
+        mediaState.error =
+          error?.name ||
+          error?.message ||
+          "Persistent camera initialization failed";
 
         throw error;
       }
