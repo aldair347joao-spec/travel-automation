@@ -1022,12 +1022,64 @@ class Bot1 {
       );
 
 
-      await moveState(
+            await moveState(
         application,
         STATES.VFS_SESSION,
         {
           event:
-            "VFS_SESSION_STARTED"
+            "VFS_SESSION_STARTED",
+
+          reason:
+            "Bot 1 abriu a sessão de automação da VFS."
+        }
+      );
+
+
+      await application.save();
+
+
+      logger.info(
+        "BOT1 VFS SESSION STARTED",
+        {
+          applicationId:
+            application._id?.toString(),
+
+          workflowState:
+            application.workflowState,
+
+          reason:
+            "Sessão VFS iniciada; próximo passo será autenticação."
+        }
+      );
+
+
+      await moveState(
+        application,
+        STATES.VFS_AUTHENTICATING,
+        {
+          event:
+            "VFS_AUTHENTICATION_STARTED",
+
+          reason:
+            "Bot 1 iniciou a autenticação na sessão VFS."
+        }
+      );
+
+
+      await application.save();
+
+
+      logger.info(
+        "BOT1 VFS AUTHENTICATION STARTED",
+        {
+          applicationId:
+            application._id?.toString(),
+
+          workflowState:
+            application.workflowState,
+
+          reason:
+            "Bot 1 vai localizar o formulário e tentar autenticar na VFS."
         }
       );
 
