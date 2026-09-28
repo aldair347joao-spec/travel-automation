@@ -2191,22 +2191,6 @@ class Bot1 {
 
 
       await application.save();
-
-
-      if (
-        typeof this.site.handleFacialPositionRequest ===
-        "function"
-      ) {
-
-       const facialResult =
-  await withTimeout(
-    this.site.processFacialVfsInstruction(
-      application,
-      application.client
-    ),
-    config.timeoutMs,
-    "Facial VFS instruction handling"
-  ); 
   /*
  * ---------------------------------------------------
  * FACIAL POSITIONS
