@@ -88,6 +88,9 @@ class VfsPuppeteerAdapter extends SiteAdapter {
     this.browser = null;
     this.context = null;
     this.page = null;
+    this.activeCameraY4mPath = null;
+this.activeCameraVideoId = null;
+this.activeCameraPosition = null;
 
     this.initialized = false;
     this.state = "UNKNOWN";
@@ -263,11 +266,26 @@ class VfsPuppeteerAdapter extends SiteAdapter {
 ];
 
   const finalArgs = [
-    ...new Set([
-      ...browserArgs,
-      ...requiredArgs
-    ])
-  ];
+  ...new Set([
+    ...browserArgs,
+    ...requiredArgs,
+
+    /*
+     * ========================================================
+     * CÂMERA SIMULADA VFS — FLUXO AUTORIZADO
+     * ========================================================
+     *
+     * Quando uma posição facial já tiver sido preparada,
+     * o Chromium recebe o vídeo Y4M através do mecanismo
+     * nativo de fake video capture.
+     */
+    ...(this.activeCameraY4mPath
+      ? [
+          `--use-file-for-fake-video-capture=${this.activeCameraY4mPath}`
+        ]
+      : [])
+  ])
+];
 
   logger.info(
     "Launching Chromium",
