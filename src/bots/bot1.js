@@ -2198,15 +2198,15 @@ class Bot1 {
         "function"
       ) {
 
-        const facialResult =
-          await withTimeout(
-            this.site.handleFacialPositionRequest(
-              application,
-              application.client
-            ),
-            config.timeoutMs,
-            "Facial position handling"
-          );
+       const facialResult =
+  await withTimeout(
+    this.site.processFacialVfsInstruction(
+      application,
+      application.client
+    ),
+    config.timeoutMs,
+    "Facial VFS instruction handling"
+  ); 
 
 
         /*
