@@ -4180,147 +4180,377 @@ async getFacialCameraState() {
       true
   };
 }
-  async detectFacialPositionRequest() {
-    const page =
-      await this.ensurePage();
+  
+async detectFacialPositionRequest() {
+  const page =
+    await this.ensurePage();
 
-    const result =
-      await page.evaluate(
-        facialTerms => {
-          const normalize =
-            value =>
-              String(value || "")
-                .toLowerCase()
-                .replace(
-                  /\s+/g,
-                  " "
-                )
-                .trim();
+  /*
+   * ============================================================
+   * A VFS só deve ser considerada como tendo uma instrução
+   * facial concreta quando existir texto que descreva realmente
+   * um movimento/posição.
+   *
+   * "Facial verification", "liveness", "selfie", etc. sozinhos
+   * NÃO são suficientes.
+   * ============================================================
+   */
 
-          const body =
-            normalize(
-              document.body?.innerText ||
+  const result =
+    await page.evaluate(() => {
+      const normalize =
+        value =>
+          String(value || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(
+              /[\u0300-\u036f]/g,
               ""
-            );
+            )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
 
-          const visibleElements =
-            Array.from(
-              document.querySelectorAll(
-                "body *"
+      const body =
+        normalize(
+          document.body?.innerText ||
+            ""
+        );
+
+      /*
+       * ========================================================
+       * TERMOS CONCRETOS DE MOVIMENTO
+       * ========================================================
+       */
+
+      const movementTerms = [
+        "look left",
+        "look right",
+        "look up",
+        "look down",
+
+        "turn left",
+        "turn right",
+
+        "turn your head left",
+        "turn your head right",
+
+        "tilt left",
+        "tilt right",
+
+        "tilt your head left",
+        "tilt your head right",
+
+        "look to the left",
+        "look to the right",
+
+        "look upwards",
+        "look upward",
+
+        "look downwards",
+        "look downward",
+
+        "smile",
+
+        "left",
+        "right",
+        "up",
+        "down",
+
+        "esquerda",
+        "direita",
+        "cima",
+        "baixo",
+
+        "virar para a esquerda",
+        "virar para a direita",
+
+        "olhar para a esquerda",
+        "olhar para a direita",
+
+        "olhar para cima",
+        "olhar para baixo",
+
+        "sorria",
+        "sorrir"
+      ];
+
+      /*
+       * ========================================================
+       * ELEMENTOS VISÍVEIS
+       * ========================================================
+       */
+
+      const elements =
+        Array.from(
+          document.querySelectorAll(
+            [
+              "body",
+              "main",
+              "section",
+              "div",
+              "p",
+              "span",
+              "label",
+              "h1",
+              "h2",
+              "h3",
+              "h4",
+              "button",
+              "[role='alert']",
+              "[role='status']",
+              "[aria-live]"
+            ].join(",")
+          )
+        );
+
+      const visibleTexts = [];
+
+      for (
+        const element of elements
+      ) {
+        const text =
+          normalize(
+            element.innerText ||
+              element.textContent ||
+              ""
+          );
+
+        if (!text) {
+          continue;
+        }
+
+        const rect =
+          typeof element.getBoundingClientRect ===
+          "function"
+            ? element.getBoundingClientRect()
+            : null;
+
+        const visible =
+          !rect ||
+          (
+            rect.width > 0 &&
+            rect.height > 0
+          );
+
+        if (!visible) {
+          continue;
+        }
+
+        if (
+          text.length < 3 ||
+          text.length > 300
+        ) {
+          continue;
+        }
+
+        const hasMovement =
+          movementTerms.some(
+            term =>
+              text.includes(term)
+          );
+
+        if (!hasMovement) {
+          continue;
+        }
+
+        visibleTexts.push(text);
+      }
+
+      /*
+       * ========================================================
+       * TAMBÉM VERIFICAR O BODY
+       * ========================================================
+       */
+
+      const bodyCandidates =
+        body
+          .split(
+            /[\n\r.!?]+/
+          )
+          .map(
+            value =>
+              normalize(value)
+          )
+          .filter(Boolean)
+          .filter(
+            text =>
+              text.length >= 3 &&
+              text.length <= 300
+          )
+          .filter(
+            text =>
+              movementTerms.some(
+                term =>
+                  text.includes(term)
               )
-            ).filter(
-              element => {
-                const rect =
-                  element.getBoundingClientRect();
+          );
 
-                const style =
-                  window.getComputedStyle(
-                    element
-                  );
+      const candidates =
+        [
+          ...visibleTexts,
+          ...bodyCandidates
+        ];
 
-                return (
-                  rect.width > 0 &&
-                  rect.height > 0 &&
-                  style.display !==
-                    "none" &&
-                  style.visibility !==
-                    "hidden"
-                );
+      /*
+       * Remover duplicados mantendo a ordem.
+       */
+      const unique =
+        Array.from(
+          new Set(candidates)
+        );
+
+      /*
+       * ========================================================
+       * ESCOLHER A INSTRUÇÃO MAIS ESPECÍFICA
+       * ========================================================
+       *
+       * Preferimos frases que contenham mais de um componente:
+       *
+       * "turn right and look up"
+       *
+       * em vez de simplesmente:
+       *
+       * "right"
+       */
+
+      unique.sort(
+        (a, b) => {
+          const score = text => {
+            let value = 0;
+
+            const components = [
+              "left",
+              "right",
+              "up",
+              "down",
+              "esquerda",
+              "direita",
+              "cima",
+              "baixo",
+              "look",
+              "turn",
+              "virar",
+              "olhar",
+              "smile",
+              "sorr",
+              "tilt"
+            ];
+
+            for (
+              const component of
+                components
+            ) {
+              if (
+                text.includes(component)
+              ) {
+                value += 1;
               }
+            }
+
+            /*
+             * Frases mais longas geralmente
+             * contêm a instrução completa.
+             */
+            value += Math.min(
+              text.length / 100,
+              2
             );
 
-          const textCandidates =
-            visibleElements
-              .map(
-                element =>
-                  normalize(
-                    element.innerText ||
-                    element.textContent ||
-                    ""
-                  )
-              )
-              .filter(
-                text =>
-                  text.length > 0 &&
-                  text.length <= 500
-              );
-
-          const matchedTerms =
-            facialTerms.filter(
-              term =>
-                body.includes(
-                  normalize(term)
-                )
-            );
-
-          if (
-            !matchedTerms.length
-          ) {
-            return {
-              found: false
-            };
-          }
-
-          /*
-           * Prefer the smallest visible text block
-           * containing a facial keyword. This avoids
-           * passing the entire page to the resolver
-           * whenever possible.
-           */
-          const relevant =
-            textCandidates
-              .filter(
-                text =>
-                  facialTerms.some(
-                    term =>
-                      text.includes(
-                        normalize(term)
-                      )
-                  )
-              )
-              .sort(
-                (a, b) =>
-                  a.length - b.length
-              );
-
-          return {
-            found: true,
-
-            description:
-              relevant[0] ||
-              body,
-
-            pageText:
-              body,
-
-            matched:
-              matchedTerms
+            return value;
           };
-        },
-        CHECKPOINT_TERMS.facial
+
+          return (
+            score(b) -
+            score(a)
+          );
+        }
       );
 
-    if (
-      !result?.found
-    ) {
       return {
-        found: false
+        body,
+        candidates: unique,
+        description:
+          unique[0] || null
       };
-    }
+    });
 
-    return {
-      found: true,
+  /*
+   * ============================================================
+   * SEM INSTRUÇÃO CONCRETA
+   * ============================================================
+   */
 
-      description:
-        result.description,
-
-      pageText:
-        result.pageText,
-
-      matched:
-        result.matched
-    };
+  if (
+    !result ||
+    !result.description
+  ) {
+    return null;
   }
+
+  /*
+   * ============================================================
+   * IGNORAR TEXTOS GENÉRICOS
+   * ============================================================
+   */
+
+  const normalized =
+    String(
+      result.description
+    )
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(
+        /[\u0300-\u036f]/g,
+        ""
+      )
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
+
+  const genericOnly =
+    [
+      "facial",
+      "facial verification",
+      "facial recognition",
+      "face verification",
+      "liveness",
+      "selfie",
+      "facial verification required",
+      "complete facial verification"
+    ];
+
+  if (
+    genericOnly.includes(
+      normalized
+    )
+  ) {
+    return null;
+  }
+
+  /*
+   * ============================================================
+   * RESULTADO
+   * ============================================================
+   */
+
+  return {
+    description:
+      result.description,
+
+    normalized,
+
+    candidates:
+      result.candidates || [],
+
+    detectedAt:
+      new Date().toISOString()
+  };
+}
   /*
    * ============================================================
    * RECUPERAR VÍDEO DE LIVENESS ARMAZENADO
