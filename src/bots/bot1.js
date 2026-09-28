@@ -933,9 +933,6 @@ class Bot1 {
       );
     }
 
-
-    try {
-
   application.workflow =
   application.workflow ||
   {};
@@ -948,7 +945,7 @@ application.workflow.lastReason =
 
 application.workflow.stateChangedAt =
   new Date();
-}
+
 
   application.status =
     "preparing";
