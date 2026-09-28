@@ -2336,7 +2336,63 @@ async findVfsLoginFields() {
         this.getDomSummary()
     };
   }
+async getFacialCameraState() {
+  const page = await this.ensurePage();
 
+  const state = await page.evaluate(() => {
+    const media =
+      window.__travelAutomationMediaState || {};
+
+    const videoTracks =
+      Array.isArray(media.tracks)
+        ? media.tracks.filter(
+            track =>
+              track &&
+              track.kind === "video"
+          )
+        : [];
+
+    return {
+      requested:
+        media.requested === true,
+
+      opened:
+        media.opened === true,
+
+      active:
+        media.active === true,
+
+      requestedAt:
+        media.requestedAt || null,
+
+      openedAt:
+        media.openedAt || null,
+
+      constraints:
+        media.constraints || null,
+
+      tracks:
+        videoTracks,
+
+      error:
+        media.error || null
+    };
+  });
+
+  if (state.opened) {
+    this.facialSession.cameraRequested = true;
+    this.facialSession.cameraOpened = true;
+  } else if (state.requested) {
+    this.facialSession.cameraRequested = true;
+  }
+
+  if (!state.active) {
+    this.facialSession.cameraOpened =
+      state.opened === true;
+  }
+
+  return state;
+}
   async detectFacialPositionRequest() {
     const page =
       await this.ensurePage();
