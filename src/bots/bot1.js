@@ -428,25 +428,28 @@ class Bot1 {
 
     const workflowMap = {
 
-      created:
-        STATES.CREATED,
+  created:
+    STATES.CREATED,
 
-      error:
-        STATES.ERROR,
+  error:
+    STATES.ERROR,
 
-      otp_required:
-        STATES.OTP_REQUIRED,
+  ready_for_automation:
+    STATES.READY_FOR_AUTOMATION,
 
-      otp_verified:
-        STATES.OTP_VERIFIED,
+  otp_required:
+    STATES.OTP_REQUIRED,
 
-      slot_received:
-        STATES.SLOT_FOUND,
+  otp_verified:
+    STATES.OTP_VERIFIED,
 
-      waiting_for_slot:
-        STATES.RADAR_ACTIVE
+  slot_received:
+    STATES.SLOT_FOUND,
 
-    };
+  waiting_for_slot:
+    STATES.RADAR_ACTIVE
+
+};
 
     const workflowCandidates =
       allowedStatuses.map(
@@ -872,13 +875,14 @@ class Bot1 {
       Date.now();
 
     const application =
-      await this.claimApplication(
-        applicationId,
-        [
-          "created",
-          "error"
-        ]
-      );
+  await this.claimApplication(
+    applicationId,
+    [
+      "created",
+      "error",
+      "ready_for_automation"
+    ]
+  );
 
 
     if (
@@ -906,7 +910,9 @@ class Bot1 {
 
       return existing;
     }
-
+    const wasAlreadyReadyForAutomation =
+  application.workflowState ===
+  STATES.READY_FOR_AUTOMATION;
 
     if (
       this.attemptsExceeded(
@@ -930,21 +936,42 @@ class Bot1 {
 
     try {
 
-      await moveState(
-        application,
-        STATES.IDENTITY_PREPARATION,
-        {
-          event:
-            "BOT1_PREPARATION_STARTED",
+  if (
+    !wasAlreadyReadyForAutomation
+  ) {
 
-          reason:
-            "Bot 1 iniciou a preparação da candidatura."
-        }
-      );
+    await moveState(
+      application,
+      STATES.IDENTITY_PREPARATION,
+      {
+        event:
+          "BOT1_PREPARATION_STARTED",
+
+        reason:
+          "Bot 1 iniciou a preparação da candidatura."
+      }
+    );
+
+  } else {
+
+    application.workflow =
+      application.workflow ||
+      {};
+
+    application.workflow.lastEvent =
+      "BOT1_AUTOMATION_STARTED";
+
+    application.workflow.lastReason =
+      "Bot 1 iniciou a automação de uma candidatura já pronta.";
+
+    application.workflow.stateChangedAt =
+      new Date();
+
+  }
 
 
-      application.status =
-        "preparing";
+  application.status =
+    "preparing";
 
       application.bot1.status =
         "running";
