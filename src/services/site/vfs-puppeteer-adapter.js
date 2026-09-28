@@ -91,6 +91,51 @@ class VfsPuppeteerAdapter extends SiteAdapter {
 this.activeCameraVideoId = null;
 this.activeCameraPosition = null;
 
+/*
+ * ============================================================
+ * SESSÃO FACIAL VFS
+ * ============================================================
+ *
+ * A VFS abre a câmera uma única vez.
+ *
+ * Depois disso:
+ *
+ * câmera aberta
+ *      ↓
+ * instrução textual VFS
+ *      ↓
+ * posição armazenada correspondente
+ *      ↓
+ * vídeo da posição
+ *      ↓
+ * aceitação da VFS
+ *      ↓
+ * próxima instrução
+ *
+ * Não assumimos uma quantidade fixa de posições.
+ */
+
+this.facialSession = {
+  active: false,
+
+  cameraRequested: false,
+  cameraOpened: false,
+
+  currentRequest: null,
+  currentPosition: null,
+
+  requestedPositions: [],
+  acceptedPositions: [],
+
+  pendingPosition: null,
+
+  startedAt: null,
+  lastRequestAt: null,
+  lastAcceptedAt: null,
+
+  completed: false
+};
+
     this.initialized = false;
     this.state = "UNKNOWN";
 
