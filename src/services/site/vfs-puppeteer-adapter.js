@@ -66,8 +66,7 @@ const CHECKPOINT_TERMS = {
     "facial verification",
     "facial recognition",
     "liveness",
-    "selfie",
-    "camera"
+    "selfie"
   ],
 
   confirmation: [
