@@ -786,9 +786,10 @@ async function assertAutomationReleased(
       : application.workflowState;
 
   const allowedStates = [
-    "READY_FOR_AUTOMATION",
+  "CREATED",
+  "READY_FOR_AUTOMATION",
 
-    "VFS_SESSION",
+  "VFS_SESSION",
     "VFS_AUTHENTICATING",
     "VFS_AUTHENTICATED",
 
