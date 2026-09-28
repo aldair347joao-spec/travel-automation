@@ -2207,174 +2207,635 @@ class Bot1 {
     config.timeoutMs,
     "Facial VFS instruction handling"
   ); 
+  /*
+ * ---------------------------------------------------
+ * FACIAL POSITIONS
+ * ---------------------------------------------------
+ *
+ * A VFS abre a câmera uma única vez e pode solicitar
+ * qualquer quantidade de posições.
+ *
+ * Não assumimos 4 posições.
+ *
+ * A sequência termina quando a VFS deixa de apresentar
+ * uma instrução facial concreta.
+ *
+ * Uma nova instrução significa que a instrução anterior
+ * foi aceita pela VFS.
+ */
+
+await moveState(
+  application,
+  STATES.FACIAL_POSITIONS,
+  {
+    event:
+      "FACIAL_POSITIONS_STARTED"
+  }
+);
+
+application.bot1.lastAction =
+  "facial_positions";
+
+await application.save();
 
 
-        /*
-         * -------------------------------------------------
-         * POSIÇÃO NÃO RESOLVIDA
-         * -------------------------------------------------
-         */
+if (
+  typeof this.site.processFacialVfsInstruction ===
+  "function"
+) {
 
-        if (
-          facialResult?.state ===
-          "FACIAL_POSITION_UNRESOLVED"
-        ) {
+  const facialStartedAt =
+    Date.now();
 
-          await moveState(
-            application,
-            STATES.FACIAL_POSITION_UNRESOLVED,
-            {
-              event:
-                "FACIAL_POSITION_UNRESOLVED",
+  /*
+   * Tempo máximo da etapa facial.
+   *
+   * Não limita a quantidade de posições.
+   * Apenas evita que o Bot 1 fique preso
+   * indefinidamente caso a página da VFS
+   * não responda.
+   */
+  const facialTimeoutMs =
+    Math.max(
+      config.timeoutMs * 6,
+      180000
+    );
 
-              reason:
-                facialResult.reason ||
-                "VFS facial request could not be mapped unambiguously."
-            }
-          );
+  let noInstructionCount =
+    0;
 
+  let lastProcessedPosition =
+    null;
 
-          application.bot1.status =
-            "waiting";
-
-          application.bot1.lastAction =
-            "facial_position_unresolved";
-
-
-          await application.save();
-
-          await this.releaseLock(
-            applicationId
-          );
+  let facialCompleted =
+    false;
 
 
-          return {
+  while (
+    Date.now() -
+      facialStartedAt <
+    facialTimeoutMs
+  ) {
 
-            success:
-              false,
+    await this.refreshLock(
+      applicationId
+    );
 
-            requiresUser:
-              true,
-
-            facialPositionUnresolved:
-              true,
-
-            candidates:
-              facialResult.candidates ||
-              [],
-
-            application
-
-          };
-        }
+    await this.heartbeat(
+      applicationId,
+      "facial_vfs_instruction"
+    );
 
 
-        /*
-         * -------------------------------------------------
-         * POSIÇÃO RESOLVIDA
-         * -------------------------------------------------
-         */
-
-        if (
-          facialResult?.state ===
-          "FACIAL_POSITION_RESOLVED"
-        ) {
-
-          application.facialCheckpoint =
-            application.facialCheckpoint ||
-            {};
+    const facialResult =
+      await withTimeout(
+        this.site.processFacialVfsInstruction(
+          application,
+          application.client
+        ),
+        config.timeoutMs,
+        "Facial VFS instruction handling"
+      );
 
 
-          application.facialCheckpoint.position =
-            facialResult.position;
+    /*
+     * -------------------------------------------------
+     * CÂMERA AINDA NÃO ABRIU
+     * -------------------------------------------------
+     */
 
-          application.facialCheckpoint.label =
-            facialResult.label ||
-            null;
+    if (
+      facialResult?.waitingForCamera ===
+      true
+    ) {
 
-          application.facialCheckpoint.storageReference =
-            facialResult.storageReference ||
-            null;
+      application.bot1.lastAction =
+        "waiting_for_vfs_camera";
 
-          application.facialCheckpoint.score =
-            facialResult.score ||
-            null;
+      await application.save();
 
-          application.facialCheckpoint.request =
-            facialResult.request ||
-            null;
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            1500
+          )
+      );
 
-          application.facialCheckpoint.resolvedAt =
-            new Date();
-
-
-          application.bot1.lastAction =
-            "facial_position_resolved";
-
-
-          await application.save();
-        }
+      continue;
+    }
 
 
-        /*
-         * Falha real.
-         */
+    /*
+     * -------------------------------------------------
+     * VFS AINDA NÃO MOSTROU A INSTRUÇÃO
+     * -------------------------------------------------
+     */
 
-        if (
-          facialResult?.success ===
-            false &&
-          facialResult?.requiresUser !==
-            true
-        ) {
+    if (
+      facialResult?.waitingForInstruction ===
+      true
+    ) {
 
-          throw new Error(
-            facialResult.reason ||
-            "Facial position handling failed"
-          );
-        }
+      noInstructionCount += 1;
 
+      application.bot1.lastAction =
+        "waiting_for_facial_instruction";
 
-        /*
-         * Checkpoint oficial.
-         */
-
-        if (
-          facialResult?.requiresUser ===
-            true &&
-          facialResult?.state !==
-            "FACIAL_POSITION_RESOLVED"
-        ) {
-
-          application.bot1.status =
-            "waiting";
-
-          application.bot1.lastAction =
-            "facial_official_checkpoint";
+      await application.save();
 
 
-          await application.save();
+      /*
+       * Uma ausência isolada não significa
+       * que a etapa terminou.
+       *
+       * A página pode estar atualizando o DOM.
+       */
+      if (
+        noInstructionCount < 3
+      ) {
 
-          await this.releaseLock(
-            applicationId
-          );
+        await new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              1200
+            )
+        );
 
-
-          return {
-
-            success:
-              true,
-
-            requiresUser:
-              true,
-
-            officialCheckpoint:
-              true,
-
-            application
-
-          };
-        }
+        continue;
       }
+
+
+      /*
+       * Depois de várias leituras sem instrução,
+       * verificamos novamente o checkpoint oficial.
+       */
+      let checkpoint =
+        null;
+
+      if (
+        typeof this.site.detectCheckpoint ===
+        "function"
+      ) {
+
+        checkpoint =
+          await withTimeout(
+            this.site.detectCheckpoint(),
+            config.timeoutMs,
+            "Facial completion checkpoint detection"
+          );
+      }
+
+
+      /*
+       * Se a VFS já não está numa etapa facial,
+       * a sequência terminou.
+       */
+      if (
+        !checkpoint ||
+        checkpoint.type !==
+          "FACIAL_POSITION"
+      ) {
+
+        facialCompleted =
+          true;
+
+        break;
+      }
+
+
+      /*
+       * Ainda está na etapa facial.
+       * Voltamos a aguardar.
+       */
+      noInstructionCount =
+        0;
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            1500
+          )
+      );
+
+      continue;
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * POSIÇÃO NÃO RESOLVIDA
+     * -------------------------------------------------
+     */
+
+    if (
+      facialResult?.state ===
+      "FACIAL_POSITION_UNRESOLVED"
+    ) {
+
+      await moveState(
+        application,
+        STATES.FACIAL_POSITION_UNRESOLVED,
+        {
+          event:
+            "FACIAL_POSITION_UNRESOLVED",
+
+          reason:
+            facialResult.reason ||
+            "VFS facial request could not be mapped unambiguously."
+        }
+      );
+
+
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "facial_position_unresolved";
+
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+
+      return {
+        success:
+          false,
+
+        requiresUser:
+          true,
+
+        facialPositionUnresolved:
+          true,
+
+        candidates:
+          facialResult.candidates ||
+          [],
+
+        application
+      };
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * POSIÇÃO JÁ PROCESSADA
+     * -------------------------------------------------
+     */
+
+    if (
+      facialResult?.state ===
+      "FACIAL_POSITION_ALREADY_ACCEPTED"
+    ) {
+
+      /*
+       * Não falhamos a candidatura.
+       *
+       * A VFS pode repetir uma instrução que já
+       * foi processada.
+       */
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            1200
+          )
+      );
+
+      continue;
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * NOVO VÍDEO ATIVO
+     * -------------------------------------------------
+     */
+
+    if (
+      facialResult?.state ===
+      "FACIAL_POSITION_VIDEO_ACTIVE"
+    ) {
+
+      noInstructionCount =
+        0;
+
+      const currentPosition =
+        Number(
+          facialResult.position
+        );
+
+
+      /*
+       * Guardamos no documento da candidatura
+       * a posição que está sendo apresentada.
+       */
+
+      application.facialCheckpoint =
+        application.facialCheckpoint ||
+        {};
+
+
+      application.facialCheckpoint.position =
+        currentPosition;
+
+      application.facialCheckpoint.label =
+        facialResult.label ||
+        null;
+
+      application.facialCheckpoint.storageReference =
+        facialResult.storageReference ||
+        null;
+
+      application.facialCheckpoint.score =
+        facialResult.score ||
+        null;
+
+      application.facialCheckpoint.request =
+        facialResult.request ||
+        null;
+
+      application.facialCheckpoint.videoId =
+        facialResult.videoId ||
+        null;
+
+      application.facialCheckpoint.resolvedAt =
+        new Date();
+
+
+      application.bot1.lastAction =
+        "facial_video_active";
+
+
+      await application.save();
+
+
+      lastProcessedPosition =
+        currentPosition;
+
+
+      /*
+       * O método processFacialVfsInstruction()
+       * já deixou o vídeo correto no mesmo
+       * MediaStream.
+       *
+       * Agora NÃO fazemos outra chamada.
+       *
+       * Esperamos a próxima instrução.
+       */
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            1500
+          )
+      );
+
+      continue;
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * MESMA INSTRUÇÃO — AGUARDANDO ACEITAÇÃO
+     * -------------------------------------------------
+     */
+
+    if (
+      facialResult?.state ===
+      "FACIAL_POSITION_WAITING_ACCEPTANCE"
+    ) {
+
+      noInstructionCount =
+        0;
+
+      application.bot1.lastAction =
+        "waiting_facial_position_acceptance";
+
+
+      await application.save();
+
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            1500
+          )
+      );
+
+      continue;
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * FALHA REAL
+     * -------------------------------------------------
+     */
+
+    if (
+      facialResult?.success ===
+        false &&
+      facialResult?.requiresUser !==
+        true
+    ) {
+
+      throw new Error(
+        facialResult.reason ||
+        "Facial position handling failed"
+      );
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * CHECKPOINT OFICIAL
+     * -------------------------------------------------
+     */
+
+    if (
+      facialResult?.requiresUser ===
+        true
+    ) {
+
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "facial_official_checkpoint";
+
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+
+      return {
+        success:
+          true,
+
+        requiresUser:
+          true,
+
+        officialCheckpoint:
+          true,
+
+        application
+      };
+    }
+
+
+    /*
+     * -------------------------------------------------
+     * SEGURANÇA
+     * -------------------------------------------------
+     */
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          1200
+        )
+    );
+  }
+
+
+  /*
+   * ---------------------------------------------------
+   * TIMEOUT DA ETAPA FACIAL
+   * ---------------------------------------------------
+   */
+
+  if (
+    !facialCompleted &&
+    Date.now() -
+      facialStartedAt >=
+      facialTimeoutMs
+  ) {
+
+    throw new Error(
+      "VFS facial verification did not finish within the allowed session time."
+    );
+  }
+
+
+  /*
+   * ---------------------------------------------------
+   * MARCAR ÚLTIMA POSIÇÃO COMO ACEITA
+   * ---------------------------------------------------
+   *
+   * Se a VFS saiu da etapa facial sem apresentar
+   * uma nova instrução, a última posição ativa é
+   * considerada concluída.
+   */
+
+  const facialSession =
+    this.site.facialSession;
+
+
+  if (
+    facialSession?.currentPosition
+  ) {
+
+    const finalPosition =
+      Number(
+        facialSession.currentPosition
+      );
+
+    const alreadyAccepted =
+      Array.isArray(
+        facialSession.acceptedPositions
+      ) &&
+      facialSession.acceptedPositions.some(
+        item =>
+          Number(item.position) ===
+          finalPosition
+      );
+
+
+    if (
+      !alreadyAccepted
+    ) {
+
+      facialSession.acceptedPositions =
+        facialSession.acceptedPositions ||
+        [];
+
+      facialSession.acceptedPositions.push(
+        {
+          position:
+            finalPosition,
+
+          request:
+            facialSession.currentRequest ||
+            null,
+
+          acceptedAt:
+            new Date().toISOString()
+        }
+      );
+
+      facialSession.lastAcceptedAt =
+        new Date().toISOString();
+    }
+  }
+
+
+  /*
+   * ---------------------------------------------------
+   * FINALIZAR SESSÃO FACIAL
+   * ---------------------------------------------------
+   */
+
+  if (
+    facialSession
+  ) {
+
+    facialSession.completed =
+      true;
+
+    facialSession.active =
+      false;
+  }
+
+
+  application.facialCheckpoint =
+    application.facialCheckpoint ||
+    {};
+
+
+  application.facialCheckpoint.completed =
+    true;
+
+  application.facialCheckpoint.completedAt =
+    new Date();
+
+
+  application.facialCheckpoint.acceptedPositions =
+    Array.isArray(
+      facialSession?.acceptedPositions
+    )
+      ? facialSession.acceptedPositions
+      : [];
+
+
+  application.bot1.lastAction =
+    "facial_positions_completed";
+
+
+  await application.save();
+}
 
 
       /*
