@@ -2692,6 +2692,252 @@ async findVfsLoginFields() {
 
     return storedVideo;
   }
+    /*
+   * ============================================================
+   * PREPARAR CÂMERA VFS PARA A POSIÇÃO SOLICITADA
+   * ============================================================
+   *
+   * Fluxo:
+   *
+   * pedido textual VFS
+   *        ↓
+   * posição já resolvida
+   *        ↓
+   * vídeo original armazenado
+   *        ↓
+   * buffer
+   *        ↓
+   * prepareFromBuffer()
+   *        ↓
+   * Y4M
+   *        ↓
+   * activeCameraY4mPath
+   *
+   * IMPORTANTE:
+   *
+   * Este método NÃO escolhe a posição.
+   * A posição já foi determinada pelo resolver.
+   *
+   * Também evita reconverter/repreparar o mesmo vídeo
+   * várias vezes durante o mesmo checkpoint.
+   */
+
+  async prepareFacialCamera(
+    application,
+    client,
+    selected
+  ) {
+    if (
+      !application ||
+      !client ||
+      !selected
+    ) {
+      throw new Error(
+        "Application, client and selected facial position are required."
+      );
+    }
+
+    const position =
+      Number(
+        selected.position
+      );
+
+    if (
+      !Number.isInteger(position) ||
+      position < 1 ||
+      position > 10
+    ) {
+      throw new Error(
+        "Invalid facial position for camera preparation."
+      );
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * Se esta mesma posição já estiver preparada,
+     * não convertemos o vídeo novamente.
+     * ----------------------------------------------------------
+     */
+
+    if (
+      this.activeCameraY4mPath &&
+      this.activeCameraPosition === position &&
+      this.activeCameraVideoId
+    ) {
+      logger.info(
+        "VFS facial camera already prepared",
+        {
+          applicationId:
+            this.applicationId,
+
+          position,
+
+          videoId:
+            this.activeCameraVideoId,
+
+          y4mPath:
+            this.activeCameraY4mPath
+        }
+      );
+
+      return {
+        success: true,
+
+        reused: true,
+
+        position,
+
+        videoId:
+          this.activeCameraVideoId,
+
+        y4mPath:
+          this.activeCameraY4mPath
+      };
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * Recuperar o vídeo original.
+     * ----------------------------------------------------------
+     */
+
+    const storedVideo =
+      await this.getStoredFacialVideo(
+        application,
+        client,
+        selected
+      );
+
+    if (
+      !storedVideo ||
+      !Buffer.isBuffer(
+        storedVideo.buffer
+      ) ||
+      !storedVideo.buffer.length
+    ) {
+      throw new Error(
+        `Stored facial video for position ${position} is unavailable.`
+      );
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * Identificar o vídeo real.
+     * ----------------------------------------------------------
+     */
+
+    const videoId =
+      storedVideo.videoId ||
+      selected.videoId ||
+      null;
+
+    /*
+     * ----------------------------------------------------------
+     * Converter o vídeo original para Y4M.
+     *
+     * O arquivo original permanece intacto.
+     * ----------------------------------------------------------
+     */
+
+    const prepared =
+      await prepareFromBuffer({
+        buffer:
+          storedVideo.buffer,
+
+        videoId:
+          videoId ||
+          `application-${this.applicationId}-position-${position}`,
+
+        position
+      });
+
+    if (
+      !prepared?.success ||
+      !prepared?.path
+    ) {
+      throw new Error(
+        `Could not prepare Y4M camera for facial position ${position}.`
+      );
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * Guardar a câmera ativa no adapter.
+     *
+     * initialize() já utiliza activeCameraY4mPath
+     * no argumento:
+     *
+     * --use-file-for-fake-video-capture=<arquivo.y4m>
+     * ----------------------------------------------------------
+     */
+
+    this.activeCameraY4mPath =
+      prepared.path;
+
+    this.activeCameraVideoId =
+      videoId ||
+      prepared.videoId ||
+      null;
+
+    this.activeCameraPosition =
+      position;
+
+    logger.info(
+      "VFS facial camera prepared",
+      {
+        applicationId:
+          this.applicationId,
+
+        position,
+
+        label:
+          selected.label ||
+          null,
+
+        videoId:
+          this.activeCameraVideoId,
+
+        y4mPath:
+          this.activeCameraY4mPath,
+
+        width:
+          prepared.width,
+
+        height:
+          prepared.height,
+
+        fps:
+          prepared.fps
+      }
+    );
+
+    return {
+      success: true,
+
+      reused: false,
+
+      position,
+
+      label:
+        selected.label ||
+        null,
+
+      videoId:
+        this.activeCameraVideoId,
+
+      y4mPath:
+        this.activeCameraY4mPath,
+
+      width:
+        prepared.width,
+
+      height:
+        prepared.height,
+
+      fps:
+        prepared.fps
+    };
+  }
   /*
    * ============================================================
    * FACIAL POSITION RESOLVER
