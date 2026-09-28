@@ -3663,6 +3663,523 @@ async getFacialCameraState() {
       new Date().toISOString();
   }
 }
+  async processFacialVfsInstruction(
+  application,
+  client
+) {
+  /*
+   * ============================================================
+   * GARANTIR QUE A SESSÃO FACIAL EXISTE
+   * ============================================================
+   */
+
+  if (!this.facialSession) {
+    this.facialSession = {
+      active: false,
+      cameraRequested: false,
+      cameraOpened: false,
+
+      currentRequest: null,
+      currentPosition: null,
+
+      requestedPositions: [],
+      acceptedPositions: [],
+
+      pendingPosition: null,
+
+      startedAt: null,
+      lastRequestAt: null,
+      lastAcceptedAt: null,
+
+      completed: false,
+
+      streamReady: false,
+      streamId: null,
+
+      canvasReady: false,
+      canvasWidth: 640,
+      canvasHeight: 480,
+      canvasFps: 30,
+
+      sourcePosition: null,
+      sourceVideoId: null,
+
+      sourceLoaded: false,
+      sourcePlaying: false,
+
+      switchInProgress: false,
+      switchStartedAt: null,
+      switchCompletedAt: null,
+
+      videoElementReady: false,
+      lastFrameAt: null
+    };
+  }
+
+  /*
+   * ============================================================
+   * 1. VERIFICAR A CÂMERA
+   * ============================================================
+   */
+
+  const camera =
+    await this.getFacialCameraState();
+
+  if (
+    !camera.opened ||
+    !camera.active
+  ) {
+    return {
+      success: false,
+      waitingForCamera: true,
+      state:
+        "WAITING_FOR_VFS_CAMERA"
+    };
+  }
+
+  this.facialSession.active =
+    true;
+
+  this.facialSession.cameraRequested =
+    true;
+
+  this.facialSession.cameraOpened =
+    true;
+
+  this.facialSession.streamReady =
+    true;
+
+  this.facialSession.streamId =
+    camera.tracks?.[0]?.id ||
+    this.facialSession.streamId ||
+    null;
+
+  if (
+    !this.facialSession.startedAt
+  ) {
+    this.facialSession.startedAt =
+      new Date().toISOString();
+  }
+
+  /*
+   * ============================================================
+   * 2. LER A INSTRUÇÃO ATUAL DA VFS
+   * ============================================================
+   */
+
+  const request =
+    await this.detectFacialPositionRequest();
+
+  if (
+    !request ||
+    !request.description
+  ) {
+    /*
+     * Não existe uma instrução facial clara.
+     *
+     * Não escolhemos uma posição aleatoriamente.
+     */
+    return {
+      success: false,
+      waitingForInstruction: true,
+      state:
+        "WAITING_FOR_VFS_FACIAL_INSTRUCTION"
+    };
+  }
+
+  const description =
+    String(
+      request.description
+    )
+      .trim();
+
+  this.facialSession.lastRequestAt =
+    new Date().toISOString();
+
+  /*
+   * ============================================================
+   * 3. NORMALIZAR IDENTIDADE DA INSTRUÇÃO
+   * ============================================================
+   */
+
+  const normalize =
+    value =>
+      String(value || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(
+          /[\u0300-\u036f]/g,
+          ""
+        )
+        .replace(
+          /\s+/g,
+          " "
+        )
+        .trim();
+
+  const normalizedRequest =
+    normalize(description);
+
+  /*
+   * ============================================================
+   * 4. SE A VFS MUDOU A INSTRUÇÃO,
+   *    CONSIDERAMOS A ANTERIOR ACEITA
+   * ============================================================
+   */
+
+  const previousRequest =
+    this.facialSession.currentRequest;
+
+  const previousPosition =
+    this.facialSession.currentPosition;
+
+  const hasPrevious =
+    Boolean(
+      previousRequest &&
+      previousPosition
+    );
+
+  const instructionChanged =
+    hasPrevious &&
+    normalize(previousRequest) !==
+      normalizedRequest;
+
+  if (
+    instructionChanged
+  ) {
+    const alreadyAccepted =
+      this.facialSession.acceptedPositions
+        .some(
+          item =>
+            Number(item.position) ===
+            Number(previousPosition)
+        );
+
+    if (!alreadyAccepted) {
+      this.facialSession.acceptedPositions.push(
+        {
+          position:
+            Number(previousPosition),
+
+          request:
+            previousRequest,
+
+          acceptedAt:
+            new Date().toISOString()
+        }
+      );
+
+      this.facialSession.lastAcceptedAt =
+        new Date().toISOString();
+    }
+  }
+
+  /*
+   * ============================================================
+   * 5. SE É A MESMA INSTRUÇÃO,
+   *    NÃO RECARREGAR O VÍDEO
+   * ============================================================
+   */
+
+  if (
+    hasPrevious &&
+    !instructionChanged
+  ) {
+    return {
+      success: true,
+      state:
+        "FACIAL_POSITION_WAITING_ACCEPTANCE",
+
+      request: description,
+
+      position:
+        Number(previousPosition),
+
+      waitingForNextInstruction:
+        true,
+
+      accepted:
+        this.facialSession.acceptedPositions
+          .some(
+            item =>
+              Number(item.position) ===
+              Number(previousPosition)
+          )
+    };
+  }
+
+  /*
+   * ============================================================
+   * 6. RECUPERAR POSIÇÕES ARMAZENADAS
+   * ============================================================
+   */
+
+  const facialPositions =
+    Array.isArray(
+      client?.facialPositions
+    )
+      ? client.facialPositions
+      : [];
+
+  const validPositions =
+    facialPositions.filter(
+      item => {
+        const position =
+          Number(item?.position);
+
+        return (
+          Number.isInteger(position) &&
+          position >= 1 &&
+          position <= 10 &&
+          Boolean(
+            item?.storageReference
+          )
+        );
+      }
+    );
+
+  if (
+    !validPositions.length
+  ) {
+    return {
+      success: false,
+      state:
+        "FACIAL_VIDEOS_NOT_AVAILABLE",
+      reason:
+        "No stored facial positions are available."
+    };
+  }
+
+  /*
+   * ============================================================
+   * 7. RESOLVER TEXTO VFS -> POSIÇÃO
+   * ============================================================
+   */
+
+  const resolved =
+    await FacialService.resolvePositionRequest(
+      {
+        request: description,
+        positions: validPositions
+      }
+    );
+
+  if (
+    !resolved ||
+    !resolved.position
+  ) {
+    /*
+     * NUNCA escolher aleatoriamente.
+     */
+    return {
+      success: false,
+
+      unresolved: true,
+
+      state:
+        "FACIAL_POSITION_UNRESOLVED",
+
+      request:
+        description,
+
+      candidates:
+        resolved?.candidates ||
+        [],
+
+      matchedTerms:
+        resolved?.matchedTerms ||
+        []
+    };
+  }
+
+  const selected =
+    validPositions.find(
+      item =>
+        Number(item.position) ===
+        Number(resolved.position)
+    );
+
+  if (!selected) {
+    return {
+      success: false,
+
+      unresolved: true,
+
+      state:
+        "FACIAL_POSITION_NOT_STORED",
+
+      request:
+        description,
+
+      position:
+        Number(resolved.position)
+    };
+  }
+
+  /*
+   * ============================================================
+   * 8. NÃO REPETIR UMA POSIÇÃO JÁ ACEITA
+   * ============================================================
+   */
+
+  const alreadyAccepted =
+    this.facialSession.acceptedPositions
+      .some(
+        item =>
+          Number(item.position) ===
+          Number(selected.position)
+      );
+
+  if (
+    alreadyAccepted
+  ) {
+    return {
+      success: false,
+
+      state:
+        "FACIAL_POSITION_ALREADY_ACCEPTED",
+
+      request:
+        description,
+
+      position:
+        Number(selected.position)
+    };
+  }
+
+  /*
+   * ============================================================
+   * 9. TROCAR O CONTEÚDO DA CÂMERA
+   * ============================================================
+   */
+
+  const switched =
+    await this.switchPersistentFacialVideo(
+      application,
+      client,
+      selected
+    );
+
+  if (
+    !switched ||
+    switched.success !== true
+  ) {
+    return {
+      success: false,
+
+      state:
+        "FACIAL_VIDEO_SWITCH_FAILED",
+
+      request:
+        description,
+
+      position:
+        Number(selected.position)
+    };
+  }
+
+  /*
+   * ============================================================
+   * 10. REGISTRAR A NOVA INSTRUÇÃO
+   * ============================================================
+   */
+
+  this.facialSession.currentRequest =
+    description;
+
+  this.facialSession.currentPosition =
+    Number(selected.position);
+
+  this.facialSession.pendingPosition =
+    Number(selected.position);
+
+  this.facialSession.sourcePosition =
+    Number(selected.position);
+
+  this.facialSession.sourceVideoId =
+    switched.videoId ||
+    null;
+
+  /*
+   * Evita duplicação no histórico.
+   */
+  const alreadyRequested =
+    this.facialSession.requestedPositions
+      .some(
+        item =>
+          Number(item.position) ===
+            Number(selected.position) &&
+          normalize(item.request) ===
+            normalizedRequest
+      );
+
+  if (
+    !alreadyRequested
+  ) {
+    this.facialSession.requestedPositions.push(
+      {
+        position:
+          Number(selected.position),
+
+        request:
+          description,
+
+        videoId:
+          switched.videoId ||
+          null,
+
+        requestedAt:
+          new Date().toISOString()
+      }
+    );
+  }
+
+  return {
+    success: true,
+
+    state:
+      "FACIAL_POSITION_VIDEO_ACTIVE",
+
+    request:
+      description,
+
+    position:
+      Number(selected.position),
+
+    label:
+      selected.label ||
+      null,
+
+    videoId:
+      switched.videoId ||
+      null,
+
+    storageReference:
+      selected.storageReference ||
+      null,
+
+    score:
+      resolved.score ||
+      null,
+
+    matchedTerms:
+      resolved.matchedTerms ||
+      [],
+
+    candidates:
+      resolved.candidates ||
+      [],
+
+    accepted:
+      false,
+
+    waitingForNextInstruction:
+      true,
+
+    persistentCamera:
+      true
+  };
+}
   async detectFacialPositionRequest() {
     const page =
       await this.ensurePage();
