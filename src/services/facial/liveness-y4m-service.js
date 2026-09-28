@@ -58,6 +58,12 @@ const CACHE_DIRECTORY =
     "travel-automation-liveness-y4m"
   );
 
+/*
+ * ============================================================
+ * UTILITÁRIOS
+ * ============================================================
+ */
+
 function ensureDirectory(directory) {
   fs.mkdirSync(
     directory,
@@ -110,6 +116,47 @@ function resolveFfmpegPath() {
   return "ffmpeg";
 }
 
+/*
+ * ============================================================
+ * CONFIGURAÇÃO
+ * ============================================================
+ */
+
+function validateConfiguration() {
+  if (
+    !Number.isInteger(WIDTH) ||
+    WIDTH <= 0
+  ) {
+    throw new Error(
+      `Invalid LIVENESS_Y4M_WIDTH: ${WIDTH}`
+    );
+  }
+
+  if (
+    !Number.isInteger(HEIGHT) ||
+    HEIGHT <= 0
+  ) {
+    throw new Error(
+      `Invalid LIVENESS_Y4M_HEIGHT: ${HEIGHT}`
+    );
+  }
+
+  if (
+    !Number.isInteger(FPS) ||
+    FPS <= 0
+  ) {
+    throw new Error(
+      `Invalid LIVENESS_Y4M_FPS: ${FPS}`
+    );
+  }
+}
+
+/*
+ * ============================================================
+ * CACHE
+ * ============================================================
+ */
+
 function createCacheKey({
   videoId,
   position,
@@ -149,36 +196,22 @@ function createCacheKey({
     .digest("hex");
 }
 
-function validateConfiguration() {
-  if (
-    !Number.isInteger(WIDTH) ||
-    WIDTH <= 0
-  ) {
-    throw new Error(
-      `Invalid LIVENESS_Y4M_WIDTH: ${WIDTH}`
-    );
-  }
-
-  if (
-    !Number.isInteger(HEIGHT) ||
-    HEIGHT <= 0
-  ) {
-    throw new Error(
-      `Invalid LIVENESS_Y4M_HEIGHT: ${HEIGHT}`
-    );
-  }
-
-  if (
-    !Number.isInteger(FPS) ||
-    FPS <= 0
-  ) {
-    throw new Error(
-      `Invalid LIVENESS_Y4M_FPS: ${FPS}`
-    );
-  }
-}
+/*
+ * ============================================================
+ * VALIDAÇÃO Y4M
+ * ============================================================
+ */
 
 function validateY4mFile(filePath) {
+  if (
+    !filePath ||
+    typeof filePath !== "string"
+  ) {
+    throw new Error(
+      "Y4M file path is required."
+    );
+  }
+
   if (
     !fs.existsSync(filePath)
   ) {
@@ -209,7 +242,7 @@ function validateY4mFile(filePath) {
 
   try {
     const headerBuffer =
-      Buffer.alloc(512);
+      Buffer.alloc(1024);
 
     const bytesRead =
       fs.readSync(
@@ -240,6 +273,11 @@ function validateY4mFile(filePath) {
       );
     }
 
+    const firstLine =
+      header
+        .split("\n")[0]
+        .trim();
+
     const expectedWidth =
       `W${WIDTH}`;
 
@@ -247,16 +285,60 @@ function validateY4mFile(filePath) {
       `H${HEIGHT}`;
 
     if (
-      !header.includes(
+      !firstLine.includes(
         expectedWidth
       ) ||
-      !header.includes(
+      !firstLine.includes(
         expectedHeight
       )
     ) {
       throw new Error(
-        `Generated Y4M dimensions are not ${WIDTH}x${HEIGHT}.`
+        `Generated Y4M dimensions are not ${WIDTH}x${HEIGHT}. Header: ${firstLine}`
       );
+    }
+
+    /*
+     * A câmera simulada deve receber
+     * exatamente a taxa configurada.
+     *
+     * O FFmpeg pode escrever:
+     *
+     * F30:1
+     * F30000:1001
+     * etc.
+     *
+     * Por isso não rejeitamos aqui formatos
+     * equivalentes sem antes parsear.
+     */
+
+    const frameRateMatch =
+      firstLine.match(
+        /(?:^|\s)F(\d+):(\d+)(?:\s|$)/
+      );
+
+    let frameRate = null;
+
+    if (
+      frameRateMatch
+    ) {
+      const numerator =
+        Number(
+          frameRateMatch[1]
+        );
+
+      const denominator =
+        Number(
+          frameRateMatch[2]
+        );
+
+      if (
+        numerator > 0 &&
+        denominator > 0
+      ) {
+        frameRate =
+          numerator /
+          denominator;
+      }
     }
 
     return {
@@ -266,14 +348,27 @@ function validateY4mFile(filePath) {
         stats.size,
 
       header:
-        header
-          .split("\n")[0]
-          .trim()
+        firstLine,
+
+      width:
+        WIDTH,
+
+      height:
+        HEIGHT,
+
+      fps:
+        frameRate
     };
   } finally {
     fs.closeSync(fd);
   }
 }
+
+/*
+ * ============================================================
+ * FFmpeg
+ * ============================================================
+ */
 
 function runFfmpeg({
   inputPath,
@@ -303,6 +398,12 @@ function runFfmpeg({
         "-r",
         String(FPS),
 
+        /*
+         * Não transportar áudio.
+         *
+         * A fonte Y4M será exclusivamente
+         * vídeo.
+         */
         "-an",
 
         "-f",
@@ -316,9 +417,12 @@ function runFfmpeg({
         {
           inputPath,
           outputPath,
-          width: WIDTH,
-          height: HEIGHT,
-          fps: FPS,
+          width:
+            WIDTH,
+          height:
+            HEIGHT,
+          fps:
+            FPS,
           ffmpeg:
             ffmpeg ===
             "ffmpeg"
@@ -448,6 +552,20 @@ function runFfmpeg({
   );
 }
 
+/*
+ * ============================================================
+ * CONVERTER
+ * ============================================================
+ *
+ * IMPORTANTE:
+ *
+ * Esta função NÃO altera o vídeo original.
+ *
+ * Ela recebe o buffer original,
+ * cria uma representação Y4M separada
+ * e coloca essa representação no cache.
+ */
+
 async function convert({
   buffer,
   videoId = null,
@@ -486,6 +604,11 @@ async function convert({
       )}-${cacheKey}.y4m`
     );
 
+  /*
+   * Reutilizar conversão anterior
+   * quando o vídeo é exatamente o mesmo.
+   */
+
   if (
     fs.existsSync(
       cachePath
@@ -500,28 +623,51 @@ async function convert({
       logger.info(
         "Using cached liveness Y4M",
         {
-          applicationId:
-            null,
-
           videoId,
           position,
           cachePath,
           size:
-            validation.size
+            validation.size,
+          header:
+            validation.header
         }
       );
 
       return {
         success: true,
-        path: cachePath,
-        cached: true,
-        width: WIDTH,
-        height: HEIGHT,
-        fps: FPS,
+
+        path:
+          cachePath,
+
+        cached:
+          true,
+
+        width:
+          WIDTH,
+
+        height:
+          HEIGHT,
+
+        fps:
+          FPS,
+
         videoId,
+
         position
       };
-    } catch {
+    } catch (error) {
+      logger.warn(
+        "Cached liveness Y4M is invalid; regenerating",
+        {
+          videoId,
+          position,
+          cachePath,
+          error:
+            error?.message ||
+            String(error)
+        }
+      );
+
       try {
         fs.unlinkSync(
           cachePath
@@ -566,7 +712,7 @@ async function convert({
     );
 
     logger.info(
-      "Converting decrypted liveness video",
+      "Converting stored liveness video to Y4M",
       {
         videoId,
         position,
@@ -589,9 +735,7 @@ async function convert({
       );
 
     /*
-     * Move atomically into the cache.
-     * This prevents another process from seeing
-     * a partially generated Y4M file.
+     * Movimento atômico para o cache.
      */
     const temporaryCachePath =
       `${cachePath}.tmp-${process.pid}-${Date.now()}`;
@@ -618,20 +762,35 @@ async function convert({
         cachePath,
         size:
           validation.size,
-        width: WIDTH,
-        height: HEIGHT,
-        fps: FPS
+        width:
+          WIDTH,
+        height:
+          HEIGHT,
+        fps:
+          FPS
       }
     );
 
     return {
       success: true,
-      path: cachePath,
-      cached: false,
-      width: WIDTH,
-      height: HEIGHT,
-      fps: FPS,
+
+      path:
+        cachePath,
+
+      cached:
+        false,
+
+      width:
+        WIDTH,
+
+      height:
+        HEIGHT,
+
+      fps:
+        FPS,
+
       videoId,
+
       position
     };
   } finally {
@@ -639,8 +798,10 @@ async function convert({
       fs.rmSync(
         temporaryDirectory,
         {
-          recursive: true,
-          force: true
+          recursive:
+            true,
+          force:
+            true
         }
       );
     } catch (error) {
@@ -655,6 +816,172 @@ async function convert({
     }
   }
 }
+
+/*
+ * ============================================================
+ * PREPARAR CÂMERA SIMULADA
+ * ============================================================
+ *
+ * Esta é a nova camada.
+ *
+ * Recebe o Y4M já preparado e devolve os argumentos
+ * necessários para o Chromium utilizar esse arquivo
+ * como fonte da câmera.
+ *
+ * O Y4M continua sendo apenas um arquivo intermediário.
+ * O vídeo original não é alterado.
+ */
+
+function prepareCameraCapture({
+  y4mPath,
+  videoId = null,
+  position = null
+}) {
+  validateConfiguration();
+
+  if (
+    !y4mPath ||
+    typeof y4mPath !== "string"
+  ) {
+    throw new Error(
+      "A Y4M file path is required to prepare simulated camera capture."
+    );
+  }
+
+  const absolutePath =
+    path.resolve(
+      y4mPath
+    );
+
+  const validation =
+    validateY4mFile(
+      absolutePath
+    );
+
+  logger.info(
+    "Prepared Y4M source for Chromium camera capture",
+    {
+      videoId,
+      position,
+      y4mPath:
+        absolutePath,
+      width:
+        validation.width,
+      height:
+        validation.height,
+      fps:
+        validation.fps
+    }
+  );
+
+  return {
+    success: true,
+
+    path:
+      absolutePath,
+
+    videoId,
+
+    position,
+
+    width:
+      WIDTH,
+
+    height:
+      HEIGHT,
+
+    fps:
+      FPS,
+
+    chromiumArgs: [
+      `--use-file-for-fake-video-capture=${absolutePath}`
+    ]
+  };
+}
+
+/*
+ * ============================================================
+ * CONVERTER + CÂMERA
+ * ============================================================
+ *
+ * Atalho para o próximo estágio da integração:
+ *
+ * vídeo original
+ *      ↓
+ * Y4M
+ *      ↓
+ * argumentos Chromium
+ */
+
+async function prepareFromBuffer({
+  buffer,
+  videoId = null,
+  position = null,
+  filename = "liveness.webm",
+  mimeType = "video/webm"
+}) {
+  const converted =
+    await convert({
+      buffer,
+      videoId,
+      position,
+      filename,
+      mimeType
+    });
+
+  const camera =
+    prepareCameraCapture({
+      y4mPath:
+        converted.path,
+
+      videoId,
+
+      position
+    });
+
+  return {
+    ...converted,
+
+    camera
+  };
+}
+
+/*
+ * ============================================================
+ * VERIFICAÇÃO DIRETA DE UM ARQUIVO
+ * ============================================================
+ */
+
+function inspect(y4mPath) {
+  validateConfiguration();
+
+  const absolutePath =
+    path.resolve(
+      String(
+        y4mPath || ""
+      )
+    );
+
+  const validation =
+    validateY4mFile(
+      absolutePath
+    );
+
+  return {
+    success: true,
+
+    path:
+      absolutePath,
+
+    ...validation
+  };
+}
+
+/*
+ * ============================================================
+ * LIMPAR CACHE
+ * ============================================================
+ */
 
 function clearCache() {
   if (
@@ -716,20 +1043,31 @@ function clearCache() {
   };
 }
 
+/*
+ * ============================================================
+ * CONFIGURAÇÃO PÚBLICA
+ * ============================================================
+ */
+
 function getConfig() {
   let ffmpegPath;
 
   try {
     ffmpegPath =
       resolveFfmpegPath();
-  } catch (error) {
+  } catch {
     ffmpegPath = null;
   }
 
   return {
-    width: WIDTH,
-    height: HEIGHT,
-    fps: FPS,
+    width:
+      WIDTH,
+
+    height:
+      HEIGHT,
+
+    fps:
+      FPS,
 
     directory:
       CACHE_DIRECTORY,
@@ -746,12 +1084,21 @@ function getConfig() {
       ),
 
     timeoutMs:
-      FFMPEG_TIMEOUT_MS
+      FFMPEG_TIMEOUT_MS,
+
+    simulatedCamera:
+      true,
+
+    chromiumArgument:
+      "--use-file-for-fake-video-capture=<absolute-y4m-path>"
   };
 }
 
 module.exports = {
   convert,
+  prepareCameraCapture,
+  prepareFromBuffer,
+  inspect,
   clearCache,
   getConfig
 };
