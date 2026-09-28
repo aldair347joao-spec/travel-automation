@@ -716,9 +716,9 @@ if (
 
         throw error;
       }
-        };
+              };
   }
-  );
+  });
 
   logger.info(
     "VFS getUserMedia monitor installed",
