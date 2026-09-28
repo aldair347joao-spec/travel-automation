@@ -4,10 +4,18 @@ const fs = require("fs");
 const path = require("path");
 const puppeteer = require("puppeteer");
 const chromium = require("@sparticuz/chromium");
+
 const {
   getCredentialsForAutomation,
   markAutomationActive
 } = require("../admin/admin-control-service");
+
+const {
+  convert,
+  prepareCameraCapture,
+  prepareFromBuffer
+} = require("../facial/liveness-y4m-service");
+
 const SiteAdapter = require("./site-adapter");
 const VfsDomInspector = require("./vfs-dom-inspector");
 const logger = require("../../utils/logger");
