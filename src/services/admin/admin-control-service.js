@@ -468,6 +468,70 @@ async function releaseForAutomation({
     "function"
       ? application.getWorkflowState()
       : application.workflowState;
+  /*
+ * ----------------------------------------------------------
+ * RECUPERAÇÃO EXPLÍCITA DE UMA CANDIDATURA EM ERROR
+ * ----------------------------------------------------------
+ *
+ * Uma nova liberação administrativa é a autorização
+ * explícita para tentar novamente a automação.
+ *
+ * NÃO colocamos ERROR no automation-guard.
+ */
+
+if (
+  workflowState ===
+  "ERROR"
+) {
+  const previousError =
+    application.error
+      ? {
+          code:
+            application.error.code ||
+            null,
+
+          message:
+            application.error.message ||
+            null,
+
+          at:
+            application.error.at ||
+            null,
+
+          attempts:
+            application.error.attempts ||
+            0
+        }
+      : null;
+
+  if (
+    typeof application.transitionTo ===
+    "function"
+  ) {
+    await application.transitionTo(
+      "READY_FOR_AUTOMATION",
+      {
+        event:
+          "ADMIN_AUTOMATION_RELEASE_RECOVERY",
+
+        reason:
+          "Administrador liberou novamente uma candidatura que estava em ERROR.",
+
+        actorId:
+          actorId || null,
+
+        previousError
+      }
+    );
+  } else {
+    application.workflowState =
+      "READY_FOR_AUTOMATION";
+  }
+
+  application.error = null;
+
+  await application.save();
+}
 
   /*
    * Uma candidatura nova deve continuar
