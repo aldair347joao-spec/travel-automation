@@ -1232,6 +1232,28 @@ try {
 
   const loginForm =
     await this.findVfsLoginFields();
+   logger.info(
+  "VFS LOGIN FORM DETECTION",
+  {
+    applicationId:
+      applicationId,
+
+    emailFieldFound:
+      Boolean(loginForm?.email),
+
+    passwordFieldFound:
+      Boolean(loginForm?.password),
+
+    submitFound:
+      Boolean(loginForm?.submit),
+
+    url:
+      page.url(),
+
+    reason:
+      "Verificação dos elementos necessários para iniciar o login."
+  }
+); 
 
   if (
     !loginForm?.email ||
@@ -1330,6 +1352,25 @@ try {
       delay: 15
     }
   );
+    logger.info(
+  "VFS LOGIN CREDENTIALS ENTERED",
+  {
+    applicationId:
+      applicationId,
+
+    emailEntered:
+      true,
+
+    passwordEntered:
+      true,
+
+    url:
+      page.url(),
+
+    reason:
+      "Os campos de autenticação foram preenchidos. Nenhuma credencial é registrada no log."
+  }
+);
 
   /*
    * IMPORTANTE:
@@ -1356,25 +1397,71 @@ try {
     };
   }
 
-  await page.click(
-    loginForm.submit
-  );
+  logger.info(
+  "VFS LOGIN SUBMIT STARTING",
+  {
+    applicationId:
+      applicationId,
 
-  await page
-    .waitForNavigation({
-      waitUntil:
-        "domcontentloaded",
-      timeout:
-        DEFAULT_TIMEOUT
-    })
-    .catch(() => {});
+    submitSelector:
+      loginForm.submit,
 
-  await page
-    .waitForNetworkIdle({
-      idleTime: 500,
-      timeout: 10000
-    })
-    .catch(() => {});
+    url:
+      page.url(),
+
+    reason:
+      "Credenciais preenchidas; Bot 1 vai clicar no botão de autenticação da VFS."
+  }
+);
+
+
+const [
+  navigationResponse
+] =
+  await Promise.all([
+    page
+      .waitForNavigation({
+        waitUntil:
+          "domcontentloaded",
+        timeout:
+          DEFAULT_TIMEOUT
+      })
+      .catch(
+        () => null
+      ),
+
+    page.click(
+      loginForm.submit
+    )
+  ]);
+
+
+logger.info(
+  "VFS LOGIN SUBMIT CLICKED",
+  {
+    applicationId:
+      applicationId,
+
+    urlAfterClick:
+      page.url(),
+
+    navigationReceived:
+      Boolean(
+        navigationResponse
+      ),
+
+    reason:
+      "O botão de autenticação da VFS foi efetivamente clicado."
+  }
+);
+
+
+await page
+  .waitForNetworkIdle({
+    idleTime: 500,
+    timeout: 10000
+  })
+  .catch(() => {});
 
   await this.detectState();
 
