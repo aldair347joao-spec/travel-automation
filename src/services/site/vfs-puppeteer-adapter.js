@@ -3458,6 +3458,211 @@ async getFacialCameraState() {
 
   return result;
 }
+  async switchPersistentFacialVideo(
+  application,
+  client,
+  selected
+) {
+  if (!selected) {
+    throw new Error(
+      "Facial position selection is required."
+    );
+  }
+
+  const position =
+    Number(selected.position);
+
+  if (
+    !Number.isInteger(position) ||
+    position < 1 ||
+    position > 10
+  ) {
+    throw new Error(
+      `Invalid facial position: ${selected.position}`
+    );
+  }
+
+  /*
+   * ============================================================
+   * IMPEDIR DUAS TROCAS SIMULTÂNEAS
+   * ============================================================
+   */
+
+  if (
+    this.facialSession.switchInProgress
+  ) {
+    return {
+      success: false,
+      busy: true,
+      position,
+      reason:
+        "Another facial video switch is already in progress."
+    };
+  }
+
+  this.facialSession.switchInProgress =
+    true;
+
+  this.facialSession.switchStartedAt =
+    new Date().toISOString();
+
+  try {
+    /*
+     * ==========================================================
+     * 1. RECUPERAR O VÍDEO GUARDADO
+     * ==========================================================
+     */
+
+    const stored =
+      await this.getStoredFacialVideo(
+        application,
+        client,
+        selected
+      );
+
+    if (
+      !stored ||
+      !stored.buffer ||
+      !Buffer.isBuffer(stored.buffer) ||
+      stored.buffer.length === 0
+    ) {
+      throw new Error(
+        `No stored facial video available for position ${position}.`
+      );
+    }
+
+    /*
+     * ==========================================================
+     * 2. PREPARAR O VÍDEO
+     * ==========================================================
+     */
+
+    const prepared =
+      await prepareFromBuffer(
+        stored.buffer,
+        {
+          position,
+          label:
+            selected.label ||
+            stored.label ||
+            null,
+          videoId:
+            stored.videoId ||
+            null
+        }
+      );
+
+    if (
+      !prepared ||
+      !prepared.path
+    ) {
+      throw new Error(
+        `Could not prepare facial video for position ${position}.`
+      );
+    }
+
+    /*
+     * ==========================================================
+     * 3. REPRODUZIR NA CÂMERA PERSISTENTE
+     * ==========================================================
+     */
+
+    const playback =
+      await this.playFacialVideoOnPersistentCamera(
+        prepared.path,
+        position,
+        stored.videoId ||
+          selected.videoId ||
+          null
+      );
+
+    /*
+     * ==========================================================
+     * 4. ATUALIZAR ESTADO
+     * ==========================================================
+     */
+
+    this.activeCameraY4mPath =
+      prepared.path;
+
+    this.activeCameraVideoId =
+      stored.videoId ||
+      selected.videoId ||
+      null;
+
+    this.activeCameraPosition =
+      position;
+
+    this.facialSession.currentPosition =
+      position;
+
+    this.facialSession.sourcePosition =
+      position;
+
+    this.facialSession.sourceVideoId =
+      stored.videoId ||
+      selected.videoId ||
+      null;
+
+    this.facialSession.sourceLoaded =
+      true;
+
+    this.facialSession.sourcePlaying =
+      true;
+
+    this.facialSession.videoElementReady =
+      true;
+
+    this.facialSession.lastFrameAt =
+      new Date().toISOString();
+
+    this.facialSession.switchCompletedAt =
+      new Date().toISOString();
+
+    return {
+      success: true,
+
+      position,
+
+      label:
+        selected.label ||
+        stored.label ||
+        null,
+
+      videoId:
+        stored.videoId ||
+        selected.videoId ||
+        null,
+
+      storageReference:
+        selected.storageReference ||
+        null,
+
+      persistentCamera: true,
+
+      reusedCameraSession: true,
+
+      streamId:
+        this.facialSession.streamId ||
+        playback?.streamId ||
+        null
+    };
+  } catch (error) {
+    this.facialSession.sourceLoaded =
+      false;
+
+    this.facialSession.sourcePlaying =
+      false;
+
+    throw error;
+  } finally {
+    this.facialSession.switchInProgress =
+      false;
+
+    this.facialSession.switchCompletedAt =
+      new Date().toISOString();
+  }
+}
   async detectFacialPositionRequest() {
     const page =
       await this.ensurePage();
