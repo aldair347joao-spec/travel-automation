@@ -965,70 +965,6 @@ try {
       .catch(() => {});
 
     await this.detectCheckpoint();
-    const loginPageSnapshot =
-  await page.evaluate(
-    () => ({
-      url:
-        window.location.href,
-
-      title:
-        document.title,
-
-      bodyText:
-        (
-          document.body?.innerText ||
-          ""
-        )
-          .replace(
-            /\s+/g,
-            " "
-          )
-          .trim()
-          .slice(
-            0,
-            2000
-          )
-    })
-  )
-  .catch(
-    () => ({
-      url:
-        page.url(),
-
-      title:
-        null,
-
-      bodyText:
-        ""
-    })
-  );
-
-
-logger.info(
-  "VFS LOGIN RESPONSE RECEIVED",
-  {
-    applicationId:
-      applicationId,
-
-    state:
-      this.state,
-
-    url:
-      loginPageSnapshot.url,
-
-    title:
-      loginPageSnapshot.title,
-
-    bodyText:
-      loginPageSnapshot.bodyText,
-
-    checkpoint:
-      this.lastCheckpoint,
-
-    reason:
-      "Resultado recebido pela página depois da tentativa de autenticação."
-  }
-);
 
     return {
       success: true,
@@ -1533,6 +1469,70 @@ await page
     .catch(() => {});
 
   await this.detectCheckpoint();
+    const loginPageSnapshot =
+  await page.evaluate(
+    () => ({
+      url:
+        window.location.href,
+
+      title:
+        document.title,
+
+      bodyText:
+        (
+          document.body?.innerText ||
+          ""
+        )
+          .replace(
+            /\s+/g,
+            " "
+          )
+          .trim()
+          .slice(
+            0,
+            2000
+          )
+    })
+  )
+  .catch(
+    () => ({
+      url:
+        page.url(),
+
+      title:
+        null,
+
+      bodyText:
+        ""
+    })
+  );
+
+
+logger.info(
+  "VFS LOGIN RESPONSE RECEIVED",
+  {
+    applicationId:
+      applicationId,
+
+    state:
+      this.state,
+
+    url:
+      loginPageSnapshot.url,
+
+    title:
+      loginPageSnapshot.title,
+
+    bodyText:
+      loginPageSnapshot.bodyText,
+
+    checkpoint:
+      this.lastCheckpoint,
+
+    reason:
+      "Resultado recebido pela página depois da tentativa de autenticação."
+  }
+);
 
   /*
    * ============================================================
