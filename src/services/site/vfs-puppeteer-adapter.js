@@ -15,8 +15,11 @@ const {
   prepareCameraCapture,
   prepareFromBuffer
 } = require("../facial/liveness-y4m-service");
-const livenessVideoStorageService =
+const LivenessVideoStorageService =
   require("../facial/liveness-video-storage-service");
+
+const livenessVideoStorageService =
+  new LivenessVideoStorageService();
 const SiteAdapter = require("./site-adapter");
 const VfsDomInspector = require("./vfs-dom-inspector");
 const logger = require("../../utils/logger");
