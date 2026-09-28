@@ -1304,16 +1304,16 @@ class Bot1 {
 
 
       await moveState(
-        application,
-        STATES.READY_FOR_AUTOMATION,
-        {
-          event:
-            "APPLICATION_READY_FOR_AUTOMATION",
+  application,
+  STATES.RADAR_ACTIVE,
+  {
+    event:
+      "RADAR_ACTIVATED",
 
-          reason:
-            "Dados preparados e candidatura pronta para o radar."
-        }
-      );
+    reason:
+      "Dados preparados e candidatura pronta para o radar."
+  }
+);
 
 
       application.status =
