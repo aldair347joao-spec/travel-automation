@@ -2352,7 +2352,328 @@ async findVfsLoginFields() {
         result.matched
     };
   }
+  /*
+   * ============================================================
+   * RECUPERAR VÍDEO DE LIVENESS ARMAZENADO
+   * ============================================================
+   *
+   * Recebe a posição já resolvida pelo pedido da VFS e
+   * recupera o segmento original guardado no GridFS.
+   *
+   * NÃO escolhe posição.
+   * NÃO altera o vídeo.
+   * NÃO substitui o armazenamento existente.
+   *
+   * Apenas:
+   *
+   * storageReference
+   *        ↓
+   * videoId / position
+   *        ↓
+   * GridFS
+   *        ↓
+   * Buffer original
+   * ============================================================
+   */
 
+  async getStoredFacialVideo(
+    application,
+    client,
+    selected
+  ) {
+
+    if (
+      !application ||
+      !client ||
+      !selected
+    ) {
+      throw new Error(
+        "Application, client and selected facial position are required."
+      );
+    }
+
+
+    const accountId =
+      application.accountId ||
+      client.accountId ||
+      null;
+
+
+    const clientId =
+      client._id ||
+      client.id ||
+      application.clientId ||
+      null;
+
+
+    const sessionId =
+      application.liveness?.sessionId ||
+      application.facialCheckpoint?.sessionId ||
+      client.liveness?.sessionId ||
+      client.facialSessionId ||
+      null;
+
+
+    const position =
+      Number(
+        selected.position
+      );
+
+
+    if (
+      !accountId
+    ) {
+      throw new Error(
+        "Não foi possível determinar o accountId para recuperar o vídeo de liveness."
+      );
+    }
+
+
+    if (
+      !clientId
+    ) {
+      throw new Error(
+        "Não foi possível determinar o clientId para recuperar o vídeo de liveness."
+      );
+    }
+
+
+    if (
+      !sessionId
+    ) {
+      throw new Error(
+        "Não foi possível determinar o sessionId para recuperar o vídeo de liveness."
+      );
+    }
+
+
+    if (
+      !Number.isInteger(position) ||
+      position < 1 ||
+      position > 10
+    ) {
+      throw new Error(
+        "A posição facial deve estar entre 1 e 10."
+      );
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * Tentar obter o ID real do vídeo.
+     *
+     * O storageReference pode ser:
+     *
+     * - um videoId direto;
+     * - um objeto serializado;
+     * - uma referência textual contendo videoId.
+     * ----------------------------------------------------------
+     */
+
+    let videoId =
+      null;
+
+
+    const storageReference =
+      selected.storageReference;
+
+
+    if (
+      typeof storageReference ===
+      "string"
+    ) {
+
+      const reference =
+        storageReference.trim();
+
+
+      if (
+        reference
+      ) {
+
+        /*
+         * Caso a referência seja diretamente
+         * o ID do vídeo.
+         */
+
+        if (
+          /^[a-fA-F0-9]{24}$/.test(
+            reference
+          )
+        ) {
+
+          videoId =
+            reference;
+
+        } else {
+
+          /*
+           * Algumas versões podem guardar
+           * JSON serializado como referência.
+           */
+
+          try {
+
+            const parsed =
+              JSON.parse(
+                reference
+              );
+
+
+            if (
+              parsed &&
+              typeof parsed ===
+              "object"
+            ) {
+
+              videoId =
+                parsed.videoId ||
+                parsed.id ||
+                parsed._id ||
+                null;
+            }
+
+          } catch (
+            error
+          ) {
+
+            /*
+             * Não é JSON.
+             *
+             * Nesse caso usamos a posição abaixo,
+             * mantendo o fluxo compatível com o
+             * armazenamento atual.
+             */
+          }
+        }
+
+      }
+
+    } else if (
+      storageReference &&
+      typeof storageReference ===
+      "object"
+    ) {
+
+      videoId =
+        storageReference.videoId ||
+        storageReference.id ||
+        storageReference._id ||
+        null;
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * RECUPERAR DO GRIDFS
+     * ----------------------------------------------------------
+     *
+     * Se temos videoId, ele é preferido.
+     *
+     * Caso contrário, o serviço procura pelo:
+     *
+     * accountId + clientId + sessionId + position
+     * ----------------------------------------------------------
+     */
+
+    const storedVideo =
+      await livenessVideoStorageService.get({
+        accountId,
+        clientId:
+          String(
+            clientId
+          ),
+        sessionId:
+          String(
+            sessionId
+          ),
+        position,
+        videoId:
+          videoId ||
+          undefined
+      });
+
+
+    if (
+      !storedVideo ||
+      !Buffer.isBuffer(
+        storedVideo.buffer
+      ) ||
+      !storedVideo.buffer.length
+    ) {
+
+      throw new Error(
+        `Vídeo de liveness da posição ${position} não foi encontrado no armazenamento.`
+      );
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * VALIDAR SE O VÍDEO RECUPERADO É MESMO DA POSIÇÃO
+     * SOLICITADA.
+     * ----------------------------------------------------------
+     */
+
+    const storedPosition =
+      Number(
+        storedVideo.position
+      );
+
+
+    if (
+      Number.isInteger(
+        storedPosition
+      ) &&
+      storedPosition !==
+        position
+    ) {
+
+      throw new Error(
+        `Inconsistência no armazenamento: VFS solicitou a posição ${position}, mas o vídeo recuperado pertence à posição ${storedPosition}.`
+      );
+    }
+
+
+    logger.info(
+      "Stored liveness video recovered",
+      {
+        applicationId:
+          this.applicationId,
+
+        accountId:
+          String(
+            accountId
+          ),
+
+        clientId:
+          String(
+            clientId
+          ),
+
+        sessionId:
+          String(
+            sessionId
+          ),
+
+        position,
+
+        videoId:
+          storedVideo.videoId ||
+          videoId ||
+          null,
+
+        mimeType:
+          storedVideo.mimeType,
+
+        size:
+          storedVideo.buffer.length
+      }
+    );
+
+
+    return storedVideo;
+  }
   /*
    * ============================================================
    * FACIAL POSITION RESOLVER
