@@ -2594,6 +2594,326 @@ async getFacialCameraState() {
 
   return state;
 }
+  async loadFacialVideoIntoPersistentCamera(
+  application,
+  client,
+  selected
+) {
+  if (!application) {
+    throw new Error(
+      "Application is required to load facial video."
+    );
+  }
+
+  if (!client) {
+    throw new Error(
+      "Client is required to load facial video."
+    );
+  }
+
+  if (!selected) {
+    throw new Error(
+      "Selected facial position is required."
+    );
+  }
+
+  const position =
+    Number(selected.position);
+
+  if (
+    !Number.isInteger(position) ||
+    position < 1 ||
+    position > 10
+  ) {
+    throw new Error(
+      `Invalid facial position: ${selected.position}`
+    );
+  }
+
+  /*
+   * ============================================================
+   * 1. GARANTIR QUE A CÂMERA PERSISTENTE EXISTE
+   * ============================================================
+   */
+
+  const cameraState =
+    await this.getFacialCameraState();
+
+  if (
+    !cameraState.opened ||
+    !cameraState.active
+  ) {
+    throw new Error(
+      "VFS persistent camera is not open."
+    );
+  }
+
+  /*
+   * ============================================================
+   * 2. BUSCAR O VÍDEO ORIGINAL ARMAZENADO
+   * ============================================================
+   *
+   * Não criamos uma nova gravação.
+   * Não alteramos o armazenamento.
+   *
+   * Apenas recuperamos o vídeo da posição
+   * que a VFS acabou de solicitar.
+   */
+
+  const stored =
+    await this.getStoredFacialVideo(
+      application,
+      client,
+      selected
+    );
+
+  if (
+    !stored ||
+    !stored.buffer ||
+    !Buffer.isBuffer(stored.buffer) ||
+    stored.buffer.length === 0
+  ) {
+    throw new Error(
+      `Stored facial video not found for position ${position}.`
+    );
+  }
+
+  /*
+   * ============================================================
+   * 3. PREPARAR O VÍDEO
+   * ============================================================
+   *
+   * O serviço existente continua sendo usado.
+   *
+   * Isso preserva a preparação Y4M já existente no projeto,
+   * mas sem reiniciar o Chromium.
+   */
+
+  const prepared =
+    await prepareFromBuffer(
+      stored.buffer,
+      {
+        position,
+        label:
+          selected.label ||
+          stored.label ||
+          null,
+        videoId:
+          stored.videoId ||
+          null
+      }
+    );
+
+  if (
+    !prepared ||
+    !prepared.path
+  ) {
+    throw new Error(
+      `Could not prepare facial video for position ${position}.`
+    );
+  }
+
+  /*
+   * ============================================================
+   * 4. ATUALIZAR ESTADO DA TROCA
+   * ============================================================
+   */
+
+  this.facialSession.switchInProgress =
+    true;
+
+  this.facialSession.switchStartedAt =
+    new Date().toISOString();
+
+  this.facialSession.sourcePosition =
+    position;
+
+  this.facialSession.sourceVideoId =
+    stored.videoId ||
+    selected.videoId ||
+    null;
+
+  this.facialSession.sourceLoaded =
+    false;
+
+  this.facialSession.sourcePlaying =
+    false;
+
+  /*
+   * ============================================================
+   * 5. ENVIAR O VÍDEO PARA A PÁGINA
+   * ============================================================
+   */
+
+  const page =
+    await this.ensurePage();
+
+  const result =
+    await page.evaluate(
+      async ({
+        path: videoPath,
+        position: selectedPosition,
+        videoId
+      }) => {
+        const camera =
+          window.__travelAutomationCamera;
+
+        if (
+          !camera ||
+          !camera.initialized ||
+          !camera.stream ||
+          !camera.canvas ||
+          !camera.context
+        ) {
+          throw new Error(
+            "Persistent camera is not initialized."
+          );
+        }
+
+        /*
+         * Criamos/reutilizamos um elemento <video>
+         * oculto como fonte.
+         */
+        let video =
+          camera.video;
+
+        if (!video) {
+          video =
+            document.createElement("video");
+
+          video.muted = true;
+          video.autoplay = false;
+          video.playsInline = true;
+
+          video.setAttribute(
+            "playsinline",
+            ""
+          );
+
+          video.style.position =
+            "fixed";
+
+          video.style.left =
+            "-10000px";
+
+          video.style.top =
+            "-10000px";
+
+          video.style.width =
+            "1px";
+
+          video.style.height =
+            "1px";
+
+          video.style.opacity =
+            "0";
+
+          document.body.appendChild(
+            video
+          );
+
+          camera.video = video;
+          camera.videoElementReady =
+            true;
+        }
+
+        /*
+         * O caminho local não pode ser passado diretamente
+         * ao navegador.
+         *
+         * Ele será convertido pelo Node para uma URL
+         * acessível ao contexto da página no próximo passo.
+         */
+        return {
+          success: true,
+          position: selectedPosition,
+          videoId: videoId || null,
+          videoReady:
+            camera.videoElementReady === true
+        };
+      },
+      {
+        path: prepared.path,
+        position,
+        videoId:
+          stored.videoId ||
+          selected.videoId ||
+          null
+      }
+    );
+
+  if (
+    !result ||
+    result.success !== true
+  ) {
+    throw new Error(
+      `Could not initialize persistent video source for position ${position}.`
+    );
+  }
+
+  /*
+   * ============================================================
+   * 6. GUARDAR O PREPARADO NO ESTADO DO ADAPTER
+   * ============================================================
+   *
+   * Este caminho NÃO será usado para relançar o Chromium.
+   *
+   * Ele fica apenas como fonte temporária da posição atual.
+   */
+
+  this.activeCameraY4mPath =
+    prepared.path;
+
+  this.activeCameraVideoId =
+    stored.videoId ||
+    selected.videoId ||
+    null;
+
+  this.activeCameraPosition =
+    position;
+
+  this.facialSession.sourceLoaded =
+    true;
+
+  this.facialSession.switchCompletedAt =
+    new Date().toISOString();
+
+  this.facialSession.switchInProgress =
+    false;
+
+  return {
+    success: true,
+
+    position,
+
+    label:
+      selected.label ||
+      stored.label ||
+      null,
+
+    videoId:
+      stored.videoId ||
+      selected.videoId ||
+      null,
+
+    storageReference:
+      selected.storageReference ||
+      null,
+
+    preparedPath:
+      prepared.path,
+
+    cameraStreamId:
+      this.facialSession.streamId ||
+      null,
+
+    persistentCamera:
+      true,
+
+    reusedCameraSession:
+      true
+  };
+}
   async detectFacialPositionRequest() {
     const page =
       await this.ensurePage();
