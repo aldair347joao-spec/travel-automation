@@ -426,33 +426,97 @@ this.facialSession = {
     try {
   await this.page.evaluateOnNewDocument(() => {
     window.__travelAutomationMediaState = {
-      requested: false,
-      constraints: null,
-      requestedAt: null
-    };
+  requested: false,
+  opened: false,
+  active: false,
+  constraints: null,
+  requestedAt: null,
+  openedAt: null,
+  tracks: []
+};
 
-    if (
-      navigator.mediaDevices &&
-      typeof navigator.mediaDevices.getUserMedia ===
-        "function"
-    ) {
-      const original =
-        navigator.mediaDevices.getUserMedia.bind(
-          navigator.mediaDevices
-        );
+if (
+  navigator.mediaDevices &&
+  typeof navigator.mediaDevices.getUserMedia ===
+    "function"
+) {
+  const original =
+    navigator.mediaDevices.getUserMedia.bind(
+      navigator.mediaDevices
+    );
 
-      navigator.mediaDevices.getUserMedia =
-        function (constraints) {
-          window.__travelAutomationMediaState = {
-            requested: true,
-            constraints:
-              constraints || null,
-            requestedAt:
-              new Date().toISOString()
-          };
+  navigator.mediaDevices.getUserMedia =
+    async function (constraints) {
+      window.__travelAutomationMediaState = {
+        ...window.__travelAutomationMediaState,
 
-          return original(constraints);
+        requested: true,
+        constraints:
+          constraints || null,
+        requestedAt:
+          new Date().toISOString()
+      };
+
+      try {
+        const stream =
+          await original(constraints);
+
+        const tracks =
+          stream &&
+          typeof stream.getTracks ===
+            "function"
+            ? stream.getTracks()
+            : [];
+
+        const videoTracks =
+          tracks.filter(
+            track =>
+              track &&
+              track.kind === "video"
+          );
+
+        window.__travelAutomationMediaState = {
+          ...window.__travelAutomationMediaState,
+
+          requested: true,
+          opened: videoTracks.length > 0,
+          active: videoTracks.length > 0,
+          openedAt:
+            videoTracks.length > 0
+              ? new Date().toISOString()
+              : null,
+          tracks:
+            videoTracks.map(
+              track => ({
+                id: track.id || null,
+                kind: track.kind || null,
+                readyState:
+                  track.readyState ||
+                  null,
+                label:
+                  track.label ||
+                  null
+              })
+            )
         };
+
+        return stream;
+      } catch (error) {
+        window.__travelAutomationMediaState = {
+          ...window.__travelAutomationMediaState,
+
+          opened: false,
+          active: false,
+          error:
+            error?.name ||
+            error?.message ||
+            "getUserMedia failed"
+        };
+
+        throw error;
+      }
+    };
+}
     }
   });
 
