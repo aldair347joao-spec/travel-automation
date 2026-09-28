@@ -5,6 +5,10 @@ const Application =
 
 const Bot1 =
   require("./bot1");
+const ApplicationAdminControl =
+  require(
+    "../models/application-admin-control"
+  );
 
 const Bot2 =
   require("./bot2");
@@ -69,7 +73,14 @@ class Supervisor {
 
     this.started =
       false;
+this.automationScanTimer =
+  null;
 
+this.automationScanRunning =
+  false;
+
+this.prepareInFlight =
+  new Map();
     this.workerId =
       crypto.randomUUID();
 
@@ -207,24 +218,54 @@ class Supervisor {
 
 
   async prepare(
+  applicationId
+) {
+
+  await this.assertAdminRelease(
     applicationId
-  ) {
+  );
 
-    await this.assertAdminRelease(
-      applicationId
-    );
+  const key =
+    String(applicationId);
 
+  const existing =
+    this.prepareInFlight.get(key);
 
-    const bot =
-      await this.getBot1(
+  if (existing) {
+    return existing;
+  }
+
+  const promise =
+    (async () => {
+
+      const bot =
+        await this.getBot1(
+          applicationId
+        );
+
+      return bot.prepare(
         applicationId
       );
 
+    })();
 
-    return bot.prepare(
-      applicationId
+  this.prepareInFlight.set(
+    key,
+    promise
+  );
+
+  try {
+
+    return await promise;
+
+  } finally {
+
+    this.prepareInFlight.delete(
+      key
     );
+
   }
+}
 
 
   async verifyOtp(
@@ -2102,7 +2143,206 @@ class Supervisor {
     }
   }
 
+/* =======================================================
+ * ARRANQUE AUTOMÁTICO DAS CANDIDATURAS LIBERADAS
+ * ======================================================= */
 
+async recoverReleasedApplications() {
+
+  if (
+    this.automationScanRunning
+  ) {
+    return;
+  }
+
+  this.automationScanRunning =
+    true;
+
+  try {
+
+    const controls =
+      await ApplicationAdminControl.find({
+        "release.enabled":
+          true,
+
+        status:
+          "READY_FOR_AUTOMATION"
+      })
+        .sort({
+          "release.releasedAt":
+            1
+        })
+        .limit(50)
+        .select(
+          "applicationId release status"
+        )
+        .lean();
+
+
+    for (
+      const control
+      of controls
+    ) {
+
+      const applicationId =
+        control.applicationId
+          ?.toString?.();
+
+
+      if (
+        !applicationId
+      ) {
+        continue;
+      }
+
+
+      try {
+
+        const application =
+          await Application.findById(
+            applicationId
+          ).select(
+            "status workflowState bot1 lock"
+          );
+
+
+        if (
+          !application
+        ) {
+
+          logger.warn(
+            "ORCHESTRATOR released application not found",
+            {
+              applicationId
+            }
+          );
+
+          continue;
+        }
+
+
+        const botStatus =
+          application.bot1?.status ||
+          "idle";
+
+
+        /*
+         * Se o Bot 1 já estiver trabalhando,
+         * não iniciamos outra instância.
+         */
+
+        if (
+          [
+            "running",
+            "waiting",
+            "continuing",
+            "completed"
+          ].includes(
+            botStatus
+          )
+        ) {
+          continue;
+        }
+
+
+        /*
+         * Processos encerrados não devem
+         * voltar para automação.
+         */
+
+        if (
+          application.status ===
+            "cancelled" ||
+
+          application.status ===
+            "completed"
+        ) {
+          continue;
+        }
+
+
+        /*
+         * O gate administrativo continua
+         * obrigatório.
+         */
+
+        await this.assertAdminRelease(
+          applicationId
+        );
+
+
+        logger.info(
+          "ORCHESTRATOR starting released application",
+          {
+            applicationId,
+
+            status:
+              application.status,
+
+            workflowState:
+              application.workflowState,
+
+            bot1Status:
+              botStatus
+          }
+        );
+
+
+        /*
+         * Inicializa o Bot 1.
+         */
+
+        await this.prepare(
+          applicationId
+        );
+
+
+      } catch (
+        error
+      ) {
+
+        this.stats.errors++;
+
+
+        logger.error(
+          "ORCHESTRATOR failed to start released application",
+          {
+            applicationId,
+
+            error:
+              error?.message ||
+              String(error)
+          }
+        );
+
+      }
+    }
+
+
+  } catch (
+    error
+  ) {
+
+    this.stats.errors++;
+
+
+    logger.error(
+      "ORCHESTRATOR released-application scan failed",
+      {
+        error:
+          error?.message ||
+          String(error)
+      }
+    );
+
+
+  } finally {
+
+    this.automationScanRunning =
+      false;
+
+  }
+}
   /* =======================================================
    * RECOVERY GERAL
    * ======================================================= */
@@ -2198,6 +2438,59 @@ class Supervisor {
 
 
     this.bot2.start();
+    const automationScanMs =
+  Math.max(
+    2000,
+    Number(
+      process.env.AUTOMATION_SCAN_INTERVAL_MS
+    ) || 5000
+  );
+
+
+this.recoverReleasedApplications()
+  .catch(
+    error => {
+
+      this.stats.errors++;
+
+      logger.error(
+        "ORCHESTRATOR initial released-application scan failed",
+        {
+          error:
+            error?.message ||
+            String(error)
+        }
+      );
+
+    }
+  );
+
+
+this.automationScanTimer =
+  setInterval(
+    () => {
+
+      this.recoverReleasedApplications()
+        .catch(
+          error => {
+
+            this.stats.errors++;
+
+            logger.error(
+              "ORCHESTRATOR scheduled released-application scan failed",
+              {
+                error:
+                  error?.message ||
+                  String(error)
+              }
+            );
+
+          }
+        );
+
+    },
+    automationScanMs
+  );
 
 
     this.recover()
@@ -2245,6 +2538,20 @@ class Supervisor {
 
 
     this.bot2.stop();
+    if (
+  this.automationScanTimer
+) {
+
+  clearInterval(
+    this.automationScanTimer
+  );
+
+  this.automationScanTimer =
+    null;
+}
+
+
+this.prepareInFlight.clear();
 
 
     for (
