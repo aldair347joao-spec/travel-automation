@@ -983,23 +983,62 @@ application.workflow.stateChangedAt =
 
 
       await this.heartbeat(
-        applicationId,
-        "initializing_site"
-      );
+  applicationId,
+  "initializing_site"
+);
 
+logger.info(
+  "BOT1 SITE INITIALIZATION STARTING",
+  {
+    applicationId:
+      application._id?.toString(),
 
-      await withTimeout(
-        this.site.initialize(),
-        config.timeoutMs,
-        "Site initialization"
-      );
+    workflowState:
+      application.workflowState,
 
+    reason:
+      "Bot 1 vai inicializar o adaptador VFS."
+  }
+);
 
-      await this.heartbeat(
-        applicationId,
-        "vfs_session"
-      );
+await withTimeout(
+  this.site.initialize(),
+  config.timeoutMs,
+  "Site initialization"
+);
 
+logger.info(
+  "BOT1 SITE INITIALIZATION COMPLETED",
+  {
+    applicationId:
+      application._id?.toString(),
+
+    workflowState:
+      application.workflowState,
+
+    reason:
+      "Adaptador VFS inicializado com sucesso."
+  }
+);
+
+logger.info(
+  "BOT1 VFS SESSION STARTING",
+  {
+    applicationId:
+      application._id?.toString(),
+
+    workflowState:
+      application.workflowState,
+
+    reason:
+      "Bot 1 vai iniciar a sessão VFS."
+  }
+);
+
+await this.heartbeat(
+  applicationId,
+  "vfs_session"
+);
 
             await moveState(
         application,
