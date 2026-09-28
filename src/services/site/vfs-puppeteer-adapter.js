@@ -383,7 +383,33 @@ this.facialSession = {
    * ============================================================
    */
 
+  let launchAttempts = 0;
+
+const maxLaunchAttempts = 4;
+
+while (
+  !this.browser &&
+  launchAttempts < maxLaunchAttempts
+) {
+  launchAttempts += 1;
+
   try {
+    logger.info(
+      "Chromium launch attempt",
+      {
+        applicationId:
+          this.applicationId,
+
+        attempt:
+          launchAttempts,
+
+        maxAttempts:
+          maxLaunchAttempts,
+
+        executablePath
+      }
+    );
+
     this.browser =
       await puppeteer.launch({
         executablePath,
@@ -400,33 +426,122 @@ this.facialSession = {
             height: 900
           },
 
-        timeout: 60000,
+        timeout:
+          60000,
 
-        handleSIGINT: false,
-        handleSIGTERM: false,
-        handleSIGHUP: false
+        handleSIGINT:
+          false,
+
+        handleSIGTERM:
+          false,
+
+        handleSIGHUP:
+          false
       });
-  } catch (error) {
-    logger.error(
-      "Failed to launch Chromium",
+
+    logger.info(
+      "Chromium launched successfully",
       {
         applicationId:
           this.applicationId,
 
-        executablePath,
+        attempt:
+          launchAttempts,
 
-        error:
-          error?.message ||
-          String(error),
-
-        stack:
-          error?.stack ||
-          null
+        executablePath
       }
     );
 
-    throw error;
+  } catch (error) {
+
+    const errorMessage =
+      error?.message ||
+      String(error);
+
+    const isEtxtbsy =
+      error?.code === "ETXTBSY" ||
+      errorMessage.includes(
+        "ETXTBSY"
+      );
+
+    logger.error(
+      "Chromium launch failed",
+      {
+        applicationId:
+          this.applicationId,
+
+        attempt:
+          launchAttempts,
+
+        maxAttempts:
+          maxLaunchAttempts,
+
+        executablePath,
+
+        code:
+          error?.code || null,
+
+        error:
+          errorMessage,
+
+        retryable:
+          isEtxtbsy
+      }
+    );
+
+    if (!isEtxtbsy) {
+      throw error;
+    }
+
+    if (
+      launchAttempts >=
+      maxLaunchAttempts
+    ) {
+      logger.error(
+        "Chromium launch exhausted after ETXTBSY retries",
+        {
+          applicationId:
+            this.applicationId,
+
+          attempts:
+            launchAttempts,
+
+          executablePath
+        }
+      );
+
+      throw error;
+    }
+
+    const retryDelay =
+      1500 * launchAttempts;
+
+    logger.warn(
+      "Chromium launch retry scheduled",
+      {
+        applicationId:
+          this.applicationId,
+
+        attempt:
+          launchAttempts + 1,
+
+        delayMs:
+          retryDelay,
+
+        reason:
+          "ETXTBSY"
+      }
+    );
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          retryDelay
+        )
+    );
   }
+}
 
   /*
    * ============================================================
