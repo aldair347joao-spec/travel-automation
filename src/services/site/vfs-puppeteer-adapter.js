@@ -6774,179 +6774,243 @@ async detectFacialPositionRequest() {
    * CHECKPOINT DETECTION
    * ============================================================
    */
+async detectCheckpoint() {
+  const page =
+    await this.ensurePage();
 
-  async detectCheckpoint() {
-    const page =
-      await this.ensurePage();
-
-    const data =
-      await page.evaluate(
-        terms => {
-          const normalize =
-            value =>
-              String(value || "")
-                .toLowerCase()
-                .replace(
-                  /\s+/g,
-                  " "
-                )
-                .trim();
-
-          const body =
-            normalize(
-              document.body?.innerText ||
+  const data =
+    await page.evaluate(terms => {
+      const normalize =
+        value =>
+          String(value || "")
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(
+              /[\u0300-\u036f]/g,
               ""
-            );
+            )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim();
 
-          const inputs =
-            Array.from(
-              document.querySelectorAll(
-                "input, textarea, select"
-              )
-            ).map(
-              element => ({
-                type:
-                  normalize(
-                    element.getAttribute(
-                      "type"
-                    )
-                  ),
+      const body =
+        normalize(
+          document.body?.innerText ||
+            ""
+        );
 
-                name:
-                  normalize(
-                    element.getAttribute(
-                      "name"
-                    )
-                  ),
-
-                id:
-                  normalize(
-                    element.id
-                  ),
-
-                placeholder:
-                  normalize(
-                    element.getAttribute(
-                      "placeholder"
-                    )
-                  ),
-
-                aria:
-                  normalize(
-                    element.getAttribute(
-                      "aria-label"
-                    )
-                  )
-              })
-            );
-
-          const has =
-            list =>
-              list.some(
-                term =>
-                  body.includes(
-                    normalize(term)
-                  )
-              );
-
-          const otpInput =
-            inputs.some(
-              input =>
-                [
-                  input.name,
-                  input.id,
-                  input.placeholder,
-                  input.aria
-                ].some(
-                  value =>
-                    terms.otp.some(
-                      term =>
-                        value.includes(
-                          normalize(
-                            term
-                          )
-                        )
-                    )
+      const inputs =
+        Array.from(
+          document.querySelectorAll(
+            "input, textarea, select"
+          )
+        ).map(
+          element => ({
+            type:
+              normalize(
+                element.getAttribute(
+                  "type"
                 )
-            );
-
-          return {
-            body,
-            otpInput,
-
-            captcha:
-              has(
-                terms.captcha
               ),
 
-            facial:
-              has(
-                terms.facial
+            name:
+              normalize(
+                element.getAttribute(
+                  "name"
+                )
+              ),
+
+            id:
+              normalize(
+                element.id
+              ),
+
+            placeholder:
+              normalize(
+                element.getAttribute(
+                  "placeholder"
+                )
+              ),
+
+            aria:
+              normalize(
+                element.getAttribute(
+                  "aria-label"
+                )
               )
-          };
-        },
-        CHECKPOINT_TERMS
-      );
+          })
+        );
 
-    if (
-      data.captcha
-    ) {
-      this.lastCheckpoint = {
-        type:
-          "CAPTCHA_REQUIRED",
+      const has =
+        list =>
+          list.some(
+            term =>
+              body.includes(
+                normalize(term)
+              )
+          );
 
-        reason:
-          "Official VFS CAPTCHA/security verification detected."
+      /*
+       * ========================================================
+       * OTP
+       * ========================================================
+       */
+
+      const otpInput =
+        inputs.some(
+          input =>
+            [
+              input.name,
+              input.id,
+              input.placeholder,
+              input.aria
+            ].some(
+              value =>
+                terms.otp.some(
+                  term =>
+                    value.includes(
+                      normalize(term)
+                    )
+                )
+            )
+        );
+
+      /*
+       * ========================================================
+       * CHECKPOINTS GERAIS
+       * ========================================================
+       */
+
+      const captcha =
+        has(terms.captcha);
+
+      const facialGeneric =
+        has(terms.facial);
+
+      return {
+        body,
+
+        otpInput,
+
+        captcha,
+
+        facialGeneric
       };
+    }, CHECKPOINT_TERMS);
 
-      return this.lastCheckpoint;
-    }
+
+  /*
+   * ============================================================
+   * 1. CAPTCHA TEM PRIORIDADE ABSOLUTA
+   * ============================================================
+   */
+
+  if (
+    data.captcha
+  ) {
+    this.lastCheckpoint = {
+      type:
+        "CAPTCHA_REQUIRED",
+
+      reason:
+        "Official VFS CAPTCHA/security verification detected."
+    };
+
+    return this.lastCheckpoint;
+  }
+
+
+  /*
+   * ============================================================
+   * 2. OTP
+   * ============================================================
+   */
+
+  if (
+    data.otpInput ||
+    data.body.includes("otp") ||
+    data.body.includes(
+      "one time password"
+    )
+  ) {
+    this.lastCheckpoint = {
+      type:
+        "OTP_REQUIRED",
+
+      reason:
+        "Official VFS OTP checkpoint detected."
+    };
+
+    return this.lastCheckpoint;
+  }
+
+
+  /*
+   * ============================================================
+   * 3. CÂMERA
+   * ============================================================
+   *
+   * Só consideramos a etapa facial concreta depois de
+   * a VFS ter realmente aberto a câmera.
+   */
+
+  const cameraState =
+    await this.getFacialCameraState();
+
+
+  /*
+   * ============================================================
+   * 4. INSTRUÇÃO FACIAL CONCRETA
+   * ============================================================
+   */
+
+  if (
+    cameraState.opened &&
+    cameraState.active
+  ) {
+
+    const request =
+      await this.detectFacialPositionRequest();
 
     if (
-      data.otpInput ||
-      data.body.includes(
-        "otp"
-      ) ||
-      data.body.includes(
-        "one time password"
-      )
+      request &&
+      request.description
     ) {
-      this.lastCheckpoint = {
-        type:
-          "OTP_REQUIRED",
-
-        reason:
-          "Official VFS OTP checkpoint detected."
-      };
-
-      return this.lastCheckpoint;
-    }
-
-    if (
-      data.facial
-    ) {
-      const request =
-        await this.detectFacialPositionRequest();
 
       this.lastCheckpoint = {
         type:
           "FACIAL_POSITION",
 
         reason:
-          "Official VFS facial checkpoint detected.",
+          "Official VFS facial-position instruction detected.",
 
         request
       };
 
       return this.lastCheckpoint;
     }
-
-    this.lastCheckpoint =
-      null;
-
-    return null;
   }
 
+
+  /*
+   * ============================================================
+   * 5. NÃO HÁ CHECKPOINT FACIAL CONCRETO
+   * ============================================================
+   *
+   * Atenção:
+   *
+   * "facial", "liveness", "selfie" ou
+   * "facial verification" sozinhos NÃO significam
+   * que a VFS está pedindo uma posição.
+   */
+
+  this.lastCheckpoint = null;
+
+  return null;
+}
+      
   /*
    * ============================================================
    * DOM INSPECTION
