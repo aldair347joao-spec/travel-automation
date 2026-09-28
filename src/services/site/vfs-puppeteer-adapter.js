@@ -133,7 +133,37 @@ this.facialSession = {
   lastRequestAt: null,
   lastAcceptedAt: null,
 
-  completed: false
+  completed: false,
+    /*
+   * ============================================================
+   * STREAM PERSISTENTE DA SESSÃO
+   * ============================================================
+   *
+   * A câmera lógica permanece aberta durante toda a etapa
+   * facial. O conteúdo apresentado pode mudar sem criar uma
+   * nova chamada getUserMedia().
+   */
+
+  streamReady: false,
+  streamId: null,
+
+  canvasReady: false,
+  canvasWidth: 640,
+  canvasHeight: 480,
+  canvasFps: 30,
+
+  sourcePosition: null,
+  sourceVideoId: null,
+
+  sourceLoaded: false,
+  sourcePlaying: false,
+
+  switchInProgress: false,
+  switchStartedAt: null,
+  switchCompletedAt: null,
+
+  videoElementReady: false,
+  lastFrameAt: null
 };
 
     this.initialized = false;
