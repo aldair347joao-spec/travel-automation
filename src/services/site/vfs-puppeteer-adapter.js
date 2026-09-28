@@ -2914,6 +2914,550 @@ async getFacialCameraState() {
       true
   };
 }
+  async playFacialVideoOnPersistentCamera(
+  preparedPath,
+  position,
+  videoId = null
+) {
+  if (!preparedPath) {
+    throw new Error(
+      "Prepared facial video path is required."
+    );
+  }
+
+  const page =
+    await this.ensurePage();
+
+  if (
+    !fs.existsSync(preparedPath)
+  ) {
+    throw new Error(
+      `Prepared facial video does not exist: ${preparedPath}`
+    );
+  }
+
+  const videoBuffer =
+    await fs.promises.readFile(
+      preparedPath
+    );
+
+  if (
+    !videoBuffer ||
+    videoBuffer.length === 0
+  ) {
+    throw new Error(
+      "Prepared facial video is empty."
+    );
+  }
+
+  /*
+   * ============================================================
+   * O Y4M é uma fonte de captura do Chromium.
+   *
+   * Para a câmera persistente baseada em canvas,
+   * precisamos reproduzir uma fonte de vídeo que o
+   * elemento <video> do navegador consiga decodificar.
+   *
+   * Portanto, o preparado Y4M não é enviado diretamente
+   * para o elemento <video>.
+   *
+   * Vamos gerar uma versão MP4 temporária para reprodução.
+   * ============================================================
+   */
+
+  const tempDir =
+    path.dirname(preparedPath);
+
+  const mp4Path =
+    path.join(
+      tempDir,
+      `facial-position-${position}-${Date.now()}.mp4`
+    );
+
+  await new Promise(
+    (resolve, reject) => {
+      const ffmpeg =
+        require("child_process").spawn(
+          require("ffmpeg-static"),
+          [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+
+            "-f",
+            "yuv4mpegpipe",
+
+            "-i",
+            preparedPath,
+
+            "-c:v",
+            "libx264",
+
+            "-preset",
+            "veryfast",
+
+            "-pix_fmt",
+            "yuv420p",
+
+            "-movflags",
+            "+faststart",
+
+            "-an",
+
+            mp4Path
+          ],
+          {
+            stdio: [
+              "ignore",
+              "ignore",
+              "pipe"
+            ]
+          }
+        );
+
+      let stderr = "";
+
+      ffmpeg.stderr.on(
+        "data",
+        chunk => {
+          stderr +=
+            chunk.toString();
+        }
+      );
+
+      ffmpeg.on(
+        "error",
+        reject
+      );
+
+      ffmpeg.on(
+        "close",
+        code => {
+          if (code === 0) {
+            resolve();
+            return;
+          }
+
+          reject(
+            new Error(
+              `FFmpeg failed creating browser video: ${stderr || `exit code ${code}`}`
+            )
+          );
+        }
+      );
+    }
+  );
+
+  if (
+    !fs.existsSync(mp4Path)
+  ) {
+    throw new Error(
+      "Temporary browser video was not created."
+    );
+  }
+
+  const browserBuffer =
+    await fs.promises.readFile(
+      mp4Path
+    );
+
+  const base64 =
+    browserBuffer.toString(
+      "base64"
+    );
+
+  /*
+   * ============================================================
+   * ENVIAR A PÁGINA E ALIMENTAR O CANVAS
+   * ============================================================
+   */
+
+  const result =
+    await page.evaluate(
+      async ({
+        base64,
+        position,
+        videoId
+      }) => {
+        const camera =
+          window.__travelAutomationCamera;
+
+        if (
+          !camera ||
+          !camera.initialized ||
+          !camera.canvas ||
+          !camera.context ||
+          !camera.stream
+        ) {
+          throw new Error(
+            "Persistent camera is not initialized."
+          );
+        }
+
+        let video =
+          camera.video;
+
+        if (!video) {
+          video =
+            document.createElement(
+              "video"
+            );
+
+          video.muted = true;
+          video.autoplay = false;
+          video.playsInline = true;
+
+          video.setAttribute(
+            "playsinline",
+            ""
+          );
+
+          video.style.position =
+            "fixed";
+
+          video.style.left =
+            "-10000px";
+
+          video.style.top =
+            "-10000px";
+
+          video.style.width =
+            "1px";
+
+          video.style.height =
+            "1px";
+
+          video.style.opacity =
+            "0";
+
+          document.body.appendChild(
+            video
+          );
+
+          camera.video =
+            video;
+
+          camera.videoElementReady =
+            true;
+        }
+
+        /*
+         * Blob temporário para o elemento <video>.
+         */
+        const binary =
+          atob(base64);
+
+        const bytes =
+          new Uint8Array(
+            binary.length
+          );
+
+        for (
+          let i = 0;
+          i < binary.length;
+          i++
+        ) {
+          bytes[i] =
+            binary.charCodeAt(i);
+        }
+
+        const blob =
+          new Blob(
+            [bytes],
+            {
+              type: "video/mp4"
+            }
+          );
+
+        const objectUrl =
+          URL.createObjectURL(
+            blob
+          );
+
+        /*
+         * Liberar a URL anterior.
+         */
+        if (
+          camera.videoObjectUrl
+        ) {
+          try {
+            URL.revokeObjectURL(
+              camera.videoObjectUrl
+            );
+          } catch (_) {}
+        }
+
+        camera.videoObjectUrl =
+          objectUrl;
+
+        video.pause();
+
+        video.removeAttribute(
+          "src"
+        );
+
+        video.load();
+
+        video.src =
+          objectUrl;
+
+        await new Promise(
+          (resolve, reject) => {
+            let settled = false;
+
+            const cleanup = () => {
+              video.removeEventListener(
+                "loadedmetadata",
+                onLoaded
+              );
+
+              video.removeEventListener(
+                "error",
+                onError
+              );
+            };
+
+            const onLoaded = () => {
+              if (settled) return;
+
+              settled = true;
+
+              cleanup();
+
+              resolve();
+            };
+
+            const onError = () => {
+              if (settled) return;
+
+              settled = true;
+
+              cleanup();
+
+              reject(
+                new Error(
+                  "Browser could not decode the facial video."
+                )
+              );
+            };
+
+            video.addEventListener(
+              "loadedmetadata",
+              onLoaded
+            );
+
+            video.addEventListener(
+              "error",
+              onError
+            );
+
+            video.load();
+          }
+        );
+
+        /*
+         * ======================================================
+         * DESENHO CONTÍNUO NO CANVAS
+         * ======================================================
+         */
+
+        const drawFrame =
+          () => {
+            if (
+              !camera.initialized ||
+              !camera.canvas ||
+              !camera.context
+            ) {
+              return;
+            }
+
+            const ctx =
+              camera.context;
+
+            const canvas =
+              camera.canvas;
+
+            if (
+              video.readyState >= 2 &&
+              video.videoWidth > 0 &&
+              video.videoHeight > 0
+            ) {
+              const sourceWidth =
+                video.videoWidth;
+
+              const sourceHeight =
+                video.videoHeight;
+
+              const scale =
+                Math.min(
+                  canvas.width /
+                    sourceWidth,
+                  canvas.height /
+                    sourceHeight
+                );
+
+              const width =
+                sourceWidth * scale;
+
+              const height =
+                sourceHeight * scale;
+
+              const x =
+                (canvas.width -
+                  width) /
+                2;
+
+              const y =
+                (canvas.height -
+                  height) /
+                2;
+
+              ctx.fillStyle =
+                "#000000";
+
+              ctx.fillRect(
+                0,
+                0,
+                canvas.width,
+                canvas.height
+              );
+
+              ctx.drawImage(
+                video,
+                x,
+                y,
+                width,
+                height
+              );
+
+              camera.lastFrameAt =
+                new Date().toISOString();
+            }
+
+            requestAnimationFrame(
+              drawFrame
+            );
+          };
+
+        if (
+          !camera.renderLoopStarted
+        ) {
+          camera.renderLoopStarted =
+            true;
+
+          requestAnimationFrame(
+            drawFrame
+          );
+        }
+
+        await video.play();
+
+        camera.currentPosition =
+          Number(position);
+
+        camera.currentVideoId =
+          videoId || null;
+
+        camera.active = true;
+
+        camera.sourceLoaded =
+          true;
+
+        camera.sourcePlaying =
+          true;
+
+        camera.lastFrameAt =
+          new Date().toISOString();
+
+        return {
+          success: true,
+
+          position:
+            Number(position),
+
+          videoId:
+            videoId || null,
+
+          streamId:
+            camera.streamId || null,
+
+          readyState:
+            video.readyState,
+
+          duration:
+            Number.isFinite(
+              video.duration
+            )
+              ? video.duration
+              : null,
+
+          width:
+            video.videoWidth || 0,
+
+          height:
+            video.videoHeight || 0
+        };
+      },
+      {
+        base64,
+        position:
+          Number(position),
+        videoId:
+          videoId || null
+      }
+    );
+
+  /*
+   * ============================================================
+   * LIMPEZA DO MP4 TEMPORÁRIO
+   * ============================================================
+   */
+
+  try {
+    await fs.promises.unlink(
+      mp4Path
+    );
+  } catch (_) {}
+
+  if (
+    !result ||
+    result.success !== true
+  ) {
+    throw new Error(
+      `Could not start facial video for position ${position}.`
+    );
+  }
+
+  /*
+   * ============================================================
+   * ATUALIZAR SESSÃO
+   * ============================================================
+   */
+
+  this.facialSession.sourcePosition =
+    Number(position);
+
+  this.facialSession.sourceVideoId =
+    videoId || null;
+
+  this.facialSession.sourceLoaded =
+    true;
+
+  this.facialSession.sourcePlaying =
+    true;
+
+  this.facialSession.videoElementReady =
+    true;
+
+  this.facialSession.lastFrameAt =
+    new Date().toISOString();
+
+  this.facialSession.switchCompletedAt =
+    new Date().toISOString();
+
+  return result;
+}
   async detectFacialPositionRequest() {
     const page =
       await this.ensurePage();
