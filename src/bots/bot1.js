@@ -871,6 +871,8 @@ class Bot1 {
         await this.assertAdminRelease(
       applicationId
     );
+   
+    try {
     const startedAt =
       Date.now();
 
