@@ -936,39 +936,19 @@ class Bot1 {
 
     try {
 
-  if (
-    !wasAlreadyReadyForAutomation
-  ) {
+  application.workflow =
+  application.workflow ||
+  {};
 
-    await moveState(
-      application,
-      STATES.IDENTITY_PREPARATION,
-      {
-        event:
-          "BOT1_PREPARATION_STARTED",
+application.workflow.lastEvent =
+  "BOT1_AUTOMATION_STARTED";
 
-        reason:
-          "Bot 1 iniciou a preparação da candidatura."
-      }
-    );
+application.workflow.lastReason =
+  "Bot 1 iniciou a automação de uma candidatura liberada pelo administrador.";
 
-  } else {
-
-    application.workflow =
-      application.workflow ||
-      {};
-
-    application.workflow.lastEvent =
-      "BOT1_AUTOMATION_STARTED";
-
-    application.workflow.lastReason =
-      "Bot 1 iniciou a automação de uma candidatura já pronta.";
-
-    application.workflow.stateChangedAt =
-      new Date();
-
-  }
-
+application.workflow.stateChangedAt =
+  new Date();
+}
 
   application.status =
     "preparing";
