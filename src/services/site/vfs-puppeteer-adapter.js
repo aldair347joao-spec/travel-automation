@@ -2111,24 +2111,43 @@ async findVfsLoginFields() {
   }
 
   /*
-   * ============================================================
-   * FACIAL VERIFICATION
-   * ============================================================
-   *
-   * IMPORTANTE:
-   *
-   * O sistema não:
-   * - simula webcam;
-   * - falsifica liveness;
-   * - contorna CAPTCHA;
-   * - injeta imagem numa proteção biométrica;
-   * - inventa posições.
-   *
-   * Ele apenas interpreta o pedido textual
-   * apresentado pelo fluxo oficial e encontra,
-   * entre as 10 posições já armazenadas do cliente,
-   * a posição semanticamente correspondente.
-   */
+ * ============================================================
+ * VERIFICAÇÃO FACIAL VFS — CÂMERA SIMULADA AUTORIZADA
+ * ============================================================
+ *
+ * A VFS autorizou o uso de uma fonte de vídeo simulada
+ * através do mecanismo nativo do Chromium.
+ *
+ * O sistema utiliza:
+ *
+ * vídeo original armazenado
+ *          ↓
+ * posição facial identificada
+ *          ↓
+ * conversão para Y4M
+ *          ↓
+ * Chromium --use-file-for-fake-video-capture
+ *          ↓
+ * getUserMedia() da página VFS
+ *
+ * IMPORTANTE:
+ *
+ * - O vídeo original permanece armazenado como evidência.
+ * - O Y4M é somente uma representação intermediária para
+ *   a câmera simulada.
+ * - A posição não é escolhida aleatoriamente.
+ * - A instrução apresentada pela VFS deve ser relacionada
+ *   a uma das posições armazenadas.
+ * - Se não houver correspondência suficientemente segura,
+ *   o sistema interrompe essa etapa em vez de escolher
+ *   uma posição errada.
+ * - CAPTCHA e demais checkpoints oficiais da VFS continuam
+ *   sendo respeitados normalmente.
+ *
+ * A simulação da câmera é usada exclusivamente no fluxo
+ * de automação facial autorizado.
+ */
+  
 
   async verifyIdentity(
     application,
