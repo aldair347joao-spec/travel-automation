@@ -269,12 +269,12 @@ this.facialSession = {
  * lock. Isso evita que Bot1 e Bot2 disputem simultaneamente
  * o /tmp/chromium.
  */
-
 const releaseChromiumLaunchLock =
   await acquireChromiumLaunchLock();
 
+let executablePath = null;
+
 try {
-  let executablePath;
 
   /*
    * ==========================================================
