@@ -23,7 +23,40 @@ const livenessVideoStorageService =
 const SiteAdapter = require("./site-adapter");
 const VfsDomInspector = require("./vfs-dom-inspector");
 const logger = require("../../utils/logger");
+/*
+ * ============================================================
+ * LOCK GLOBAL DO CHROMIUM
+ * ============================================================
+ *
+ * O @sparticuz/chromium usa um executável extraído em /tmp.
+ *
+ * Bot1 e Bot2 podem pedir um navegador praticamente ao mesmo
+ * tempo. Se ambos tentarem inicializar o mesmo executável,
+ * o Linux pode responder:
+ *
+ *     spawn ETXTBSY
+ *
+ * Mantemos uma fila global no processo Node para garantir que
+ * somente uma inicialização Chromium aconteça de cada vez.
+ */
 
+let chromiumLaunchLock = Promise.resolve();
+
+async function acquireChromiumLaunchLock() {
+  const previousLock =
+    chromiumLaunchLock;
+
+  let releaseLock;
+
+  chromiumLaunchLock =
+    new Promise(resolve => {
+      releaseLock = resolve;
+    });
+
+  await previousLock;
+
+  return releaseLock;
+}
 const VFS_BASE_URL =
   process.env.VFS_BASE_URL ||
   "https://visa.vfsglobal.com/ago/en/prt";
@@ -225,7 +258,29 @@ this.facialSession = {
    * ============================================================
    */
 
+   /*
+ * ============================================================
+ * INICIALIZAÇÃO SERIALIZADA DO CHROMIUM
+ * ============================================================
+ *
+ * IMPORTANTE:
+ *
+ * A resolução do executável e o launch ficam dentro do mesmo
+ * lock. Isso evita que Bot1 e Bot2 disputem simultaneamente
+ * o /tmp/chromium.
+ */
+
+const releaseChromiumLaunchLock =
+  await acquireChromiumLaunchLock();
+
+try {
   let executablePath;
+
+  /*
+   * ==========================================================
+   * RESOLVER EXECUTÁVEL
+   * ==========================================================
+   */
 
   try {
     executablePath =
@@ -282,15 +337,9 @@ this.facialSession = {
   }
 
   /*
-   * ============================================================
+   * ==========================================================
    * ARGUMENTOS DO CHROMIUM
-   * ============================================================
-   *
-   * Usamos os argumentos oficiais fornecidos pelo
-   * @sparticuz/chromium juntamente com os argumentos
-   * padrão do Puppeteer.
-   *
-   * Isto é importante no Chromium headless-shell.
+   * ==========================================================
    */
 
   const chromiumArgs =
@@ -314,52 +363,42 @@ this.facialSession = {
       headless: "shell"
     });
 
-  /*
-   * Garantir argumentos essenciais do Render
-   * sem duplicar argumentos já fornecidos.
-   */
-
   const requiredArgs = [
-  "--no-sandbox",
-  "--disable-setuid-sandbox",
-  "--disable-dev-shm-usage",
-  "--disable-gpu",
-  "--no-first-run",
-  "--no-zygote",
-
-  /*
-   * MediaStream / câmera
-   */
-  "--enable-media-stream",
-
-  /*
-   * Permitir que a página solicite
-   * acesso aos dispositivos de mídia.
-   */
-  "--use-fake-ui-for-media-stream"
-];
-
-  const finalArgs = [
-  ...new Set([
-    ...browserArgs,
-    ...requiredArgs,
+    "--no-sandbox",
+    "--disable-setuid-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    "--no-first-run",
+    "--no-zygote",
 
     /*
-     * ========================================================
-     * CÂMERA SIMULADA VFS — FLUXO AUTORIZADO
-     * ========================================================
-     *
-     * Quando uma posição facial já tiver sido preparada,
-     * o Chromium recebe o vídeo Y4M através do mecanismo
-     * nativo de fake video capture.
+     * MediaStream / câmera
      */
-    ...(this.activeCameraY4mPath
-      ? [
-          `--use-file-for-fake-video-capture=${this.activeCameraY4mPath}`
-        ]
-      : [])
-  ])
-];
+    "--enable-media-stream",
+
+    /*
+     * Permitir acesso aos dispositivos de mídia.
+     */
+    "--use-fake-ui-for-media-stream"
+  ];
+
+  const finalArgs = [
+    ...new Set([
+      ...browserArgs,
+      ...requiredArgs,
+
+      /*
+       * ======================================================
+       * CÂMERA SIMULADA VFS — FLUXO AUTORIZADO
+       * ======================================================
+       */
+      ...(this.activeCameraY4mPath
+        ? [
+            `--use-file-for-fake-video-capture=${this.activeCameraY4mPath}`
+          ]
+        : [])
+    ])
+  ];
 
   logger.info(
     "Launching Chromium",
@@ -378,38 +417,204 @@ this.facialSession = {
   );
 
   /*
-   * ============================================================
-   * INICIAR CHROMIUM
-   * ============================================================
+   * ==========================================================
+   * LAUNCH
+   * ==========================================================
    */
 
   let launchAttempts = 0;
 
-const maxLaunchAttempts = 4;
+  const maxLaunchAttempts = 4;
 
-while (
-  !this.browser &&
-  launchAttempts < maxLaunchAttempts
-) {
-  launchAttempts += 1;
+  while (
+    !this.browser &&
+    launchAttempts < maxLaunchAttempts
+  ) {
+    launchAttempts += 1;
 
-  try {
-    logger.info(
-      "Chromium launch attempt",
-      {
-        applicationId:
-          this.applicationId,
+    try {
+      logger.info(
+        "Chromium launch attempt",
+        {
+          applicationId:
+            this.applicationId,
 
-        attempt:
-          launchAttempts,
+          attempt:
+            launchAttempts,
 
-        maxAttempts:
-          maxLaunchAttempts,
+          maxAttempts:
+            maxLaunchAttempts,
 
-        executablePath
+          executablePath
+        }
+      );
+
+      this.browser =
+        await puppeteer.launch({
+          executablePath,
+
+          headless:
+            "shell",
+
+          args:
+            finalArgs,
+
+          defaultViewport:
+            chromium.defaultViewport || {
+              width: 1440,
+              height: 900
+            },
+
+          timeout:
+            60000,
+
+          handleSIGINT:
+            false,
+
+          handleSIGTERM:
+            false,
+
+          handleSIGHUP:
+            false
+        });
+
+      logger.info(
+        "Chromium launched successfully",
+        {
+          applicationId:
+            this.applicationId,
+
+          attempt:
+            launchAttempts,
+
+          executablePath
+        }
+      );
+
+    } catch (error) {
+
+      const errorMessage =
+        error?.message ||
+        String(error);
+
+      const isEtxtbsy =
+        error?.code === "ETXTBSY" ||
+        errorMessage.includes(
+          "ETXTBSY"
+        );
+
+      logger.error(
+        "Chromium launch failed",
+        {
+          applicationId:
+            this.applicationId,
+
+          attempt:
+            launchAttempts,
+
+          maxAttempts:
+            maxLaunchAttempts,
+
+          executablePath,
+
+          code:
+            error?.code || null,
+
+          error:
+            errorMessage,
+
+          retryable:
+            isEtxtbsy
+        }
+      );
+
+      if (!isEtxtbsy) {
+        throw error;
       }
-    );
 
+      if (
+        launchAttempts >=
+        maxLaunchAttempts
+      ) {
+        logger.error(
+          "Chromium launch exhausted after ETXTBSY retries",
+          {
+            applicationId:
+              this.applicationId,
+
+            attempts:
+              launchAttempts,
+
+            executablePath
+          }
+        );
+
+        throw error;
+      }
+
+      const retryDelay =
+        1500 * launchAttempts;
+
+      logger.warn(
+        "Chromium launch retry scheduled",
+        {
+          applicationId:
+            this.applicationId,
+
+          attempt:
+            launchAttempts + 1,
+
+          delayMs:
+            retryDelay,
+
+          reason:
+            "ETXTBSY"
+        }
+      );
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            retryDelay
+          )
+      );
+    }
+  }
+
+  /*
+   * Se chegou aqui, o browser precisa existir.
+   */
+  if (!this.browser) {
+    const error =
+      new Error(
+        "Chromium launch finished without a browser instance."
+      );
+
+    error.code =
+      "CHROMIUM_BROWSER_NOT_CREATED";
+
+    throw error;
+  }
+
+} finally {
+
+  /*
+   * ==========================================================
+   * LIBERAR LOCK
+   * ==========================================================
+   */
+
+  releaseChromiumLaunchLock();
+}
+try {
+  const pages =
+    await this.browser.pages();
+
+  this.page =
+    pages.length > 0
+      ? pages[0]
+      : await this.browser.newPage();
     this.browser =
       await puppeteer.launch({
         executablePath,
