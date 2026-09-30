@@ -2411,7 +2411,711 @@ class VfsNavigator {
 
   }
 
+  /*
+   * ==========================================================
+   * CENTRAL DRIVER
+   * ==========================================================
+   *
+   * O Navigator passa a ser o cérebro do fluxo VFS.
+   *
+   * Fluxo:
+   *
+   * OBSERVAR
+   *    ↓
+   * IDENTIFICAR ESTADO
+   *    ↓
+   * DECIDIR
+   *    ↓
+   * EXECUTAR
+   *    ↓
+   * VERIFICAR
+   *    ↓
+   * PRÓXIMO ESTADO
+   *
+   * O Navigator não duplica os seletores da VFS.
+   * Os executores continuam no Bot 1 / Adapter.
+   *
+   * Cada Navigator pertence a uma candidatura.
+   */
 
+  async drive(
+    application,
+    executors = {},
+    options = {}
+  ) {
+
+    this.assertApplication(
+      application
+    );
+
+    const maxSteps =
+      Math.max(
+        1,
+        Number(
+          options.maxSteps
+        ) || 40
+      );
+
+    const sameStateLimit =
+      Math.max(
+        1,
+        Number(
+          options.sameStateLimit
+        ) || 4
+      );
+
+    const stepDelayMs =
+      Math.max(
+        0,
+        Number(
+          options.stepDelayMs
+        ) || 250
+      );
+
+    let previousSignature =
+      null;
+
+    let repeated =
+      0;
+
+    for (
+      let step = 1;
+      step <= maxSteps;
+      step++
+    ) {
+
+      this.assertApplication(
+        application
+      );
+
+      /*
+       * ------------------------------------------------------
+       * 1. OBSERVAR A VFS
+       * ------------------------------------------------------
+       */
+
+      const observation =
+        await this.inspect(
+          application
+        );
+
+      /*
+       * ------------------------------------------------------
+       * 2. DECIDIR
+       * ------------------------------------------------------
+       */
+
+      const decision =
+        this.decide(
+          observation,
+          application
+        );
+
+      /*
+       * ------------------------------------------------------
+       * 3. DETECTAR LOOP
+       * ------------------------------------------------------
+       */
+
+      const signature =
+        [
+          this.state,
+          decision.action,
+          observation.url || ""
+        ].join("|");
+
+      if (
+        signature ===
+        previousSignature
+      ) {
+
+        repeated++;
+
+      } else {
+
+        repeated = 0;
+
+      }
+
+      previousSignature =
+        signature;
+
+      this.record(
+        "DRIVE_STEP",
+        {
+          step,
+          state:
+            this.state,
+          action:
+            decision.action,
+          repeated
+        }
+      );
+
+      /*
+       * ------------------------------------------------------
+       * 4. CHECKPOINTS OFICIAIS
+       * ------------------------------------------------------
+       *
+       * CAPTCHA
+       * OTP
+       * FACIAL
+       *
+       * O Navigator nunca tenta contornar esses
+       * checkpoints.
+       */
+
+      if (
+        decision.action ===
+        "WAIT_FOR_USER"
+      ) {
+
+        return {
+          success:
+            true,
+
+          requiresUser:
+            true,
+
+          officialCheckpoint:
+            true,
+
+          checkpoint:
+            observation.checkpoint ||
+            null,
+
+          state:
+            this.state,
+
+          step
+        };
+      }
+
+      /*
+       * ------------------------------------------------------
+       * 5. PROCESSO CONCLUÍDO
+       * ------------------------------------------------------
+       */
+
+      if (
+        decision.action ===
+        "COMPLETE"
+      ) {
+
+        return {
+          success:
+            true,
+
+          completed:
+            true,
+
+          state:
+            this.state,
+
+          step
+        };
+      }
+
+      /*
+       * ------------------------------------------------------
+       * 6. DISPONIBILIDADE
+       * ------------------------------------------------------
+       *
+       * Se não houver vaga:
+       *
+       * Navigator
+       *      ↓
+       * Bot 2 / Radar
+       *
+       * A candidatura fica esperando enquanto
+       * outras candidaturas continuam.
+       */
+
+      if (
+        decision.action ===
+        "CHECK_AVAILABILITY"
+      ) {
+
+        const executor =
+          executors.checkAvailability;
+
+        if (
+          typeof executor !==
+          "function"
+        ) {
+
+          return {
+            success:
+              false,
+
+            handoffToRadar:
+              true,
+
+            state:
+              this.state,
+
+            reason:
+              "Navigator requires a checkAvailability executor."
+          };
+        }
+
+        const result =
+          await executor(
+            application,
+            observation,
+            decision
+          );
+
+        if (
+          result?.requiresUser ===
+          true
+        ) {
+
+          return {
+            success:
+              true,
+
+            requiresUser:
+              true,
+
+            officialCheckpoint:
+              true,
+
+            checkpoint:
+              result.checkpoint ||
+              observation.checkpoint ||
+              null,
+
+            state:
+              this.state
+          };
+        }
+
+        if (
+          result?.handoffToRadar ||
+          result?.noAvailability
+        ) {
+
+          return {
+            success:
+              true,
+
+            handoffToRadar:
+              true,
+
+            waitingForSlot:
+              true,
+
+            state:
+              this.state,
+
+            result
+          };
+        }
+
+        /*
+         * Uma vaga encontrada nunca é assumida
+         * cegamente. O próximo ciclo volta a observar
+         * o DOM real da VFS.
+         */
+
+        if (
+          result?.slot
+        ) {
+
+          application.slot =
+            result.slot;
+
+          this.record(
+            "SLOT_DETECTED",
+            {
+              slot:
+                result.slot
+            }
+          );
+        }
+
+        await this._navigatorDelay(
+          stepDelayMs
+        );
+
+        continue;
+      }
+
+      /*
+       * ------------------------------------------------------
+       * 7. SELEÇÃO / RECUPERAÇÃO DE SLOT
+       * ------------------------------------------------------
+       */
+
+      if (
+        decision.action ===
+        "SELECT_SLOT"
+      ) {
+
+        const executor =
+          executors.selectSlot;
+
+        if (
+          typeof executor !==
+          "function"
+        ) {
+
+          return {
+            success:
+              false,
+
+            state:
+              this.state,
+
+            reason:
+              "Navigator requires a selectSlot executor."
+          };
+        }
+
+        const result =
+          await executor(
+            application,
+            observation,
+            decision
+          );
+
+        /*
+         * A vaga pode desaparecer entre:
+         *
+         * Bot 2 encontrou
+         *       ↓
+         * Bot 1 selecionou
+         *       ↓
+         * outro utilizador reservou
+         *
+         * Nesse caso o Navigator tenta outra vaga.
+         */
+
+        if (
+          result?.slotLost ===
+          true
+        ) {
+
+          const recovery =
+            await this.handleSlotLoss(
+              application,
+              result.slot ||
+              application.slot
+            );
+
+          if (
+            recovery?.slotRecovered
+          ) {
+
+            await this._navigatorDelay(
+              stepDelayMs
+            );
+
+            continue;
+          }
+
+          return {
+            success:
+              false,
+
+            slotLost:
+              true,
+
+            handoffToRadar:
+              recovery?.handoffToRadar ===
+              true,
+
+            requiresUser:
+              recovery?.requiresUser ===
+              true,
+
+            checkpoint:
+              recovery?.checkpoint ||
+              null,
+
+            reason:
+              recovery?.reason ||
+              "Navigator could not recover the selected appointment slot."
+          };
+        }
+
+        if (
+          result?.requiresUser ===
+          true
+        ) {
+
+          return {
+            success:
+              true,
+
+            requiresUser:
+              true,
+
+            officialCheckpoint:
+              true,
+
+            checkpoint:
+              result.checkpoint ||
+              null,
+
+            state:
+              this.state
+          };
+        }
+
+        await this._navigatorDelay(
+          stepDelayMs
+        );
+
+        continue;
+      }
+
+      /*
+       * ------------------------------------------------------
+       * 8. EXECUTOR DA ETAPA
+       * ------------------------------------------------------
+       */
+
+      const executor =
+        executors[
+          decision.action
+        ] ||
+        executors.default;
+
+      if (
+        typeof executor !==
+        "function"
+      ) {
+
+        return {
+          success:
+            false,
+
+          state:
+            this.state,
+
+          action:
+            decision.action,
+
+          reason:
+            "Navigator has no executor for action " +
+            decision.action
+        };
+      }
+
+      const result =
+        await executor(
+          application,
+          observation,
+          decision
+        );
+
+      this.record(
+        "DRIVE_ACTION_RESULT",
+        {
+          step,
+          action:
+            decision.action,
+          success:
+            result?.success !== false,
+          requiresUser:
+            result?.requiresUser === true,
+          handoffToRadar:
+            result?.handoffToRadar === true
+        }
+      );
+
+      /*
+       * ------------------------------------------------------
+       * 9. CHECKPOINT DEVOLVIDO PELO EXECUTOR
+       * ------------------------------------------------------
+       */
+
+      if (
+        result?.requiresUser ===
+        true
+      ) {
+
+        return {
+          success:
+            true,
+
+          requiresUser:
+            true,
+
+          officialCheckpoint:
+            result.officialCheckpoint ===
+            true,
+
+          checkpoint:
+            result.checkpoint ||
+            null,
+
+          state:
+            this.state,
+
+          result
+        };
+      }
+
+      /*
+       * ------------------------------------------------------
+       * 10. FALHA REAL
+       * ------------------------------------------------------
+       */
+
+      if (
+        result?.success ===
+        false &&
+        !result?.handoffToRadar
+      ) {
+
+        return {
+          success:
+            false,
+
+          state:
+            this.state,
+
+          action:
+            decision.action,
+
+          reason:
+            result.reason ||
+            (
+              "Navigator executor failed: " +
+              decision.action
+            ),
+
+          result
+        };
+      }
+
+      /*
+       * ------------------------------------------------------
+       * 11. HANDOFF PARA BOT 2 / RADAR
+       * ------------------------------------------------------
+       */
+
+      if (
+        result?.handoffToRadar
+      ) {
+
+        return {
+          success:
+            true,
+
+          handoffToRadar:
+            true,
+
+          waitingForSlot:
+            true,
+
+          state:
+            this.state,
+
+          result
+        };
+      }
+
+      /*
+       * ------------------------------------------------------
+       * 12. PROTEÇÃO CONTRA LOOP
+       * ------------------------------------------------------
+       */
+
+      if (
+        repeated >=
+        sameStateLimit
+      ) {
+
+        this.record(
+          "DRIVE_STALLED",
+          {
+            step,
+            state:
+              this.state,
+            action:
+              decision.action
+          }
+        );
+
+        return {
+          success:
+            false,
+
+          stalled:
+            true,
+
+          state:
+            this.state,
+
+          action:
+            decision.action,
+
+          reason:
+            "Navigator detected a repeated VFS state without progress."
+        };
+      }
+
+      await this._navigatorDelay(
+        stepDelayMs
+      );
+    }
+
+    this.record(
+      "DRIVE_MAX_STEPS",
+      {
+        maxSteps,
+        state:
+          this.state
+      }
+    );
+
+    return {
+      success:
+        false,
+
+      stalled:
+        true,
+
+      state:
+        this.state,
+
+      reason:
+        "Navigator reached its maximum workflow steps."
+    };
+  }
+
+
+  async _navigatorDelay(
+    milliseconds
+  ) {
+
+    const delay =
+      Math.max(
+        0,
+        Number(
+          milliseconds
+        ) || 0
+      );
+
+    if (
+      !delay
+    ) {
+
+      return;
+    }
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          delay
+        )
+    );
+  }
   /*
    * ==========================================================
    * HISTORY
@@ -2542,12 +3246,14 @@ class VfsNavigator {
 }
 
 
-module.exports = {
+module.exports =
+  VfsNavigator;
 
-  STATES,
+module.exports.VfsNavigator =
+  VfsNavigator;
 
-  CHECKPOINTS,
+module.exports.STATES =
+  STATES;
 
-  VfsNavigator
-
-};
+module.exports.CHECKPOINTS =
+  CHECKPOINTS;
