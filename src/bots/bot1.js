@@ -3785,7 +3785,101 @@ await this.refreshLock(
   }
 }
 
-  
+        /*
+       * ---------------------------------------------------
+       * CONTACT DETAILS APÓS EXTRAÇÃO DO PASSAPORTE
+       * ---------------------------------------------------
+       *
+       * A VFS já extraiu os dados do passaporte.
+       *
+       * O Bot1 altera somente:
+       * - Country code: 244
+       * - Phone: 9XXXXXXXX
+       * - Email: agendamentov001@gmail.com
+       */
+
+      if (
+        typeof this.site.fillVfsContactDetails ===
+        "function"
+      ) {
+
+        const contactDetails =
+          await withTimeout(
+            this.site.fillVfsContactDetails(
+              application
+            ),
+            config.timeoutMs,
+            "VFS contact details"
+          );
+
+        if (
+          contactDetails?.success ===
+          false
+        ) {
+
+          if (
+            contactDetails.requiresUser ===
+            true
+          ) {
+
+            application.bot1.status =
+              "waiting";
+
+            application.bot1.lastAction =
+              "vfs_contact_details_checkpoint";
+
+            await application.save();
+
+            await this.releaseLock(
+              applicationId
+            );
+
+            return {
+              success:
+                true,
+
+              requiresUser:
+                true,
+
+              officialCheckpoint:
+                false,
+
+              application
+            };
+          }
+
+          throw new Error(
+            contactDetails.reason ||
+            "VFS contact details could not be filled."
+          );
+        }
+
+        /*
+         * Guardamos apenas os dados que o Bot1
+         * realmente adicionou.
+         */
+        application.vfsContact =
+          application.vfsContact ||
+          {};
+
+        application.vfsContact.countryCode =
+          "244";
+
+        application.vfsContact.phone =
+          contactDetails.phone;
+
+        application.vfsContact.email =
+          "agendamentov001@gmail.com";
+
+        application.bot1.lastAction =
+          "vfs_contact_details_filled";
+
+        await application.save();
+
+        await this.refreshLock(
+          applicationId
+        );
+      }
 
   /*
  * ---------------------------------------------------
