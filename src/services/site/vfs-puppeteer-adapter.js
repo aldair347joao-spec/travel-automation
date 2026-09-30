@@ -534,7 +534,204 @@ this.facialSession = {
       pages.length > 0
         ? pages[0]
         : await this.browser.newPage();
+    /*
+ * ============================================================
+ * BRIGHT DATA — NOVA SESSÃO POR LOGIN
+ * ============================================================
+ *
+ * REGRA:
+ *
+ * 1. Cada execução de login recebe um sessionId NOVO.
+ * 2. O mesmo sessionId é mantido durante todo o login.
+ * 3. Não usamos applicationId como sessionId permanente.
+ * 4. Uma nova tentativa de login cria outra sessão Bright Data.
+ *
+ * Assim:
+ *
+ * LOGIN 1 -> sessão BD A -> IP A
+ * LOGIN 2 -> sessão BD B -> IP B
+ * LOGIN 3 -> sessão BD C -> IP C
+ *
+ * O IP dentro de uma mesma execução permanece estável.
+ */
 
+try {
+  const sessionPrefix =
+    String(
+      process.env.BRIGHTDATA_BROWSER_SESSION_PREFIX ||
+        "travel-automation"
+    )
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]/g, "-");
+
+  /*
+   * Criamos um identificador NOVO para cada login.
+   *
+   * Não utilizar applicationId aqui.
+   */
+  const randomPart =
+    `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 12)}`;
+
+  this.brightDataSessionId =
+    `${sessionPrefix}-${randomPart}`;
+
+  const cdpClient =
+    await this.page
+      .target()
+      .createCDPSession();
+
+  /*
+   * Associamos esta sessão ao proxy peer escolhido
+   * pela Bright Data.
+   *
+   * IMPORTANTE:
+   * isto mantém o mesmo IP DURANTE ESTE LOGIN.
+   */
+  await cdpClient.send(
+    "Proxy.useSession",
+    {
+      sessionId:
+        this.brightDataSessionId
+    }
+  );
+
+  this.brightDataProxySessionConfigured =
+    true;
+
+  logger.info(
+    "Bright Data new login session configured",
+    {
+      applicationId:
+        this.applicationId,
+
+      sessionId:
+        this.brightDataSessionId,
+
+      rotationMode:
+        "new-session-per-login"
+    }
+  );
+
+} catch (error) {
+  this.brightDataProxySessionConfigured =
+    false;
+
+  logger.error(
+    "Failed to configure Bright Data login session",
+    {
+      applicationId:
+        this.applicationId,
+
+      error:
+        error?.message ||
+        String(error)
+    }
+  );
+
+  throw error;
+}
+    /*
+ * ============================================================
+ * DIAGNÓSTICO DO IP DA SESSÃO BRIGHT DATA
+ * ============================================================
+ */
+
+try {
+  const browserNetwork =
+    await this.page.evaluate(
+      async () => {
+        try {
+          const response =
+            await fetch(
+              "https://api.ipify.org?format=json",
+              {
+                cache: "no-store"
+              }
+            );
+
+          if (!response.ok) {
+            throw new Error(
+              `IP service returned HTTP ${response.status}`
+            );
+          }
+
+          const data =
+            await response.json();
+
+          return {
+            ip:
+              data?.ip ||
+              null
+          };
+
+        } catch (error) {
+          return {
+            ip:
+              null,
+
+            error:
+              error?.message ||
+              String(error)
+          };
+        }
+      }
+    );
+
+  this.brightDataObservedIp =
+    browserNetwork?.ip ||
+    null;
+
+  if (
+    this.brightDataObservedIp
+  ) {
+    logger.info(
+      "Bright Data login IP detected",
+      {
+        applicationId:
+          this.applicationId,
+
+        sessionId:
+          this.brightDataSessionId,
+
+        ip:
+          this.brightDataObservedIp,
+
+        rotationMode:
+          "new-session-per-login"
+      }
+    );
+  } else {
+    logger.warn(
+      "Bright Data login IP could not be detected",
+      {
+        applicationId:
+          this.applicationId,
+
+        sessionId:
+          this.brightDataSessionId,
+
+        error:
+          browserNetwork?.error ||
+          null
+      }
+    );
+  }
+
+} catch (error) {
+  logger.warn(
+    "Bright Data IP diagnostic failed",
+    {
+      applicationId:
+        this.applicationId,
+
+      error:
+        error?.message ||
+        String(error)
+    }
+  );
+}
     /*
      * ==========================================================
      * ESTADO DA CÂMERA / MEDIA
