@@ -1354,59 +1354,275 @@ await this.heartbeat(
         startedAt;
 
 
-      await moveState(
-  application,
-  STATES.RADAR_ACTIVE,
-  {
-    event:
-      "RADAR_ACTIVATED",
-
-    reason:
-      "Dados preparados e candidatura pronta para o radar."
-  }
-);
-
-
-      application.status =
-        "waiting_for_slot";
+            /*
+       * =======================================================
+       * NAVIGATOR — PRIMEIRA DECISÃO DE DISPONIBILIDADE
+       * =======================================================
+       *
+       * A partir daqui o Navigator assume o controlo.
+       *
+       * Regra:
+       *
+       * 1. Navigator observa a VFS.
+       * 2. Seleciona centro.
+       * 3. Seleciona tipo de visto.
+       * 4. Verifica disponibilidade.
+       *
+       * SE EXISTIR VAGA:
+       *      Navigator devolve imediatamente ao Bot 1.
+       *      O Bot 1 entra em handleSlot().
+       *
+       * SE NÃO EXISTIR VAGA:
+       *      Navigator entrega a candidatura ao Radar/Bot 2.
+       *
+       * IMPORTANTE:
+       * Não iniciamos o Radar quando existe vaga.
+       */
 
       application.bot1.status =
-        "waiting";
+        "running";
 
       application.bot1.lastAction =
-        "ready_for_automation";
-
-
-      application.bot2 =
-        application.bot2 || {};
-
-
-      application.bot2.status =
-        "monitoring";
-
-      application.bot2.monitoring =
-        true;
-
-      application.bot2.workerId =
-        null;
-
-
-      application.radar =
-        application.radar || {};
-
-
-      application.radar.enabled =
-        true;
-
+        "navigator_starting";
 
       await application.save();
 
-      await this.releaseLock(
+      await this.refreshLock(
         applicationId
       );
 
+      const navigatorResult =
+        await this.driveWithNavigator(
+          application,
+          {
+            maxSteps:
+              16,
 
-      return application;
+            sameStateLimit:
+              4,
+
+            stepDelayMs:
+              300
+          }
+        );
+
+      /*
+       * -------------------------------------------------------
+       * CHECKPOINT OFICIAL
+       * -------------------------------------------------------
+       */
+
+      if (
+        navigatorResult?.requiresUser ===
+        true
+      ) {
+
+        application.bot1.status =
+          "waiting";
+
+        application.bot1.lastAction =
+          "navigator_checkpoint";
+
+        await application.save();
+
+        await this.releaseLock(
+          applicationId
+        );
+
+        return application;
+      }
+
+      /*
+       * -------------------------------------------------------
+       * VAGA ENCONTRADA
+       * -------------------------------------------------------
+       *
+       * NÃO ativamos Bot 2.
+       *
+       * A vaga encontrada pelo Navigator passa diretamente
+       * para o fluxo normal do Bot 1.
+       */
+
+      if (
+        navigatorResult?.slotFound ===
+          true ||
+        (
+          navigatorResult?.handoffToBot1 ===
+          true &&
+          navigatorResult?.slot
+        )
+      ) {
+
+        application.slot =
+          navigatorResult.slot ||
+          application.slot;
+
+        if (
+          !application.slot
+        ) {
+
+          throw new Error(
+            "Navigator reported a slot but no appointment slot was returned."
+          );
+        }
+
+        await moveState(
+          application,
+          STATES.SLOT_FOUND,
+          {
+            event:
+              "NAVIGATOR_SLOT_FOUND",
+
+            reason:
+              "Navigator encontrou disponibilidade imediatamente; Bot 2 não foi ativado.",
+
+            slot:
+              application.slot
+          }
+        );
+
+        application.status =
+          "slot_received";
+
+        application.bot1.status =
+          "continuing";
+
+        application.bot1.lastAction =
+          "navigator_slot_found";
+
+        application.bot2 =
+          application.bot2 ||
+          {};
+
+        application.bot2.status =
+          "inactive";
+
+        application.bot2.monitoring =
+          false;
+
+        application.bot2.workerId =
+          null;
+
+        application.radar =
+          application.radar ||
+          {};
+
+        application.radar.enabled =
+          false;
+
+        await application.save();
+
+        await this.refreshLock(
+          applicationId
+        );
+
+        /*
+         * O handleSlot já possui:
+         *
+         * - revalidação;
+         * - recuperação de vaga perdida;
+         * - seleção;
+         * - continuação da VFS;
+         * - upload;
+         * - liveness;
+         * - resumo;
+         * - pagamento.
+         *
+         * Portanto não duplicamos nenhuma dessas etapas aqui.
+         */
+
+        return await this.handleSlot(
+          applicationId
+        );
+      }
+
+      /*
+       * -------------------------------------------------------
+       * SEM VAGA
+       * -------------------------------------------------------
+       *
+       * Somente agora o Radar/Bot 2 é ativado.
+       */
+
+      if (
+        navigatorResult?.handoffToRadar ===
+          true ||
+        navigatorResult?.waitingForSlot ===
+          true
+      ) {
+
+        application.status =
+          "waiting_for_slot";
+
+        application.bot1.status =
+          "waiting";
+
+        application.bot1.lastAction =
+          "navigator_handoff_radar";
+
+        application.bot2 =
+          application.bot2 ||
+          {};
+
+        application.bot2.status =
+          "monitoring";
+
+        application.bot2.monitoring =
+          true;
+
+        application.bot2.workerId =
+          null;
+
+        application.radar =
+          application.radar ||
+          {};
+
+        application.radar.enabled =
+          true;
+
+        await application.save();
+
+        await this.releaseLock(
+          applicationId
+        );
+
+        logger.info(
+          "BOT1 NAVIGATOR HANDOFF TO RADAR",
+          {
+            applicationId,
+
+            reason:
+              "Nenhuma vaga disponível para o tipo de candidatura selecionado."
+          }
+        );
+
+        return application;
+      }
+
+      /*
+       * -------------------------------------------------------
+       * FALHA DO NAVIGATOR
+       * -------------------------------------------------------
+       */
+
+      if (
+        navigatorResult?.success ===
+        false
+      ) {
+
+        throw new Error(
+          navigatorResult.reason ||
+          "Navigator failed during initial VFS availability workflow."
+        );
+      }
+
+      /*
+       * Resultado inesperado.
+       */
+
+      throw new Error(
+        "Navigator finished without finding a slot or handing the application to Radar."
+      );
 
     } catch (
       error
