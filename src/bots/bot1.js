@@ -2119,27 +2119,109 @@ await this.heartbeat(
       );
 
 
-      /*
-       * ---------------------------------------------------
-       * REVALIDAÇÃO
-       * ---------------------------------------------------
-       */
+       /*
+ * ---------------------------------------------------
+ * REVALIDAÇÃO REAL DO SLOT
+ * ---------------------------------------------------
+ *
+ * O slot recebido pelo Bot 1 precisa ser confirmado
+ * novamente antes de iniciar o booking.
+ *
+ * Se outro processo já tomou o slot, NÃO marcamos
+ * SLOT_REVALIDATED.
+ */
 
-      await moveState(
-        application,
-        STATES.SLOT_REVALIDATED,
-        {
-          event:
-            "SLOT_REVALIDATED"
-        }
-      );
+if (
+  typeof this.site.revalidateSlot ===
+  "function"
+) {
 
+  const revalidated =
+    await withTimeout(
+      this.site.revalidateSlot(
+        application.slot,
+        application
+      ),
+      config.timeoutMs,
+      "Slot revalidation"
+    );
 
-      await this.refreshLock(
-        applicationId
-      );
+  if (
+    revalidated?.success ===
+    false
+  ) {
 
+    await moveState(
+      application,
+      STATES.SLOT_LOST,
+      {
+        event:
+          "SLOT_LOST",
 
+        reason:
+          revalidated.reason ||
+          "The selected VFS slot is no longer available."
+      }
+    );
+
+    application.status =
+      "waiting_for_slot";
+
+    application.bot1.status =
+      "waiting";
+
+    application.bot1.lastAction =
+      "slot_lost";
+
+    application.bot2 =
+      application.bot2 || {};
+
+    application.bot2.status =
+      "monitoring";
+
+    application.bot2.monitoring =
+      true;
+
+    application.radar =
+      application.radar || {};
+
+    application.radar.enabled =
+      true;
+
+    await application.save();
+
+    await this.releaseLock(
+      applicationId
+    );
+
+    return {
+      success:
+        false,
+
+      slotLost:
+        true,
+
+      reason:
+        revalidated.reason ||
+        "Selected VFS slot is no longer available.",
+
+      application
+    };
+  }
+}
+
+await moveState(
+  application,
+  STATES.SLOT_REVALIDATED,
+  {
+    event:
+      "SLOT_REVALIDATED"
+  }
+);
+
+await this.refreshLock(
+  applicationId
+);
       /*
        * ---------------------------------------------------
        * BOOKING
@@ -2435,30 +2517,8 @@ await this.heartbeat(
   }
 }
 
-      /*
-       * ---------------------------------------------------
-       * FACIAL POSITIONS
-       * ---------------------------------------------------
-       *
-       * As 10 posições existentes no Client
-       * continuam sendo a fonte oficial.
-       */
+  
 
-      await moveState(
-        application,
-        STATES.FACIAL_POSITIONS,
-        {
-          event:
-            "FACIAL_POSITIONS_STARTED"
-        }
-      );
-
-
-      application.bot1.lastAction =
-        "facial_positions";
-
-
-      await application.save();
   /*
  * ---------------------------------------------------
  * FACIAL POSITIONS
