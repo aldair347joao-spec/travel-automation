@@ -2925,7 +2925,66 @@ class VfsNavigator {
             result?.handoffToRadar === true
         }
       );
+      /*
+ * ------------------------------------------------------
+ * SLOT ENCONTRADO
+ * ------------------------------------------------------
+ *
+ * A disponibilidade foi encontrada pelo Bot 1.
+ *
+ * Neste momento NÃO chamamos o Radar.
+ * O processo volta ao fluxo principal do Bot 1
+ * para revalidar e selecionar a vaga.
+ */
 
+if (
+  result?.slotFound === true ||
+  (
+    result?.slot &&
+    result?.handoffToBot1 === true
+  )
+) {
+
+  if (
+    result.slot
+  ) {
+
+    application.slot =
+      result.slot;
+
+  }
+
+  this.record(
+    "SLOT_FOUND_HANDOFF_TO_BOT1",
+    {
+      slot:
+        application.slot ||
+        null
+    }
+  );
+
+  return {
+
+    success:
+      true,
+
+    slotFound:
+      true,
+
+    handoffToBot1:
+      true,
+
+    slot:
+      application.slot ||
+      null,
+
+    state:
+      this.state,
+
+    step
+
+  };
+}
       /*
        * ------------------------------------------------------
        * 9. CHECKPOINT DEVOLVIDO PELO EXECUTOR
