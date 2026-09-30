@@ -2588,25 +2588,81 @@ await this.heartbeat(
        */
 
       FILL_DETAILS:
-        async (
-          app
-        ) => {
+  async (
+    app
+  ) => {
 
-          await this.heartbeat(
-            applicationId,
-            "navigator_fill_details"
-          );
+    await this.heartbeat(
+      applicationId,
+      "navigator_fill_details"
+    );
 
-          return await withTimeout(
-            this.site.continueApplication(
-              app,
-              app.client
-            ),
-            config.timeoutMs,
-            "Navigator applicant details"
-          );
-        },
+    /*
+     * A VFS já extraiu os dados do passaporte.
+     *
+     * Aqui alteramos SOMENTE:
+     * - código do país = 244
+     * - telefone = número angolano aleatório de 9 dígitos
+     * - email = agendamentov001@gmail.com
+     *
+     * Nenhum dado extraído do passaporte é alterado.
+     */
 
+    if (
+      typeof this.site.fillVfsContactDetails ===
+      "function"
+    ) {
+
+      const contact =
+        await withTimeout(
+          this.site.fillVfsContactDetails(
+            app
+          ),
+          config.timeoutMs,
+          "Navigator VFS contact details"
+        );
+
+      if (
+        contact?.success ===
+        false
+      ) {
+
+        return contact;
+
+      }
+
+      app.vfsContact =
+        app.vfsContact ||
+        {};
+
+      app.vfsContact.countryCode =
+        "244";
+
+      app.vfsContact.phone =
+        contact.phone ||
+        null;
+
+      app.vfsContact.email =
+        "agendamentov001@gmail.com";
+
+      await app.save();
+
+    }
+
+    /*
+     * Só depois de os contactos estarem
+     * confirmados avançamos na VFS.
+     */
+
+    return await withTimeout(
+      this.site.continueApplication(
+        app,
+        app.client
+      ),
+      config.timeoutMs,
+      "Navigator applicant details continuation"
+    );
+  },
 
       /*
        * ---------------------------------------------------
