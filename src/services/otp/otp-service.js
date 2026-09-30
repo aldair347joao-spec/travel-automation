@@ -1510,7 +1510,7 @@ class OtpService {
             exists > 0
           ) {
 
-            const start =
+                        const start =
               Math.max(
                 1,
                 exists -
@@ -1525,9 +1525,21 @@ class OtpService {
 
             try {
 
-              const range =
-                `${start}:${end}`;
-
+              /*
+               * Alguns servidores podem devolver UIDs diferentes
+               * da numeração sequencial das mensagens.
+               *
+               * Por isso, quando a pesquisa por data não encontra
+               * resultados, fazemos uma pesquisa ampla por UID e
+               * limitamos aos e-mails mais recentes.
+               *
+               * IMPORTANTE:
+               *
+               * O intervalo `${start}:${end}` não é usado aqui
+               * porque, com { uid: true }, o argumento precisa
+               * representar UIDs reais e não números sequenciais
+               * de mensagens.
+               */
 
               const fallbackUids =
                 await client.search(
@@ -1555,7 +1567,9 @@ class OtpService {
               }
 
             } catch {
+
               uids = [];
+
             }
           }
         }
