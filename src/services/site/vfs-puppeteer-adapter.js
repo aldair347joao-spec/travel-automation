@@ -6446,7 +6446,796 @@ async detectFacialPositionRequest() {
 
     return false;
   }
+  /*
+   * ============================================================
+   * DADOS DE CONTACTO DA CANDIDATURA
+   * ============================================================
+   *
+   * IMPORTANTE:
+   *
+   * A VFS é responsável por extrair os dados do passaporte.
+   *
+   * O Bot1 NÃO altera esses dados.
+   *
+   * Depois da extração do passaporte, tratamos somente:
+   *
+   * 1. Country code -> 244
+   * 2. Phone        -> 9 dígitos, começando por 9
+   * 3. Email        -> agendamentov001@gmail.com
+   *
+   * O country code é sempre LIMPO antes de receber 244.
+   *
+   * O telefone é mantido separado do country code.
+   */
 
+  async fillVfsContactDetails(
+    application = null
+  ) {
+    const page =
+      await this.ensurePage();
+
+    /*
+     * Esperamos a VFS terminar a extração
+     * e apresentar os campos de contacto.
+     */
+    const timeoutMs = 20000;
+    const startedAt = Date.now();
+
+    let descriptors = null;
+
+    while (
+      Date.now() - startedAt <
+      timeoutMs
+    ) {
+      descriptors =
+        await page.evaluate(() => {
+          const normalize =
+            value =>
+              String(value || "")
+                .normalize("NFD")
+                .replace(
+                  /[\u0300-\u036f]/g,
+                  ""
+                )
+                .replace(
+                  /\s+/g,
+                  " "
+                )
+                .trim()
+                .toLowerCase();
+
+          const visible =
+            element => {
+              if (!element) {
+                return false;
+              }
+
+              const style =
+                window.getComputedStyle(
+                  element
+                );
+
+              const rect =
+                element.getBoundingClientRect();
+
+              return (
+                !element.disabled &&
+                !element.readOnly &&
+                style.display !== "none" &&
+                style.visibility !== "hidden" &&
+                rect.width > 0 &&
+                rect.height > 0
+              );
+            };
+
+          const describe =
+            element => {
+              const labels = [];
+
+              if (element.labels) {
+                for (
+                  const label of element.labels
+                ) {
+                  labels.push(
+                    label.innerText ||
+                    label.textContent ||
+                    ""
+                  );
+                }
+              }
+
+              const parentText =
+                element.parentElement
+                  ?.innerText ||
+                "";
+
+              const grandParentText =
+                element.parentElement
+                  ?.parentElement
+                  ?.innerText ||
+                "";
+
+              return normalize(
+                [
+                  element.name,
+                  element.id,
+                  element.placeholder,
+                  element.getAttribute(
+                    "aria-label"
+                  ),
+                  element.getAttribute(
+                    "autocomplete"
+                  ),
+                  ...labels,
+                  parentText,
+                  grandParentText
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+              );
+            };
+
+          const elements =
+            Array.from(
+              document.querySelectorAll(
+                "input, select, textarea"
+              )
+            ).filter(
+              visible
+            );
+
+          const findCandidates =
+            terms =>
+              elements
+                .map(
+                  element => ({
+                    element,
+                    text:
+                      describe(element)
+                  })
+                )
+                .filter(
+                  item =>
+                    terms.some(
+                      term =>
+                        item.text.includes(
+                          normalize(term)
+                        )
+                    )
+                );
+
+          const countryCodeCandidates =
+            findCandidates([
+              "country code",
+              "country calling code",
+              "calling code",
+              "dial code",
+              "phone country code",
+              "codigo do pais",
+              "código do país",
+              "indicativo"
+            ]);
+
+          const phoneCandidates =
+            findCandidates([
+              "phone number",
+              "phone",
+              "mobile number",
+              "mobile",
+              "telephone number",
+              "telephone",
+              "contact number",
+              "contact phone",
+              "numero de telefone",
+              "número de telefone"
+            ])
+              .filter(
+                item => {
+                  const text =
+                    item.text;
+
+                  /*
+                   * Não aceitar o próprio campo
+                   * do country code como telefone.
+                   */
+                  return !(
+                    text.includes(
+                      "country code"
+                    ) ||
+                    text.includes(
+                      "calling code"
+                    ) ||
+                    text.includes(
+                      "dial code"
+                    ) ||
+                    text.includes(
+                      "codigo do pais"
+                    ) ||
+                    text.includes(
+                      "indicativo"
+                    )
+                  );
+                }
+              );
+
+          const emailCandidates =
+            findCandidates([
+              "email address",
+              "email",
+              "e-mail",
+              "correo electronico",
+              "electronic mail"
+            ]);
+
+          const serialize =
+            items =>
+              items.map(
+                item => ({
+                  tag:
+                    item.element.tagName
+                      .toLowerCase(),
+
+                  type:
+                    item.element.type ||
+                    null,
+
+                  id:
+                    item.element.id ||
+                    null,
+
+                  name:
+                    item.element.name ||
+                    null,
+
+                  value:
+                    item.element.value ||
+                    "",
+
+                  text:
+                    item.text
+                })
+              );
+
+          return {
+            countryCode:
+              serialize(
+                countryCodeCandidates
+              ),
+
+            phone:
+              serialize(
+                phoneCandidates
+              ),
+
+            email:
+              serialize(
+                emailCandidates
+              )
+          };
+        });
+
+      const hasAll =
+        descriptors?.countryCode?.length === 1 &&
+        descriptors?.phone?.length === 1 &&
+        descriptors?.email?.length === 1;
+
+      if (hasAll) {
+        break;
+      }
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            500
+          )
+      );
+    }
+
+    if (
+      !descriptors?.countryCode?.length
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "VFS country-code field was not detected after passport extraction.",
+        applicationId:
+          application?._id?.toString?.() ||
+          this.applicationId
+      };
+    }
+
+    if (
+      descriptors.countryCode.length !== 1
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "Multiple VFS country-code fields were detected; refusing ambiguous automation."
+      };
+    }
+
+    if (
+      !descriptors?.phone?.length
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "VFS phone field was not detected after passport extraction."
+      };
+    }
+
+    if (
+      descriptors.phone.length !== 1
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "Multiple VFS phone fields were detected; refusing ambiguous automation."
+      };
+    }
+
+    if (
+      !descriptors?.email?.length
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "VFS email field was not detected after passport extraction."
+      };
+    }
+
+    if (
+      descriptors.email.length !== 1
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "Multiple VFS email fields were detected; refusing ambiguous automation."
+      };
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * GERAR TELEFONE ANGOLANO
+     * ----------------------------------------------------------
+     *
+     * Exatamente 9 dígitos.
+     * Primeiro dígito obrigatoriamente 9.
+     */
+    const phoneNumber =
+      "9" +
+      Array.from(
+        { length: 8 },
+        () =>
+          Math.floor(
+            Math.random() * 10
+          )
+      ).join("");
+
+    /*
+     * ----------------------------------------------------------
+     * HELPERS PARA SELETORES
+     * ----------------------------------------------------------
+     */
+
+    const buildSelector =
+      descriptor => {
+        if (
+          descriptor.id
+        ) {
+          return `#${CSS.escape(
+            descriptor.id
+          )}`;
+        }
+
+        if (
+          descriptor.name
+        ) {
+          return `[name="${String(
+            descriptor.name
+          ).replace(
+            /"/g,
+            '\\"'
+          )}"]`;
+        }
+
+        return null;
+      };
+
+    const countrySelector =
+      buildSelector(
+        descriptors.countryCode[0]
+      );
+
+    const phoneSelector =
+      buildSelector(
+        descriptors.phone[0]
+      );
+
+    const emailSelector =
+      buildSelector(
+        descriptors.email[0]
+      );
+
+    if (
+      !countrySelector ||
+      !phoneSelector ||
+      !emailSelector
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "One or more VFS contact fields could not be addressed safely."
+      };
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * COUNTRY CODE
+     * ----------------------------------------------------------
+     *
+     * Apagar absolutamente tudo que a VFS colocou
+     * e inserir 244.
+     */
+    await page.click(
+      countrySelector
+    );
+
+    await page.evaluate(
+      selector => {
+        const element =
+          document.querySelector(
+            selector
+          );
+
+        if (!element) {
+          throw new Error(
+            "Country-code field disappeared."
+          );
+        }
+
+        if (
+          element.tagName.toLowerCase() ===
+          "select"
+        ) {
+          const options =
+            Array.from(
+              element.options
+            );
+
+          const match =
+            options.find(
+              option =>
+                String(
+                  option.value || ""
+                ).replace(
+                  /\D/g,
+                  ""
+                ) === "244" ||
+                String(
+                  option.textContent || ""
+                ).replace(
+                  /\D/g,
+                  ""
+                ) === "244"
+            );
+
+          if (!match) {
+            throw new Error(
+              "VFS country-code select does not contain 244."
+            );
+          }
+
+          element.value =
+            match.value;
+
+          element.dispatchEvent(
+            new Event(
+              "input",
+              {
+                bubbles: true
+              }
+            )
+          );
+
+          element.dispatchEvent(
+            new Event(
+              "change",
+              {
+                bubbles: true
+              }
+            )
+          );
+
+          return;
+        }
+
+        element.focus();
+
+        element.select?.();
+
+        element.value =
+          "";
+
+        element.dispatchEvent(
+          new Event(
+            "input",
+            {
+              bubbles: true
+            }
+          )
+        );
+
+        element.dispatchEvent(
+          new Event(
+            "change",
+            {
+              bubbles: true
+            }
+          )
+        );
+      },
+      countrySelector
+    );
+
+    /*
+     * Se for input/text:
+     * garantir que 244 seja realmente escrito.
+     */
+    if (
+      descriptors.countryCode[0].tag !==
+      "select"
+    ) {
+      await page.type(
+        countrySelector,
+        "244",
+        {
+          delay: 20
+        }
+      );
+    }
+
+    /*
+     * ----------------------------------------------------------
+     * TELEFONE
+     * ----------------------------------------------------------
+     */
+    await page.click(
+      phoneSelector
+    );
+
+    await page.$eval(
+      phoneSelector,
+      element => {
+        element.focus();
+
+        if (
+          typeof element.select ===
+          "function"
+        ) {
+          element.select();
+        }
+
+        element.value =
+          "";
+
+        element.dispatchEvent(
+          new Event(
+            "input",
+            {
+              bubbles: true
+            }
+          )
+        );
+
+        element.dispatchEvent(
+          new Event(
+            "change",
+            {
+              bubbles: true
+            }
+          )
+        );
+      }
+    );
+
+    await page.type(
+      phoneSelector,
+      phoneNumber,
+      {
+        delay: 20
+      }
+    );
+
+    /*
+     * ----------------------------------------------------------
+     * E-MAIL
+     * ----------------------------------------------------------
+     */
+    const applicationEmail =
+      "agendamentov001@gmail.com";
+
+    await page.click(
+      emailSelector
+    );
+
+    await page.$eval(
+      emailSelector,
+      element => {
+        element.focus();
+
+        if (
+          typeof element.select ===
+          "function"
+        ) {
+          element.select();
+        }
+
+        element.value =
+          "";
+
+        element.dispatchEvent(
+          new Event(
+            "input",
+            {
+              bubbles: true
+            }
+          )
+        );
+
+        element.dispatchEvent(
+          new Event(
+            "change",
+            {
+              bubbles: true
+            }
+          )
+        );
+      }
+    );
+
+    await page.type(
+      emailSelector,
+      applicationEmail,
+      {
+        delay: 20
+      }
+    );
+
+    /*
+     * ----------------------------------------------------------
+     * VALIDAR O RESULTADO NO DOM
+     * ----------------------------------------------------------
+     */
+    const verification =
+      await page.evaluate(
+        ({
+          countrySelector,
+          phoneSelector,
+          emailSelector
+        }) => {
+          const country =
+            document.querySelector(
+              countrySelector
+            );
+
+          const phone =
+            document.querySelector(
+              phoneSelector
+            );
+
+          const email =
+            document.querySelector(
+              emailSelector
+            );
+
+          const countryValue =
+            String(
+              country?.value || ""
+            ).replace(
+              /\D/g,
+              ""
+            );
+
+          const phoneValue =
+            String(
+              phone?.value || ""
+            ).replace(
+              /\D/g,
+              ""
+            );
+
+          const emailValue =
+            String(
+              email?.value || ""
+            )
+              .trim()
+              .toLowerCase();
+
+          return {
+            countryCode:
+              countryValue,
+            phone:
+              phoneValue,
+            email:
+              emailValue
+          };
+        },
+        {
+          countrySelector,
+          phoneSelector,
+          emailSelector
+        }
+      );
+
+    if (
+      verification.countryCode !==
+      "244"
+    ) {
+      return {
+        success: false,
+        reason:
+          "VFS rejected or changed the country code after filling 244.",
+        verification
+      };
+    }
+
+    if (
+      !/^9\d{8}$/.test(
+        verification.phone
+      )
+    ) {
+      return {
+        success: false,
+        reason:
+          "VFS phone field does not contain a valid 9-digit Angolan number beginning with 9.",
+        verification
+      };
+    }
+
+    if (
+      verification.email !==
+      applicationEmail
+    ) {
+      return {
+        success: false,
+        reason:
+          "VFS email field does not contain the configured application email.",
+        verification
+      };
+    }
+
+    await this.inspectCurrentDom()
+      .catch(() => {});
+
+    return {
+      success: true,
+
+      countryCode:
+        "244",
+
+      phone:
+        verification.phone,
+
+      email:
+        applicationEmail,
+
+      applicationId:
+        application?._id?.toString?.() ||
+        this.applicationId,
+
+      dom:
+        this.getDomSummary()
+    };
+  }
   /*
    * ============================================================
    * CONTINUE
