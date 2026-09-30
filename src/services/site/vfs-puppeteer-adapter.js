@@ -1209,6 +1209,125 @@ try {
 
   return true;
 }
+    /*
+   * ============================================================
+   * CAPTCHA — RESOLUÇÃO OFICIAL BRIGHT DATA
+   * ============================================================
+   *
+   * O Browser API possui um comando CDP próprio para resolver
+   * CAPTCHA. Não fazemos bypass, não manipulamos tokens e não
+   * tentamos contornar a proteção da VFS.
+   *
+   * Fluxo:
+   *
+   * CAPTCHA detectado
+   *       ↓
+   * Captcha.solve
+   *       ↓
+   * resolved?
+   *       ↓
+   * continua login
+   *
+   * Se não resolver:
+   *       ↓
+   * CAPTCHA_REQUIRED
+   */
+
+  async solveBrightDataCaptcha() {
+    const page =
+      await this.ensurePage();
+
+    if (!page) {
+      return {
+        attempted: false,
+        solved: false,
+        status: "NO_PAGE"
+      };
+    }
+
+    try {
+      const client =
+        await page
+          .target()
+          .createCDPSession();
+
+      const result =
+        await client.send(
+          "Captcha.solve",
+          {
+            detectTimeout:
+              Number(
+                process.env.BRIGHTDATA_CAPTCHA_TIMEOUT_MS
+              ) || 30000
+          }
+        );
+
+      const status =
+        String(
+          result?.status ||
+          ""
+        )
+          .trim()
+          .toLowerCase();
+
+      logger.info(
+        "Bright Data CAPTCHA solve completed",
+        {
+          applicationId:
+            this.applicationId,
+
+          status,
+
+          attempted:
+            true
+        }
+      );
+
+      return {
+        attempted:
+          true,
+
+        solved:
+          [
+            "solved",
+            "success",
+            "completed"
+          ].includes(
+            status
+          ),
+
+        status
+      };
+
+    } catch (error) {
+      logger.warn(
+        "Bright Data CAPTCHA solve failed",
+        {
+          applicationId:
+            this.applicationId,
+
+          error:
+            error?.message ||
+            String(error)
+        }
+      );
+
+      return {
+        attempted:
+          true,
+
+        solved:
+          false,
+
+        status:
+          "ERROR",
+
+        error:
+          error?.message ||
+          String(error)
+      };
+    }
+  }
   async ensurePage() {
     if (
       !this.initialized ||
@@ -1488,29 +1607,131 @@ try {
    * CAPTCHA
    * ============================================================
    */
+   if (
+  this.lastCheckpoint?.type ===
+  "CAPTCHA_REQUIRED"
+) {
 
+  logger.info(
+    "VFS CAPTCHA detected — requesting Bright Data official solver",
+    {
+      applicationId:
+        applicationId
+    }
+  );
+
+  const captchaResult =
+    await this.solveBrightDataCaptcha();
+
+  /*
+   * Se o Browser API resolveu o desafio,
+   * damos tempo para a VFS atualizar a página.
+   */
+  if (
+    captchaResult.solved ===
+    true
+  ) {
+
+    await page
+      .waitForNetworkIdle({
+        idleTime:
+          700,
+
+        timeout:
+          15000
+      })
+      .catch(
+        () => {}
+      );
+
+    await this.detectState();
+
+    await this.inspectCurrentDom()
+      .catch(
+        () => {}
+      );
+
+    await this.detectCheckpoint();
+
+    /*
+     * CAPTCHA desapareceu:
+     * continuamos normalmente.
+     */
+    if (
+      this.lastCheckpoint?.type !==
+      "CAPTCHA_REQUIRED"
+    ) {
+
+      logger.info(
+        "VFS CAPTCHA resolved by Bright Data",
+        {
+          applicationId:
+            applicationId
+        }
+      );
+
+    } else {
+
+      /*
+       * O solver terminou, mas a VFS
+       * ainda apresenta o checkpoint.
+       */
+      logger.warn(
+        "Bright Data reported CAPTCHA solved but VFS still shows CAPTCHA",
+        {
+          applicationId:
+            applicationId
+        }
+      );
+    }
+  }
+
+  /*
+   * Se ainda existe CAPTCHA depois da tentativa,
+   * mantemos o checkpoint oficial.
+   */
   if (
     this.lastCheckpoint?.type ===
     "CAPTCHA_REQUIRED"
   ) {
+
     return {
-      success: false,
-      requiresUser: true,
-      captchaRequired: true,
-      authenticated: false,
+      success:
+        false,
+
+      requiresUser:
+        true,
+
+      captchaRequired:
+        true,
+
+      authenticated:
+        false,
+
       code:
         "CAPTCHA_REQUIRED",
+
       reason:
-        "Official VFS CAPTCHA/security checkpoint is required.",
+        "Bright Data could not complete the VFS CAPTCHA automatically.",
+
       state:
         this.state,
+
       checkpoint:
         this.lastCheckpoint,
+
       dom:
-        this.getDomSummary()
+        this.getDomSummary(),
+
+      captchaSolveAttempted:
+        captchaResult.attempted,
+
+      captchaSolveStatus:
+        captchaResult.status
     };
   }
-
+}
+  
   /*
    * ============================================================
    * PROCURAR FORMULÁRIO DE LOGIN
@@ -1552,26 +1773,89 @@ try {
     await this.detectCheckpoint();
 
     if (
-      this.lastCheckpoint?.type ===
-      "CAPTCHA_REQUIRED"
-    ) {
-      return {
-        success: false,
-        requiresUser: true,
-        captchaRequired: true,
-        authenticated: false,
-        code:
-          "CAPTCHA_REQUIRED",
-        reason:
-          "Official VFS CAPTCHA/security checkpoint is required.",
-        state:
-          this.state,
-        checkpoint:
-          this.lastCheckpoint,
-        dom:
-          this.getDomSummary()
-      };
+  this.lastCheckpoint?.type ===
+  "CAPTCHA_REQUIRED"
+) {
+
+  logger.info(
+    "VFS CAPTCHA detected after login submission — requesting Bright Data solver",
+    {
+      applicationId:
+        applicationId
     }
+  );
+
+  const captchaResult =
+    await this.solveBrightDataCaptcha();
+
+  if (
+    captchaResult.solved ===
+    true
+  ) {
+
+    await page
+      .waitForNetworkIdle({
+        idleTime:
+          700,
+
+        timeout:
+          15000
+      })
+      .catch(
+        () => {}
+      );
+
+    await this.detectState();
+
+    await this.inspectCurrentDom()
+      .catch(
+        () => {}
+      );
+
+    await this.detectCheckpoint();
+  }
+
+  if (
+    this.lastCheckpoint?.type ===
+    "CAPTCHA_REQUIRED"
+  ) {
+
+    return {
+      success:
+        false,
+
+      requiresUser:
+        true,
+
+      captchaRequired:
+        true,
+
+      authenticated:
+        false,
+
+      code:
+        "CAPTCHA_REQUIRED",
+
+      reason:
+        "Bright Data could not complete the VFS CAPTCHA automatically.",
+
+      state:
+        this.state,
+
+      checkpoint:
+        this.lastCheckpoint,
+
+      dom:
+        this.getDomSummary(),
+
+      captchaSolveAttempted:
+        captchaResult.attempted,
+
+      captchaSolveStatus:
+        captchaResult.status
+    };
+  }
+}
 
     return {
       success: false,
