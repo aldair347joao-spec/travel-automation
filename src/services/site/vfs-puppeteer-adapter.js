@@ -1787,54 +1787,6 @@ await this.startBrightDataLoginSession();
 
     await this.detectCheckpoint();
 
-    if (
-  this.lastCheckpoint?.type ===
-  "CAPTCHA_REQUIRED"
-) {
-
-  logger.info(
-    "VFS CAPTCHA detected after login submission — requesting Bright Data solver",
-    {
-      applicationId:
-        applicationId
-    }
-  );
-
-  const captchaResult =
-    await this.solveBrightDataCaptcha();
-
-  if (
-    captchaResult.solved ===
-    true
-  ) {
-
-    await page
-      .waitForNetworkIdle({
-        idleTime:
-          700,
-
-        timeout:
-          15000
-      })
-      .catch(
-        () => {}
-      );
-
-    await this.detectState();
-
-    await this.inspectCurrentDom()
-      .catch(
-        () => {}
-      );
-
-    await this.detectCheckpoint();
-  }
-
-  if (
-    this.lastCheckpoint?.type ===
-    "CAPTCHA_REQUIRED"
-  ) {
-
     return {
       success:
         false,
