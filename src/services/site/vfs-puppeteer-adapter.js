@@ -2313,8 +2313,7 @@ async findVfsLoginFields() {
         null
     };
   }
-
-  async fillKnownField(
+          async fillKnownField(
     semantic,
     value
   ) {
@@ -2372,6 +2371,25 @@ async findVfsLoginFields() {
             gender: [
               "gender",
               "sex"
+            ],
+
+            visaCenter: [
+              "visa application centre",
+              "visa application center",
+              "application centre",
+              "application center",
+              "visa centre",
+              "visa center",
+              "centre",
+              "center"
+            ],
+
+            visaType: [
+              "visa type",
+              "type of visa",
+              "visa category",
+              "application type",
+              "category"
             ]
           };
 
@@ -2403,6 +2421,72 @@ async findVfsLoginFields() {
                   return false;
                 }
 
+                const labelTexts = [];
+
+                /*
+                 * LABEL ligado diretamente ao campo.
+                 */
+                if (
+                  element.id
+                ) {
+                  const labels =
+                    document.querySelectorAll(
+                      `label[for="${CSS.escape(
+                        element.id
+                      )}"]`
+                    );
+
+                  labels.forEach(
+                    label => {
+                      labelTexts.push(
+                        label.innerText
+                      );
+                    }
+                  );
+                }
+
+                /*
+                 * LABEL pai.
+                 */
+                const parentLabel =
+                  element.closest(
+                    "label"
+                  );
+
+                if (
+                  parentLabel
+                ) {
+                  labelTexts.push(
+                    parentLabel.innerText
+                  );
+                }
+
+                /*
+                 * Texto do container imediato.
+                 *
+                 * Limitamos aos dois níveis mais próximos
+                 * para evitar que "Email" faça um campo
+                 * de telefone parecer candidato.
+                 */
+                if (
+                  element.parentElement
+                ) {
+                  labelTexts.push(
+                    element.parentElement.innerText
+                  );
+
+                  if (
+                    element.parentElement
+                      .parentElement
+                  ) {
+                    labelTexts.push(
+                      element.parentElement
+                        .parentElement
+                        .innerText
+                    );
+                  }
+                }
+
                 const haystack =
                   normalize(
                     [
@@ -2419,8 +2503,7 @@ async findVfsLoginFields() {
                       element.getAttribute(
                         "autocomplete"
                       ),
-                      element.parentElement
-                        ?.innerText
+                      ...labelTexts
                     ].join(" ")
                   );
 
@@ -2433,13 +2516,19 @@ async findVfsLoginFields() {
               }
             );
 
+          /*
+           * Para centro/tipo de visto precisamos de
+           * uma única correspondência.
+           */
           if (
             candidates.length !== 1
           ) {
             return {
               found: false,
+
               ambiguous:
                 candidates.length > 1,
+
               count:
                 candidates.length
             };
@@ -2480,10 +2569,12 @@ async findVfsLoginFields() {
     ) {
       return {
         filled: false,
+
         ambiguous:
           Boolean(
             descriptor?.ambiguous
           ),
+
         reason:
           descriptor?.ambiguous
             ? "Multiple possible VFS fields."
@@ -2499,11 +2590,184 @@ async findVfsLoginFields() {
     if (!selector) {
       return {
         filled: false,
+
         ambiguous: false,
+
         reason:
           "Could not safely address the VFS field."
       };
     }
+
+    /*
+     * ========================================================
+     * SELECT
+     * ========================================================
+     *
+     * Centro e tipo de visto normalmente aparecem como
+     * dropdowns na VFS.
+     */
+    if (
+      descriptor.selectorData.tag ===
+      "select"
+    ) {
+      const selected =
+        await page.$eval(
+          selector,
+          (
+            element,
+            requestedValue
+          ) => {
+            const normalize =
+              value =>
+                String(value || "")
+                  .trim()
+                  .toLowerCase()
+                  .replace(
+                    /\s+/g,
+                    " "
+                  );
+
+            const wanted =
+              normalize(
+                requestedValue
+              );
+
+            const options =
+              Array.from(
+                element.options || []
+              );
+
+            /*
+             * Primeiro tentamos correspondência exata.
+             */
+            let option =
+              options.find(
+                item =>
+                  normalize(
+                    item.value
+                  ) === wanted ||
+                  normalize(
+                    item.textContent
+                  ) === wanted
+              );
+
+            /*
+             * Depois correspondência contendo o valor.
+             *
+             * Isto permite, por exemplo:
+             * SCHENGEN
+             * Schengen Visa
+             * Schengen Visa Application
+             */
+            if (!option) {
+              option =
+                options.find(
+                  item => {
+                    const optionValue =
+                      normalize(
+                        item.value
+                      );
+
+                    const optionText =
+                      normalize(
+                        item.textContent
+                      );
+
+                    return (
+                      optionValue.includes(
+                        wanted
+                      ) ||
+                      optionText.includes(
+                        wanted
+                      )
+                    );
+                  }
+                );
+            }
+
+            if (!option) {
+              return {
+                selected: false,
+
+                reason:
+                  "Requested VFS option was not found."
+              };
+            }
+
+            element.value =
+              option.value;
+
+            element.dispatchEvent(
+              new Event(
+                "input",
+                {
+                  bubbles: true
+                }
+              )
+            );
+
+            element.dispatchEvent(
+              new Event(
+                "change",
+                {
+                  bubbles: true
+                }
+              )
+            );
+
+            return {
+              selected: true,
+
+              value:
+                option.value,
+
+              text:
+                option.textContent
+                  ?.trim() ||
+                ""
+            };
+          },
+          String(value)
+        );
+
+      if (
+        !selected?.selected
+      ) {
+        return {
+          filled: false,
+
+          ambiguous: false,
+
+          reason:
+            selected?.reason ||
+            "VFS option could not be selected."
+        };
+      }
+
+      return {
+        filled: true,
+
+        ambiguous: false,
+
+        selector:
+          descriptor.selectorData,
+
+        selected:
+          true,
+
+        value:
+          selected.value,
+
+        text:
+          selected.text
+      };
+    }
+
+    /*
+     * ========================================================
+     * INPUT / TEXTAREA
+     * ========================================================
+     */
 
     await page.click(
       selector
@@ -2513,12 +2777,30 @@ async findVfsLoginFields() {
       selector,
       element => {
         element.value = "";
+
+        element.dispatchEvent(
+          new Event(
+            "input",
+            {
+              bubbles: true
+            }
+          )
+        );
+
+        element.dispatchEvent(
+          new Event(
+            "change",
+            {
+              bubbles: true
+            }
+          )
+        );
       }
     );
 
     await page.type(
       selector,
-      value,
+      String(value),
       {
         delay: 15
       }
@@ -2526,12 +2808,114 @@ async findVfsLoginFields() {
 
     return {
       filled: true,
+
       ambiguous: false,
+
       selector:
         descriptor.selectorData
     };
   }
+    async setVfsVisaCenter(
+    application
+  ) {
+    const center =
+      String(
+        application?.visaCenter ||
+        "Luanda"
+      ).trim();
 
+    if (!center) {
+      return {
+        success: false,
+        reason:
+          "Visa center is missing from application."
+      };
+    }
+
+    const result =
+      await this.fillKnownField(
+        "visaCenter",
+        center
+      );
+
+    if (
+      result?.filled !== true
+    ) {
+      return {
+        success: false,
+        reason:
+          result?.reason ||
+          "VFS visa center could not be selected.",
+        ambiguous:
+          Boolean(
+            result?.ambiguous
+          )
+      };
+    }
+
+    return {
+      success: true,
+      visaCenter:
+        center,
+      field:
+        result
+    };
+  }
+
+  async setVfsVisaType(
+    application
+  ) {
+    const visaType =
+      String(
+        application?.visaType ||
+        ""
+      )
+        .trim()
+        .toUpperCase();
+
+    if (
+      ![
+        "SCHENGEN",
+        "NACIONAL"
+      ].includes(
+        visaType
+      )
+    ) {
+      return {
+        success: false,
+        reason:
+          `Unsupported visa type: ${visaType || "empty"}`
+      };
+    }
+
+    const result =
+      await this.fillKnownField(
+        "visaType",
+        visaType
+      );
+
+    if (
+      result?.filled !== true
+    ) {
+      return {
+        success: false,
+        reason:
+          result?.reason ||
+          "VFS visa type could not be selected.",
+        ambiguous:
+          Boolean(
+            result?.ambiguous
+          )
+      };
+    }
+
+    return {
+      success: true,
+      visaType,
+      field:
+        result
+    };
+  }
   /*
    * ============================================================
    * OTP
