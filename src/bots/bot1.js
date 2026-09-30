@@ -2125,115 +2125,6 @@ await this.heartbeat(
        * ---------------------------------------------------
        */
 
-                  if (
-        typeof this.site.uploadPassport ===
-        "function"
-      ) {
-
-        let passportFile =
-          null;
-
-        try {
-
-          passportFile =
-            await this.preparePassportFile(
-              application
-            );
-
-          logger.info(
-            "Verified passport prepared for VFS upload",
-            {
-              applicationId:
-                applicationId,
-
-              documentId:
-                passportFile.documentId,
-
-              mimeType:
-                passportFile.mimeType
-            }
-          );
-
-          const passport =
-            await withTimeout(
-              this.site.uploadPassport(
-                passportFile.filePath,
-                {
-                  applicationId,
-
-                  clientId:
-                    application.client?._id?.toString?.() ||
-                    application.client?.toString?.() ||
-                    null,
-
-                  documentId:
-                    passportFile.documentId,
-
-                  mimeType:
-                    passportFile.mimeType,
-
-                  originalName:
-                    passportFile.originalName,
-
-                  sha256:
-                    passportFile.sha256
-                }
-              ),
-              config.timeoutMs,
-              "Passport upload"
-            );
-
-          if (
-            passport?.success ===
-              false &&
-            passport?.requiresUser !==
-              true
-          ) {
-
-            throw new Error(
-              passport.reason ||
-              "Passport upload failed"
-            );
-          }
-
-          if (
-            passport?.requiresUser ===
-            true
-          ) {
-
-            application.bot1.status =
-              "waiting";
-
-            application.bot1.lastAction =
-              "passport_checkpoint";
-
-            await application.save();
-
-            await this.releaseLock(
-              applicationId
-            );
-
-            return {
-              success:
-                true,
-
-              requiresUser:
-                true,
-
-              officialCheckpoint:
-                true,
-
-              application
-            };
-          }
-
-        } finally {
-
-          await this.cleanupPassportFile(
-            passportFile
-          );
-        }
-      }
       await moveState(
         application,
         STATES.SLOT_REVALIDATED,
@@ -2434,73 +2325,115 @@ await this.heartbeat(
 
       await application.save();
 
+     if (
+  typeof this.site.uploadPassport ===
+  "function"
+) {
 
-      if (
-        typeof this.site.uploadPassport ===
-        "function"
-      ) {
+  let passportFile =
+    null;
 
-        const passport =
-          await withTimeout(
-            this.site.uploadPassport(
-              application,
-              application.client
-            ),
-            config.timeoutMs,
-            "Passport upload"
-          );
+  try {
 
+    passportFile =
+      await this.preparePassportFile(
+        application
+      );
 
-        if (
-          passport?.success ===
-            false &&
-          passport?.requiresUser !==
-            true
-        ) {
+    logger.info(
+      "Verified passport prepared for VFS upload",
+      {
+        applicationId:
+          applicationId,
 
-          throw new Error(
-            passport.reason ||
-            "Passport upload failed"
-          );
-        }
+        documentId:
+          passportFile.documentId,
 
-
-        if (
-          passport?.requiresUser ===
-          true
-        ) {
-
-          application.bot1.status =
-            "waiting";
-
-          application.bot1.lastAction =
-            "passport_checkpoint";
-
-
-          await application.save();
-
-          await this.releaseLock(
-            applicationId
-          );
-
-
-          return {
-
-            success:
-              true,
-
-            requiresUser:
-              true,
-
-            officialCheckpoint:
-              true,
-
-            application
-
-          };
-        }
+        mimeType:
+          passportFile.mimeType
       }
+    );
 
+    const passport =
+      await withTimeout(
+        this.site.uploadPassport(
+          passportFile.filePath,
+          {
+            applicationId,
+
+            clientId:
+              application.client?._id?.toString?.() ||
+              application.client?.toString?.() ||
+              null,
+
+            documentId:
+              passportFile.documentId,
+
+            mimeType:
+              passportFile.mimeType,
+
+            originalName:
+              passportFile.originalName,
+
+            sha256:
+              passportFile.sha256
+          }
+        ),
+        config.timeoutMs,
+        "Passport upload"
+      );
+
+    if (
+      passport?.success ===
+        false &&
+      passport?.requiresUser !==
+        true
+    ) {
+
+      throw new Error(
+        passport.reason ||
+        "Passport upload failed"
+      );
+    }
+
+    if (
+      passport?.requiresUser ===
+      true
+    ) {
+
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "passport_checkpoint";
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+      return {
+        success:
+          true,
+
+        requiresUser:
+          true,
+
+        officialCheckpoint:
+          true,
+
+        application
+      };
+    }
+
+  } finally {
+
+    await this.cleanupPassportFile(
+      passportFile
+    );
+  }
+}
 
       /*
        * ---------------------------------------------------
