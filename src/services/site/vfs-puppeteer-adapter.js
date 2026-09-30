@@ -2125,28 +2125,105 @@ logger.info(
    * CHECKPOINTS PÓS-LOGIN
    * ============================================================
    */
+if (
+  this.lastCheckpoint?.type ===
+  "CAPTCHA_REQUIRED"
+) {
+
+  logger.info(
+    "VFS CAPTCHA detected after login submission — requesting Bright Data official solver",
+    {
+      applicationId:
+        applicationId
+    }
+  );
+
+  const captchaResult =
+    await this.solveBrightDataCaptcha();
+
+  if (
+    captchaResult.solved ===
+    true
+  ) {
+
+    await page
+      .waitForNetworkIdle({
+        idleTime:
+          700,
+
+        timeout:
+          15000
+      })
+      .catch(
+        () => {}
+      );
+
+    await this.detectState();
+
+    await this.inspectCurrentDom()
+      .catch(
+        () => {}
+      );
+
+    await this.detectCheckpoint();
+
+    logger.info(
+      "VFS CAPTCHA solver completed",
+      {
+        applicationId:
+          applicationId,
+
+        status:
+          captchaResult.status,
+
+        checkpointAfterSolve:
+          this.lastCheckpoint?.type ||
+          null
+      }
+    );
+  }
 
   if (
     this.lastCheckpoint?.type ===
     "CAPTCHA_REQUIRED"
   ) {
+
     return {
-      success: false,
-      requiresUser: true,
-      captchaRequired: true,
-      authenticated: false,
+      success:
+        false,
+
+      requiresUser:
+        true,
+
+      captchaRequired:
+        true,
+
+      authenticated:
+        false,
+
       code:
         "CAPTCHA_REQUIRED",
+
       reason:
-        "Official VFS CAPTCHA/security checkpoint is required.",
+        "Bright Data could not complete the VFS CAPTCHA automatically.",
+
       state:
         this.state,
+
       checkpoint:
         this.lastCheckpoint,
+
       dom:
-        this.getDomSummary()
+        this.getDomSummary(),
+
+      captchaSolveAttempted:
+        captchaResult.attempted,
+
+      captchaSolveStatus:
+        captchaResult.status
     };
   }
+}
 
   if (
     this.lastCheckpoint?.type ===
