@@ -1778,7 +1778,7 @@ await this.startBrightDataLoginSession();
   }
 ); 
 
-  if (
+    if (
     !loginForm?.email ||
     !loginForm?.password
   ) {
@@ -1786,43 +1786,6 @@ await this.startBrightDataLoginSession();
       .catch(() => {});
 
     await this.detectCheckpoint();
-
-    return {
-      success:
-        false,
-
-      requiresUser:
-        true,
-
-      captchaRequired:
-        true,
-
-      authenticated:
-        false,
-
-      code:
-        "CAPTCHA_REQUIRED",
-
-      reason:
-        "Bright Data could not complete the VFS CAPTCHA automatically.",
-
-      state:
-        this.state,
-
-      checkpoint:
-        this.lastCheckpoint,
-
-      dom:
-        this.getDomSummary(),
-
-      captchaSolveAttempted:
-        captchaResult.attempted,
-
-      captchaSolveStatus:
-        captchaResult.status
-    };
-  }
-}
 
     return {
       success: false,
@@ -1834,11 +1797,13 @@ await this.startBrightDataLoginSession();
         "Could not find an unambiguous VFS email/password login form.",
       state:
         this.state,
+      checkpoint:
+        this.lastCheckpoint,
       dom:
         this.getDomSummary()
     };
   }
-
+    
   /*
    * ============================================================
    * PREENCHER EMAIL
