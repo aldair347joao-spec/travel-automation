@@ -2351,24 +2351,80 @@ await this.heartbeat(
        */
 
       SET_CENTER:
-        async (
+  async (
+    app
+  ) => {
+
+    await this.heartbeat(
+      applicationId,
+      "navigator_center"
+    );
+
+    /*
+     * O Adapter é responsável por localizar
+     * e selecionar o campo real da VFS.
+     *
+     * O Navigator apenas decide que esta é
+     * a etapa de centro.
+     */
+    if (
+      typeof this.site.setVfsVisaCenter !==
+      "function"
+    ) {
+
+      return {
+        success:
+          false,
+
+        reason:
+          "VFS adapter does not provide setVfsVisaCenter()."
+      };
+    }
+
+    const result =
+      await withTimeout(
+        this.site.setVfsVisaCenter(
           app
-        ) => {
+        ),
+        config.timeoutMs,
+        "Navigator VFS visa center"
+      );
 
-          await this.heartbeat(
-            applicationId,
-            "navigator_center"
-          );
+    if (
+      result?.requiresUser ===
+      true
+    ) {
 
-          return await withTimeout(
-            this.site.continueApplication(
-              app,
-              app.client
-            ),
-            config.timeoutMs,
-            "Navigator center continuation"
-          );
-        },
+      return result;
+    }
+
+    if (
+      result?.success ===
+      false
+    ) {
+
+      return result;
+    }
+
+    /*
+     * Só avançamos depois de o centro ter
+     * sido efetivamente preenchido.
+     */
+    const continued =
+      await withTimeout(
+        this.site.continueApplication(
+          app,
+          app.client
+        ),
+        config.timeoutMs,
+        "Navigator center continuation"
+      );
+
+    return continued || {
+      success:
+        true
+    };
+  },
 
 
       /*
@@ -2377,27 +2433,78 @@ await this.heartbeat(
        * ---------------------------------------------------
        */
 
-      SET_VISA_TYPE:
-        async (
+       SET_VISA_TYPE:
+  async (
+    app
+  ) => {
+
+    await this.heartbeat(
+      applicationId,
+      "navigator_visa_type"
+    );
+
+    /*
+     * O Adapter localiza o campo real da VFS
+     * e seleciona SCHENGEN ou NACIONAL.
+     */
+    if (
+      typeof this.site.setVfsVisaType !==
+      "function"
+    ) {
+
+      return {
+        success:
+          false,
+
+        reason:
+          "VFS adapter does not provide setVfsVisaType()."
+      };
+    }
+
+    const result =
+      await withTimeout(
+        this.site.setVfsVisaType(
           app
-        ) => {
+        ),
+        config.timeoutMs,
+        "Navigator VFS visa type"
+      );
 
-          await this.heartbeat(
-            applicationId,
-            "navigator_visa_type"
-          );
+    if (
+      result?.requiresUser ===
+      true
+    ) {
 
-          return await withTimeout(
-            this.site.continueApplication(
-              app,
-              app.client
-            ),
-            config.timeoutMs,
-            "Navigator visa type continuation"
-          );
-        },
+      return result;
+    }
 
+    if (
+      result?.success ===
+      false
+    ) {
 
+      return result;
+    }
+
+    /*
+     * Só avançamos depois de confirmar
+     * a seleção do tipo de visto.
+     */
+    const continued =
+      await withTimeout(
+        this.site.continueApplication(
+          app,
+          app.client
+        ),
+        config.timeoutMs,
+        "Navigator visa type continuation"
+      );
+
+    return continued || {
+      success:
+        true
+    };
+  }, 
       /*
        * ---------------------------------------------------
        * DISPONIBILIDADE
