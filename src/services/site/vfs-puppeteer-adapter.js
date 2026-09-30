@@ -6105,7 +6105,441 @@ async detectFacialPositionRequest() {
         this.getDomSummary()
     };
   }
+    /*
+   * ============================================================
+   * PROCESSAR INSTRUÇÃO FACIAL DA VFS
+   * ============================================================
+   *
+   * Fluxo completo:
+   *
+   * VFS
+   *   ↓
+   * detectar instrução textual
+   *   ↓
+   * resolver posição 1..10
+   *   ↓
+   * recuperar vídeo correto do GridFS
+   *   ↓
+   * preparar Y4M
+   *   ↓
+   * disponibilizar câmera simulada
+   *
+   * IMPORTANTE:
+   *
+   * Esta função NÃO escolhe uma posição por aproximação.
+   * O handleFacialPositionRequest() já faz a resolução
+   * semântica e só retorna quando existe correspondência
+   * válida.
+   *
+   * Também NÃO guarda novas tentativas.
+   * Os vídeos já foram guardados pelo módulo de liveness.
+   * ============================================================
+   */
 
+  async processFacialVfsInstruction(
+    application,
+    client
+  ) {
+
+    if (
+      !application ||
+      !client
+    ) {
+      return {
+        success: false,
+
+        requiresUser: true,
+
+        unresolved: true,
+
+        state:
+          "FACIAL_POSITION_UNRESOLVED",
+
+        reason:
+          "Application or client is missing."
+      };
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * 1. RESOLVER O PEDIDO ATUAL DA VFS
+     * ----------------------------------------------------------
+     */
+
+    const resolved =
+      await this.handleFacialPositionRequest(
+        application,
+        client
+      );
+
+
+    /*
+     * ----------------------------------------------------------
+     * 2. PEDIDO AINDA NÃO PODE SER RESOLVIDO
+     * ----------------------------------------------------------
+     */
+
+    if (
+      !resolved?.success ||
+      resolved?.unresolved
+    ) {
+
+      return {
+        ...resolved,
+
+        success:
+          false,
+
+        requiresUser:
+          resolved?.requiresUser !== false,
+
+        state:
+          resolved?.state ||
+          "FACIAL_POSITION_UNRESOLVED"
+      };
+    }
+
+
+    const position =
+      Number(
+        resolved.position
+      );
+
+
+    if (
+      !Number.isInteger(
+        position
+      ) ||
+      position < 1 ||
+      position > 10
+    ) {
+
+      return {
+        success: false,
+
+        requiresUser: true,
+
+        unresolved: true,
+
+        state:
+          "FACIAL_POSITION_UNRESOLVED",
+
+        reason:
+          "Resolved facial position is invalid.",
+
+        request:
+          resolved.request ||
+          null
+      };
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * 3. VERIFICAR SE O MESMO VÍDEO JÁ ESTÁ ATIVO
+     * ----------------------------------------------------------
+     *
+     * Se a VFS continuar perguntando pela mesma posição,
+     * não precisamos recuperar nem converter novamente.
+     * ----------------------------------------------------------
+     */
+
+    if (
+      this.activeCameraPosition ===
+        position &&
+      this.activeCameraY4mPath &&
+      this.activeCameraVideoId
+    ) {
+
+      logger.info(
+        "VFS facial position already active",
+        {
+          applicationId:
+            this.applicationId,
+
+          position,
+
+          videoId:
+            this.activeCameraVideoId,
+
+          y4mPath:
+            this.activeCameraY4mPath
+        }
+      );
+
+      return {
+        success: true,
+
+        requiresUser: false,
+
+        unresolved: false,
+
+        state:
+          "FACIAL_POSITION_VIDEO_ACTIVE",
+
+        position,
+
+        label:
+          resolved.label ||
+          null,
+
+        request:
+          resolved.request ||
+          null,
+
+        storageReference:
+          resolved.storageReference ||
+          null,
+
+        videoId:
+          this.activeCameraVideoId,
+
+        y4mPath:
+          this.activeCameraY4mPath,
+
+        score:
+          resolved.score ??
+          null,
+
+        matchedTerms:
+          resolved.matchedTerms ||
+          [],
+
+        reused: true,
+
+        checkpoint:
+          this.lastCheckpoint,
+
+        dom:
+          this.getDomSummary()
+      };
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * 4. PREPARAR O VÍDEO CORRETO
+     * ----------------------------------------------------------
+     *
+     * Aqui acontece:
+     *
+     * storageReference
+     *      ↓
+     * GridFS
+     *      ↓
+     * Buffer
+     *      ↓
+     * Y4M
+     */
+
+    let prepared;
+
+    try {
+
+      prepared =
+        await this.prepareFacialCamera(
+          application,
+          client,
+          resolved
+        );
+
+    } catch (
+      error
+    ) {
+
+      logger.error(
+        "Failed to prepare VFS facial camera",
+        {
+          applicationId:
+            this.applicationId,
+
+          position,
+
+          request:
+            resolved.request ||
+            null,
+
+          error:
+            error?.message ||
+            error
+        }
+      );
+
+      return {
+        success: false,
+
+        requiresUser: true,
+
+        unresolved: false,
+
+        state:
+          "FACIAL_POSITION_VIDEO_UNAVAILABLE",
+
+        position,
+
+        label:
+          resolved.label ||
+          null,
+
+        request:
+          resolved.request ||
+          null,
+
+        storageReference:
+          resolved.storageReference ||
+          null,
+
+        reason:
+          error?.message ||
+          `Could not prepare facial video for position ${position}.`,
+
+        checkpoint:
+          this.lastCheckpoint,
+
+        dom:
+          this.getDomSummary()
+      };
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * 5. CONFIRMAR PREPARAÇÃO
+     * ----------------------------------------------------------
+     */
+
+    if (
+      !prepared?.success ||
+      !prepared?.y4mPath
+    ) {
+
+      return {
+        success: false,
+
+        requiresUser: true,
+
+        unresolved: false,
+
+        state:
+          "FACIAL_POSITION_VIDEO_UNAVAILABLE",
+
+        position,
+
+        label:
+          resolved.label ||
+          null,
+
+        request:
+          resolved.request ||
+          null,
+
+        storageReference:
+          resolved.storageReference ||
+          null,
+
+        reason:
+          `The facial video for position ${position} could not be prepared for the VFS camera.`,
+
+        checkpoint:
+          this.lastCheckpoint,
+
+        dom:
+          this.getDomSummary()
+      };
+    }
+
+
+    /*
+     * ----------------------------------------------------------
+     * 6. RESULTADO PARA O BOT 1
+     * ----------------------------------------------------------
+     *
+     * O Bot 1 reconhece FACIAL_POSITION_VIDEO_ACTIVE
+     * e mantém a câmera aberta enquanto a VFS processa
+     * a posição.
+     */
+
+    logger.info(
+      "VFS facial position video activated",
+      {
+        applicationId:
+          this.applicationId,
+
+        position,
+
+        label:
+          resolved.label ||
+          null,
+
+        request:
+          resolved.request ||
+          null,
+
+        videoId:
+          prepared.videoId ||
+          this.activeCameraVideoId ||
+          null,
+
+        y4mPath:
+          prepared.y4mPath,
+
+        reused:
+          prepared.reused === true
+      }
+    );
+
+
+    return {
+      success: true,
+
+      requiresUser: false,
+
+      unresolved: false,
+
+      state:
+        "FACIAL_POSITION_VIDEO_ACTIVE",
+
+      position,
+
+      label:
+        resolved.label ||
+        null,
+
+      request:
+        resolved.request ||
+        null,
+
+      storageReference:
+        resolved.storageReference ||
+        null,
+
+      videoId:
+        prepared.videoId ||
+        this.activeCameraVideoId ||
+        null,
+
+      y4mPath:
+        prepared.y4mPath,
+
+      score:
+        resolved.score ??
+        null,
+
+      matchedTerms:
+        resolved.matchedTerms ||
+        [],
+
+      reused:
+        prepared.reused === true,
+
+      checkpoint:
+        this.lastCheckpoint,
+
+      dom:
+        this.getDomSummary()
+    };
+  }
   /*
    * ============================================================
    * CALENDAR / RADAR
