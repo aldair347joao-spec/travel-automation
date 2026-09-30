@@ -2023,6 +2023,961 @@ await this.heartbeat(
       );
     }
   }
+    /*
+   * =======================================================
+   * NAVIGATOR - CÉREBRO CENTRAL
+   * =======================================================
+   *
+   * Esta função não substitui os executores especializados
+   * do Bot 1.
+   *
+   * O Navigator observa a VFS, identifica o estado e decide
+   * qual executor deve atuar.
+   *
+   * Cada candidatura possui o seu próprio Navigator.
+   */
+
+  async driveWithNavigator(
+    application,
+    options = {}
+  ) {
+
+    if (
+      !application
+    ) {
+
+      throw new Error(
+        "Navigator requires an application."
+      );
+    }
+
+    if (
+      !this.navigator
+    ) {
+
+      throw new Error(
+        "Navigator is not initialized for this application."
+      );
+    }
+
+    const applicationId =
+      application._id?.toString?.() ||
+      application.id?.toString?.();
+
+    if (
+      !applicationId
+    ) {
+
+      throw new Error(
+        "Navigator requires a valid applicationId."
+      );
+    }
+
+    /*
+     * -------------------------------------------------------
+     * GARANTIR ISOLAMENTO
+     * -------------------------------------------------------
+     */
+
+    if (
+      String(
+        this.navigator.applicationId
+      ) !==
+      String(
+        applicationId
+      )
+    ) {
+
+      throw new Error(
+        `Navigator/application mismatch: navigator=${this.navigator.applicationId} application=${applicationId}`
+      );
+    }
+
+    /*
+     * -------------------------------------------------------
+     * EXECUTORES
+     * -------------------------------------------------------
+     *
+     * O Navigator decide.
+     *
+     * O Adapter executa as operações específicas da VFS.
+     *
+     * Não duplicamos os seletores aqui.
+     */
+
+    const executors = {
+
+      /*
+       * ---------------------------------------------------
+       * LOGIN
+       * ---------------------------------------------------
+       */
+
+      LOGIN:
+        async (
+          app
+        ) => {
+
+          await this.assertAdminRelease(
+            applicationId
+          );
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_login"
+          );
+
+          const result =
+            await withTimeout(
+              this.site.login(
+                app
+              ),
+              config.timeoutMs,
+              "Navigator VFS login"
+            );
+
+          /*
+           * CAPTCHA oficial
+           */
+
+          if (
+            result?.state ===
+            "CAPTCHA_REQUIRED" ||
+            result?.checkpoint?.type ===
+            "CAPTCHA_REQUIRED"
+          ) {
+
+            app.bot1.status =
+              "waiting";
+
+            app.bot1.lastAction =
+              "captcha_required";
+
+            await moveState(
+              app,
+              STATES.CAPTCHA_REQUIRED,
+              {
+                event:
+                  "NAVIGATOR_CAPTCHA_REQUIRED",
+
+                reason:
+                  result.reason ||
+                  "Official VFS CAPTCHA checkpoint."
+              }
+            );
+
+            await app.save();
+
+            return {
+              success:
+                true,
+
+              requiresUser:
+                true,
+
+              officialCheckpoint:
+                true,
+
+              checkpoint:
+                result.checkpoint ||
+                {
+                  type:
+                    "CAPTCHA_REQUIRED"
+                }
+            };
+          }
+
+          if (
+            result?.success ===
+            false
+          ) {
+
+            throw new Error(
+              result.reason ||
+              "Navigator VFS login failed."
+            );
+          }
+
+          await this.refreshLock(
+            applicationId
+          );
+
+          return (
+            result || {
+              success:
+                true
+            }
+          );
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * OTP
+       * ---------------------------------------------------
+       *
+       * O tratamento automático do OTP continua sendo
+       * responsabilidade do Bot 1.
+       *
+       * Não tentamos contornar nenhum checkpoint.
+       */
+
+      HANDLE_OTP:
+        async (
+          app
+        ) => {
+
+          await this.assertAdminRelease(
+            applicationId
+          );
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_otp"
+          );
+
+          /*
+           * Se o OTP já foi verificado, não repetimos.
+           */
+
+          if (
+            app.otp?.status ===
+            "verified"
+          ) {
+
+            return {
+              success:
+                true
+            };
+          }
+
+          /*
+           * O fluxo especializado de OTP do Bot 1
+           * continuará sendo usado pelo prepare/verifyOtp.
+           *
+           * Aqui o Navigator apenas informa ao supervisor
+           * que a página está num checkpoint oficial.
+           */
+
+          app.bot1.status =
+            "waiting";
+
+          app.bot1.lastAction =
+            "otp_required";
+
+          await moveState(
+            app,
+            STATES.OTP_REQUIRED,
+            {
+              event:
+                "NAVIGATOR_OTP_REQUIRED",
+
+              reason:
+                "VFS requested an OTP verification code."
+            }
+          );
+
+          await app.save();
+
+          return {
+            success:
+              true,
+
+            requiresUser:
+              true,
+
+            officialCheckpoint:
+              true,
+
+            checkpoint:
+              {
+                type:
+                  "OTP_REQUIRED"
+              }
+          };
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * NOVA CANDIDATURA
+       * ---------------------------------------------------
+       */
+
+      START_NEW_BOOKING:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_new_booking"
+          );
+
+          return {
+            success:
+              true
+          };
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * FORMULÁRIO
+       * ---------------------------------------------------
+       */
+
+      INSPECT_BOOKING_FORM:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_booking_form"
+          );
+
+          return {
+            success:
+              true
+          };
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * CENTRO
+       * ---------------------------------------------------
+       */
+
+      SET_CENTER:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_center"
+          );
+
+          return await withTimeout(
+            this.site.continueApplication(
+              app,
+              app.client
+            ),
+            config.timeoutMs,
+            "Navigator center continuation"
+          );
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * TIPO DE VISTO
+       * ---------------------------------------------------
+       */
+
+      SET_VISA_TYPE:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_visa_type"
+          );
+
+          return await withTimeout(
+            this.site.continueApplication(
+              app,
+              app.client
+            ),
+            config.timeoutMs,
+            "Navigator visa type continuation"
+          );
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * DISPONIBILIDADE
+       * ---------------------------------------------------
+       */
+
+      CHECK_AVAILABILITY:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_check_availability"
+          );
+
+          const result =
+            await withTimeout(
+              this.site.checkAvailability(
+                app
+              ),
+              config.timeoutMs,
+              "Navigator availability check"
+            );
+
+          if (
+            result?.requiresUser ===
+            true
+          ) {
+
+            return result;
+          }
+
+          const slots =
+            Array.isArray(
+              result?.slots
+            )
+              ? result.slots
+              : [];
+
+          /*
+           * Sem vaga:
+           *
+           * Navigator não bloqueia esta candidatura.
+           * O Radar/Bot 2 assume.
+           */
+
+          if (
+            !slots.length
+          ) {
+
+            return {
+              success:
+                true,
+
+              noAvailability:
+                true,
+
+              handoffToRadar:
+                true
+            };
+          }
+
+          /*
+           * Escolhemos a primeira vaga que o Adapter
+           * considerou válida.
+           */
+
+          app.slot =
+            slots[0];
+
+          return {
+            success:
+              true,
+
+            slot:
+              app.slot,
+
+            slots
+          };
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * PAYMENT METHOD / CONTINUE
+       * ---------------------------------------------------
+       */
+
+      CONTINUE:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_continue"
+          );
+
+          return await withTimeout(
+            this.site.continueApplication(
+              app,
+              app.client
+            ),
+            config.timeoutMs,
+            "Navigator continue"
+          );
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * UPLOAD PASSAPORTE
+       * ---------------------------------------------------
+       *
+       * Não duplicamos a lógica de armazenamento seguro.
+       */
+
+      UPLOAD_PASSPORT:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_passport_upload"
+          );
+
+          let passportFile =
+            null;
+
+          try {
+
+            passportFile =
+              await this.preparePassportFile(
+                app
+              );
+
+            const result =
+              await withTimeout(
+                this.site.uploadPassport(
+                  passportFile.filePath,
+                  {
+                    applicationId,
+
+                    clientId:
+                      app.client?._id?.toString?.() ||
+                      app.client?.toString?.() ||
+                      null,
+
+                    documentId:
+                      passportFile.documentId,
+
+                    mimeType:
+                      passportFile.mimeType,
+
+                    originalName:
+                      passportFile.originalName,
+
+                    sha256:
+                      passportFile.sha256
+                  }
+                ),
+                config.timeoutMs,
+                "Navigator passport upload"
+              );
+
+            return (
+              result || {
+                success:
+                  true
+              }
+            );
+
+          } finally {
+
+            await this.cleanupPassportFile(
+              passportFile
+            );
+          }
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * DADOS DO REQUERENTE
+       * ---------------------------------------------------
+       */
+
+      FILL_DETAILS:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_fill_details"
+          );
+
+          return await withTimeout(
+            this.site.continueApplication(
+              app,
+              app.client
+            ),
+            config.timeoutMs,
+            "Navigator applicant details"
+          );
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * FACIAL
+       * ---------------------------------------------------
+       *
+       * A lógica de 10 posições continua no Bot 1.
+       * O Navigator não substitui a máquina de liveness.
+       */
+
+      HANDLE_FACIAL:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_facial"
+          );
+
+          return {
+            success:
+              true,
+
+            delegated:
+              true,
+
+            stage:
+              "FACIAL"
+          };
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * CALENDÁRIO
+       * ---------------------------------------------------
+       */
+
+      SELECT_SLOT:
+        async (
+          app
+        ) => {
+
+          if (
+            !app.slot
+          ) {
+
+            const availability =
+              await this.site.checkAvailability(
+                app
+              );
+
+            const slots =
+              availability?.slots ||
+              [];
+
+            if (
+              !slots.length
+            ) {
+
+              return {
+                success:
+                  true,
+
+                noAvailability:
+                  true,
+
+                handoffToRadar:
+                  true
+              };
+            }
+
+            app.slot =
+              slots[0];
+          }
+
+          /*
+           * Revalidar antes de selecionar.
+           */
+
+          if (
+            typeof this.site.revalidateSlot ===
+            "function"
+          ) {
+
+            const revalidated =
+              await this.site.revalidateSlot(
+                app.slot,
+                app
+              );
+
+            if (
+              revalidated?.success ===
+              false
+            ) {
+
+              return {
+                success:
+                  false,
+
+                slotLost:
+                  true,
+
+                slot:
+                  app.slot,
+
+                reason:
+                  revalidated.reason ||
+                  "Selected appointment slot is no longer available."
+              };
+            }
+          }
+
+          const selected =
+            await withTimeout(
+              this.site.selectSlot(
+                app.slot,
+                app
+              ),
+              config.timeoutMs,
+              "Navigator slot selection"
+            );
+
+          return (
+            selected || {
+              success:
+                true,
+
+              slot:
+                app.slot
+            }
+          );
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * OPÇÕES DA REVISÃO
+       * ---------------------------------------------------
+       *
+       * Mantemos a seleção especializada existente no
+       * Adapter. O Navigator apenas continua depois.
+       */
+
+      SELECT_REVIEW_OPTIONS:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_review"
+          );
+
+          return await withTimeout(
+            this.site.continueApplication(
+              app,
+              app.client
+            ),
+            config.timeoutMs,
+            "Navigator review continuation"
+          );
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * PAGAMENTO
+       * ---------------------------------------------------
+       *
+       * Apenas extrair.
+       *
+       * NÃO PAGAR.
+       */
+
+      EXTRACT_PAYMENT:
+        async (
+          app
+        ) => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_extract_payment"
+          );
+
+          const payment =
+            await withTimeout(
+              this.site.getPaymentDetails(
+                app,
+                app.client
+              ),
+              config.timeoutMs,
+              "Navigator payment extraction"
+            );
+
+          app.result =
+            app.result || {};
+
+          app.result.reference =
+            payment?.reference ||
+            null;
+
+          app.result.entity =
+            payment?.entity ||
+            null;
+
+          app.result.paymentAmount =
+            payment?.amount ||
+            null;
+
+          app.result.paymentCurrency =
+            payment?.currency ||
+            null;
+
+          app.result.paymentStatus =
+            payment?.paymentStatus ||
+            null;
+
+          app.result.paymentDeadline =
+            payment?.deadline ||
+            null;
+
+          await app.save();
+
+          return {
+            success:
+              true,
+
+            payment
+          };
+        },
+
+
+      /*
+       * ---------------------------------------------------
+       * REINSPECTION
+       * ---------------------------------------------------
+       */
+
+      REINSPECT:
+        async () => {
+
+          await this.heartbeat(
+            applicationId,
+            "navigator_reinspect"
+          );
+
+          return {
+            success:
+              true
+          };
+        }
+
+    };
+
+    /*
+     * -------------------------------------------------------
+     * EXECUTAR O CÉREBRO
+     * -------------------------------------------------------
+     */
+
+    const result =
+      await this.navigator.drive(
+        application,
+        executors,
+        {
+          maxSteps:
+            options.maxSteps ||
+            40,
+
+          sameStateLimit:
+            options.sameStateLimit ||
+            4,
+
+          stepDelayMs:
+            options.stepDelayMs ||
+            300
+        }
+      );
+
+    /*
+     * -------------------------------------------------------
+     * RESULTADO DO NAVIGATOR
+     * -------------------------------------------------------
+     */
+
+    if (
+      result?.requiresUser ===
+      true
+    ) {
+
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "navigator_checkpoint";
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+      return result;
+    }
+
+    if (
+      result?.handoffToRadar ===
+      true
+    ) {
+
+      application.status =
+        "waiting_for_slot";
+
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "navigator_handoff_radar";
+
+      application.bot2 =
+        application.bot2 || {};
+
+      application.bot2.status =
+        "monitoring";
+
+      application.bot2.monitoring =
+        true;
+
+      application.radar =
+        application.radar || {};
+
+      application.radar.enabled =
+        true;
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+      return result;
+    }
+
+    if (
+      result?.completed ===
+      true
+    ) {
+
+      application.bot1.lastAction =
+        "navigator_completed";
+
+      await application.save();
+
+      return result;
+    }
+
+    if (
+      result?.success ===
+      false
+    ) {
+
+      throw new Error(
+        result.reason ||
+        "Navigator failed to advance the VFS workflow."
+      );
+    }
+
+    return result;
+  }
   /*
    * =======================================================
    * HANDLE SLOT
