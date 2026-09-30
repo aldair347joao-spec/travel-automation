@@ -3822,6 +3822,7 @@ async getFacialCameraState() {
           video.muted = true;
           video.autoplay = false;
           video.playsInline = true;
+          video.loop = true;
 
           video.setAttribute(
             "playsinline",
@@ -4045,6 +4046,18 @@ async getFacialCameraState() {
                 width,
                 height
               );
+              const videoTrack =
+  camera.stream &&
+  typeof camera.stream.getVideoTracks === "function"
+    ? camera.stream.getVideoTracks()[0]
+    : null;
+
+if (
+  videoTrack &&
+  typeof videoTrack.requestFrame === "function"
+) {
+  videoTrack.requestFrame();
+}
 
               camera.lastFrameAt =
                 new Date().toISOString();
@@ -4065,6 +4078,12 @@ async getFacialCameraState() {
             drawFrame
           );
         }
+        video.loop = true;
+
+if (
+  video.ended
+) {
+  video.currentTime = 0;
 
         await video.play();
 
