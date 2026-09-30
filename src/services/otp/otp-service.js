@@ -670,7 +670,224 @@ class OtpService {
     };
   }
 
+    /*
+   * =======================================================
+   * VALIDAR AUTENTICAÇÃO IMAP
+   * =======================================================
+   *
+   * Faz uma ligação REAL à caixa de e-mail.
+   *
+   * Não envia e-mail.
+   * Não lê o OTP.
+   * Apenas confirma:
+   *
+   * 1. servidor IMAP acessível
+   * 2. porta correta
+   * 3. TLS/SSL funcional
+   * 4. utilizador autenticado
+   * 5. INBOX acessível
+   *
+   * Nunca registamos a password.
+   */
+  async validateMailboxConnection(
+    applicationId
+  ) {
 
+    const {
+      ImapFlow
+    } = this.loadEmailDependencies();
+
+    const mailbox =
+      await this.getMailboxCredentials(
+        applicationId
+      );
+
+    let client = null;
+
+    try {
+
+      console.log(
+        "[OTP][IMAP] Iniciando autenticação real.",
+        {
+          applicationId:
+            String(applicationId),
+
+          email:
+            mailbox.email,
+
+          host:
+            mailbox.host,
+
+          port:
+            mailbox.port,
+
+          secure:
+            mailbox.secure,
+
+          mailbox:
+            mailbox.mailbox
+        }
+      );
+
+      client =
+        new ImapFlow({
+
+          host:
+            mailbox.host,
+
+          port:
+            mailbox.port,
+
+          secure:
+            mailbox.secure,
+
+          auth: {
+
+            user:
+              mailbox.email,
+
+            pass:
+              mailbox.password
+
+          },
+
+          logger:
+            false
+
+        });
+
+      await client.connect();
+
+      console.log(
+        "[OTP][IMAP] Autenticação IMAP concluída com sucesso.",
+        {
+          applicationId:
+            String(applicationId),
+
+          email:
+            mailbox.email,
+
+          host:
+            mailbox.host
+        }
+      );
+
+      await client.mailboxOpen(
+        mailbox.mailbox,
+        {
+          readOnly:
+            true
+        }
+      );
+
+      console.log(
+        "[OTP][IMAP] INBOX aberta com sucesso.",
+        {
+          applicationId:
+            String(applicationId),
+
+          email:
+            mailbox.email,
+
+          mailbox:
+            mailbox.mailbox
+        }
+      );
+
+      return {
+
+        success:
+          true,
+
+        authenticated:
+          true,
+
+        email:
+          mailbox.email,
+
+        host:
+          mailbox.host,
+
+        port:
+          mailbox.port,
+
+        secure:
+          mailbox.secure,
+
+        mailbox:
+          mailbox.mailbox
+
+      };
+
+    } catch (
+      error
+    ) {
+
+      console.error(
+        "[OTP][IMAP] FALHA NA AUTENTICAÇÃO.",
+        {
+          applicationId:
+            String(applicationId),
+
+          email:
+            mailbox.email,
+
+          host:
+            mailbox.host,
+
+          port:
+            mailbox.port,
+
+          secure:
+            mailbox.secure,
+
+          error:
+            error?.message ||
+            String(error),
+
+          code:
+            error?.code ||
+            null
+
+        }
+      );
+
+      const imapError =
+        new Error(
+          `Falha na autenticação IMAP da caixa ${mailbox.email}: ${error?.message || "erro desconhecido"}`
+        );
+
+      imapError.code =
+        "OTP_IMAP_AUTH_FAILED";
+
+      imapError.cause =
+        error;
+
+      throw imapError;
+
+    } finally {
+
+      if (
+        client
+      ) {
+
+        try {
+
+          await client.logout();
+
+        } catch {
+
+          try {
+
+            await client.close();
+
+          } catch {
+            /* encerramento ignorado */
+          }
+        }
+      }
+    }
+  }
   /*
    * =======================================================
    * TEST MODE
@@ -735,11 +952,40 @@ class OtpService {
      * A leitura efetiva será feita por waitForCode().
      */
 
-    const mailbox =
+        const mailbox =
       await this.getMailboxCredentials(
         request.applicationId
       );
 
+    /*
+     * =====================================================
+     * AUTENTICAÇÃO IMAP REAL
+     * =====================================================
+     *
+     * Antes de colocar o Bot 1 em espera, confirmamos
+     * que a caixa de e-mail configurada pela Administração
+     * pode realmente ser acessada.
+     */
+    await this.validateMailboxConnection(
+      request.applicationId
+    );
+
+    console.log(
+      "[OTP] Caixa de e-mail validada. Bot 1 pode aguardar o OTP.",
+      {
+        applicationId:
+          request.applicationId,
+
+        requestId:
+          request.requestId,
+
+        destination:
+          mailbox.email,
+
+        mailboxHost:
+          mailbox.host
+      }
+    );
 
     return {
 
@@ -759,7 +1005,10 @@ class OtpService {
         mailbox.email,
 
       mailboxHost:
-        mailbox.host
+        mailbox.host,
+
+      imapAuthenticated:
+        true
     };
   }
 
