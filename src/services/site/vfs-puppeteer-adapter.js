@@ -4174,210 +4174,319 @@ async getFacialCameraState() {
   return result;
 }
   async switchPersistentFacialVideo(
-  application,
-  client,
-  selected
-) {
-  if (!selected) {
-    throw new Error(
-      "Facial position selection is required."
-    );
-  }
-
-  const position =
-    Number(selected.position);
-
-  if (
-    !Number.isInteger(position) ||
-    position < 1 ||
-    position > 10
+    application,
+    client,
+    selected
   ) {
-    throw new Error(
-      `Invalid facial position: ${selected.position}`
-    );
-  }
+    if (!selected) {
+      throw new Error(
+        "Facial position selection is required."
+      );
+    }
 
-  /*
-   * ============================================================
-   * IMPEDIR DUAS TROCAS SIMULTÂNEAS
-   * ============================================================
-   */
-
-  if (
-    this.facialSession.switchInProgress
-  ) {
-    return {
-      success: false,
-      busy: true,
-      position,
-      reason:
-        "Another facial video switch is already in progress."
-    };
-  }
-
-  this.facialSession.switchInProgress =
-    true;
-
-  this.facialSession.switchStartedAt =
-    new Date().toISOString();
-
-  try {
-    /*
-     * ==========================================================
-     * 1. RECUPERAR O VÍDEO GUARDADO
-     * ==========================================================
-     */
-
-    const stored =
-      await this.getStoredFacialVideo(
-        application,
-        client,
-        selected
+    const position =
+      Number(
+        selected.position
       );
 
     if (
-      !stored ||
-      !stored.buffer ||
-      !Buffer.isBuffer(stored.buffer) ||
-      stored.buffer.length === 0
+      !Number.isInteger(position) ||
+      position < 1 ||
+      position > 10
     ) {
       throw new Error(
-        `No stored facial video available for position ${position}.`
+        `Invalid facial position: ${selected.position}`
       );
     }
 
     /*
      * ==========================================================
-     * 2. PREPARAR O VÍDEO
+     * IMPEDIR DUAS TROCAS SIMULTÂNEAS
      * ==========================================================
      */
 
-    const prepared =
-      await prepareFromBuffer(
-        stored.buffer,
-        {
-          position,
-          label:
-            selected.label ||
-            stored.label ||
-            null,
+    if (
+      this.facialSession.switchInProgress
+    ) {
+      return {
+        success: false,
+
+        busy: true,
+
+        position,
+
+        reason:
+          "Another facial video switch is already in progress."
+      };
+    }
+
+    this.facialSession.switchInProgress =
+      true;
+
+    this.facialSession.switchStartedAt =
+      new Date().toISOString();
+
+    try {
+
+      /*
+       * ========================================================
+       * 1. RECUPERAR O VÍDEO CORRETO DO GRIDFS
+       * ========================================================
+       */
+
+      const stored =
+        await this.getStoredFacialVideo(
+          application,
+          client,
+          selected
+        );
+
+      if (
+        !stored ||
+        !Buffer.isBuffer(
+          stored.buffer
+        ) ||
+        stored.buffer.length === 0
+      ) {
+        throw new Error(
+          `No stored facial video available for position ${position}.`
+        );
+      }
+
+      /*
+       * ========================================================
+       * 2. PREPARAR O VÍDEO
+       * ========================================================
+       *
+       * IMPORTANTE:
+       *
+       * prepareFromBuffer() recebe UM ÚNICO OBJETO.
+       *
+       * A implementação correta no
+       * liveness-y4m-service.js é:
+       *
+       * prepareFromBuffer({
+       *   buffer,
+       *   videoId,
+       *   position
+       * })
+       *
+       * ========================================================
+       */
+
+      const prepared =
+        await prepareFromBuffer({
+          buffer:
+            stored.buffer,
+
           videoId:
             stored.videoId ||
+            selected.videoId ||
+            `application-${this.applicationId}-position-${position}`,
+
+          position,
+
+          filename:
+            stored.filename ||
+            "liveness.webm",
+
+          mimeType:
+            stored.mimeType ||
+            "video/webm"
+        });
+
+      if (
+        !prepared ||
+        !prepared.success ||
+        !prepared.path
+      ) {
+        throw new Error(
+          `Could not prepare facial video for position ${position}.`
+        );
+      }
+
+      /*
+       * ========================================================
+       * 3. REPRODUZIR NA CÂMERA PERSISTENTE
+       * ========================================================
+       *
+       * NÃO relançamos Chromium.
+       *
+       * A câmera VFS continua sendo o mesmo MediaStream.
+       * Apenas alteramos o conteúdo do canvas.
+       */
+
+      const playback =
+        await this.playFacialVideoOnPersistentCamera(
+          prepared.path,
+          position,
+          stored.videoId ||
+            selected.videoId ||
+            prepared.videoId ||
+            null
+        );
+
+      if (
+        !playback ||
+        playback.success !== true
+      ) {
+        throw new Error(
+          `Could not activate facial video for position ${position}.`
+        );
+      }
+
+      /*
+       * ========================================================
+       * 4. ATUALIZAR ESTADO DO ADAPTER
+       * ========================================================
+       */
+
+      this.activeCameraY4mPath =
+        prepared.path;
+
+      this.activeCameraVideoId =
+        stored.videoId ||
+        selected.videoId ||
+        prepared.videoId ||
+        null;
+
+      this.activeCameraPosition =
+        position;
+
+      this.facialSession.currentPosition =
+        position;
+
+      this.facialSession.sourcePosition =
+        position;
+
+      this.facialSession.sourceVideoId =
+        this.activeCameraVideoId;
+
+      this.facialSession.sourceLoaded =
+        true;
+
+      this.facialSession.sourcePlaying =
+        true;
+
+      this.facialSession.videoElementReady =
+        true;
+
+      this.facialSession.streamReady =
+        true;
+
+      this.facialSession.lastFrameAt =
+        new Date().toISOString();
+
+      this.facialSession.switchCompletedAt =
+        new Date().toISOString();
+
+      logger.info(
+        "VFS facial video switched successfully",
+        {
+          applicationId:
+            this.applicationId,
+
+          position,
+
+          videoId:
+            this.activeCameraVideoId,
+
+          y4mPath:
+            prepared.path,
+
+          persistentCamera:
+            true,
+
+          streamId:
+            playback?.streamId ||
+            this.facialSession.streamId ||
             null
         }
       );
 
-    if (
-      !prepared ||
-      !prepared.path
-    ) {
-      throw new Error(
-        `Could not prepare facial video for position ${position}.`
-      );
-    }
+      return {
+        success: true,
 
-    /*
-     * ==========================================================
-     * 3. REPRODUZIR NA CÂMERA PERSISTENTE
-     * ==========================================================
-     */
-
-    const playback =
-      await this.playFacialVideoOnPersistentCamera(
-        prepared.path,
         position,
-        stored.videoId ||
-          selected.videoId ||
-          null
+
+        label:
+          selected.label ||
+          stored.label ||
+          null,
+
+        videoId:
+          this.activeCameraVideoId,
+
+        storageReference:
+          selected.storageReference ||
+          null,
+
+        preparedPath:
+          prepared.path,
+
+        persistentCamera:
+          true,
+
+        reusedCameraSession:
+          true,
+
+        streamId:
+          playback?.streamId ||
+          this.facialSession.streamId ||
+          null,
+
+        readyState:
+          playback?.readyState ||
+          null,
+
+        duration:
+          playback?.duration ||
+          null,
+
+        width:
+          playback?.width ||
+          prepared.width ||
+          0,
+
+        height:
+          playback?.height ||
+          prepared.height ||
+          0
+      };
+
+    } catch (error) {
+
+      this.facialSession.sourceLoaded =
+        false;
+
+      this.facialSession.sourcePlaying =
+        false;
+
+      logger.error(
+        "VFS persistent facial video switch failed",
+        {
+          applicationId:
+            this.applicationId,
+
+          position,
+
+          error:
+            error?.message ||
+            String(error)
+        }
       );
 
-    /*
-     * ==========================================================
-     * 4. ATUALIZAR ESTADO
-     * ==========================================================
-     */
+      throw error;
 
-    this.activeCameraY4mPath =
-      prepared.path;
+    } finally {
 
-    this.activeCameraVideoId =
-      stored.videoId ||
-      selected.videoId ||
-      null;
+      this.facialSession.switchInProgress =
+        false;
 
-    this.activeCameraPosition =
-      position;
-
-    this.facialSession.currentPosition =
-      position;
-
-    this.facialSession.sourcePosition =
-      position;
-
-    this.facialSession.sourceVideoId =
-      stored.videoId ||
-      selected.videoId ||
-      null;
-
-    this.facialSession.sourceLoaded =
-      true;
-
-    this.facialSession.sourcePlaying =
-      true;
-
-    this.facialSession.videoElementReady =
-      true;
-
-    this.facialSession.lastFrameAt =
-      new Date().toISOString();
-
-    this.facialSession.switchCompletedAt =
-      new Date().toISOString();
-
-    return {
-      success: true,
-
-      position,
-
-      label:
-        selected.label ||
-        stored.label ||
-        null,
-
-      videoId:
-        stored.videoId ||
-        selected.videoId ||
-        null,
-
-      storageReference:
-        selected.storageReference ||
-        null,
-
-      persistentCamera: true,
-
-      reusedCameraSession: true,
-
-      streamId:
-        this.facialSession.streamId ||
-        playback?.streamId ||
-        null
-    };
-  } catch (error) {
-    this.facialSession.sourceLoaded =
-      false;
-
-    this.facialSession.sourcePlaying =
-      false;
-
-    throw error;
-  } finally {
-    this.facialSession.switchInProgress =
-      false;
-
-    this.facialSession.switchCompletedAt =
-      new Date().toISOString();
+      this.facialSession.switchCompletedAt =
+        new Date().toISOString();
+    }
   }
-}
   async processFacialVfsInstruction(
   application,
   client
