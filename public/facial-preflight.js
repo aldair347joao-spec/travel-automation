@@ -1269,42 +1269,42 @@
         break;
 
       case "left":
-        yawScore =
-          clamp(
-            -yaw /
-              0.35,
-            0,
-            1
-          );
+  yawScore =
+    clamp(
+      yaw /
+        0.35,
+      0,
+      1
+    );
 
-        pitchScore =
-          1 -
-          clamp(
-            Math.abs(pitch) /
-              0.35,
-            0,
-            1
-          );
-        break;
+  pitchScore =
+    1 -
+    clamp(
+      Math.abs(pitch) /
+        0.35,
+      0,
+      1
+    );
+  break;
 
       case "right":
-        yawScore =
-          clamp(
-            yaw /
-              0.35,
-            0,
-            1
-          );
+  yawScore =
+    clamp(
+      -yaw /
+        0.35,
+      0,
+      1
+    );
 
-        pitchScore =
-          1 -
-          clamp(
-            Math.abs(pitch) /
-              0.35,
-            0,
-            1
-          );
-        break;
+  pitchScore =
+    1 -
+    clamp(
+      Math.abs(pitch) /
+        0.35,
+      0,
+      1
+    );
+  break;
 
       case "up":
         pitchScore =
@@ -1345,76 +1345,77 @@
         break;
 
       case "left_up":
-        yawScore =
-          clamp(
-            -yaw /
-              0.32,
-            0,
-            1
-          );
+  yawScore =
+    clamp(
+      yaw /
+        0.32,
+      0,
+      1
+    );
 
-        pitchScore =
-          clamp(
-            -pitch /
-              0.25,
-            0,
-            1
-          );
-        break;
+  pitchScore =
+    clamp(
+      -pitch /
+        0.25,
+      0,
+      1
+    );
+  break;
+case "right_up":
+  yawScore =
+    clamp(
+      -yaw /
+        0.32,
+      0,
+      1
+    );
 
-      case "right_up":
-        yawScore =
-          clamp(
-            yaw /
-              0.32,
-            0,
-            1
-          );
+  pitchScore =
+    clamp(
+      -pitch /
+        0.25,
+      0,
+      1
+    );
+  break;
 
-        pitchScore =
-          clamp(
-            -pitch /
-              0.25,
-            0,
-            1
-          );
-        break;
+    
+case "left_down":
+  yawScore =
+    clamp(
+      yaw /
+        0.32,
+      0,
+      1
+    );
 
-      case "left_down":
-        yawScore =
-          clamp(
-            -yaw /
-              0.32,
-            0,
-            1
-          );
+  pitchScore =
+    clamp(
+      pitch /
+        0.25,
+      0,
+      1
+    );
+  break;
 
-        pitchScore =
-          clamp(
-            pitch /
-              0.25,
-            0,
-            1
-          );
-        break;
+      
+case "right_down":
+  yawScore =
+    clamp(
+      -yaw /
+        0.32,
+      0,
+      1
+    );
 
-      case "right_down":
-        yawScore =
-          clamp(
-            yaw /
-              0.32,
-            0,
-            1
-          );
-
-        pitchScore =
-          clamp(
-            pitch /
-              0.25,
-            0,
-            1
-          );
-        break;
+  pitchScore =
+    clamp(
+      pitch /
+        0.25,
+      0,
+      1
+    );
+  break;
 
       case "smile":
         yawScore =
