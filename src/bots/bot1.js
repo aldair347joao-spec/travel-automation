@@ -2405,81 +2405,98 @@ await this.heartbeat(
        */
 
       CHECK_AVAILABILITY:
-        async (
+  async (
+    app
+  ) => {
+
+    await this.heartbeat(
+      applicationId,
+      "navigator_check_availability"
+    );
+
+    const result =
+      await withTimeout(
+        this.site.checkAvailability(
           app
-        ) => {
+        ),
+        config.timeoutMs,
+        "Navigator availability check"
+      );
 
-          await this.heartbeat(
-            applicationId,
-            "navigator_check_availability"
-          );
+    /*
+     * Checkpoint oficial.
+     */
+    if (
+      result?.requiresUser ===
+      true
+    ) {
 
-          const result =
-            await withTimeout(
-              this.site.checkAvailability(
-                app
-              ),
-              config.timeoutMs,
-              "Navigator availability check"
-            );
+      return result;
+    }
 
-          if (
-            result?.requiresUser ===
-            true
-          ) {
+    const slots =
+      Array.isArray(
+        result?.slots
+      )
+        ? result.slots
+        : [];
 
-            return result;
-          }
+    /*
+     * =====================================================
+     * SEM VAGA
+     * =====================================================
+     *
+     * Só neste caso o Bot 2/Radar recebe a candidatura.
+     */
+    if (
+      !slots.length
+    ) {
 
-          const slots =
-            Array.isArray(
-              result?.slots
-            )
-              ? result.slots
-              : [];
+      return {
 
-          /*
-           * Sem vaga:
-           *
-           * Navigator não bloqueia esta candidatura.
-           * O Radar/Bot 2 assume.
-           */
+        success:
+          true,
 
-          if (
-            !slots.length
-          ) {
+        noAvailability:
+          true,
 
-            return {
-              success:
-                true,
+        handoffToRadar:
+          true
 
-              noAvailability:
-                true,
+      };
+    }
 
-              handoffToRadar:
-                true
-            };
-          }
+    /*
+     * =====================================================
+     * VAGA ENCONTRADA
+     * =====================================================
+     *
+     * O Bot 2 NÃO é chamado.
+     *
+     * Guardamos a vaga e devolvemos o controle
+     * ao Bot 1 para revalidação/seleção.
+     */
+    app.slot =
+      slots[0];
 
-          /*
-           * Escolhemos a primeira vaga que o Adapter
-           * considerou válida.
-           */
+    return {
 
-          app.slot =
-            slots[0];
+      success:
+        true,
 
-          return {
-            success:
-              true,
+      slotFound:
+        true,
 
-            slot:
-              app.slot,
+      handoffToBot1:
+        true,
 
-            slots
-          };
-        },
+      slot:
+        app.slot,
 
+      slots
+
+    };
+  },
 
       /*
        * ---------------------------------------------------
