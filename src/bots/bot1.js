@@ -2117,18 +2117,32 @@ await this.heartbeat(
         applicationId,
         "slot_locked"
       );
-
-
-       /*
+/*
  * ---------------------------------------------------
- * REVALIDAÇÃO REAL DO SLOT
+ * REVALIDAÇÃO + RECUPERAÇÃO INTELIGENTE DO SLOT
  * ---------------------------------------------------
  *
- * O slot recebido pelo Bot 1 precisa ser confirmado
- * novamente antes de iniciar o booking.
+ * O Navigator é responsável por recuperar uma vaga
+ * que desapareceu depois de ter sido encontrada pelo
+ * Bot 2/Radar.
  *
- * Se outro processo já tomou o slot, NÃO marcamos
- * SLOT_REVALIDATED.
+ * Fluxo:
+ *
+ * Bot 2 encontra vaga
+ *        ↓
+ * Bot 1 recebe vaga
+ *        ↓
+ * revalida
+ *        ↓
+ * vaga desapareceu?
+ *        ↓
+ * Navigator procura outra
+ *        ↓
+ * outra hora no mesmo dia
+ *        ↓
+ * outro dia
+ *        ↓
+ * se não houver nenhuma → Bot 2/Radar
  */
 
 if (
@@ -2145,6 +2159,12 @@ if (
       config.timeoutMs,
       "Slot revalidation"
     );
+
+  /*
+   * -------------------------------------------------
+   * SLOT PERDIDO
+   * -------------------------------------------------
+   */
 
   if (
     revalidated?.success ===
@@ -2164,51 +2184,344 @@ if (
       }
     );
 
-    application.status =
-      "waiting_for_slot";
+    application.bot1.lastAction =
+      "slot_lost_navigator";
 
     application.bot1.status =
-      "waiting";
-
-    application.bot1.lastAction =
-      "slot_lost";
-
-    application.bot2 =
-      application.bot2 || {};
-
-    application.bot2.status =
-      "monitoring";
-
-    application.bot2.monitoring =
-      true;
-
-    application.radar =
-      application.radar || {};
-
-    application.radar.enabled =
-      true;
+      "continuing";
 
     await application.save();
 
-    await this.releaseLock(
-      applicationId
-    );
+    /*
+     * -------------------------------------------------
+     * NAVIGATOR RECOVERY
+     * -------------------------------------------------
+     *
+     * O Navigator:
+     *
+     * 1. volta a verificar disponibilidade;
+     * 2. ignora a vaga perdida;
+     * 3. tenta outra hora no mesmo dia;
+     * 4. depois tenta outro dia;
+     * 5. só entrega ao Radar quando realmente
+     *    não existir alternativa.
+     */
 
-    return {
-      success:
-        false,
+    if (
+      this.navigator &&
+      typeof this.navigator.handleSlotLoss ===
+      "function"
+    ) {
 
-      slotLost:
-        true,
+      logger.warn(
+        "BOT1 SLOT LOST - NAVIGATOR RECOVERY STARTING",
+        {
+          applicationId:
+            applicationId,
 
-      reason:
-        revalidated.reason ||
-        "Selected VFS slot is no longer available.",
+          failedSlot:
+            application.slot || null,
 
-      application
-    };
+          reason:
+            revalidated.reason ||
+            "Selected slot is no longer available."
+        }
+      );
+
+      const recovery =
+        await withTimeout(
+          this.navigator.handleSlotLoss(
+            application,
+            application.slot
+          ),
+          config.timeoutMs * 5,
+          "Navigator slot recovery"
+        );
+
+      /*
+       * -------------------------------------------------
+       * RECUPEROU OUTRA VAGA
+       * -------------------------------------------------
+       */
+
+      if (
+        recovery?.slotRecovered ===
+        true
+      ) {
+
+        application.slot =
+          recovery.slot ||
+          application.slot;
+
+        application.status =
+          "continuing";
+
+        application.bot1.status =
+          "continuing";
+
+        application.bot1.lastAction =
+          "navigator_slot_recovered";
+
+        application.bot2 =
+          application.bot2 ||
+          {};
+
+        application.bot2.status =
+          "inactive";
+
+        application.bot2.monitoring =
+          false;
+
+        application.radar =
+          application.radar ||
+          {};
+
+        application.radar.enabled =
+          false;
+
+        await moveState(
+          application,
+          STATES.SLOT_REVALIDATED,
+          {
+            event:
+              "NAVIGATOR_SLOT_RECOVERED",
+
+            reason:
+              "Navigator recovered an alternative appointment slot.",
+
+            slot:
+              application.slot
+          }
+        );
+
+        await application.save();
+
+        await this.refreshLock(
+          applicationId
+        );
+
+        await this.heartbeat(
+          applicationId,
+          "navigator_slot_recovered"
+        );
+
+        logger.info(
+          "BOT1 NAVIGATOR RECOVERED ALTERNATIVE SLOT",
+          {
+            applicationId:
+              applicationId,
+
+            slot:
+              application.slot,
+
+            attempts:
+              recovery.attempts || 0
+          }
+        );
+
+        /*
+         * IMPORTANTE:
+         *
+         * Não fazemos return aqui.
+         *
+         * O Bot 1 continua o mesmo processo
+         * usando a nova vaga recuperada.
+         */
+      }
+
+      /*
+       * -------------------------------------------------
+       * CHECKPOINT OFICIAL
+       * -------------------------------------------------
+       */
+
+      else if (
+        recovery?.requiresUser ===
+        true
+      ) {
+
+        application.bot1.status =
+          "waiting";
+
+        application.bot1.lastAction =
+          "navigator_checkpoint";
+
+        await application.save();
+
+        await this.releaseLock(
+          applicationId
+        );
+
+        return {
+          success:
+            true,
+
+          requiresUser:
+            true,
+
+          officialCheckpoint:
+            true,
+
+          checkpoint:
+            recovery.checkpoint ||
+            null,
+
+          application
+        };
+      }
+
+      /*
+       * -------------------------------------------------
+       * SEM VAGA → RADAR/BOT 2
+       * -------------------------------------------------
+       */
+
+      else {
+
+        application.status =
+          "waiting_for_slot";
+
+        application.bot1.status =
+          "waiting";
+
+        application.bot1.lastAction =
+          "navigator_handoff_radar";
+
+        application.bot2 =
+          application.bot2 ||
+          {};
+
+        application.bot2.status =
+          "monitoring";
+
+        application.bot2.monitoring =
+          true;
+
+        application.radar =
+          application.radar ||
+          {};
+
+        application.radar.enabled =
+          true;
+
+        await application.save();
+
+        await this.releaseLock(
+          applicationId
+        );
+
+        logger.info(
+          "BOT1 NAVIGATOR HANDOFF TO RADAR",
+          {
+            applicationId:
+              applicationId,
+
+            reason:
+              recovery?.reason ||
+              "Navigator found no alternative appointment slot."
+          }
+        );
+
+        return {
+          success:
+            false,
+
+          slotLost:
+            true,
+
+          handoffToRadar:
+            true,
+
+          reason:
+            recovery?.reason ||
+            "No alternative appointment slot is currently available.",
+
+          application
+        };
+      }
+    }
+
+    /*
+     * -------------------------------------------------
+     * FALLBACK
+     * -------------------------------------------------
+     *
+     * Se por algum motivo o Navigator não existir,
+     * mantemos o comportamento seguro anterior.
+     */
+
+    else {
+
+      application.status =
+        "waiting_for_slot";
+
+      application.bot1.status =
+        "waiting";
+
+      application.bot1.lastAction =
+        "slot_lost";
+
+      application.bot2 =
+        application.bot2 ||
+        {};
+
+      application.bot2.status =
+        "monitoring";
+
+      application.bot2.monitoring =
+        true;
+
+      application.radar =
+        application.radar ||
+        {};
+
+      application.radar.enabled =
+        true;
+
+      await application.save();
+
+      await this.releaseLock(
+        applicationId
+      );
+
+      return {
+        success:
+          false,
+
+        slotLost:
+          true,
+
+        handoffToRadar:
+          true,
+
+        reason:
+          revalidated.reason ||
+          "Selected VFS slot is no longer available.",
+
+        application
+      };
+    }
   }
 }
+
+/*
+ * ---------------------------------------------------
+ * SLOT CONFIRMADO
+ * ---------------------------------------------------
+ */
+
+await moveState(
+  application,
+  STATES.SLOT_REVALIDATED,
+  {
+    event:
+      "SLOT_REVALIDATED"
+  }
+);
+
+await this.refreshLock(
+  applicationId
+);
 
 await moveState(
   application,
