@@ -3830,7 +3830,6 @@ if (permissionDescription) {
             scroll: false
         }
     );
-}
             } else {
                 state.selectedApplicationId =
                     null;
