@@ -6826,28 +6826,47 @@ async detectFacialPositionRequest() {
      */
 
     const buildSelector =
-      descriptor => {
-        if (
+  descriptor => {
+    if (
+      descriptor.id
+    ) {
+      const escapedId =
+        String(
           descriptor.id
-        ) {
-          return `#${CSS.escape(
-            descriptor.id
-          )}`;
-        }
-
-        if (
-          descriptor.name
-        ) {
-          return `[name="${String(
-            descriptor.name
-          ).replace(
+        )
+          .replace(
+            /\\/g,
+            "\\\\"
+          )
+          .replace(
             /"/g,
             '\\"'
-          )}"]`;
-        }
+          );
 
-        return null;
-      };
+      return `[id="${escapedId}"]`;
+    }
+
+    if (
+      descriptor.name
+    ) {
+      const escapedName =
+        String(
+          descriptor.name
+        )
+          .replace(
+            /\\/g,
+            "\\\\"
+          )
+          .replace(
+            /"/g,
+            '\\"'
+          );
+
+      return `[name="${escapedName}"]`;
+    }
+
+    return null;
+  };
 
     const countrySelector =
       buildSelector(
