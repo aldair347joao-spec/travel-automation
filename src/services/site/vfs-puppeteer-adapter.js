@@ -3314,19 +3314,25 @@ async getFacialCameraState() {
    */
 
   const prepared =
-    await prepareFromBuffer(
+  await prepareFromBuffer({
+    buffer:
       stored.buffer,
-      {
-        position,
-        label:
-          selected.label ||
-          stored.label ||
-          null,
-        videoId:
-          stored.videoId ||
-          null
-      }
-    );
+
+    videoId:
+      stored.videoId ||
+      selected.videoId ||
+      `application-${this.applicationId}-position-${position}`,
+
+    position,
+
+    filename:
+      stored.filename ||
+      "liveness.webm",
+
+    mimeType:
+      stored.mimeType ||
+      "video/webm"
+  });
 
   if (
     !prepared ||
