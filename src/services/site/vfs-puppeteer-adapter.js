@@ -4084,7 +4084,7 @@ if (
   video.ended
 ) {
   video.currentTime = 0;
-
+    }
         await video.play();
 
         camera.currentPosition =
