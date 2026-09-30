@@ -1496,33 +1496,6 @@ class OtpService {
           uids.length === 0
         ) {
 
-          const status =
-            client.mailbox;
-
-          const exists =
-            Number(
-              status?.exists ||
-              0
-            );
-
-
-          if (
-            exists > 0
-          ) {
-
-                        const start =
-              Math.max(
-                1,
-                exists -
-                this.maxMessagesPerPoll +
-                1
-              );
-
-
-            const end =
-              exists;
-
-
             try {
 
               /*
