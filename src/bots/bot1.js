@@ -1,10 +1,19 @@
 "use strict";
 
 const crypto = require("crypto");
-
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const Application = require("../models/application");
 const OtpService = require("../services/otp/otp-service");
 const FacialService = require("../services/facial/facial-service");
+const PassportStorageService = require(
+  "../services/passport/passport-storage-service"
+);
+
+const VfsNavigator = require(
+  "../services/vfs/vfs-navigator"
+);
 const {
   requireAutomationRelease
 } = require(
@@ -339,21 +348,45 @@ async function moveState(
 class Bot1 {
 
   constructor(
-    site
-  ) {
+  site
+) {
 
-    this.site =
-      site;
+  this.site =
+    site;
 
-    this.workerId =
-      crypto.randomUUID();
+  this.workerId =
+    crypto.randomUUID();
 
-    this.otp =
-      new OtpService();
+  this.otp =
+    new OtpService();
 
-    this.facial =
-      new FacialService();
-  }
+  this.facial =
+    new FacialService();
+
+  this.passportStorage =
+    new PassportStorageService();
+
+  /*
+   * Cada Bot 1 possui o seu próprio Navigator.
+   *
+   * O Navigator fica preso ao applicationId do
+   * adapter e nunca pode operar outra candidatura.
+   *
+   * Isto é importante quando começarmos a executar
+   * várias candidaturas simultaneamente.
+   */
+  this.navigator =
+    site?.applicationId
+      ? new VfsNavigator(
+          site,
+          {
+            applicationId:
+              site.applicationId,
+            logger
+          }
+        )
+      : null;
+}
 
   /*
    * =======================================================
@@ -1803,7 +1836,193 @@ await this.heartbeat(
     }
   }
 
+  /*
+   * =======================================================
+   * PREPARAR PASSAPORTE PARA O VFS
+   * =======================================================
+   *
+   * O sistema guarda o passaporte de forma criptografada
+   * no PassportDocument.
+   *
+   * O Puppeteer, por sua vez, precisa de um caminho físico
+   * para input.uploadFile().
+   *
+   * Aqui fazemos a ponte:
+   *
+   * MongoDB criptografado
+   *        ↓
+   * PassportStorageService
+   *        ↓
+   * Buffer
+   *        ↓
+   * ficheiro temporário
+   *        ↓
+   * VFS Puppeteer adapter
+   *
+   * O ficheiro temporário é removido depois do upload.
+   */
+  async preparePassportFile(
+    application
+  ) {
 
+    if (!application) {
+      throw new Error(
+        "Application is required to prepare passport."
+      );
+    }
+
+    const applicationId =
+      application._id?.toString?.();
+
+    if (!applicationId) {
+      throw new Error(
+        "Application ID is required to prepare passport."
+      );
+    }
+
+    const clientId =
+      application.client?._id?.toString?.() ||
+      application.client?.toString?.();
+
+    if (!clientId) {
+      throw new Error(
+        "Client ID is required to retrieve passport."
+      );
+    }
+
+    if (
+      !application.accountId
+    ) {
+      throw new Error(
+        "Application accountId is required to retrieve passport."
+      );
+    }
+
+    const stored =
+      await this.passportStorage.getForBot({
+        accountId:
+          application.accountId,
+
+        clientId
+      });
+
+    if (!stored) {
+      throw new Error(
+        "Verified passport document was not found for this application."
+      );
+    }
+
+    if (
+      !Buffer.isBuffer(
+        stored.buffer
+      ) ||
+      !stored.buffer.length
+    ) {
+      throw new Error(
+        "Stored passport document is empty."
+      );
+    }
+
+    const extension =
+      stored.mimeType ===
+      "image/png"
+        ? ".png"
+        : ".jpg";
+
+    const directory =
+      await fs.promises.mkdtemp(
+        path.join(
+          os.tmpdir(),
+          "travel-passport-"
+        )
+      );
+
+    const filePath =
+      path.join(
+        directory,
+        `passport-${applicationId}${extension}`
+      );
+
+    await fs.promises.writeFile(
+      filePath,
+      stored.buffer
+    );
+
+    return {
+      filePath,
+
+      directory,
+
+      documentId:
+        stored.documentId,
+
+      mimeType:
+        stored.mimeType,
+
+      originalName:
+        stored.originalName,
+
+      sha256:
+        stored.sha256
+    };
+  }
+
+
+  /*
+   * =======================================================
+   * LIMPAR PASSAPORTE TEMPORÁRIO
+   * =======================================================
+   */
+  async cleanupPassportFile(
+    passportFile
+  ) {
+
+    if (!passportFile) {
+      return;
+    }
+
+    try {
+
+      if (
+        passportFile.filePath
+      ) {
+        await fs.promises.rm(
+          passportFile.filePath,
+          {
+            force: true
+          }
+        );
+      }
+
+      if (
+        passportFile.directory
+      ) {
+        await fs.promises.rm(
+          passportFile.directory,
+          {
+            recursive: true,
+            force: true
+          }
+        );
+      }
+
+    } catch (
+      error
+    ) {
+
+      logger.warn(
+        "Temporary passport cleanup failed",
+        {
+          filePath:
+            passportFile.filePath ||
+            null,
+
+          error:
+            error.message
+        }
+      );
+    }
+  }
   /*
    * =======================================================
    * HANDLE SLOT
@@ -1906,96 +2125,115 @@ await this.heartbeat(
        * ---------------------------------------------------
        */
 
-      if (
-        typeof this.site.revalidateSlot ===
+                  if (
+        typeof this.site.uploadPassport ===
         "function"
       ) {
 
-        const revalidated =
-          await withTimeout(
-            this.site.revalidateSlot(
-              application.slot,
+        let passportFile =
+          null;
+
+        try {
+
+          passportFile =
+            await this.preparePassportFile(
               application
-            ),
-            config.timeoutMs,
-            "Slot revalidation"
-          );
+            );
 
-
-        if (
-          revalidated?.success ===
-          false
-        ) {
-
-          await moveState(
-            application,
-            STATES.SLOT_LOST,
+          logger.info(
+            "Verified passport prepared for VFS upload",
             {
-              event:
-                "SLOT_REVALIDATION_FAILED",
+              applicationId:
+                applicationId,
 
-              reason:
-                revalidated.reason ||
-                "Slot no longer available"
+              documentId:
+                passportFile.documentId,
+
+              mimeType:
+                passportFile.mimeType
             }
           );
 
+          const passport =
+            await withTimeout(
+              this.site.uploadPassport(
+                passportFile.filePath,
+                {
+                  applicationId,
 
-          application.status =
-            "waiting_for_slot";
+                  clientId:
+                    application.client?._id?.toString?.() ||
+                    application.client?.toString?.() ||
+                    null,
 
-          application.bot1.status =
-            "waiting";
+                  documentId:
+                    passportFile.documentId,
 
-          application.bot1.lastAction =
-            "slot_lost";
+                  mimeType:
+                    passportFile.mimeType,
 
+                  originalName:
+                    passportFile.originalName,
 
-          application.bot2 =
-            application.bot2 || {};
+                  sha256:
+                    passportFile.sha256
+                }
+              ),
+              config.timeoutMs,
+              "Passport upload"
+            );
 
+          if (
+            passport?.success ===
+              false &&
+            passport?.requiresUser !==
+              true
+          ) {
 
-          application.bot2.status =
-            "monitoring";
+            throw new Error(
+              passport.reason ||
+              "Passport upload failed"
+            );
+          }
 
-          application.bot2.monitoring =
-            true;
+          if (
+            passport?.requiresUser ===
+            true
+          ) {
 
+            application.bot1.status =
+              "waiting";
 
-          application.radar =
-            application.radar || {};
+            application.bot1.lastAction =
+              "passport_checkpoint";
 
+            await application.save();
 
-          application.radar.enabled =
-            true;
+            await this.releaseLock(
+              applicationId
+            );
 
+            return {
+              success:
+                true,
 
-          await application.save();
+              requiresUser:
+                true,
 
-          await this.releaseLock(
-            applicationId
+              officialCheckpoint:
+                true,
+
+              application
+            };
+          }
+
+        } finally {
+
+          await this.cleanupPassportFile(
+            passportFile
           );
-
-
-          return {
-
-            success:
-              false,
-
-            slotLost:
-              true,
-
-            reason:
-              revalidated.reason ||
-              "Slot no longer available",
-
-            application
-
-          };
         }
       }
-
-
       await moveState(
         application,
         STATES.SLOT_REVALIDATED,
