@@ -1401,42 +1401,57 @@ const AdminApp = (() => {
      * SELECT APPLICATION
      * ========================================================
      */
+     async function selectApplication(
+    applicationId,
+    options = {}
+) {
+    const shouldScroll =
+        options.scroll !== false;
 
-    async function selectApplication(
-        applicationId
-    ) {
-        state.selectedApplicationId =
-            applicationId;
+    state.selectedApplicationId =
+        applicationId;
 
-        updateSelectedId();
+    updateSelectedId();
 
-        try {
-            state.loadingDetails =
-                true;
+    try {
+        state.loadingDetails =
+            true;
 
-            const data =
-                await api(
-                    `/api/admin/applications/${encodeURIComponent(
-                        applicationId
-                    )}`
-                );
+        const data =
+            await api(
+                `/api/admin/applications/${encodeURIComponent(
+                    applicationId
+                )}`
+            );
 
-            state.selectedApplication =
-                {
-                    ...(data?.application ||
-                        {}),
-                    admin:
-                        data?.admin ||
-                        {},
-                    payment:
-                        data?.payment ||
-                        data?.application
-                            ?.payment ||
-                        {}
-                };
+        state.selectedApplication =
+            {
+                ...(data?.application ||
+                    {}),
+                admin:
+                    data?.admin ||
+                    {},
+                payment:
+                    data?.payment ||
+                    data?.application
+                        ?.payment ||
+                    {}
+            };
 
-            renderDetails();
+        renderDetails();
 
+        /*
+         * IMPORTANTE:
+         *
+         * O scroll só acontece quando
+         * o administrador seleciona uma
+         * candidatura manualmente.
+         *
+         * Durante o refresh automático,
+         * options.scroll === false e a
+         * posição atual da página é preservada.
+         */
+        if (shouldScroll) {
             const section =
                 $(
                     "#detailsSection"
@@ -1451,28 +1466,27 @@ const AdminApp = (() => {
                         "start"
                 });
             }
-
-        } catch (
-            error
-        ) {
-            console.error(
-                "[ADMIN] detail",
-                error
-            );
-
-            showToast(
-                "Erro",
-                error.message,
-                "error"
-            );
-
-        } finally {
-            state.loadingDetails =
-                false;
         }
+
+    } catch (
+        error
+    ) {
+        console.error(
+            "[ADMIN] detail",
+            error
+        );
+
+        showToast(
+            "Erro",
+            error.message,
+            "error"
+        );
+
+    } finally {
+        state.loadingDetails =
+            false;
     }
-
-
+}
     function updateSelectedId() {
         const element =
             $(
@@ -3810,9 +3824,13 @@ if (permissionDescription) {
                 );
 
             if (exists) {
-                await selectApplication(
-                    selectedId
-                );
+    await selectApplication(
+        selectedId,
+        {
+            scroll: false
+        }
+    );
+}
             } else {
                 state.selectedApplicationId =
                     null;
