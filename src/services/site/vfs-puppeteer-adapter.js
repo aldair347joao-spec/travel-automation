@@ -218,118 +218,120 @@ this.facialSession = {
    * BROWSER
    * ============================================================
    */
+
   async initialize() {
   if (
     this.initialized &&
-    this.page
+    this.page &&
+    !this.page.isClosed()
   ) {
     return true;
   }
 
-  const proxyHost =
-    String(
-      process.env.VFS_PROXY_HOST || ""
-    ).trim();
-
-  const proxyPort =
-    String(
-      process.env.VFS_PROXY_PORT || ""
-    ).trim();
-
-  const proxyUsername =
-    String(
-      process.env.VFS_PROXY_USERNAME || ""
-    ).trim();
-
-  const proxyPassword =
-    String(
-      process.env.VFS_PROXY_PASSWORD || ""
-    ).trim();
-
-  const proxyConfigured =
-    Boolean(
-      proxyHost &&
-      proxyPort
-    );
-
   /*
    * ============================================================
-   * CHROMIUM
+   * BRIGHT DATA BROWSER API
    * ============================================================
+   *
+   * O navegador Chromium deixa de ser iniciado no Render.
+   *
+   * O Puppeteer conecta-se ao navegador remoto da Bright Data
+   * através do endpoint WebSocket da zona scraping_browser1.
+   *
+   * Render
+   *   ↓
+   * Bot 1
+   *   ↓
+   * Puppeteer
+   *   ↓
+   * Bright Data Browser API
+   *   ↓
+   * VFS
    */
 
-   /*
- * ============================================================
- * INICIALIZAÇÃO SERIALIZADA DO CHROMIUM
- * ============================================================
- *
- * IMPORTANTE:
- *
- * A resolução do executável e o launch ficam dentro do mesmo
- * lock. Isso evita que Bot1 e Bot2 disputem simultaneamente
- * o /tmp/chromium.
- */
-const releaseChromiumLaunchLock =
-  await acquireChromiumLaunchLock();
+  const brightDataEnabled =
+    String(
+      process.env.BRIGHTDATA_BROWSER_ENABLED || ""
+    )
+      .trim()
+      .toLowerCase() === "true";
 
-let executablePath = null;
+  const brightDataHost =
+    String(
+      process.env.BRIGHTDATA_BROWSER_HOST ||
+        "brd.superproxy.io"
+    ).trim();
 
-try {
+  const brightDataPort =
+    String(
+      process.env.BRIGHTDATA_BROWSER_PORT ||
+        "9222"
+    ).trim();
 
-  /*
-   * ==========================================================
-   * RESOLVER EXECUTÁVEL
-   * ==========================================================
-   */
+  const brightDataUsername =
+    String(
+      process.env.BRIGHTDATA_BROWSER_USERNAME || ""
+    ).trim();
 
-  try {
-    executablePath =
-      await chromium.executablePath();
+  const brightDataPassword =
+    String(
+      process.env.BRIGHTDATA_BROWSER_PASSWORD || ""
+    ).trim();
 
-    const executableExists =
-      Boolean(
-        executablePath &&
-        fs.existsSync(
-          executablePath
-        )
+  if (!brightDataEnabled) {
+    const error =
+      new Error(
+        "Bright Data Browser API is disabled. Set BRIGHTDATA_BROWSER_ENABLED=true."
       );
 
-    logger.info(
-      "Chromium executable resolved",
+    error.code =
+      "BRIGHTDATA_BROWSER_DISABLED";
+
+    logger.error(
+      "Bright Data Browser API is disabled",
       {
         applicationId:
-          this.applicationId,
-
-        executablePath,
-
-        exists:
-          executableExists
+          this.applicationId
       }
     );
 
-    if (!executableExists) {
-      const error =
-        new Error(
-          `Chromium executable not found: ${
-            executablePath || "unknown"
-          }`
-        );
+    throw error;
+  }
 
-      error.code =
-        "CHROMIUM_EXECUTABLE_NOT_FOUND";
+  if (!brightDataUsername) {
+    const error =
+      new Error(
+        "BRIGHTDATA_BROWSER_USERNAME is required."
+      );
 
-      throw error;
-    }
-  } catch (error) {
+    error.code =
+      "BRIGHTDATA_BROWSER_USERNAME_REQUIRED";
+
     logger.error(
-      "Could not resolve Chromium executable",
+      "Bright Data Browser username is missing",
       {
         applicationId:
-          this.applicationId,
+          this.applicationId
+      }
+    );
 
-        error:
-          error?.message ||
-          String(error)
+    throw error;
+  }
+
+  if (!brightDataPassword) {
+    const error =
+      new Error(
+        "BRIGHTDATA_BROWSER_PASSWORD is required."
+      );
+
+    error.code =
+      "BRIGHTDATA_BROWSER_PASSWORD_REQUIRED";
+
+    logger.error(
+      "Bright Data Browser password is missing",
+      {
+        applicationId:
+          this.applicationId
       }
     );
 
@@ -337,293 +339,191 @@ try {
   }
 
   /*
-   * ==========================================================
-   * ARGUMENTOS DO CHROMIUM
-   * ==========================================================
+   * ============================================================
+   * WEBSOCKET DA BRIGHT DATA
+   * ============================================================
+   *
+   * A senha pode conter caracteres especiais.
+   *
+   * encodeURIComponent evita quebrar o formato:
+   *
+   * wss://username:password@host:port
    */
 
-  const chromiumArgs =
-    Array.isArray(
-      chromium.args
-    )
-      ? chromium.args
-      : [];
-
-  if (
-    proxyConfigured
-  ) {
-    chromiumArgs.push(
-      `--proxy-server=http://${proxyHost}:${proxyPort}`
+  const encodedUsername =
+    encodeURIComponent(
+      brightDataUsername
     );
-  }
 
-  const browserArgs =
-    await puppeteer.defaultArgs({
-      args: chromiumArgs,
-      headless: "shell"
-    });
+  const encodedPassword =
+    encodeURIComponent(
+      brightDataPassword
+    );
 
-  const requiredArgs = [
-    "--no-sandbox",
-    "--disable-setuid-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-gpu",
-    "--no-first-run",
-    "--no-zygote",
+  const browserWSEndpoint =
+    `wss://${encodedUsername}:${encodedPassword}` +
+    `@${brightDataHost}:${brightDataPort}`;
 
-    /*
-     * MediaStream / câmera
-     */
-    "--enable-media-stream",
-
-    /*
-     * Permitir acesso aos dispositivos de mídia.
-     */
-    "--use-fake-ui-for-media-stream"
-  ];
-
-  const finalArgs = [
-    ...new Set([
-      ...browserArgs,
-      ...requiredArgs,
-
-      /*
-       * ======================================================
-       * CÂMERA SIMULADA VFS — FLUXO AUTORIZADO
-       * ======================================================
-       */
-      ...(this.activeCameraY4mPath
-        ? [
-            `--use-file-for-fake-video-capture=${this.activeCameraY4mPath}`
-          ]
-        : [])
-    ])
-  ];
+  /*
+   * ============================================================
+   * LOG SEGURO
+   * ============================================================
+   *
+   * Nunca registramos:
+   *
+   * - password
+   * - API key
+   * - URL completa com credenciais
+   */
 
   logger.info(
-    "Launching Chromium",
+    "Connecting to Bright Data Browser API",
     {
       applicationId:
         this.applicationId,
 
-      headless:
-        "shell",
+      host:
+        brightDataHost,
 
-      argsCount:
-        finalArgs.length,
+      port:
+        brightDataPort,
 
-      proxyConfigured
+      username:
+        brightDataUsername,
+
+      remoteBrowser:
+        true
     }
   );
 
   /*
-   * ==========================================================
-   * LAUNCH
-   * ==========================================================
+   * ============================================================
+   * CONEXÃO PUPPETEER
+   * ============================================================
+   *
+   * Não usamos:
+   *
+   * puppeteer.launch()
+   *
+   * Não usamos:
+   *
+   * chromium.executablePath()
+   *
+   * O Chrome agora é gerenciado pela Bright Data.
    */
 
-  let launchAttempts = 0;
+  let connectAttempts = 0;
 
-  const maxLaunchAttempts = 4;
+  const maxConnectAttempts = 3;
 
   while (
     !this.browser &&
-    launchAttempts < maxLaunchAttempts
+    connectAttempts < maxConnectAttempts
   ) {
-    launchAttempts += 1;
+    connectAttempts += 1;
 
     try {
       logger.info(
-        "Chromium launch attempt",
+        "Bright Data Browser connection attempt",
         {
           applicationId:
             this.applicationId,
 
           attempt:
-            launchAttempts,
+            connectAttempts,
 
           maxAttempts:
-            maxLaunchAttempts,
-
-          executablePath
+            maxConnectAttempts
         }
       );
 
       this.browser =
-        await puppeteer.launch({
-          executablePath,
+        await puppeteer.connect({
+          browserWSEndpoint,
 
-          headless:
-            "shell",
+          defaultViewport: {
+            width: 1440,
+            height: 900
+          },
 
-          args:
-            finalArgs,
-
-          defaultViewport:
-            chromium.defaultViewport || {
-              width: 1440,
-              height: 900
-            },
-
-          timeout:
-            60000,
-
-          handleSIGINT:
-            false,
-
-          handleSIGTERM:
-            false,
-
-          handleSIGHUP:
-            false
+          protocolTimeout:
+            120000
         });
 
       logger.info(
-        "Chromium launched successfully",
+        "Bright Data Browser connected successfully",
         {
           applicationId:
             this.applicationId,
 
           attempt:
-            launchAttempts,
-
-          executablePath
+            connectAttempts
         }
       );
 
     } catch (error) {
-
       const errorMessage =
         error?.message ||
         String(error);
 
-      const isEtxtbsy =
-        error?.code === "ETXTBSY" ||
-        errorMessage.includes(
-          "ETXTBSY"
-        );
-
       logger.error(
-        "Chromium launch failed",
+        "Bright Data Browser connection failed",
         {
           applicationId:
             this.applicationId,
 
           attempt:
-            launchAttempts,
+            connectAttempts,
 
           maxAttempts:
-            maxLaunchAttempts,
-
-          executablePath,
+            maxConnectAttempts,
 
           code:
             error?.code || null,
 
           error:
-            errorMessage,
-
-          retryable:
-            isEtxtbsy
+            errorMessage
         }
       );
 
-      if (!isEtxtbsy) {
-        throw error;
-      }
+      this.browser =
+        null;
 
       if (
-        launchAttempts >=
-        maxLaunchAttempts
+        connectAttempts >=
+        maxConnectAttempts
       ) {
-        logger.error(
-          "Chromium launch exhausted after ETXTBSY retries",
-          {
-            applicationId:
-              this.applicationId,
-
-            attempts:
-              launchAttempts,
-
-            executablePath
-          }
-        );
-
         throw error;
       }
-
-      const retryDelay =
-        1500 * launchAttempts;
-
-      logger.warn(
-        "Chromium launch retry scheduled",
-        {
-          applicationId:
-            this.applicationId,
-
-          attempt:
-            launchAttempts + 1,
-
-          delayMs:
-            retryDelay,
-
-          reason:
-            "ETXTBSY"
-        }
-      );
 
       await new Promise(
         resolve =>
           setTimeout(
             resolve,
-            retryDelay
+            2000 * connectAttempts
           )
       );
     }
   }
 
-  /*
-   * Se chegou aqui, o browser precisa existir.
-   */
   if (!this.browser) {
     const error =
       new Error(
-        "Chromium launch finished without a browser instance."
+        "Bright Data Browser connection finished without a browser instance."
       );
 
     error.code =
-      "CHROMIUM_BROWSER_NOT_CREATED";
+      "BRIGHTDATA_BROWSER_NOT_CONNECTED";
 
     throw error;
   }
-
-} finally {
-
-  /*
-   * ==========================================================
-   * LIBERAR LOCK
-   * ==========================================================
-   */
-
-  releaseChromiumLaunchLock();
-}
-    
 
   /*
    * ============================================================
    * PÁGINA PRINCIPAL
    * ============================================================
    *
-   * IMPORTANTE:
-   *
-   * NÃO usamos:
-   *
-   * this.browser.createBrowserContext()
-   *
-   * porque @sparticuz/chromium documenta que a criação
-   * de um novo BrowserContext pode provocar Target.closed.
-   *
-   * Usamos diretamente o contexto padrão do navegador.
+   * Reutilizamos uma página existente da sessão quando houver.
    */
 
   try {
@@ -634,296 +534,362 @@ try {
       pages.length > 0
         ? pages[0]
         : await this.browser.newPage();
+
+    /*
+     * ==========================================================
+     * ESTADO DA CÂMERA / MEDIA
+     * ==========================================================
+     *
+     * O navegador agora está remoto.
+     *
+     * Portanto não usamos:
+     *
+     * --use-file-for-fake-video-capture
+     *
+     * O fluxo facial persistente existente continua utilizando
+     * o MediaStream criado dentro da própria página.
+     */
+
     try {
-  await this.page.evaluateOnNewDocument(() => {
-    window.__travelAutomationMediaState = {
-  requested: false,
-  opened: false,
-  active: false,
-  constraints: null,
-  requestedAt: null,
-  openedAt: null,
-  tracks: []
-};
-
-if (
-  navigator.mediaDevices &&
-  typeof navigator.mediaDevices.getUserMedia ===
-    "function"
-) {
-  const original =
-    navigator.mediaDevices.getUserMedia.bind(
-      navigator.mediaDevices
-    );
-
-  /*
-   * ============================================================
-   * CÂMERA PERSISTENTE VFS
-   * ============================================================
-   *
-   * O VFS chama getUserMedia() uma única vez.
-   *
-   * A partir daí mantemos o mesmo MediaStream.
-   *
-   * O conteúdo visual será controlado posteriormente pelo
-   * backend através da sessão facial persistente.
-   */
-
-  window.__travelAutomationCamera = {
-    initialized: false,
-    stream: null,
-
-    canvas: null,
-    context: null,
-
-    video: null,
-
-    width: 640,
-    height: 480,
-    fps: 30,
-
-    active: false,
-    streamId: null,
-
-    currentPosition: null,
-    currentVideoId: null,
-
-    lastFrameAt: null
-  };
-
-  window.__travelAutomationMediaState = {
-    requested: false,
-    opened: false,
-    active: false,
-    constraints: null,
-    requestedAt: null,
-    openedAt: null,
-    tracks: [],
-    error: null
-  };
-
-  navigator.mediaDevices.getUserMedia =
-    async function (constraints) {
-      const mediaState =
-        window.__travelAutomationMediaState;
-
-      mediaState.requested = true;
-      mediaState.constraints =
-        constraints || null;
-      mediaState.requestedAt =
-        new Date().toISOString();
-
-      /*
-       * Se a câmera persistente já foi criada,
-       * NÃO chamamos getUserMedia novamente.
-       *
-       * Isso é fundamental porque o VFS mantém
-       * a mesma sessão de câmera durante toda
-       * a etapa facial.
-       */
-      if (
-        window.__travelAutomationCamera.initialized &&
-        window.__travelAutomationCamera.stream
-      ) {
-        const stream =
-          window.__travelAutomationCamera.stream;
-
-        const tracks =
-          typeof stream.getTracks ===
-            "function"
-            ? stream.getTracks()
-            : [];
-
-        const videoTracks =
-          tracks.filter(
-            track =>
-              track &&
-              track.kind === "video"
-          );
-
-        mediaState.opened =
-          videoTracks.length > 0;
-
-        mediaState.active =
-          videoTracks.some(
-            track =>
-              track.readyState === "live"
-          );
-
-        mediaState.openedAt =
-          mediaState.openedAt ||
-          new Date().toISOString();
-
-        mediaState.tracks =
-          videoTracks.map(
-            track => ({
-              id: track.id || null,
-              kind: track.kind || null,
-              readyState:
-                track.readyState || null,
-              label:
-                track.label || null
-            })
-          );
-
-        return stream;
-      }
-
-      try {
-        /*
-         * Canvas permanente.
-         *
-         * Ele será a fonte visual do MediaStream.
-         */
-        const canvas =
-          document.createElement("canvas");
-
-        canvas.width = 640;
-        canvas.height = 480;
-
-        const context =
-          canvas.getContext("2d", {
-            alpha: false
-          });
-
-        if (!context) {
-          throw new Error(
-            "Não foi possível criar o contexto da câmera persistente."
-          );
-        }
+      await this.page.evaluateOnNewDocument(() => {
+        window.__travelAutomationMediaState = {
+          requested: false,
+          opened: false,
+          active: false,
+          constraints: null,
+          requestedAt: null,
+          openedAt: null,
+          tracks: []
+        };
 
         /*
-         * Frame inicial neutro.
-         *
-         * Posteriormente será substituído
-         * pelo vídeo da posição solicitada.
+         * ======================================================
+         * CÂMERA PERSISTENTE
+         * ======================================================
          */
-        context.fillStyle = "#000000";
-        context.fillRect(
-          0,
-          0,
-          canvas.width,
-          canvas.height
-        );
 
-        /*
-         * O stream permanece ligado ao canvas.
-         */
-        const stream =
-          canvas.captureStream(30);
-
-        if (
-          !stream ||
-          typeof stream.getTracks !==
-            "function"
-        ) {
-          throw new Error(
-            "Canvas não produziu um MediaStream válido."
-          );
-        }
-
-        const videoTracks =
-          stream
-            .getTracks()
-            .filter(
-              track =>
-                track &&
-                track.kind === "video"
-            );
-
-        if (!videoTracks.length) {
-          throw new Error(
-            "O MediaStream persistente não possui faixa de vídeo."
-          );
-        }
-
-        /*
-         * Guardamos tudo globalmente para que o Node
-         * possa controlar esta câmera posteriormente.
-         */
         window.__travelAutomationCamera = {
-          ...window.__travelAutomationCamera,
+          initialized: false,
 
-          initialized: true,
-          stream,
+          stream: null,
 
-          canvas,
-          context,
+          canvas: null,
+          context: null,
 
-          width: canvas.width,
-          height: canvas.height,
+          video: null,
+
+          width: 640,
+          height: 480,
           fps: 30,
 
-          active: true,
+          active: false,
 
-          streamId:
-            videoTracks[0].id || null,
+          streamId: null,
 
           currentPosition: null,
           currentVideoId: null,
 
-          lastFrameAt:
-            new Date().toISOString()
+          lastFrameAt: null
         };
 
-        mediaState.opened = true;
-        mediaState.active = true;
+        if (
+          navigator.mediaDevices &&
+          typeof navigator.mediaDevices.getUserMedia ===
+            "function"
+        ) {
+          const originalGetUserMedia =
+            navigator.mediaDevices.getUserMedia.bind(
+              navigator.mediaDevices
+            );
 
-        mediaState.openedAt =
-          new Date().toISOString();
+          navigator.mediaDevices.getUserMedia =
+            async function (constraints) {
+              const mediaState =
+                window.__travelAutomationMediaState;
 
-        mediaState.tracks =
-          videoTracks.map(
-            track => ({
-              id: track.id || null,
-              kind: track.kind || null,
-              readyState:
-                track.readyState || null,
-              label:
-                track.label ||
-                "Travel Automation Persistent Camera"
-            })
-          );
+              mediaState.requested =
+                true;
 
-        return stream;
-      } catch (error) {
-        mediaState.opened = false;
-        mediaState.active = false;
+              mediaState.constraints =
+                constraints || null;
 
-        mediaState.error =
-          error?.name ||
-          error?.message ||
-          "Persistent camera initialization failed";
+              mediaState.requestedAt =
+                new Date().toISOString();
 
-        throw error;
-      }
-              };
-  }
-  });
+              /*
+               * =================================================
+               * REUTILIZAR STREAM EXISTENTE
+               * =================================================
+               */
 
-  logger.info(
-    "VFS getUserMedia monitor installed",
-    {
-      applicationId:
-        this.applicationId
+              if (
+                window.__travelAutomationCamera.initialized &&
+                window.__travelAutomationCamera.stream
+              ) {
+                const existingStream =
+                  window.__travelAutomationCamera.stream;
+
+                const tracks =
+                  typeof existingStream.getTracks ===
+                    "function"
+                    ? existingStream.getTracks()
+                    : [];
+
+                const videoTracks =
+                  tracks.filter(
+                    track =>
+                      track &&
+                      track.kind === "video"
+                  );
+
+                mediaState.opened =
+                  videoTracks.length > 0;
+
+                mediaState.active =
+                  videoTracks.some(
+                    track =>
+                      track.readyState ===
+                      "live"
+                  );
+
+                mediaState.openedAt =
+                  mediaState.openedAt ||
+                  new Date().toISOString();
+
+                mediaState.tracks =
+                  videoTracks.map(
+                    track => ({
+                      id:
+                        track.id ||
+                        null,
+
+                      kind:
+                        track.kind ||
+                        null,
+
+                      readyState:
+                        track.readyState ||
+                        null,
+
+                      label:
+                        track.label ||
+                        null
+                    })
+                  );
+
+                return existingStream;
+              }
+
+              /*
+               * =================================================
+               * CRIAR STREAM PERSISTENTE
+               * =================================================
+               */
+
+              try {
+                const canvas =
+                  document.createElement(
+                    "canvas"
+                  );
+
+                canvas.width =
+                  640;
+
+                canvas.height =
+                  480;
+
+                const context =
+                  canvas.getContext(
+                    "2d",
+                    {
+                      alpha: false
+                    }
+                  );
+
+                if (!context) {
+                  throw new Error(
+                    "Could not create persistent camera canvas context."
+                  );
+                }
+
+                /*
+                 * Frame inicial.
+                 */
+
+                context.fillStyle =
+                  "#000000";
+
+                context.fillRect(
+                  0,
+                  0,
+                  canvas.width,
+                  canvas.height
+                );
+
+                /*
+                 * Stream persistente.
+                 */
+
+                const stream =
+                  canvas.captureStream(
+                    30
+                  );
+
+                if (
+                  !stream ||
+                  typeof stream.getTracks !==
+                    "function"
+                ) {
+                  throw new Error(
+                    "Canvas did not produce a valid MediaStream."
+                  );
+                }
+
+                const videoTracks =
+                  stream
+                    .getTracks()
+                    .filter(
+                      track =>
+                        track &&
+                        track.kind ===
+                          "video"
+                    );
+
+                if (
+                  !videoTracks.length
+                ) {
+                  throw new Error(
+                    "Persistent MediaStream does not contain a video track."
+                  );
+                }
+
+                const streamId =
+                  videoTracks[0].id ||
+                  null;
+
+                window.__travelAutomationCamera = {
+                  initialized:
+                    true,
+
+                  stream,
+
+                  canvas,
+                  context,
+
+                  video:
+                    null,
+
+                  width:
+                    canvas.width,
+
+                  height:
+                    canvas.height,
+
+                  fps:
+                    30,
+
+                  active:
+                    true,
+
+                  streamId,
+
+                  currentPosition:
+                    null,
+
+                  currentVideoId:
+                    null,
+
+                  lastFrameAt:
+                    new Date().toISOString()
+                };
+
+                mediaState.opened =
+                  true;
+
+                mediaState.active =
+                  true;
+
+                mediaState.openedAt =
+                  new Date().toISOString();
+
+                mediaState.tracks =
+                  videoTracks.map(
+                    track => ({
+                      id:
+                        track.id ||
+                        null,
+
+                      kind:
+                        track.kind ||
+                        null,
+
+                      readyState:
+                        track.readyState ||
+                        null,
+
+                      label:
+                        track.label ||
+                        "Travel Automation Persistent Camera"
+                    })
+                  );
+
+                return stream;
+
+              } catch (error) {
+                /*
+                 * Mantemos a função original como último recurso.
+                 *
+                 * Isto evita que uma falha de inicialização
+                 * silenciosa quebre completamente o VFS.
+                 */
+
+                mediaState.opened =
+                  false;
+
+                mediaState.active =
+                  false;
+
+                mediaState.error =
+                  error?.message ||
+                  "Persistent camera initialization failed";
+
+                try {
+                  return await originalGetUserMedia(
+                    constraints
+                  );
+                } catch {
+                  throw error;
+                }
+              }
+            };
+        }
+      });
+
+      logger.info(
+        "Bright Data VFS persistent camera layer installed",
+        {
+          applicationId:
+            this.applicationId
+        }
+      );
+
+    } catch (error) {
+      logger.warn(
+        "Could not install Bright Data camera layer",
+        {
+          applicationId:
+            this.applicationId,
+
+          error:
+            error?.message ||
+            String(error)
+        }
+      );
     }
-  );
-} catch (error) {
-  logger.warn(
-    "Could not install getUserMedia monitor",
-    {
-      applicationId:
-        this.applicationId,
 
-      error:
-        error?.message ||
-        String(error)
-    }
-  );
-}
   } catch (error) {
     logger.error(
-      "Failed to create Chromium page",
+      "Failed to create Bright Data browser page",
       {
         applicationId:
           this.applicationId,
@@ -935,77 +901,70 @@ if (
     );
 
     try {
-      await this.browser.close();
+      await this.browser.disconnect();
     } catch {}
 
     this.browser =
       null;
 
+    this.page =
+      null;
+
     throw error;
   }
 
-  this.context =
-    this.page.browserContext();
-    /*
- * ============================================================
- * MEDIA PERMISSIONS
- * ============================================================
- */
-
-try {
-  const cameraOrigin =
-    new URL(VFS_BASE_URL).origin;
-
-  await this.context.overridePermissions(
-    cameraOrigin,
-    [
-      "camera",
-      "microphone"
-    ]
-  );
-
-  logger.info(
-    "VFS camera/microphone permissions configured",
-    {
-      applicationId:
-        this.applicationId,
-
-      origin:
-        cameraOrigin
-    }
-  );
-} catch (error) {
-  logger.warn(
-    "Could not configure VFS media permissions",
-    {
-      applicationId:
-        this.applicationId,
-
-      error:
-        error?.message ||
-        String(error)
-    }
-  );
-}
-
   /*
    * ============================================================
-   * PROXY AUTHENTICATION
+   * CONTEXTO
    * ============================================================
    */
 
-  if (
-    proxyConfigured &&
-    proxyUsername &&
-    proxyPassword
-  ) {
-    await this.page.authenticate({
-      username:
-        proxyUsername,
+  this.context =
+    this.page.browserContext();
 
-      password:
-        proxyPassword
-    });
+  /*
+   * ============================================================
+   * PERMISSÕES DE CÂMERA / MICROFONE
+   * ============================================================
+   */
+
+  try {
+    const cameraOrigin =
+      new URL(
+        VFS_BASE_URL
+      ).origin;
+
+    await this.context.overridePermissions(
+      cameraOrigin,
+      [
+        "camera",
+        "microphone"
+      ]
+    );
+
+    logger.info(
+      "VFS camera/microphone permissions configured on Bright Data Browser",
+      {
+        applicationId:
+          this.applicationId,
+
+        origin:
+          cameraOrigin
+      }
+    );
+
+  } catch (error) {
+    logger.warn(
+      "Could not configure VFS media permissions on Bright Data Browser",
+      {
+        applicationId:
+          this.applicationId,
+
+        error:
+          error?.message ||
+          String(error)
+      }
+    );
   }
 
   /*
@@ -1024,63 +983,7 @@ try {
 
   /*
    * ============================================================
-   * RESIDENTIAL PROXY TEST
-   * ============================================================
-   */
-
-  if (
-    proxyConfigured &&
-    process.env.VFS_PROXY_TEST ===
-      "true"
-  ) {
-    try {
-      await this.page.goto(
-        "https://ipapi.co/json/",
-        {
-          waitUntil:
-            "domcontentloaded",
-
-          timeout:
-            DEFAULT_TIMEOUT
-        }
-      );
-
-      const proxyTestBody =
-        await this.page.evaluate(
-          () =>
-            document.body
-              ?.innerText ||
-            ""
-        );
-
-      logger.info(
-        "VFS proxy test completed",
-        {
-          applicationId:
-            this.applicationId,
-
-          response:
-            proxyTestBody
-        }
-      );
-    } catch (error) {
-      logger.warn(
-        "VFS proxy test failed",
-        {
-          applicationId:
-            this.applicationId,
-
-          error:
-            error?.message ||
-            String(error)
-        }
-      );
-    }
-  }
-
-  /*
-   * ============================================================
-   * FINAL STATE
+   * ESTADO FINAL
    * ============================================================
    */
 
@@ -1091,18 +994,24 @@ try {
     "INITIALIZED";
 
   logger.info(
-    "VFS Puppeteer adapter initialized with Sparticuz Chromium",
+    "VFS Puppeteer adapter initialized with Bright Data Browser API",
     {
       applicationId:
         this.applicationId,
 
-      executablePath
+      remoteBrowser:
+        true,
+
+      host:
+        brightDataHost,
+
+      port:
+        brightDataPort
     }
   );
 
   return true;
 }
-
   async ensurePage() {
     if (
       !this.initialized ||
