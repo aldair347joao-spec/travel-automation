@@ -143,12 +143,12 @@
     minBrightness: 35,
     maxBrightness: 235,
 
-    stableFramesRequired: 5,
-    detectionIntervalMs: 120,
+    stableFramesRequired: 4,
+detectionIntervalMs: 120,
 
-    positionScoreThreshold: 0.64,
-    overallScoreThreshold: 0.62,
-    smileThreshold: 0.42,
+positionScoreThreshold: 0.60,
+overallScoreThreshold: 0.62,
+smileThreshold: 0.42,
 
     positionTimeoutMs: 15000,
 
