@@ -230,6 +230,9 @@ this.facialSession = {
     this.radarKeepAliveBusy = false;
 
     this.radarKeepAliveLastAt = null;
+    this.radarSessionHealthy = true;
+this.radarSessionHealthCheckedAt = null;
+this.radarSessionRecoveryRequired = false;
   }
 
   /*
@@ -1356,6 +1359,253 @@ async startBrightDataLoginSession() {
     throw error;
   }
 }
+   /*
+   * ============================================================
+   * SAÚDE DA SESSÃO VFS DO RADAR
+   * ============================================================
+   *
+   * Esta verificação NÃO fecha o browser.
+   *
+   * Apenas verifica se a página continua viva e se a VFS
+   * aparenta continuar autenticada.
+   *
+   * Se a sessão tiver expirado, marcamos que é necessária
+   * recuperação. O Bot2 fará a recuperação de forma controlada
+   * antes da próxima consulta de disponibilidade.
+   */
+
+  async checkRadarSessionHealth() {
+    const page =
+      this.page;
+
+    this.radarSessionHealthCheckedAt =
+      new Date();
+
+    if (
+      !page ||
+      page.isClosed()
+    ) {
+      this.radarSessionHealthy =
+        false;
+
+      this.radarSessionRecoveryRequired =
+        true;
+
+      return {
+        healthy: false,
+        recoveryRequired: true,
+        reason: "PAGE_UNAVAILABLE"
+      };
+    }
+
+    try {
+      const snapshot =
+        await page.evaluate(
+          () => {
+            const bodyText =
+              (
+                document.body?.innerText ||
+                ""
+              )
+                .replace(
+                  /\s+/g,
+                  " "
+                )
+                .trim()
+                .toLowerCase();
+
+            const loginForm =
+              Boolean(
+                document.querySelector(
+                  "input[type='password']"
+                )
+              ) &&
+              Boolean(
+                document.querySelector(
+                  "input[type='email'], input[name*='email' i], input[name*='username' i]"
+                )
+              );
+
+            const sessionExpiredTerms = [
+              "session expired",
+              "session has expired",
+              "your session has expired",
+              "session timeout",
+              "session timed out",
+              "login again",
+              "please login again",
+              "please log in again",
+              "sign in again",
+              "authentication expired",
+              "authentication required"
+            ];
+
+            const expired =
+              sessionExpiredTerms.some(
+                term =>
+                  bodyText.includes(term)
+              );
+
+            return {
+              url:
+                window.location.href,
+
+              bodyText:
+                bodyText.slice(
+                  0,
+                  4000
+                ),
+
+              loginForm,
+
+              expired
+            };
+          }
+        );
+
+      const url =
+        String(
+          snapshot?.url ||
+          ""
+        ).toLowerCase();
+
+      const atLogin =
+        url.includes(
+          "/login"
+        );
+
+      const sessionExpired =
+        Boolean(
+          snapshot?.expired
+        );
+
+      const loginForm =
+        Boolean(
+          snapshot?.loginForm
+        );
+
+      /*
+       * A URL /login ou um formulário de login acompanhado
+       * de uma mensagem de sessão expirada significa que
+       * precisamos recuperar.
+       */
+      if (
+        atLogin ||
+        sessionExpired
+      ) {
+        this.radarSessionHealthy =
+          false;
+
+        this.radarSessionRecoveryRequired =
+          true;
+
+        logger.warn(
+          "VFS radar session requires recovery",
+          {
+            applicationId:
+              this.applicationId,
+
+            url:
+              snapshot?.url ||
+              null,
+
+            reason:
+              atLogin
+                ? "LOGIN_PAGE"
+                : "SESSION_EXPIRED"
+          }
+        );
+
+        return {
+          healthy: false,
+          recoveryRequired: true,
+          reason:
+            atLogin
+              ? "LOGIN_PAGE"
+              : "SESSION_EXPIRED"
+        };
+      }
+
+      /*
+       * Um formulário de login isolado não é suficiente para
+       * declarar a sessão expirada. Evitamos falsos positivos.
+       */
+      if (
+        loginForm &&
+        !this.isAuthenticatedState()
+      ) {
+        this.radarSessionHealthy =
+          false;
+
+        this.radarSessionRecoveryRequired =
+          true;
+
+        return {
+          healthy: false,
+          recoveryRequired: true,
+          reason: "LOGIN_FORM_DETECTED"
+        };
+      }
+
+      this.radarSessionHealthy =
+        true;
+
+      this.radarSessionRecoveryRequired =
+        false;
+
+      return {
+        healthy: true,
+        recoveryRequired: false,
+        reason: "SESSION_ACTIVE"
+      };
+
+    } catch (error) {
+      /*
+       * Uma falha temporária de avaliação não significa
+       * automaticamente que a sessão VFS morreu.
+       *
+       * Marcamos recuperação apenas se a própria página
+       * estiver indisponível.
+       */
+      const pageUnavailable =
+        !this.page ||
+        this.page.isClosed();
+
+      this.radarSessionHealthy =
+        !pageUnavailable;
+
+      this.radarSessionRecoveryRequired =
+        pageUnavailable;
+
+      logger.warn(
+        "VFS radar session health check failed",
+        {
+          applicationId:
+            this.applicationId,
+
+          error:
+            error?.message ||
+            String(error),
+
+          recoveryRequired:
+            pageUnavailable
+        }
+      );
+
+      return {
+        healthy:
+          !pageUnavailable,
+
+        recoveryRequired:
+          pageUnavailable,
+
+        reason:
+          pageUnavailable
+            ? "PAGE_UNAVAILABLE"
+            : "HEALTH_CHECK_ERROR"
+      };
+    }
+  } 
     /*
    * ============================================================
    * RADAR KEEP-ALIVE
@@ -1455,6 +1705,34 @@ async startBrightDataLoginSession() {
           steps: 3
         }
       );
+            /*
+       * Depois da atividade física, verificamos a sessão.
+       *
+       * O mouse mantém a atividade.
+       * Esta verificação confirma se a autenticação continua
+       * válida.
+       */
+
+      const health =
+        await this.checkRadarSessionHealth();
+
+      if (
+        !health.healthy &&
+        health.recoveryRequired
+      ) {
+        logger.warn(
+          "VFS radar keep-alive detected session recovery requirement",
+          {
+            applicationId:
+              this.applicationId,
+
+            reason:
+              health.reason
+          }
+        );
+
+        return false;
+      }
 
       this.radarKeepAliveLastAt =
         new Date();
