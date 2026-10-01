@@ -1040,99 +1040,223 @@ smileThreshold: 0.42,
   }
 
   function calculatePose(
-    landmarks
+  landmarks
+) {
+  const nose =
+    landmark(
+      landmarks,
+      30
+    );
+
+  const leftEye =
+    landmark(
+      landmarks,
+      36
+    );
+
+  const rightEye =
+    landmark(
+      landmarks,
+      45
+    );
+
+  const forehead =
+    landmark(
+      landmarks,
+      27
+    );
+
+  const chin =
+    landmark(
+      landmarks,
+      8
+    );
+
+  const jawLeft =
+    landmark(
+      landmarks,
+      0
+    );
+
+  const jawRight =
+    landmark(
+      landmarks,
+      16
+    );
+
+  if (
+    !nose ||
+    !leftEye ||
+    !rightEye ||
+    !forehead ||
+    !chin
   ) {
-    const nose =
-      landmark(
-        landmarks,
-        30
-      );
-
-    const leftEye =
-      landmark(
-        landmarks,
-        36
-      );
-
-    const rightEye =
-      landmark(
-        landmarks,
-        45
-      );
-
-    const forehead =
-      landmark(
-        landmarks,
-        27
-      );
-
-    const chin =
-      landmark(
-        landmarks,
-        8
-      );
-
-    if (
-      !nose ||
-      !leftEye ||
-      !rightEye ||
-      !forehead ||
-      !chin
-    ) {
-      return {
-        yaw: 0,
-        pitch: 0,
-        roll: 0
-      };
-    }
-
-    const eyeCenterX =
-      (
-        leftEye.x +
-        rightEye.x
-      ) / 2;
-
-    const eyeCenterY =
-      (
-        leftEye.y +
-        rightEye.y
-      ) / 2;
-
-    const eyeDistance =
-      distance(
-        leftEye,
-        rightEye
-      ) || 1;
-
-    const faceHeight =
-      distance(
-        forehead,
-        chin
-      ) || 1;
-
     return {
-      yaw:
-        (
-          nose.x -
-          eyeCenterX
-        ) /
-        eyeDistance,
-
-      pitch:
-        (
-          nose.y -
-          eyeCenterY
-        ) /
-        faceHeight,
-
-      roll:
-        (
-          rightEye.y -
-          leftEye.y
-        ) /
-        eyeDistance
+      yaw: 0,
+      pitch: 0,
+      roll: 0
     };
   }
+
+  /*
+   * ==========================================================
+   * EIXO DOS OLHOS
+   * ==========================================================
+   *
+   * Usado apenas para confirmar que o rosto está de frente
+   * e para o sorriso/frontal.
+   *
+   * Não será usado como referência principal para os
+   * movimentos de cabeça.
+   */
+
+  const eyeCenterX =
+    (
+      leftEye.x +
+      rightEye.x
+    ) / 2;
+
+  const eyeCenterY =
+    (
+      leftEye.y +
+      rightEye.y
+    ) / 2;
+
+  const eyeDistance =
+    distance(
+      leftEye,
+      rightEye
+    ) || 1;
+
+  /*
+   * ==========================================================
+   * EIXO DA CABEÇA
+   * ==========================================================
+   *
+   * Para esquerda/direita usamos o nariz em relação
+   * ao centro da mandíbula.
+   *
+   * Isso reduz a influência de simplesmente mover os olhos.
+   */
+
+  let headCenterX;
+
+  let headWidth;
+
+  if (
+    jawLeft &&
+    jawRight
+  ) {
+    headCenterX =
+      (
+        jawLeft.x +
+        jawRight.x
+      ) / 2;
+
+    headWidth =
+      distance(
+        jawLeft,
+        jawRight
+      ) || eyeDistance * 2.2;
+  } else {
+    headCenterX =
+      (
+        forehead.x +
+        chin.x
+      ) / 2;
+
+    headWidth =
+      eyeDistance * 2.2;
+  }
+
+  /*
+   * ==========================================================
+   * YAW DA CABEÇA
+   * ==========================================================
+   *
+   * Positivo = esquerda
+   * Negativo = direita
+   *
+   * O nariz é comparado com o centro real da cabeça,
+   * e não somente com o centro dos olhos.
+   */
+
+  const yaw =
+    (
+      nose.x -
+      headCenterX
+    ) /
+    (
+      headWidth / 2
+    );
+
+  /*
+   * ==========================================================
+   * PITCH DA CABEÇA
+   * ==========================================================
+   *
+   * Usamos a posição do nariz dentro do eixo vertical
+   * forehead -> chin.
+   *
+   * Isto é muito mais apropriado para detectar:
+   *
+   *     "levante a cabeça"
+   *     "baixe a cabeça"
+   *
+   * do que simplesmente acompanhar o deslocamento dos olhos.
+   */
+
+  const faceHeight =
+    distance(
+      forehead,
+      chin
+    ) || 1;
+
+  const faceCenterY =
+    (
+      forehead.y +
+      chin.y
+    ) / 2;
+
+  const pitch =
+    (
+      nose.y -
+      faceCenterY
+    ) /
+    faceHeight;
+
+  /*
+   * ==========================================================
+   * ROLL
+   * ==========================================================
+   *
+   * Mantemos os olhos apenas para determinar a inclinação
+   * lateral da cabeça.
+   */
+
+  const roll =
+    (
+      rightEye.y -
+      leftEye.y
+    ) /
+    eyeDistance;
+
+  /*
+   * eyeCenterX / eyeCenterY continuam calculados porque
+   * representam a referência frontal do rosto.
+   *
+   * O movimento das outras posições NÃO depende deles.
+   */
+
+  void eyeCenterX;
+  void eyeCenterY;
+
+  return {
+    yaw,
+    pitch,
+    roll
+  };
+}
 
   function smileScore(
     expressions
