@@ -1526,27 +1526,6 @@ async startBrightDataLoginSession() {
         };
       }
 
-      /*
-       * Um formulário de login isolado não é suficiente para
-       * declarar a sessão expirada. Evitamos falsos positivos.
-       */
-      if (
-        loginForm &&
-        !this.isAuthenticatedState()
-      ) {
-        this.radarSessionHealthy =
-          false;
-
-        this.radarSessionRecoveryRequired =
-          true;
-
-        return {
-          healthy: false,
-          recoveryRequired: true,
-          reason: "LOGIN_FORM_DETECTED"
-        };
-      }
-
       this.radarSessionHealthy =
         true;
 
