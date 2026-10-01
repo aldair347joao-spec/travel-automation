@@ -1341,315 +1341,485 @@ smileThreshold: 0.42,
    * AVALIAÇÃO
    * ==========================================================
    */
+   function evaluate(
+  position,
+  pose,
+  smile,
+  area,
+  brightness,
+  detectorScore
+) {
+  const yaw =
+    Number(
+      pose?.yaw || 0
+    );
 
-  function evaluate(
-    position,
-    pose,
-    smile,
-    area,
-    brightness,
-    detectorScore
-  ) {
-    const yaw =
+  const pitch =
+    Number(
+      pose?.pitch || 0
+    );
+
+  const roll =
+    Math.abs(
       Number(
-        pose?.yaw || 0
-      );
-
-    const pitch =
-      Number(
-        pose?.pitch || 0
-      );
-
-    const roll =
-      Math.abs(
-        Number(
-          pose?.roll || 0
-        )
-      );
-
-    let yawScore = 0;
-    let pitchScore = 0;
-    let smilePositionScore = 0;
-
-    switch (position.id) {
-      case "frontal":
-        yawScore =
-          1 -
-          clamp(
-            Math.abs(yaw) /
-              0.30,
-            0,
-            1
-          );
-
-        pitchScore =
-          1 -
-          clamp(
-            Math.abs(pitch) /
-              0.28,
-            0,
-            1
-          );
-        break;
-
-      case "left":
-  yawScore =
-    clamp(
-      yaw /
-        0.35,
-      0,
-      1
+        pose?.roll || 0
+      )
     );
 
-  pitchScore =
-    1 -
-    clamp(
-      Math.abs(pitch) /
-        0.35,
-      0,
-      1
-    );
-  break;
+  let yawScore = 0;
+  let pitchScore = 0;
+  let smilePositionScore = 0;
 
-      case "right":
-  yawScore =
-    clamp(
-      -yaw /
-        0.35,
-      0,
-      1
-    );
+  /*
+   * ==========================================================
+   * AVALIAÇÃO DAS POSIÇÕES
+   * ==========================================================
+   *
+   * IMPORTANTE:
+   *
+   * - esquerda/direita = movimento da CABEÇA
+   * - cima/baixo = movimento da CABEÇA
+   * - diagonais = movimento da CABEÇA
+   *
+   * Não exigimos que os olhos acompanhem o movimento.
+   *
+   * Os valores foram mantidos suaves para não obrigar
+   * o cliente a fazer movimentos exagerados.
+   */
 
-  pitchScore =
-    1 -
-    clamp(
-      Math.abs(pitch) /
-        0.35,
-      0,
-      1
-    );
-  break;
+  switch (position.id) {
 
-      case "up":
-        pitchScore =
-          clamp(
-            -pitch /
-              0.28,
-            0,
-            1
-          );
+    /*
+     * --------------------------------------------------------
+     * FRONTAL
+     * --------------------------------------------------------
+     *
+     * Aqui queremos o rosto voltado para a câmera.
+     *
+     * Não exigimos uma precisão exagerada.
+     */
 
-        yawScore =
-          1 -
-          clamp(
-            Math.abs(yaw) /
-              0.35,
-            0,
-            1
-          );
-        break;
+    case "frontal":
 
-      case "down":
-        pitchScore =
-          clamp(
-            pitch /
-              0.28,
-            0,
-            1
-          );
-
-        yawScore =
-          1 -
-          clamp(
-            Math.abs(yaw) /
-              0.35,
-            0,
-            1
-          );
-        break;
-
-      case "left_up":
-  yawScore =
-    clamp(
-      yaw /
-        0.32,
-      0,
-      1
-    );
-
-  pitchScore =
-    clamp(
-      -pitch /
-        0.25,
-      0,
-      1
-    );
-  break;
-case "right_up":
-  yawScore =
-    clamp(
-      -yaw /
-        0.32,
-      0,
-      1
-    );
-
-  pitchScore =
-    clamp(
-      -pitch /
-        0.25,
-      0,
-      1
-    );
-  break;
-
-    
-case "left_down":
-  yawScore =
-    clamp(
-      yaw /
-        0.32,
-      0,
-      1
-    );
-
-  pitchScore =
-    clamp(
-      pitch /
-        0.25,
-      0,
-      1
-    );
-  break;
-
-      
-case "right_down":
-  yawScore =
-    clamp(
-      -yaw /
-        0.32,
-      0,
-      1
-    );
-
-  pitchScore =
-    clamp(
-      pitch /
-        0.25,
-      0,
-      1
-    );
-  break;
-
-      case "smile":
-        yawScore =
-          1 -
-          clamp(
-            Math.abs(yaw) /
-              0.35,
-            0,
-            1
-          );
-
-        pitchScore =
-          1 -
-          clamp(
-            Math.abs(pitch) /
-              0.35,
-            0,
-            1
-          );
-
-        smilePositionScore =
-          clamp(
-            smile /
-              CONFIG.smileThreshold,
-            0,
-            1
-          );
-        break;
-
-      default:
-        yawScore = 1;
-        pitchScore = 1;
-    }
-
-    const rollScore =
-      1 -
-      clamp(
-        roll /
-          0.30,
-        0,
-        1
-      );
-
-    const detector =
-      clamp(
-        detectorScore,
-        0,
-        1
-      );
-
-    const size =
-      faceSizeScore(
-        area
-      );
-
-    const light =
-      brightnessScore(
-        brightness
-      );
-
-    let score;
-
-    if (
-      position.id === "smile"
-    ) {
-      score =
-        detector * 0.20 +
-        yawScore * 0.12 +
-        pitchScore * 0.12 +
-        rollScore * 0.08 +
-        smilePositionScore *
-          0.32 +
-        size * 0.08 +
-        light * 0.08;
-    } else {
-      score =
-        detector * 0.20 +
-        yawScore * 0.27 +
-        pitchScore * 0.22 +
-        rollScore * 0.10 +
-        size * 0.10 +
-        light * 0.11;
-    }
-
-    return {
-      score:
+      yawScore =
+        1 -
         clamp(
-          score,
+          Math.abs(yaw) /
+            0.38,
           0,
           1
-        ),
+        );
 
-      yawScore,
-      pitchScore,
-      rollScore,
+      pitchScore =
+        1 -
+        clamp(
+          Math.abs(pitch) /
+            0.34,
+          0,
+          1
+        );
 
-      smileScore:
-        smilePositionScore,
+      break;
 
-      faceSizeScore:
-        size,
 
-      brightnessScore:
-        light,
+    /*
+     * --------------------------------------------------------
+     * ESQUERDA
+     * --------------------------------------------------------
+     *
+     * Movimento da cabeça para a esquerda.
+     */
 
-      detectionScore:
-        detector
-    };
+    case "left":
+
+      yawScore =
+        clamp(
+          yaw /
+            0.42,
+          0,
+          1
+        );
+
+      pitchScore =
+        1 -
+        clamp(
+          Math.abs(pitch) /
+            0.40,
+          0,
+          1
+        );
+
+      break;
+
+
+    /*
+     * --------------------------------------------------------
+     * DIREITA
+     * --------------------------------------------------------
+     *
+     * Movimento da cabeça para a direita.
+     */
+
+    case "right":
+
+      yawScore =
+        clamp(
+          -yaw /
+            0.42,
+          0,
+          1
+        );
+
+      pitchScore =
+        1 -
+        clamp(
+          Math.abs(pitch) /
+            0.40,
+          0,
+          1
+        );
+
+      break;
+
+
+    /*
+     * --------------------------------------------------------
+     * CIMA
+     * --------------------------------------------------------
+     *
+     * A pessoa deve LEVANTAR A CABEÇA.
+     *
+     * Não basta mover os olhos para cima.
+     */
+
+    case "up":
+
+      pitchScore =
+        clamp(
+          -pitch /
+            0.34,
+          0,
+          1
+        );
+
+      yawScore =
+        1 -
+        clamp(
+          Math.abs(yaw) /
+            0.40,
+          0,
+          1
+        );
+
+      break;
+
+
+    /*
+     * --------------------------------------------------------
+     * BAIXO
+     * --------------------------------------------------------
+     *
+     * A pessoa deve BAIXAR A CABEÇA.
+     */
+
+    case "down":
+
+      pitchScore =
+        clamp(
+          pitch /
+            0.34,
+          0,
+          1
+        );
+
+      yawScore =
+        1 -
+        clamp(
+          Math.abs(yaw) /
+            0.40,
+          0,
+          1
+        );
+
+      break;
+
+
+    /*
+     * --------------------------------------------------------
+     * ESQUERDA + CIMA
+     * --------------------------------------------------------
+     */
+
+    case "left_up":
+
+      yawScore =
+        clamp(
+          yaw /
+            0.40,
+          0,
+          1
+        );
+
+      pitchScore =
+        clamp(
+          -pitch /
+            0.34,
+          0,
+          1
+        );
+
+      break;
+
+
+    /*
+     * --------------------------------------------------------
+     * DIREITA + CIMA
+     * --------------------------------------------------------
+     */
+
+    case "right_up":
+
+      yawScore =
+        clamp(
+          -yaw /
+            0.40,
+          0,
+          1
+        );
+
+      pitchScore =
+        clamp(
+          -pitch /
+            0.34,
+          0,
+          1
+        );
+
+      break;
+
+
+    /*
+     * --------------------------------------------------------
+     * ESQUERDA + BAIXO
+     * --------------------------------------------------------
+     */
+
+    case "left_down":
+
+      yawScore =
+        clamp(
+          yaw /
+            0.40,
+          0,
+          1
+        );
+
+      pitchScore =
+        clamp(
+          pitch /
+            0.34,
+          0,
+          1
+        );
+
+      break;
+
+
+    /*
+     * --------------------------------------------------------
+     * DIREITA + BAIXO
+     * --------------------------------------------------------
+     */
+
+    case "right_down":
+
+      yawScore =
+        clamp(
+          -yaw /
+            0.40,
+          0,
+          1
+        );
+
+      pitchScore =
+        clamp(
+          pitch /
+            0.34,
+          0,
+          1
+        );
+
+      break;
+
+
+    /*
+     * --------------------------------------------------------
+     * SORRISO
+     * --------------------------------------------------------
+     *
+     * Aqui mantemos a verificação do sorriso.
+     *
+     * O rosto deve permanecer aproximadamente frontal.
+     */
+
+    case "smile":
+
+      yawScore =
+        1 -
+        clamp(
+          Math.abs(yaw) /
+            0.38,
+          0,
+          1
+        );
+
+      pitchScore =
+        1 -
+        clamp(
+          Math.abs(pitch) /
+            0.34,
+          0,
+          1
+        );
+
+      smilePositionScore =
+        clamp(
+          smile /
+            CONFIG.smileThreshold,
+          0,
+          1
+        );
+
+      break;
+
+
+    default:
+
+      yawScore = 1;
+      pitchScore = 1;
+
+      break;
   }
 
+
+  /*
+   * ==========================================================
+   * ROLL
+   * ==========================================================
+   *
+   * Pequena tolerância para inclinação lateral.
+   */
+
+  const rollScore =
+    1 -
+    clamp(
+      roll /
+        0.35,
+      0,
+      1
+    );
+
+
+  /*
+   * ==========================================================
+   * QUALIDADE DA DETECÇÃO
+   * ==========================================================
+   */
+
+  const detector =
+    clamp(
+      detectorScore,
+      0,
+      1
+    );
+
+
+  const size =
+    faceSizeScore(
+      area
+    );
+
+
+  const light =
+    brightnessScore(
+      brightness
+    );
+
+
+  /*
+   * ==========================================================
+   * SCORE FINAL
+   * ==========================================================
+   *
+   * Para movimentos físicos:
+   *
+   *   cabeça = principal
+   *   detector/tamanho/luz = suporte
+   *
+   * Para sorriso:
+   *
+   *   sorriso = principal
+   *   frontalidade = suporte
+   */
+
+  let score;
+
+
+  if (
+    position.id === "smile"
+  ) {
+
+    score =
+      detector * 0.18 +
+      yawScore * 0.14 +
+      pitchScore * 0.10 +
+      rollScore * 0.08 +
+      smilePositionScore *
+        0.38 +
+      size * 0.06 +
+      light * 0.06;
+
+  } else {
+
+    score =
+      detector * 0.18 +
+      yawScore * 0.32 +
+      pitchScore * 0.28 +
+      rollScore * 0.08 +
+      size * 0.07 +
+      light * 0.07;
+  }
+
+
+  return {
+
+    score:
+      clamp(
+        score,
+        0,
+        1
+      ),
+
+    yawScore,
+
+    pitchScore,
+
+    rollScore,
+
+    smileScore:
+      smilePositionScore,
+
+    faceSizeScore:
+      size,
+
+    brightnessScore:
+      light,
+
+    detectionScore:
+      detector
+  };
+}
+  
   /*
    * ==========================================================
    * ANÁLISE
