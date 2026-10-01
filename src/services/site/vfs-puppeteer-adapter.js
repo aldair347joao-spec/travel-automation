@@ -211,6 +211,25 @@ this.facialSession = {
     this.lastDomInspection = null;
     this.lastCheckpoint = null;
     this.lastSlotSnapshot = [];
+        /*
+     * ============================================================
+     * KEEP-ALIVE DO RADAR
+     * ============================================================
+     *
+     * O Bot2 pode permanecer vários minutos aguardando uma vaga.
+     *
+     * Não fazemos cliques nem navegação artificial.
+     * Apenas movimentamos o mouse periodicamente dentro da
+     * janela do navegador para manter a sessão ativa.
+     */
+
+    this.radarKeepAliveTimer = null;
+
+    this.radarKeepAliveActive = false;
+
+    this.radarKeepAliveBusy = false;
+
+    this.radarKeepAliveLastAt = null;
   }
 
   /*
@@ -1337,6 +1356,223 @@ async startBrightDataLoginSession() {
     throw error;
   }
 }
+    /*
+   * ============================================================
+   * RADAR KEEP-ALIVE
+   * ============================================================
+   */
+
+  async performRadarKeepAlive() {
+    if (
+      !this.radarKeepAliveActive ||
+      this.radarKeepAliveBusy
+    ) {
+      return false;
+    }
+
+    const page =
+      this.page;
+
+    if (
+      !page ||
+      page.isClosed()
+    ) {
+      this.stopRadarKeepAlive();
+
+      return false;
+    }
+
+    this.radarKeepAliveBusy =
+      true;
+
+    try {
+      const viewport =
+        await page.evaluate(() => ({
+          width:
+            window.innerWidth ||
+            1440,
+
+          height:
+            window.innerHeight ||
+            900
+        }));
+
+      const width =
+        Math.max(
+          200,
+          Number(
+            viewport?.width
+          ) || 1440
+        );
+
+      const height =
+        Math.max(
+          200,
+          Number(
+            viewport?.height
+          ) || 900
+        );
+
+      /*
+       * Usamos uma pequena área próxima ao canto inferior
+       * direito para evitar menus e campos do VFS.
+       */
+
+      const x =
+        Math.max(
+          5,
+          width - 8
+        );
+
+      const y =
+        Math.max(
+          5,
+          height - 8
+        );
+
+      await page.mouse.move(
+        x,
+        y,
+        {
+          steps: 4
+        }
+      );
+
+      /*
+       * Pequeno movimento de retorno.
+       */
+
+      await page.mouse.move(
+        Math.max(
+          5,
+          x - 4
+        ),
+        Math.max(
+          5,
+          y - 4
+        ),
+        {
+          steps: 3
+        }
+      );
+
+      this.radarKeepAliveLastAt =
+        new Date();
+
+      logger.debug?.(
+        "VFS radar keep-alive mouse movement",
+        {
+          applicationId:
+            this.applicationId
+        }
+      );
+
+      return true;
+
+    } catch (error) {
+      logger.warn(
+        "VFS radar keep-alive failed",
+        {
+          applicationId:
+            this.applicationId,
+
+          error:
+            error?.message ||
+            String(error)
+        }
+      );
+
+      return false;
+
+    } finally {
+      this.radarKeepAliveBusy =
+        false;
+    }
+  }
+
+
+  startRadarKeepAlive() {
+    if (
+      this.radarKeepAliveActive
+    ) {
+      return;
+    }
+
+    this.radarKeepAliveActive =
+      true;
+
+    /*
+     * Primeira atividade imediatamente.
+     */
+
+    this.performRadarKeepAlive()
+      .catch(() => {});
+
+    /*
+     * Muito abaixo dos 5 minutos.
+     *
+     * O intervalo pode ser ajustado pelo Render:
+     *
+     * VFS_RADAR_KEEPALIVE_MS
+     *
+     * Padrão: 60 segundos.
+     */
+
+    const intervalMs =
+      Math.max(
+        15000,
+        Number(
+          process.env.VFS_RADAR_KEEPALIVE_MS
+        ) || 60000
+      );
+
+    this.radarKeepAliveTimer =
+      setInterval(
+        () => {
+          this.performRadarKeepAlive()
+            .catch(() => {});
+        },
+        intervalMs
+      );
+
+    logger.info(
+      "VFS radar keep-alive started",
+      {
+        applicationId:
+          this.applicationId,
+
+        intervalMs
+      }
+    );
+  }
+
+
+  stopRadarKeepAlive() {
+    this.radarKeepAliveActive =
+      false;
+
+    if (
+      this.radarKeepAliveTimer
+    ) {
+      clearInterval(
+        this.radarKeepAliveTimer
+      );
+
+      this.radarKeepAliveTimer =
+        null;
+    }
+
+    this.radarKeepAliveBusy =
+      false;
+
+    logger.info(
+      "VFS radar keep-alive stopped",
+      {
+        applicationId:
+          this.applicationId
+      }
+    );
+  }
   async ensurePage() {
     if (
       !this.initialized ||
@@ -9883,6 +10119,7 @@ async detectCheckpoint() {
   }
 
   async close() {
+  this.stopRadarKeepAlive();
     try {
       if (this.context) {
         await this.context.close();
