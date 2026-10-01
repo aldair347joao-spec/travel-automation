@@ -1232,7 +1232,119 @@ class Bot2 {
       };
     }
 
+           /*
+       * ------------------------------------------------------
+       * SAÚDE DA SESSÃO VFS
+       * ------------------------------------------------------
+       *
+       * O keep-alive verifica a sessão periodicamente.
+       *
+       * Se detectar expiração, não fechamos o browser.
+       * Tentamos recuperar a autenticação através do mecanismo
+       * normal já existente no adapter.
+       */
 
+      if (
+        typeof adapter.checkRadarSessionHealth ===
+        "function"
+      ) {
+        const sessionHealth =
+          await withTimeout(
+            adapter.checkRadarSessionHealth(),
+            TIMEOUT,
+            "VFS radar session health"
+          );
+
+        if (
+          sessionHealth?.recoveryRequired ===
+          true
+        ) {
+          logger.warn(
+            "RADAR VFS session requires authentication recovery",
+            {
+              applicationId:
+                id,
+
+              reason:
+                sessionHealth.reason ||
+                null
+            }
+          );
+
+          if (
+            typeof adapter.ensureAuthenticated ===
+            "function"
+          ) {
+            const recovery =
+              await withTimeout(
+                adapter.ensureAuthenticated(
+                  claimed
+                ),
+                TIMEOUT,
+                "VFS authentication recovery"
+              );
+
+            if (
+              !recovery?.authenticated
+            ) {
+              logger.warn(
+                "RADAR VFS session recovery did not authenticate",
+                {
+                  applicationId:
+                    id,
+
+                  state:
+                    recovery?.state ||
+                    null,
+
+                  reason:
+                    recovery?.reason ||
+                    null
+                }
+              );
+
+              await Application.updateOne(
+                {
+                  _id:
+                    claimed._id,
+
+                  workflowState:
+                    STATES.RADAR_ACTIVE
+                },
+                {
+                  $set: {
+                    "bot2.status":
+                      "waiting",
+
+                    "bot2.heartbeatAt":
+                      new Date(),
+
+                    "radar.nextCheckAt":
+                      new Date(
+                        Date.now() +
+                        MIN_INTERVAL
+                      )
+                  }
+                }
+              );
+
+              return;
+            }
+
+            logger.info(
+              "RADAR VFS session recovered successfully",
+              {
+                applicationId:
+                  id,
+
+                state:
+                  recovery?.state ||
+                  null
+              }
+            );
+          }
+        }
+      }
     /*
      * --------------------------------------------------------
      * COMPATIBILIDADE COM O ADAPTER ATUAL
