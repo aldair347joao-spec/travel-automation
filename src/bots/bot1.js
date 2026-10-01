@@ -898,26 +898,28 @@ class Bot1 {
    * =======================================================
    */
 
-  async prepare(
+    async prepare(
     applicationId
   ) {
-        await this.assertAdminRelease(
+    await this.assertAdminRelease(
       applicationId
     );
-   
-    try {
-    const startedAt =
-      Date.now();
 
-    const application =
-  await this.claimApplication(
-    applicationId,
-    [
-      "created",
-      "error",
-      "ready_for_automation"
-    ]
-  );
+    let application = null;
+
+    try {
+      const startedAt =
+        Date.now();
+
+      application =
+        await this.claimApplication(
+          applicationId,
+          [
+            "created",
+            "error",
+            "ready_for_automation"
+          ]
+        );
 
 
     if (
@@ -1624,15 +1626,51 @@ await this.heartbeat(
         "Navigator finished without finding a slot or handing the application to Radar."
       );
 
-    } catch (
+      } catch (
       error
     ) {
-     
-      await this.markError(
-        application,
-        "BOT1_PREPARATION_ERROR",
-        error
-      );
+
+      if (
+        application
+      ) {
+        await this.markError(
+          application,
+          "BOT1_PREPARATION_ERROR",
+          error
+        );
+      } else {
+        try {
+          const failedApplication =
+            await Application.findById(
+              applicationId
+            );
+
+          if (
+            failedApplication
+          ) {
+            await this.markError(
+              failedApplication,
+              "BOT1_PREPARATION_ERROR",
+              error
+            );
+          }
+        } catch (
+          markErrorFailure
+        ) {
+          logger.error(
+            "BOT1 could not persist preparation error",
+            {
+              applicationId,
+              originalError:
+                error?.message ||
+                String(error),
+              persistenceError:
+                markErrorFailure?.message ||
+                String(markErrorFailure)
+            }
+          );
+        }
+      }
 
       throw error;
     }
