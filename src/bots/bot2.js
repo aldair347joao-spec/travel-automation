@@ -59,7 +59,18 @@ const TIMEOUT =
       process.env.BOT2_TIMEOUT_MS
     ) || 10000
   );
-
+/*
+ * Recuperação de sessão pode precisar de login/OTP.
+ * Mantemos um timeout separado do timeout normal
+ * das consultas do radar.
+ */
+const RADAR_RECOVERY_TIMEOUT =
+  Math.max(
+    15000,
+    Number(
+      process.env.VFS_RADAR_RECOVERY_TIMEOUT_MS
+    ) || 60000
+  );
 const BATCH_SIZE =
   Math.max(
     1,
@@ -1640,13 +1651,13 @@ if (
     }
 
     const recovery =
-      await withTimeout(
-        adapter.ensureAuthenticated(
-          claimed
-        ),
-        TIMEOUT,
-        "VFS authentication recovery"
-      );
+  await withTimeout(
+    adapter.ensureAuthenticated(
+      claimed
+    ),
+    RADAR_RECOVERY_TIMEOUT,
+    "VFS authentication recovery"
+  );
 
     if (
       recovery?.authenticated !==
