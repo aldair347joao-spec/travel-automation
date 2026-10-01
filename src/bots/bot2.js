@@ -1666,7 +1666,21 @@ class Bot2 {
       await this.assertAdminRelease(
         id
       );
+            /*
+       * ------------------------------------------------------
+       * KEEP-ALIVE DO RADAR
+       * ------------------------------------------------------
+       *
+       * A partir deste ponto o Bot2 confirmou que está
+       * na área SERVICES e pode permanecer monitorando.
+       */
 
+      if (
+        typeof adapter.startRadarKeepAlive ===
+        "function"
+      ) {
+        adapter.startRadarKeepAlive();
+      }
       const availability =
         await withTimeout(
           adapter.checkAvailability(
@@ -1730,7 +1744,12 @@ class Bot2 {
        * SLOT FOUND
        * ------------------------------------------------------
        */
-
+          if (
+          typeof adapter.stopRadarKeepAlive ===
+          "function"
+        ) {
+          adapter.stopRadarKeepAlive();
+        }
       if (
         compatibleSlot
       ) {
