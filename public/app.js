@@ -2950,8 +2950,11 @@ const response = await api(
             const status =
               application.status ||
               "created";
-
-
+           const bot1Stage =
+         getBot1StatusLabel(
+         application
+         ); 
+            
             const start =
               application.preferredDates
                 ?.start ||
@@ -3006,7 +3009,43 @@ const response = await api(
                       )
                     )}
                   </span>
+                   ${
+  application.bot1?.status &&
+  application.bot1.status !== "idle"
+    ? `
+      <div
+        class="application-bot1-stage"
+        style="
+          margin-top:8px;
+          font-size:12px;
+          line-height:1.45;
+          opacity:.9;
+        "
+      >
+        <strong>
+          BOT 1:
+          ${escapeHtml(
+            bot1Stage.status
+          )}
+        </strong>
 
+        <div>
+          Etapa:
+          ${escapeHtml(
+            bot1Stage.action
+          )}
+        </div>
+
+        <div>
+          Workflow:
+          ${escapeHtml(
+            bot1Stage.workflow
+          )}
+        </div>
+      </div>
+    `
+    : ""
+}      
 
                   <div class="application-meta">
 
@@ -3942,7 +3981,24 @@ if (
   monitorFacialResult,
   500
 );
+setInterval(
+  async () => {
+    if (state.loading) {
+      return;
+    }
 
+    try {
+      await loadApplications();
+      updateBotCenter();
+    } catch (error) {
+      console.debug(
+        "[APPLICATION MONITOR]",
+        error.message
+      );
+    }
+  },
+  5000
+);
     /*
      * Navegação suave.
      */
