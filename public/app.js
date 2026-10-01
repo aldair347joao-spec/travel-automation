@@ -2707,7 +2707,150 @@ const response = await api(
     );
 
   }
+  function getBot1StatusLabel(
+    application
+  ) {
 
+    const bot1 =
+      application?.bot1 ||
+      {};
+
+    const workflowState =
+      application?.workflowState ||
+      application?.workflow?.state ||
+      null;
+
+    const action =
+      bot1.lastAction ||
+      null;
+
+    const status =
+      bot1.status ||
+      null;
+
+
+    const actionLabels = {
+
+      initializing:
+        "Inicializando",
+
+      initializing_site:
+        "Inicializando VFS",
+
+      vfs_session:
+        "Abrindo sessão VFS",
+
+      vfs_authentication:
+        "Autenticação VFS",
+
+      vfs_authentication_checkpoint:
+        "Aguardando autenticação VFS",
+
+      captcha_required:
+        "Aguardando CAPTCHA",
+
+      filling_application:
+        "Preenchendo candidatura",
+
+      application_checkpoint:
+        "Ponto de verificação VFS",
+
+      navigator_starting:
+        "Analisando disponibilidade",
+
+      navigator_slot_found:
+        "Vaga encontrada",
+
+      navigator_handoff_radar:
+        "Entregue ao Radar",
+
+      navigator_checkpoint:
+        "Aguardando ação",
+
+      navigator_completed:
+        "Navigator concluído",
+
+      navigator_facial:
+        "Verificação facial",
+
+      slot_selection:
+        "Selecionando vaga",
+
+      selecting_slot:
+        "Selecionando horário",
+
+      recovering_slot:
+        "Recuperando vaga",
+
+      navigator_recovering_slot:
+        "Recuperando disponibilidade",
+
+      continuing:
+        "Continuando candidatura",
+
+      completed:
+        "Concluída",
+
+      error:
+        "Erro",
+
+      initializing_payment:
+        "Preparando pagamento",
+
+      payment_pending:
+        "Pagamento pendente"
+
+    };
+
+
+    const statusLabels = {
+
+      idle:
+        "Parado",
+
+      starting:
+        "A iniciar",
+
+      running:
+        "Em execução",
+
+      waiting:
+        "Aguardando",
+
+      continuing:
+        "A continuar",
+
+      completed:
+        "Concluído",
+
+      requires_user:
+        "Aguardando utilizador",
+
+      error:
+        "Erro"
+
+    };
+
+
+    return {
+
+      status:
+        statusLabels[status] ||
+        status ||
+        "Desconhecido",
+
+      action:
+        actionLabels[action] ||
+        action ||
+        "A processar",
+
+      workflow:
+        workflowState ||
+        "—"
+
+    };
+
+  }
 
   function getApplicationClientName(
     application
