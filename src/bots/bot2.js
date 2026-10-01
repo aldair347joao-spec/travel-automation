@@ -1745,29 +1745,29 @@ class Bot2 {
        * ------------------------------------------------------
        */
           if (
-          typeof adapter.stopRadarKeepAlive ===
-          "function"
-        ) {
-          adapter.stopRadarKeepAlive();
-        }
-      if (
-        compatibleSlot
-      ) {
+    compatibleSlot
+) {
 
-        /*
-         * Antes de emitir o evento,
-         * confirmamos novamente que o
-         * administrador ainda mantém
-         * a aplicação liberada.
-         */
+    if (
+        typeof adapter.stopRadarKeepAlive ===
+        "function"
+    ) {
+        adapter.stopRadarKeepAlive();
+    }
 
-        await this.assertAdminRelease(
-          id
-        );
+    /*
+     * Antes de emitir o evento,
+     * confirmamos novamente que o
+     * administrador ainda mantém
+     * a aplicação liberada.
+     */
 
+    await this.assertAdminRelease(
+        id
+    );
 
-        const updated =
-          await Application.findOneAndUpdate(
+    const updated =
+        await Application.findOneAndUpdate(
             {
               _id:
                 claimed._id,
