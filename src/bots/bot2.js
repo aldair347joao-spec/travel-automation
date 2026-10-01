@@ -1266,6 +1266,7 @@ class Bot2 {
         siteState ===
         "SERVICES"
       ) {
+        
         await persistWorkflowState(
           application,
           STATES.VFS_AUTHENTICATED,
@@ -1592,7 +1593,12 @@ class Bot2 {
           siteState !==
           "SERVICES"
         ) {
-
+           if (
+  typeof adapter.stopRadarKeepAlive ===
+  "function"
+) {
+  adapter.stopRadarKeepAlive();
+}
           /*
            * O administrador pode ter
            * pausado durante detectState().
