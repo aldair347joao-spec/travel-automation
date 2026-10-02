@@ -10,11 +10,58 @@ async function main() {
   const apiKey =
     process.env.SCRAPELESS_API_KEY;
 
-  if (!apiKey) {
+    if (!apiKey) {
     throw new Error(
       "SCRAPELESS_API_KEY não está definida no ambiente."
     );
   }
+
+  console.log(
+    "[SCRAPELESS TEST] Verifying API key..."
+  );
+
+  const accountResponse =
+    await fetch(
+      "https://api.scrapeless.com/api/v1/me",
+      {
+        method:
+          "GET",
+
+        headers: {
+          "x-api-token":
+            apiKey
+        }
+      }
+    );
+
+  const accountText =
+    await accountResponse.text();
+
+  console.log(
+    "[SCRAPELESS TEST] API KEY STATUS:",
+    accountResponse.status
+  );
+
+  if (
+    accountResponse.status !==
+    200
+  ) {
+    console.error(
+      "[SCRAPELESS TEST] API KEY RESPONSE:",
+      accountText.slice(
+        0,
+        1000
+      )
+    );
+
+    throw new Error(
+      `Scrapeless API key verification failed with HTTP ${accountResponse.status}`
+    );
+  }
+
+  console.log(
+    "[SCRAPELESS TEST] API key authenticated successfully."
+  );
 
   const connectionURL =
     "wss://browser.scrapeless.com/api/v2/browser" +
