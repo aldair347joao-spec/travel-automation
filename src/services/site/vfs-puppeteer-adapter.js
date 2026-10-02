@@ -2461,12 +2461,89 @@ async startBrightDataLoginSession() {
    * PROCURAR FORMULÁRIO DE LOGIN
    * ============================================================
    */
+logger.info(
+  "VFS LOGIN PAGE DIAGNOSTIC",
+  {
+    applicationId,
 
-  let loginForm =
+    url:
+      (() => {
+        try {
+          return page.url();
+        } catch {
+          return null;
+        }
+      })(),
+
+    title:
+      await page
+        .title()
+        .catch(() => null),
+
+    htmlLength:
+      await page
+        .content()
+        .then(
+          html =>
+            html?.length ||
+            0
+        )
+        .catch(
+          () => 0
+        ),
+
+    inputCount:
+      await page
+        .locator("input")
+        .count()
+        .catch(
+          () => -1
+        ),
+
+    iframeCount:
+      await page
+        .locator("iframe")
+        .count()
+        .catch(
+          () => -1
+        ),
+
+    buttonCount:
+      await page
+        .locator("button")
+        .count()
+        .catch(
+          () => -1
+        ),
+
+    bodyText:
+      await page
+        .locator("body")
+        .innerText()
+        .then(
+          text =>
+            String(text || "")
+              .replace(
+                /\s+/g,
+                " "
+              )
+              .slice(
+                0,
+                1500
+              )
+        )
+        .catch(
+          () => ""
+        )
+  }
+);
+
+let loginForm =
   null;
 
 const loginDetectionAttempts =
   6;
+  
 
 for (
   let attempt = 1;
