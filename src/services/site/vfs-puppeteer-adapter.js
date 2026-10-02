@@ -548,14 +548,42 @@ this.radarSessionRecoveryRequired = false;
    * Reutilizamos uma página existente da sessão quando houver.
    */
 
-  try {
+    try {
     const pages =
       await this.browser.pages();
 
+    const blankPage =
+      pages.find(
+        candidate => {
+          try {
+            return (
+              candidate &&
+              !candidate.isClosed() &&
+              candidate.url() ===
+                "about:blank"
+            );
+          } catch {
+            return false;
+          }
+        }
+      );
+
     this.page =
-      pages.length > 0
-        ? pages[0]
-        : await this.browser.newPage();
+      blankPage ||
+      await this.browser.newPage();
+
+    /*
+     * ==========================================================
+     * SESSÃO BRIGHT DATA — ANTES DA PRIMEIRA NAVEGAÇÃO
+     * ==========================================================
+     *
+     * Proxy.useSession só pode configurar a localização/proxy
+     * antes da página navegar.
+     *
+     * Portanto esta chamada obrigatoriamente acontece aqui,
+     * imediatamente depois de obter uma página em branco.
+     */
+    await this.startBrightDataLoginSession();
 
     /*
      * ==========================================================
@@ -2103,13 +2131,7 @@ async startBrightDataLoginSession() {
         this.getDomSummary()
     };
   }
-   /*
- * ============================================================
- * NOVA SESSÃO BRIGHT DATA PARA ESTE LOGIN
- * ============================================================
- */
 
-await this.startBrightDataLoginSession();
   /*
    * ============================================================
    * CAPTCHA
