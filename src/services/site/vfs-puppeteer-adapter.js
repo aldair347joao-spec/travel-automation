@@ -10392,7 +10392,93 @@ async detectFacialPositionRequest() {
    * CHECKPOINT DETECTION
    * ============================================================
    */
-async detectCheckpoint() {
+  async detectCheckpoint() {
+  const maxAttempts = 3;
+
+  for (
+    let attempt = 1;
+    attempt <= maxAttempts;
+    attempt++
+  ) {
+    try {
+      return await this.detectCheckpointOnce();
+    } catch (error) {
+      const message =
+        error?.message ||
+        String(error);
+
+      const detachedFrame =
+        message
+          .toLowerCase()
+          .includes(
+            "detached frame"
+          ) ||
+        message
+          .toLowerCase()
+          .includes(
+            "navigating frame was detached"
+          );
+
+      if (!detachedFrame) {
+        throw error;
+      }
+
+      logger.warn(
+        "VFS DETACHED FRAME — CHECKPOINT RETRY",
+        {
+          applicationId:
+            this.applicationId,
+
+          attempt,
+
+          maxAttempts,
+
+          url:
+            (() => {
+              try {
+                return this.page?.url?.() ||
+                  null;
+              } catch {
+                return null;
+              }
+            })(),
+
+          message
+        }
+      );
+
+      if (
+        attempt >=
+        maxAttempts
+      ) {
+        throw error;
+      }
+
+      /*
+       * O VFS pode ter acabado de substituir
+       * o documento/frame.
+       *
+       * Esperamos um pequeno intervalo para
+       * o novo frame estabilizar e depois
+       * executamos toda a detecção novamente.
+       */
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            500
+          )
+      );
+
+      /*
+       * Garante que continuamos usando
+       * a página atual da sessão.
+       */
+      await this.ensurePage();
+    }
+  }
+}
+async detectCheckpointOnce() {
   const page =
     await this.ensurePage();
 
