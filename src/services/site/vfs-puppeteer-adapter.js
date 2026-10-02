@@ -2732,76 +2732,52 @@ async findVfsLoginFields() {
     await this.ensurePage();
 
   return page.evaluate(() => {
-    const normalize = value =>
-      String(value || "")
-        .trim()
-        .toLowerCase()
-        .replace(/\s+/g, " ");
+    const normalize =
+      value =>
+        String(value || "")
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, " ");
 
-    const visible = element => {
-      if (!element) {
-        return false;
-      }
+    const visible =
+      element => {
+        if (!element) {
+          return false;
+        }
 
-      const style =
-        window.getComputedStyle(
-          element
+        const style =
+          window.getComputedStyle(
+            element
+          );
+
+        return (
+          !element.disabled &&
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          style.opacity !== "0"
         );
-
-      return (
-        !element.disabled &&
-        style.display !== "none" &&
-        style.visibility !== "hidden" &&
-        style.opacity !== "0"
-      );
-    };
-
-    const descriptor = element => ({
-      tag:
-        element.tagName
-          .toLowerCase(),
-
-      id:
-        element.id || null,
-
-      name:
-        element.getAttribute(
-          "name"
-        ) || null,
-
-      type:
-        element.getAttribute(
-          "type"
-        ) || null,
-
-      placeholder:
-        element.getAttribute(
-          "placeholder"
-        ) || null,
-
-      aria:
-        element.getAttribute(
-          "aria-label"
-        ) || null
-    });
+      };
 
     const selectorFor =
       element => {
+        if (!element) {
+          return null;
+        }
+
         if (element.id) {
           return `#${CSS.escape(
             element.id
           )}`;
         }
 
-        if (
+        const name =
           element.getAttribute(
             "name"
-          )
-        ) {
+          );
+
+        if (name) {
           return `${element.tagName.toLowerCase()}[name="${CSS.escape(
-            element.getAttribute(
-              "name"
-            )
+            name
           )}"]`;
         }
 
@@ -2813,124 +2789,374 @@ async findVfsLoginFields() {
         document.querySelectorAll(
           "input"
         )
-      ).filter(visible);
+      ).filter(
+        visible
+      );
 
-    const emailCandidates =
-      inputs.filter(element => {
-        const type =
-          normalize(
-            element.getAttribute(
-              "type"
-            )
-          );
+    /*
+     * ========================================================
+     * FORMULÁRIOS
+     * ========================================================
+     *
+     * Primeiro procuramos pares de email/password
+     * dentro do MESMO formulário.
+     *
+     * Isto evita que o texto do container de password
+     * seja interpretado como se fosse um campo de email.
+     */
 
-        const haystack =
-          normalize(
-            [
-              element.getAttribute(
-                "name"
-              ),
-              element.id,
-              element.getAttribute(
-                "placeholder"
-              ),
-              element.getAttribute(
-                "aria-label"
-              ),
-              element.getAttribute(
-                "autocomplete"
-              ),
-              element.parentElement
-                ?.innerText
-            ].join(" ")
-          );
+    const forms =
+      Array.from(
+        document.querySelectorAll(
+          "form"
+        )
+      ).filter(
+        visible
+      );
 
-        return (
-          type === "email" ||
-          type === "text" &&
-          (
-            haystack.includes(
+    const formCandidates = [];
+
+    for (
+      const form of forms
+    ) {
+      const formInputs =
+        Array.from(
+          form.querySelectorAll(
+            "input"
+          )
+        ).filter(
+          visible
+        );
+
+      /*
+       * ------------------------------------------------------
+       * EMAIL
+       * ------------------------------------------------------
+       *
+       * Prioridade:
+       *
+       * 1. type=email
+       * 2. autocomplete=email
+       * 3. name/id/placeholder/aria relacionados a email
+       * 4. username
+       */
+
+      const emailCandidates =
+        formInputs.filter(
+          element => {
+            const type =
+              normalize(
+                element.getAttribute(
+                  "type"
+                )
+              );
+
+            const autocomplete =
+              normalize(
+                element.getAttribute(
+                  "autocomplete"
+                )
+              );
+
+            const name =
+              normalize(
+                element.getAttribute(
+                  "name"
+                )
+              );
+
+            const id =
+              normalize(
+                element.id
+              );
+
+            const placeholder =
+              normalize(
+                element.getAttribute(
+                  "placeholder"
+                )
+              );
+
+            const aria =
+              normalize(
+                element.getAttribute(
+                  "aria-label"
+                )
+              );
+
+            /*
+             * Um campo password nunca pode ser
+             * candidato a email.
+             */
+            if (
+              type === "password"
+            ) {
+              return false;
+            }
+
+            /*
+             * type=email é a indicação mais forte.
+             */
+            if (
+              type === "email"
+            ) {
+              return true;
+            }
+
+            if (
+              autocomplete ===
               "email"
-            ) ||
-            haystack.includes(
-              "e-mail"
-            ) ||
-            haystack.includes(
-              "username"
-            ) ||
-            haystack.includes(
-              "user name"
-            )
-          )
+            ) {
+              return true;
+            }
+
+            const metadata =
+              [
+                name,
+                id,
+                placeholder,
+                aria
+              ].join(" ");
+
+            return (
+              metadata.includes(
+                "email"
+              ) ||
+              metadata.includes(
+                "e-mail"
+              ) ||
+              metadata.includes(
+                "username"
+              ) ||
+              metadata.includes(
+                "user name"
+              )
+            );
+          }
         );
-      });
 
-    const passwordCandidates =
-      inputs.filter(element => {
-        const type =
-          normalize(
-            element.getAttribute(
-              "type"
-            )
-          );
+      /*
+       * ------------------------------------------------------
+       * PASSWORD
+       * ------------------------------------------------------
+       */
 
-        const haystack =
-          normalize(
-            [
-              element.getAttribute(
-                "name"
-              ),
-              element.id,
-              element.getAttribute(
-                "placeholder"
-              ),
-              element.getAttribute(
-                "aria-label"
-              ),
-              element.getAttribute(
-                "autocomplete"
-              ),
-              element.parentElement
-                ?.innerText
-            ].join(" ")
-          );
+      const passwordCandidates =
+        formInputs.filter(
+          element => {
+            const type =
+              normalize(
+                element.getAttribute(
+                  "type"
+                )
+              );
 
-        return (
-          type === "password" ||
-          haystack.includes(
-            "password"
-          ) ||
-          haystack.includes(
-            "pass word"
-          )
+            const autocomplete =
+              normalize(
+                element.getAttribute(
+                  "autocomplete"
+                )
+              );
+
+            const name =
+              normalize(
+                element.getAttribute(
+                  "name"
+                )
+              );
+
+            const id =
+              normalize(
+                element.id
+              );
+
+            const placeholder =
+              normalize(
+                element.getAttribute(
+                  "placeholder"
+                )
+              );
+
+            const aria =
+              normalize(
+                element.getAttribute(
+                  "aria-label"
+                )
+              );
+
+            /*
+             * type=password é a indicação mais forte.
+             */
+            if (
+              type === "password"
+            ) {
+              return true;
+            }
+
+            if (
+              autocomplete ===
+              "current-password" ||
+              autocomplete ===
+              "password"
+            ) {
+              return true;
+            }
+
+            const metadata =
+              [
+                name,
+                id,
+                placeholder,
+                aria
+              ].join(" ");
+
+            return (
+              metadata.includes(
+                "password"
+              ) ||
+              metadata.includes(
+                "pass word"
+              )
+            );
+          }
         );
-      });
+
+      /*
+       * Só aceitamos um par inequívoco.
+       */
+      if (
+        emailCandidates.length === 1 &&
+        passwordCandidates.length === 1
+      ) {
+        formCandidates.push({
+          form,
+
+          email:
+            emailCandidates[0],
+
+          password:
+            passwordCandidates[0]
+        });
+      }
+    }
+
+    /*
+     * ========================================================
+     * ESCOLHER O FORMULÁRIO
+     * ========================================================
+     */
+
+    let selectedForm = null;
 
     if (
-      emailCandidates.length !== 1 ||
-      passwordCandidates.length !== 1
+      formCandidates.length === 1
+    ) {
+      selectedForm =
+        formCandidates[0];
+    }
+
+    /*
+     * ========================================================
+     * FALLBACK
+     * ========================================================
+     *
+     * Algumas versões da VFS podem renderizar os campos sem
+     * <form>. Nesse caso procuramos apenas campos fortemente
+     * identificados.
+     */
+
+    if (
+      !selectedForm
+    ) {
+      const emailByType =
+        inputs.filter(
+          element =>
+            normalize(
+              element.getAttribute(
+                "type"
+              )
+            ) === "email"
+        );
+
+      const passwordByType =
+        inputs.filter(
+          element =>
+            normalize(
+              element.getAttribute(
+                "type"
+              )
+            ) === "password"
+        );
+
+      if (
+        emailByType.length === 1 &&
+        passwordByType.length === 1
+      ) {
+        selectedForm = {
+          form: null,
+
+          email:
+            emailByType[0],
+
+          password:
+            passwordByType[0]
+        };
+      }
+    }
+
+    /*
+     * ========================================================
+     * NENHUM LOGIN INEQUÍVOCO
+     * ========================================================
+     */
+
+    if (
+      !selectedForm
     ) {
       return {
         email: null,
+
         password: null,
+
         submit: null,
 
         emailCandidates:
-          emailCandidates.length,
+          forms.length
+            ? formCandidates.length
+            : inputs.filter(
+                element =>
+                  normalize(
+                    element.getAttribute(
+                      "type"
+                    )
+                  ) === "email"
+              ).length,
 
         passwordCandidates:
-          passwordCandidates.length
+          forms.length
+            ? formCandidates.length
+            : inputs.filter(
+                element =>
+                  normalize(
+                    element.getAttribute(
+                      "type"
+                    )
+                  ) === "password"
+              ).length,
+
+        reason:
+          "No unambiguous email/password pair was found."
       };
     }
 
     const email =
       selectorFor(
-        emailCandidates[0]
+        selectedForm.email
       );
 
     const password =
       selectorFor(
-        passwordCandidates[0]
+        selectedForm.password
       );
 
     if (
@@ -2939,36 +3165,89 @@ async findVfsLoginFields() {
     ) {
       return {
         email: null,
+
         password: null,
-        submit: null
+
+        submit: null,
+
+        reason:
+          "Login fields were detected but could not be addressed safely."
       };
     }
 
     /*
-     * Procurar o botão apenas dentro do
-     * formulário que contém os campos.
+     * ========================================================
+     * BOTÃO DE LOGIN
+     * ========================================================
      */
-    const form =
-      emailCandidates[0]
-        .closest("form") ||
-      passwordCandidates[0]
-        .closest("form");
 
-    if (!form) {
-      return {
-        email,
-        password,
-        submit: null
-      };
+    const form =
+      selectedForm.form;
+
+    let submitCandidates = [];
+
+    if (form) {
+      submitCandidates =
+        Array.from(
+          form.querySelectorAll(
+            "button, input[type='submit']"
+          )
+        ).filter(
+          visible
+        );
+    } else {
+      /*
+       * Sem <form>, procuramos botões próximos aos campos.
+       */
+      const emailParent =
+        selectedForm.email
+          .parentElement;
+
+      const passwordParent =
+        selectedForm.password
+          .parentElement;
+
+      const containers =
+        [
+          emailParent,
+          passwordParent,
+          emailParent?.parentElement,
+          passwordParent?.parentElement
+        ].filter(
+          Boolean
+        );
+
+      const uniqueButtons =
+        new Set();
+
+      containers.forEach(
+        container => {
+          Array.from(
+            container.querySelectorAll(
+              "button, input[type='submit']"
+            )
+          )
+            .filter(
+              visible
+            )
+            .forEach(
+              button =>
+                uniqueButtons.add(
+                  button
+                )
+            );
+        }
+      );
+
+      submitCandidates =
+        Array.from(
+          uniqueButtons
+        );
     }
 
-    const submitCandidates =
-      Array.from(
-        form.querySelectorAll(
-          "button, input[type='submit']"
-        )
-      ).filter(visible)
-       .filter(element => {
+    const loginButtons =
+      submitCandidates.filter(
+        element => {
           const type =
             normalize(
               element.getAttribute(
@@ -3008,27 +3287,59 @@ async findVfsLoginFields() {
               "continue"
             )
           );
-        });
+        }
+      );
 
-    /*
-     * Só usamos o botão se existir
-     * exatamente um candidato.
-     */
     let submit = null;
 
     if (
-      submitCandidates.length === 1
+      loginButtons.length === 1
     ) {
       submit =
         selectorFor(
-          submitCandidates[0]
+          loginButtons[0]
         );
+    }
+
+    /*
+     * Se não encontramos um botão textual mas existe
+     * exatamente um submit no formulário, podemos utilizá-lo.
+     */
+    if (
+      !submit &&
+      form
+    ) {
+      const submitInputs =
+        Array.from(
+          form.querySelectorAll(
+            "button[type='submit'], input[type='submit']"
+          )
+        ).filter(
+          visible
+        );
+
+      if (
+        submitInputs.length === 1
+      ) {
+        submit =
+          selectorFor(
+            submitInputs[0]
+          );
+      }
     }
 
     return {
       email,
+
       password,
-      submit
+
+      submit,
+
+      emailCandidates:
+        1,
+
+      passwordCandidates:
+        1
     };
   });
 }
