@@ -537,6 +537,7 @@ if (
     "function"
       ? application.getWorkflowState()
       : application.workflowState;
+}
   /*
    * Uma candidatura nova deve continuar
    * disponível para o Bot 1.
