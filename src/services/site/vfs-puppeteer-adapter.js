@@ -1197,7 +1197,7 @@ this.radarSessionRecoveryRequired = false;
  */
 async startBrightDataLoginSession() {
   const page =
-    await this.ensurePage();
+    this.page;
 
   if (!page) {
     throw new Error(
