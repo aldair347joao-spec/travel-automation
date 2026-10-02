@@ -64,10 +64,10 @@ async function main() {
   );
 
   const connectionURL =
-    "wss://browser.scrapeless.com/api/v2/browser" +
-    `?token=${encodeURIComponent(apiKey)}` +
-    "&sessionTTL=180" +
-    "&proxyCountry=ANY";
+  "wss://browser.scrapeless.com/api/v2/browser" +
+  `?token=${encodeURIComponent(apiKey)}` +
+  "&sessionTTL=60" +
+  "&sessionName=travel-automation-test";
 
   console.log(
     "[SCRAPELESS TEST] Connecting..."
