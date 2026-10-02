@@ -463,7 +463,7 @@ async function releaseForAutomation({
    * que o Bot 1 consegue reivindicá-la.
    */
 
-  const workflowState =
+    let workflowState =
     typeof application.getWorkflowState ===
     "function"
       ? application.getWorkflowState()
@@ -531,8 +531,12 @@ if (
   application.error = null;
 
   await application.save();
-}
 
+  workflowState =
+    typeof application.getWorkflowState ===
+    "function"
+      ? application.getWorkflowState()
+      : application.workflowState;
   /*
    * Uma candidatura nova deve continuar
    * disponível para o Bot 1.
