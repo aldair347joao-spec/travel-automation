@@ -1,5 +1,8 @@
 require("dotenv").config();
 
+const {
+  spawn
+} = require("child_process");
 const prepareFaceModels =
   require("./scripts/prepare-face-models");
 
@@ -74,7 +77,54 @@ async function main() {
         );
       }
     );
+  if (
+    process.env.SCRAPELESS_VFS_TEST ===
+    "true"
+  ) {
+    logger.info(
+      "SCRAPELESS VFS TEST STARTING"
+    );
 
+    const testProcess =
+      spawn(
+        process.execPath,
+        [
+          "scripts/test-scrapeless-vfs.js"
+        ],
+        {
+          env:
+            process.env,
+          stdio:
+            "inherit"
+        }
+      );
+
+    testProcess.on(
+      "exit",
+      code => {
+        logger.info(
+          "SCRAPELESS VFS TEST FINISHED",
+          {
+            code
+          }
+        );
+      }
+    );
+
+    testProcess.on(
+      "error",
+      error => {
+        logger.error(
+          "SCRAPELESS VFS TEST PROCESS ERROR",
+          {
+            error:
+              error?.message ||
+              String(error)
+          }
+        );
+      }
+    );
+  }
   const role =
     (
       process.env.PROCESS_ROLE ||
