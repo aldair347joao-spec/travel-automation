@@ -2265,21 +2265,19 @@ async startBrightDataLoginSession() {
    */
 
   if (
-    !currentUrl.includes("/login") &&
-    !currentUrl.includes("/dashboard") &&
-    !currentUrl.includes("/application-detail")
-  ) {
-    await this.navigate(
-  `${VFS_BASE_URL}/login`
-);
-  } else {
-    await this.detectState();
+  !currentUrl.includes("/login")
+) {
+  await this.navigate(
+    `${VFS_BASE_URL}/login`
+  );
+} else {
+  await this.detectState();
 
-    await this.inspectCurrentDom()
-      .catch(() => {});
+  await this.inspectCurrentDom()
+    .catch(() => {});
 
-    await this.detectCheckpoint();
-  }
+  await this.detectCheckpoint();
+}
 
   /*
    * Se a navegação já nos colocou numa página
