@@ -2377,14 +2377,17 @@ async recoverReleasedApplications() {
          */
 
         if (
-          application.status ===
-            "cancelled" ||
+  application.status ===
+    "cancelled" ||
 
-          application.status ===
-            "completed"
-        ) {
-          continue;
-        }
+  application.status ===
+    "completed" ||
+
+  application.workflowState ===
+    STATES.ERROR
+) {
+  continue;
+}
 
 
         /*
