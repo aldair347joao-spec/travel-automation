@@ -120,6 +120,7 @@ class VfsPuppeteerAdapter extends SiteAdapter {
     this.browser = null;
     this.context = null;
     this.page = null;
+    this.frameDiagnosticsAttached = false;
     this.activeCameraY4mPath = null;
 this.activeCameraVideoId = null;
 this.activeCameraPosition = null;
@@ -571,7 +572,202 @@ this.radarSessionRecoveryRequired = false;
     this.page =
       blankPage ||
       await this.browser.newPage();
+    /*
+ * ============================================================
+ * DIAGNÓSTICO DO CICLO DE VIDA DOS FRAMES
+ * ============================================================
+ *
+ * O VFS pode criar, navegar ou remover iframes durante
+ * autenticação, CAPTCHA, Cloudflare e carregamento dinâmico.
+ *
+ * O erro:
+ *
+ *   Attempted to use detached Frame
+ *
+ * significa que algum código tentou utilizar um Frame depois
+ * de ele ter sido removido/navegado.
+ *
+ * Estes listeners servem para identificar exatamente qual
+ * frame foi removido antes da operação que falha.
+ */
 
+if (
+  !this.frameDiagnosticsAttached &&
+  this.page
+) {
+  this.frameDiagnosticsAttached =
+    true;
+
+  this.page.on(
+    "frameattached",
+    frame => {
+      try {
+        logger.info(
+          "VFS FRAME ATTACHED",
+          {
+            applicationId:
+              this.applicationId,
+
+            frameId:
+              frame?._id ||
+              null,
+
+            url:
+              frame.url(),
+
+            isMainFrame:
+              frame.isMainFrame(),
+
+            parentUrl:
+              frame.parentFrame()?.url() ||
+              null
+          }
+        );
+      } catch (
+        error
+      ) {
+        logger.warn(
+          "VFS FRAME ATTACHED LOG FAILED",
+          {
+            applicationId:
+              this.applicationId,
+
+            message:
+              error?.message ||
+              String(error)
+          }
+        );
+      }
+    }
+  );
+
+  this.page.on(
+    "framenavigated",
+    frame => {
+      try {
+        logger.info(
+          "VFS FRAME NAVIGATED",
+          {
+            applicationId:
+              this.applicationId,
+
+            frameId:
+              frame?._id ||
+              null,
+
+            url:
+              frame.url(),
+
+            isMainFrame:
+              frame.isMainFrame(),
+
+            parentUrl:
+              frame.parentFrame()?.url() ||
+              null
+          }
+        );
+      } catch (
+        error
+      ) {
+        logger.warn(
+          "VFS FRAME NAVIGATION LOG FAILED",
+          {
+            applicationId:
+              this.applicationId,
+
+            message:
+              error?.message ||
+              String(error)
+          }
+        );
+      }
+    }
+  );
+
+  this.page.on(
+    "framedetached",
+    frame => {
+      try {
+        logger.warn(
+          "VFS FRAME DETACHED",
+          {
+            applicationId:
+              this.applicationId,
+
+            frameId:
+              frame?._id ||
+              null,
+
+            url:
+              frame.url(),
+
+            isMainFrame:
+              frame.isMainFrame(),
+
+            parentUrl:
+              frame.parentFrame()?.url() ||
+              null
+          }
+        );
+      } catch (
+        error
+      ) {
+        logger.warn(
+          "VFS FRAME DETACHED LOG FAILED",
+          {
+            applicationId:
+              this.applicationId,
+
+            message:
+              error?.message ||
+              String(error)
+          }
+        );
+      }
+    }
+  );
+
+  this.page.on(
+    "pageerror",
+    error => {
+      try {
+        logger.warn(
+          "VFS PAGE ERROR",
+          {
+            applicationId:
+              this.applicationId,
+
+            message:
+              error?.message ||
+              String(error)
+          }
+        );
+      } catch (
+        logError
+      ) {
+        logger.warn(
+          "VFS PAGE ERROR LOG FAILED",
+          {
+            applicationId:
+              this.applicationId,
+
+            message:
+              logError?.message ||
+              String(logError)
+          }
+        );
+      }
+    }
+  );
+
+  logger.info(
+    "VFS FRAME DIAGNOSTICS ATTACHED",
+    {
+      applicationId:
+        this.applicationId
+    }
+  );
+}
     /*
      * ==========================================================
      * SESSÃO BRIGHT DATA — ANTES DA PRIMEIRA NAVEGAÇÃO
