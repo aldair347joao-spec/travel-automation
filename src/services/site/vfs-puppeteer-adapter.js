@@ -2759,30 +2759,63 @@ async findVfsLoginFields() {
       };
 
     const selectorFor =
-      element => {
-        if (!element) {
-          return null;
-        }
+  element => {
+    if (!element) {
+      return null;
+    }
 
-        if (element.id) {
-          return `#${CSS.escape(
-            element.id
-          )}`;
-        }
+    if (element.id) {
+      return `#${CSS.escape(
+        element.id
+      )}`;
+    }
 
-        const name =
-          element.getAttribute(
-            "name"
-          );
+    const name =
+      element.getAttribute(
+        "name"
+      );
 
-        if (name) {
-          return `${element.tagName.toLowerCase()}[name="${CSS.escape(
-            name
-          )}"]`;
-        }
+    if (name) {
+      return `${element.tagName.toLowerCase()}[name="${CSS.escape(
+        name
+      )}"]`;
+    }
 
-        return null;
-      };
+    /*
+     * Alguns elementos da VFS, especialmente o botão
+     * Sign In, podem não possuir id nem name.
+     *
+     * Criamos um seletor temporário único diretamente
+     * no elemento para que o Puppeteer consiga encontrá-lo.
+     */
+    const attribute =
+      "data-travel-automation-login-target";
+
+    const existing =
+      element.getAttribute(
+        attribute
+      );
+
+    if (existing) {
+      return `[${attribute}="${CSS.escape(
+        existing
+      )}"]`;
+    }
+
+    const value =
+      `target-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 10)}`;
+
+    element.setAttribute(
+      attribute,
+      value
+    );
+
+    return `[${attribute}="${CSS.escape(
+      value
+    )}"]`;
+  };
 
     const inputs =
       Array.from(
