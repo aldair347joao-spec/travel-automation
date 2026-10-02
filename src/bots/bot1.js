@@ -877,21 +877,6 @@ class Bot1 {
       }
     );
   }
-
-
-  attemptsExceeded(
-    application
-  ) {
-
-    return (
-      Number(
-        application?.bot1?.attempts || 0
-      ) >
-      config.maxAttempts
-    );
-  }
-
-
   /*
    * =======================================================
    * PREPARE
@@ -950,25 +935,6 @@ class Bot1 {
     const wasAlreadyReadyForAutomation =
   application.workflowState ===
   STATES.READY_FOR_AUTOMATION;
-
-    if (
-      this.attemptsExceeded(
-        application
-      )
-    ) {
-
-      await this.markError(
-        application,
-        "BOT1_MAX_ATTEMPTS",
-        new Error(
-          "Maximum Bot 1 attempts exceeded"
-        )
-      );
-
-      throw new Error(
-        "Maximum Bot 1 attempts exceeded"
-      );
-    }
 
   application.workflow =
   application.workflow ||
@@ -3448,26 +3414,6 @@ await this.heartbeat(
           "Slot already claimed or application unavailable"
 
       };
-    }
-
-
-    if (
-      this.attemptsExceeded(
-        application
-      )
-    ) {
-
-      await this.markError(
-        application,
-        "BOT1_MAX_ATTEMPTS",
-        new Error(
-          "Maximum Bot 1 attempts exceeded"
-        )
-      );
-
-      throw new Error(
-        "Maximum Bot 1 attempts exceeded"
-      );
     }
 
 
