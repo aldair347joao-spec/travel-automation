@@ -2270,8 +2270,8 @@ async startBrightDataLoginSession() {
     !currentUrl.includes("/application-detail")
   ) {
     await this.navigate(
-      `${VFS_BASE_URL}/dashboard`
-    );
+  `${VFS_BASE_URL}/login`
+);
   } else {
     await this.detectState();
 
