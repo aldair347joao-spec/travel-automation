@@ -1,6 +1,7 @@
 require("dotenv").config();
 
-const puppeteer = require("puppeteer");
+const puppeteer =
+  require("puppeteer");
 
 const TARGET_URL =
   "https://visa.vfsglobal.com/ago/en/prt/login";
@@ -16,29 +17,10 @@ async function main() {
   }
 
   const connectionURL =
-    new URL(
-      "wss://browser.scrapeless.com/api/v2/browser"
-    );
-
-  connectionURL.searchParams.set(
-    "token",
-    apiKey
-  );
-
-  connectionURL.searchParams.set(
-    "sessionTTL",
-    "180"
-  );
-
-  connectionURL.searchParams.set(
-    "proxyCountry",
-    "ANY"
-  );
-
-  connectionURL.searchParams.set(
-    "sessionName",
-    "travel-automation-vfs-test"
-  );
+    "wss://browser.scrapeless.com/api/v2/browser" +
+    `?token=${encodeURIComponent(apiKey)}` +
+    "&sessionTTL=180" +
+    "&proxyCountry=ANY";
 
   console.log(
     "[SCRAPELESS TEST] Connecting..."
@@ -47,25 +29,22 @@ async function main() {
   const browser =
     await puppeteer.connect({
       browserWSEndpoint:
-        connectionURL.toString(),
+        connectionURL,
+
       defaultViewport:
         null
     });
 
-  try {
-    const pages =
-      await browser.pages();
+  console.log(
+    "[SCRAPELESS TEST] Connected."
+  );
 
+  try {
     const page =
-      pages[0] ||
       await browser.newPage();
 
     page.setDefaultNavigationTimeout(
       45000
-    );
-
-    console.log(
-      "[SCRAPELESS TEST] Connected."
     );
 
     console.log(
@@ -78,6 +57,7 @@ async function main() {
       {
         waitUntil:
           "domcontentloaded",
+
         timeout:
           45000
       }
@@ -132,7 +112,10 @@ async function main() {
       );
 
     console.log(
-      "[SCRAPELESS TEST] RESULT:",
+      "[SCRAPELESS TEST] RESULT:"
+    );
+
+    console.log(
       JSON.stringify(
         result,
         null,
@@ -145,6 +128,10 @@ async function main() {
     );
   } finally {
     await browser.close();
+
+    console.log(
+      "[SCRAPELESS TEST] Browser closed."
+    );
   }
 }
 
