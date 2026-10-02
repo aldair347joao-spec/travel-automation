@@ -81,8 +81,12 @@ this.automationScanRunning =
 
 this.prepareInFlight =
   new Map();
-    this.workerId =
-      crypto.randomUUID();
+
+this.adapterInFlight =
+  new Map();
+
+this.workerId =
+  crypto.randomUUID();
 
     this.stats = {
       slotEvents:
@@ -137,39 +141,161 @@ this.prepareInFlight =
    * ======================================================= */
 
   async getAdapter(
-    applicationId
+  applicationId
+) {
+
+  const key =
+    String(applicationId);
+
+
+  /*
+   * =======================================================
+   * ADAPTER JÁ INICIALIZADO
+   * =======================================================
+   */
+
+  if (
+    this.adapters.has(
+      key
+    )
   ) {
 
-    if (
-      this.adapters.has(
-        applicationId
-      )
-    ) {
-
-      return this.adapters.get(
-        applicationId
-      );
-    }
-
-
-    const adapter =
-      this.siteFactory(
-        applicationId
-      );
-
-    await adapter.initialize();
-
-
-    this.adapters.set(
-      applicationId,
-      adapter
+    return this.adapters.get(
+      key
     );
-
-
-    return adapter;
   }
 
 
+  /*
+   * =======================================================
+   * ADAPTER JÁ EM PROCESSO DE INICIALIZAÇÃO
+   * =======================================================
+   *
+   * Vários consumidores podem pedir o mesmo adapter
+   * simultaneamente:
+   *
+   * - Bot 1
+   * - Bot 2 / Radar
+   * - recuperação automática
+   * - rota administrativa
+   *
+   * Todos devem esperar a MESMA inicialização.
+   */
+
+  const existingInitialization =
+    this.adapterInFlight.get(
+      key
+    );
+
+  if (
+    existingInitialization
+  ) {
+
+    return existingInitialization;
+  }
+
+
+  /*
+   * =======================================================
+   * CRIAR UMA ÚNICA INICIALIZAÇÃO
+   * =======================================================
+   */
+
+  const initialization =
+    (async () => {
+
+      const adapter =
+        this.siteFactory(
+          key
+        );
+
+
+      try {
+
+        await adapter.initialize();
+
+
+        this.adapters.set(
+          key,
+          adapter
+        );
+
+
+        return adapter;
+
+      } catch (
+        error
+      ) {
+
+        /*
+         * Se a conexão falhar, não deixamos
+         * um adapter parcialmente inicializado
+         * dentro do cache.
+         */
+
+        try {
+
+          if (
+            typeof adapter.close ===
+            "function"
+          ) {
+
+            await adapter.close();
+
+          }
+
+        } catch (
+          closeError
+        ) {
+
+          logger.warn(
+            "Failed to close adapter after initialization failure",
+            {
+              applicationId:
+                key,
+
+              error:
+                closeError?.message ||
+                String(
+                  closeError
+                )
+            }
+          );
+        }
+
+
+        throw error;
+      }
+
+    })();
+
+
+  /*
+   * IMPORTANTE:
+   *
+   * Guardamos a Promise ANTES de esperar.
+   * Assim nenhuma segunda chamada consegue
+   * criar outro adapter para a mesma candidatura.
+   */
+
+  this.adapterInFlight.set(
+    key,
+    initialization
+  );
+
+
+  try {
+
+    return await initialization;
+
+  } finally {
+
+    this.adapterInFlight.delete(
+      key
+    );
+
+  }
+}
   /* =======================================================
    * BOT 1
    * ======================================================= */
