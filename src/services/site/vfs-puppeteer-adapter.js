@@ -2268,8 +2268,81 @@ async startBrightDataLoginSession() {
    * ============================================================
    */
 
-  const loginForm =
-    await this.findVfsLoginFields();
+  let loginForm =
+  null;
+
+const loginDetectionAttempts =
+  6;
+
+for (
+  let attempt = 1;
+  attempt <=
+  loginDetectionAttempts;
+  attempt++
+) {
+  loginForm =
+    await this.findVfsLoginFields()
+      .catch(
+        error => {
+          logger.warn(
+            "VFS LOGIN FORM DETECTION ATTEMPT FAILED",
+            {
+              applicationId,
+              attempt,
+              message:
+                error?.message ||
+                String(error)
+            }
+          );
+
+          return null;
+        }
+      );
+
+  logger.info(
+    "VFS LOGIN FORM DETECTION ATTEMPT",
+    {
+      applicationId,
+      attempt,
+
+      emailFieldFound:
+        Boolean(
+          loginForm?.email
+        ),
+
+      passwordFieldFound:
+        Boolean(
+          loginForm?.password
+        ),
+
+      submitFound:
+        Boolean(
+          loginForm?.submit
+        ),
+
+      url:
+        page.url(),
+
+      reason:
+        "Aguardando a renderização dinâmica do formulário de autenticação VFS."
+    }
+  );
+
+  if (
+    loginForm?.email &&
+    loginForm?.password
+  ) {
+    break;
+  }
+
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        1500
+      )
+  );
+}
    logger.info(
   "VFS LOGIN FORM DETECTION",
   {
