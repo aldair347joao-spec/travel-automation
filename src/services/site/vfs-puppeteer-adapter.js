@@ -1650,18 +1650,21 @@ if (
           String(error)
       };
 
-    } finally {
+      } finally {
       if (client) {
         client.off(
-          "Captcha.detected"
+          "Captcha.detected",
+          onDetected
         );
 
         client.off(
-          "Captcha.solveFinished"
+          "Captcha.solveFinished",
+          onFinished
         );
 
         client.off(
-          "Captcha.solveFailed"
+          "Captcha.solveFailed",
+          onFailed
         );
       }
     }
@@ -2471,7 +2474,7 @@ if (
     ) {
 
       logger.info(
-        "VFS CAPTCHA resolved by Bright Data",
+        "VFS CAPTCHA resolved by Scrapeless",
         {
           applicationId:
             applicationId
@@ -2485,7 +2488,7 @@ if (
        * ainda apresenta o checkpoint.
        */
       logger.warn(
-        "Bright Data reported CAPTCHA solved but VFS still shows CAPTCHA",
+        "Scrapeless reported CAPTCHA solved but VFS still shows CAPTCHA",
         {
           applicationId:
             applicationId
@@ -2520,7 +2523,7 @@ if (
         "CAPTCHA_REQUIRED",
 
       reason:
-        "Bright Data could not complete the VFS CAPTCHA automatically.",
+        "Scrapeless could not complete the VFS CAPTCHA automatically.",
 
       state:
         this.state,
