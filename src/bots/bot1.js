@@ -356,7 +356,15 @@ const BOT1_VFS_STAGES = {
     key: "SESSION",
     label: "Sessão VFS"
   },
+  filling_application: {
+    key: "NEW_BOOKING",
+    label: "Preparando candidatura"
+  },
 
+  identity_verification: {
+    key: "PASSPORT",
+    label: "Verificação de identidade"
+  },
   navigator_starting: {
     key: "SESSION",
     label: "Preparando navegação VFS"
@@ -421,7 +429,45 @@ const BOT1_VFS_STAGES = {
     key: "AVAILABILITY",
     label: "Verificando disponibilidade"
   },
+    navigator_continue: {
+    key: "SLOT",
+    label: "Avançando no processo VFS"
+  },
 
+  navigator_passport_upload: {
+    key: "PASSPORT",
+    label: "Enviando passaporte"
+  },
+
+  navigator_fill_details: {
+    key: "DETAILS",
+    label: "Preenchendo dados de contacto"
+  },
+
+  navigator_facial: {
+    key: "FACIAL",
+    label: "Reconhecimento facial"
+  },
+
+  navigator_review: {
+    key: "REVIEW",
+    label: "Revisão da candidatura"
+  },
+
+  navigator_extract_payment: {
+    key: "REFERENCE",
+    label: "Extraindo dados de pagamento"
+  },
+
+  navigator_reinspect: {
+    key: "AVAILABILITY",
+    label: "Reinspecionando disponibilidade VFS"
+  },
+
+  facial_vfs_instruction: {
+    key: "FACIAL",
+    label: "Aguardando instrução facial VFS"
+  },
   navigator_slot_found: {
     key: "AVAILABILITY_FOUND",
     label: "Disponibilidade encontrada"
@@ -6222,7 +6268,8 @@ if (
       normalizePaymentDetails(
         confirmation || {}
       );
-
+        const applicationId =
+      application._id.toString();
 
     application.result =
       application.result || {};
