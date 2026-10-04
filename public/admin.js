@@ -1566,7 +1566,9 @@ const AdminApp = (() => {
         renderBotDetails(
             application
         );
-
+       renderVfsJourney(
+    application
+     );
         renderPaymentDetails(
             application
         );
@@ -2663,7 +2665,666 @@ const AdminApp = (() => {
         );
     }
 
+  /*
+ * ========================================================
+ * VFS JOURNEY
+ * ========================================================
+ */
 
+const VFS_JOURNEY_STAGES = [
+    {
+        key: "SESSION",
+        label: "Sessão VFS"
+    },
+    {
+        key: "AUTHENTICATION",
+        label: "Autenticação"
+    },
+    {
+        key: "CAPTCHA",
+        label: "CAPTCHA"
+    },
+    {
+        key: "OTP",
+        label: "OTP"
+    },
+    {
+        key: "NEW_BOOKING",
+        label: "Nova reserva"
+    },
+    {
+        key: "CENTER",
+        label: "Centro Luanda"
+    },
+    {
+        key: "VISA_TYPE",
+        label: "Categoria de visto"
+    },
+    {
+        key: "AVAILABILITY",
+        label: "Disponibilidade"
+    },
+    {
+        key: "AVAILABILITY_FOUND",
+        label: "Vaga encontrada"
+    },
+    {
+        key: "BOT2",
+        label: "Bot 2 / Monitorização"
+    },
+    {
+        key: "SLOT",
+        label: "Data e horário"
+    },
+    {
+        key: "PASSPORT",
+        label: "Passaporte"
+    },
+    {
+        key: "DETAILS",
+        label: "Dados de contacto"
+    },
+    {
+        key: "FACIAL",
+        label: "Reconhecimento facial"
+    },
+    {
+        key: "FACIAL_COMPLETED",
+        label: "Reconhecimento facial concluído"
+    },
+    {
+        key: "REVIEW",
+        label: "Revisão"
+    },
+    {
+        key: "PAYMENT",
+        label: "Pagamento"
+    },
+    {
+        key: "REFERENCE",
+        label: "Referência"
+    },
+    {
+        key: "COMPLETED",
+        label: "Agendamento concluído"
+    }
+];
+
+
+function getVfsJourneyIndex(
+    stageKey
+) {
+
+    const index =
+        VFS_JOURNEY_STAGES.findIndex(
+            stage =>
+                stage.key === stageKey
+        );
+
+    return index;
+}
+
+
+function isHeartbeatOnline(
+    heartbeatAt
+) {
+
+    if (!heartbeatAt) {
+        return false;
+    }
+
+    const timestamp =
+        new Date(
+            heartbeatAt
+        ).getTime();
+
+    if (
+        Number.isNaN(
+            timestamp
+        )
+    ) {
+        return false;
+    }
+
+    /*
+     * Consideramos online quando
+     * o heartbeat ocorreu nos últimos
+     * 90 segundos.
+     */
+
+    return (
+        Date.now() -
+        timestamp
+    ) <= 90000;
+}
+
+
+function renderVfsJourney(
+    application
+) {
+
+    const progress =
+        application?.bot1?.vfsProgress ||
+        {};
+
+    const stageKey =
+        progress.stage ||
+        "SESSION";
+
+    const stageLabel =
+        progress.stageLabel ||
+        "A iniciar navegação VFS";
+
+    const action =
+        progress.action ||
+        application?.bot1?.lastAction ||
+        "—";
+
+    const heartbeatAt =
+        progress.updatedAt ||
+        application?.bot1?.heartbeatAt ||
+        null;
+
+    const history =
+        Array.isArray(
+            progress.history
+        )
+            ? progress.history
+            : [];
+
+    const currentIndex =
+        getVfsJourneyIndex(
+            stageKey
+        );
+
+    /*
+     * ETAPA ATUAL
+     */
+
+    setText(
+        "#vfsCurrentStage",
+        stageLabel
+    );
+
+    setText(
+        "#vfsCurrentAction",
+        action
+    );
+
+    setText(
+        "#vfsHeartbeatAt",
+        heartbeatAt
+            ? formatDate(
+                heartbeatAt
+            )
+            : "Sem heartbeat"
+    );
+
+
+    /*
+     * HEARTBEAT
+     */
+
+    const heartbeatOnline =
+        isHeartbeatOnline(
+            heartbeatAt
+        );
+
+    setText(
+        "#vfsHeartbeatStatus",
+        heartbeatOnline
+            ? "ONLINE"
+            : "OFFLINE"
+    );
+
+
+    /*
+     * STATUS GERAL
+     */
+
+    const journeyStatus =
+        $(
+            "#vfsJourneyStatus"
+        );
+
+    if (journeyStatus) {
+
+        journeyStatus.classList.remove(
+            "online",
+            "offline",
+            "completed",
+            "waiting"
+        );
+
+        if (
+            application.status ===
+            "completed" ||
+            stageKey ===
+            "COMPLETED"
+        ) {
+
+            journeyStatus.textContent =
+                "Concluído";
+
+            journeyStatus.classList.add(
+                "completed"
+            );
+
+        } else if (
+            application.bot1?.status ===
+            "waiting"
+        ) {
+
+            journeyStatus.textContent =
+                "A aguardar";
+
+            journeyStatus.classList.add(
+                "waiting"
+            );
+
+        } else if (
+            heartbeatOnline
+        ) {
+
+            journeyStatus.textContent =
+                "Em execução";
+
+            journeyStatus.classList.add(
+                "online"
+            );
+
+        } else {
+
+            journeyStatus.textContent =
+                "Sem heartbeat";
+
+            journeyStatus.classList.add(
+                "offline"
+            );
+        }
+    }
+
+
+    /*
+     * INDICADOR
+     */
+
+    const indicator =
+        $(
+            "#vfsStageIndicator"
+        );
+
+    if (indicator) {
+
+        indicator.classList.remove(
+            "online",
+            "offline",
+            "completed"
+        );
+
+        if (
+            stageKey ===
+            "COMPLETED"
+        ) {
+
+            indicator.textContent =
+                "✓";
+
+            indicator.classList.add(
+                "completed"
+            );
+
+        } else if (
+            heartbeatOnline
+        ) {
+
+            indicator.textContent =
+                "●";
+
+            indicator.classList.add(
+                "online"
+            );
+
+        } else {
+
+            indicator.textContent =
+                "●";
+
+            indicator.classList.add(
+                "offline"
+            );
+        }
+    }
+
+
+    /*
+     * ETAPAS
+     */
+
+    const stepsContainer =
+        $(
+            "#vfsJourneySteps"
+        );
+
+    if (
+        !stepsContainer
+    ) {
+        return;
+    }
+
+    stepsContainer.innerHTML =
+        VFS_JOURNEY_STAGES
+            .map(
+                (
+                    stage,
+                    index
+                ) => {
+
+                    let state =
+                        "pending";
+
+                    if (
+                        stage.key ===
+                        stageKey
+                    ) {
+
+                        state =
+                            "current";
+
+                    } else if (
+                        currentIndex >=
+                        0 &&
+                        index <
+                        currentIndex
+                    ) {
+
+                        state =
+                            "completed";
+                    }
+
+                    /*
+                     * Bot 2 só fica destacado
+                     * quando realmente foi ativado.
+                     */
+
+                    if (
+                        stage.key ===
+                        "BOT2" &&
+                        stageKey !==
+                        "BOT2" &&
+                        !application.bot2
+                            ?.monitoring
+                    ) {
+
+                        state =
+                            "pending";
+                    }
+
+                    const icon =
+                        state ===
+                        "completed"
+                            ? "✓"
+                            : state ===
+                              "current"
+                                ? "●"
+                                : "○";
+
+                    return `
+                        <div
+                            class="vfs-journey-step ${state}"
+                            data-stage="${escapeHtml(
+                                stage.key
+                            )}"
+                        >
+
+                            <div class="vfs-step-marker">
+                                ${icon}
+                            </div>
+
+                            <div class="vfs-step-copy">
+                                <strong>
+                                    ${escapeHtml(
+                                        stage.label
+                                    )}
+                                </strong>
+
+                                ${
+                                    state ===
+                                    "current"
+                                        ? `
+                                            <span>
+                                                ${escapeHtml(
+                                                    stageLabel
+                                                )}
+                                            </span>
+                                        `
+                                        : ""
+                                }
+
+                            </div>
+
+                        </div>
+                    `;
+                }
+            )
+            .join("");
+
+
+    /*
+     * HISTÓRICO
+     */
+
+    const historyContainer =
+        $(
+            "#vfsJourneyHistory"
+        );
+
+    if (
+        !historyContainer
+    ) {
+        return;
+    }
+
+    const visibleHistory =
+        history
+            .slice()
+            .reverse()
+            .slice(
+                0,
+                8
+            );
+
+    if (
+        !visibleHistory.length
+    ) {
+
+        historyContainer.innerHTML =
+            `
+                <div class="vfs-history-empty">
+                    Ainda não existem eventos registados.
+                </div>
+            `;
+
+        return;
+    }
+
+    historyContainer.innerHTML =
+        `
+            <div class="vfs-history-title">
+                ÚLTIMAS ATIVIDADES
+            </div>
+
+            ${visibleHistory
+                .map(
+                    item => `
+                        <div class="vfs-history-row">
+
+                            <span class="vfs-history-dot"></span>
+
+                            <div>
+                                <strong>
+                                    ${escapeHtml(
+                                        item.stageLabel ||
+                                        item.stage ||
+                                        "Processamento"
+                                    )}
+                                </strong>
+
+                                <small>
+                                    ${escapeHtml(
+                                        item.action ||
+                                        "—"
+                                    )}
+                                </small>
+                            </div>
+
+                            <time>
+                                ${escapeHtml(
+                                    formatDate(
+                                        item.at
+                                    )
+                                )}
+                            </time>
+
+                        </div>
+                    `
+                )
+                .join("")}
+        `;
+
+
+    /*
+     * REFERÊNCIA FINAL
+     */
+
+    renderVfsReference(
+        application
+    );
+}
+
+
+function renderVfsReference(
+    application
+) {
+
+    const reference =
+        application?.result
+            ?.reference ||
+        application?.payment
+            ?.reference ||
+        null;
+
+    let box =
+        document.querySelector(
+            "#vfsReferenceBox"
+        );
+
+    if (!box) {
+
+        const journeyCard =
+            document.querySelector(
+                ".vfs-journey-card"
+            );
+
+        if (!journeyCard) {
+            return;
+        }
+
+        box =
+            document.createElement(
+                "div"
+            );
+
+        box.id =
+            "vfsReferenceBox";
+
+        box.className =
+            "vfs-reference-box";
+
+        journeyCard.appendChild(
+            box
+        );
+    }
+
+    if (!reference) {
+
+        box.innerHTML =
+            `
+                <div class="vfs-reference-pending">
+                    <span>REFERÊNCIA</span>
+                    <strong>
+                        Ainda não extraída
+                    </strong>
+                </div>
+            `;
+
+        return;
+    }
+
+    box.innerHTML =
+        `
+            <div class="vfs-reference-label">
+                REFERÊNCIA DO AGENDAMENTO
+            </div>
+
+            <div class="vfs-reference-value">
+                <strong>
+                    ${escapeHtml(
+                        reference
+                    )}
+                </strong>
+
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    data-copy-reference="${escapeHtml(
+                        reference
+                    )}"
+                >
+                    Copiar referência
+                </button>
+            </div>
+        `;
+
+    const button =
+        box.querySelector(
+            "[data-copy-reference]"
+        );
+
+    if (button) {
+
+        button.addEventListener(
+            "click",
+            async () => {
+
+                const value =
+                    button.dataset
+                        .copyReference;
+
+                try {
+
+                    await navigator
+                        .clipboard
+                        .writeText(
+                            value
+                        );
+
+                    showToast(
+                        "Referência copiada",
+                        value
+                    );
+
+                } catch {
+
+                    showToast(
+                        "Referência",
+                        value
+                    );
+                }
+            }
+        );
+    }
+}
     /*
      * ========================================================
      * PAYMENT
