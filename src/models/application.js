@@ -832,7 +832,60 @@ const applicationSchema = new mongoose.Schema(
         type: Number,
         default: 0
       },
+      /*
+       * =====================================================
+       * PROGRESSO VFS PARA ADMIN
+       * =====================================================
+       */
 
+      vfsProgress: {
+        stage: {
+          type: String,
+          default: "UNKNOWN"
+        },
+
+        stageLabel: {
+          type: String,
+          default: "Aguardando início"
+        },
+
+        action: {
+          type: String,
+          default: null
+        },
+
+        updatedAt: {
+          type: Date,
+          default: null
+        },
+
+        history: {
+          type: [
+            {
+              stage: {
+                type: String,
+                default: "UNKNOWN"
+              },
+
+              stageLabel: {
+                type: String,
+                default: "Aguardando início"
+              },
+
+              action: {
+                type: String,
+                default: null
+              },
+
+              at: {
+                type: Date,
+                default: null
+              }
+            }
+          ],
+          default: []
+        }
+      },
       lastAttemptAt: {
         type: Date,
         default: null
