@@ -3,8 +3,6 @@
 const fs = require("fs");
 const path = require("path");
 const puppeteer = require("puppeteer");
-const chromium = require("@sparticuz/chromium");
-
 const {
   getCredentialsForAutomation,
   markAutomationActive
@@ -23,40 +21,7 @@ const livenessVideoStorageService =
 const SiteAdapter = require("./site-adapter");
 const VfsDomInspector = require("./vfs-dom-inspector");
 const logger = require("../../utils/logger");
-/*
- * ============================================================
- * LOCK GLOBAL DO CHROMIUM
- * ============================================================
- *
- * O @sparticuz/chromium usa um executável extraído em /tmp.
- *
- * Bot1 e Bot2 podem pedir um navegador praticamente ao mesmo
- * tempo. Se ambos tentarem inicializar o mesmo executável,
- * o Linux pode responder:
- *
- *     spawn ETXTBSY
- *
- * Mantemos uma fila global no processo Node para garantir que
- * somente uma inicialização Chromium aconteça de cada vez.
- */
 
-let chromiumLaunchLock = Promise.resolve();
-
-async function acquireChromiumLaunchLock() {
-  const previousLock =
-    chromiumLaunchLock;
-
-  let releaseLock;
-
-  chromiumLaunchLock =
-    new Promise(resolve => {
-      releaseLock = resolve;
-    });
-
-  await previousLock;
-
-  return releaseLock;
-}
 const VFS_BASE_URL =
   process.env.VFS_BASE_URL ||
   "https://visa.vfsglobal.com/ago/en/prt";
@@ -1066,7 +1031,7 @@ if (
       });
 
       logger.info(
-        "Bright Data VFS persistent camera layer installed",
+        "Scrapeless VFS persistent camera layer installed",
         {
           applicationId:
             this.applicationId
@@ -1075,7 +1040,7 @@ if (
 
     } catch (error) {
       logger.warn(
-        "Could not install Bright Data camera layer",
+        "Could not install Scrapeless camera layer",
         {
           applicationId:
             this.applicationId,
@@ -1089,7 +1054,7 @@ if (
 
   } catch (error) {
     logger.error(
-      "Failed to create Bright Data browser page",
+      "Failed to create Scrapeless browser page",
       {
         applicationId:
           this.applicationId,
@@ -1143,7 +1108,7 @@ if (
     );
 
     logger.info(
-      "VFS camera/microphone permissions configured on Bright Data Browser",
+      "VFS camera/microphone permissions configured on Scrapeless Browser",
       {
         applicationId:
           this.applicationId,
@@ -1155,7 +1120,7 @@ if (
 
   } catch (error) {
     logger.warn(
-      "Could not configure VFS media permissions on Bright Data Browser",
+      "Could not configure VFS media permissions on Scrapeless Browser",
       {
         applicationId:
           this.applicationId,
@@ -1193,26 +1158,21 @@ if (
   this.state =
     "INITIALIZED";
 
-  logger.info(
-    "VFS Puppeteer adapter initialized with Bright Data Browser API",
+    logger.info(
+    "VFS Puppeteer adapter initialized with Scrapeless Agent Browser",
     {
       applicationId:
         this.applicationId,
 
       remoteBrowser:
-        true,
-
-      host:
-        brightDataHost,
-
-      port:
-        brightDataPort
+        true
     }
   );
 
   return true;
 }
-      async solveScrapelessCaptcha() {
+      
+  async solveScrapelessCaptcha() {
     const page =
       await this.ensurePage();
 
@@ -1224,149 +1184,430 @@ if (
       };
     }
 
+    const captchaTimeout =
+      Number(
+        process.env.SCRAPELESS_CAPTCHA_TIMEOUT_MS
+      ) || 120000;
+
+    let captchaDetected =
+      false;
+
+    let captchaFinished =
+      false;
+
+    let captchaFailed =
+      false;
+
+    let client =
+      null;
+
+    const sleep =
+      milliseconds =>
+        new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              milliseconds
+            )
+        );
+
     try {
-      const client =
+      client =
         await page
           .target()
           .createCDPSession();
 
-      let solvedMessage =
-        null;
+      /*
+       * ========================================================
+       * EVENTO: CAPTCHA DETECTADO
+       * ========================================================
+       */
 
-      let detected =
-        false;
+      const onDetected =
+        message => {
+          captchaDetected =
+            true;
 
-      const captchaTimeout =
-        Number(
-          process.env.SCRAPELESS_CAPTCHA_TIMEOUT_MS
-        ) || 120000;
+          logger.info(
+            "Scrapeless CAPTCHA detected",
+            {
+              applicationId:
+                this.applicationId,
 
-      const solveFinishedPromise =
-        new Promise(resolve => {
-          const onDetected =
-            message => {
-              detected = true;
-
-              logger.info(
-                "Scrapeless CAPTCHA detected",
-                {
-                  applicationId:
-                    this.applicationId,
-
-                  message:
-                    message || null
-                }
-              );
-            };
-
-          const onFinished =
-            message => {
-              solvedMessage =
-                message || null;
-
-              client.off(
-                "Captcha.detected",
-                onDetected
-              );
-
-              client.off(
-                "Captcha.solveFinished",
-                onFinished
-              );
-
-              resolve(
-                message || {}
-              );
-            };
-
-          client.on(
-            "Captcha.detected",
-            onDetected
+              message:
+                message || null
+            }
           );
-
-          client.on(
-            "Captcha.solveFinished",
-            onFinished
-          );
-        });
+        };
 
       /*
-       * O Agent Browser possui o solver oficial integrado.
+       * ========================================================
+       * EVENTO: CAPTCHA RESOLVIDO
+       * ========================================================
        */
-      await client
-        .send(
+
+      const onFinished =
+        message => {
+          captchaFinished =
+            true;
+
+          logger.info(
+            "Scrapeless CAPTCHA solve finished",
+            {
+              applicationId:
+                this.applicationId,
+
+              message:
+                message || null
+            }
+          );
+        };
+
+      /*
+       * ========================================================
+       * EVENTO: CAPTCHA FALHOU
+       * ========================================================
+       */
+
+      const onFailed =
+        message => {
+          captchaFailed =
+            true;
+
+          logger.warn(
+            "Scrapeless CAPTCHA solve failed",
+            {
+              applicationId:
+                this.applicationId,
+
+              message:
+                message || null
+            }
+          );
+        };
+
+      client.on(
+        "Captcha.detected",
+        onDetected
+      );
+
+      client.on(
+        "Captcha.solveFinished",
+        onFinished
+      );
+
+      client.on(
+        "Captcha.solveFailed",
+        onFailed
+      );
+
+      /*
+       * ========================================================
+       * SOLICITAR RESOLUÇÃO OFICIAL
+       * ========================================================
+       *
+       * O Agent Browser já possui o solver integrado.
+       *
+       * Não implementamos bypass próprio do Cloudflare.
+       */
+
+      try {
+        await client.send(
           "Captcha.solve"
-        )
-        .catch(
-          error => {
-            logger.warn(
-              "Scrapeless Captcha.solve request returned an error",
-              {
-                applicationId:
-                  this.applicationId,
-
-                error:
-                  error?.message ||
-                  String(error)
-              }
-            );
-          }
         );
-
-      const result =
-        await Promise.race([
-          solveFinishedPromise,
-
-          new Promise(resolve =>
-            setTimeout(
-              () =>
-                resolve({
-                  timeout:
-                    true
-                }),
-              captchaTimeout
-            )
-          )
-        ]);
-
-      if (
-        result?.timeout
-      ) {
+      } catch (error) {
         logger.warn(
-          "Scrapeless CAPTCHA solve timeout",
+          "Scrapeless Captcha.solve request failed",
           {
             applicationId:
               this.applicationId,
 
-            detected,
-
-            timeout:
-              captchaTimeout
+            error:
+              error?.message ||
+              String(error)
           }
         );
-
-        return {
-          attempted:
-            true,
-
-          solved:
-            false,
-
-          status:
-            "TIMEOUT"
-        };
       }
 
-      logger.info(
-        "Scrapeless CAPTCHA solve completed",
+      /*
+       * ========================================================
+       * AGUARDAR RESULTADO
+       * ========================================================
+       *
+       * Não dependemos somente do evento.
+       *
+       * Para Cloudflare Challenge, verificamos também
+       * se a página de segurança desapareceu e se o
+       * formulário VFS apareceu.
+       */
+
+      const startedAt =
+        Date.now();
+
+      while (
+        Date.now() -
+          startedAt <
+        captchaTimeout
+      ) {
+
+        /*
+         * Se o solver confirmou sucesso,
+         * damos uma pequena janela para a VFS
+         * atualizar o DOM.
+         */
+        if (
+          captchaFinished
+        ) {
+          await sleep(1200);
+        }
+
+        /*
+         * ======================================================
+         * ESTADO ATUAL DA PÁGINA
+         * ======================================================
+         */
+
+        const pageSnapshot =
+          await page
+            .evaluate(
+              () => {
+                const bodyText =
+                  String(
+                    document.body?.innerText ||
+                    ""
+                  )
+                    .replace(
+                      /\s+/g,
+                      " "
+                    )
+                    .trim();
+
+                return {
+                  url:
+                    window.location.href,
+
+                  title:
+                    document.title || "",
+
+                  bodyText:
+                    bodyText.slice(
+                      0,
+                      2500
+                    )
+                };
+              }
+            )
+            .catch(
+              () => ({
+                url:
+                  page.url(),
+
+                title:
+                  "",
+
+                bodyText:
+                  ""
+              })
+            );
+
+        const normalizedText =
+          `${pageSnapshot.title} ${pageSnapshot.bodyText}`
+            .toLowerCase();
+
+        /*
+         * ======================================================
+         * VERIFICAR SE A PÁGINA DE SEGURANÇA AINDA EXISTE
+         * ======================================================
+         */
+
+        const securityPage =
+          normalizedText.includes(
+            "just a moment"
+          ) ||
+          normalizedText.includes(
+            "performing security verification"
+          ) ||
+          normalizedText.includes(
+            "checking your browser"
+          ) ||
+          normalizedText.includes(
+            "verify you are human"
+          ) ||
+          normalizedText.includes(
+            "security verification"
+          );
+
+        /*
+         * ======================================================
+         * FORMULÁRIO VFS DISPONÍVEL
+         * ======================================================
+         */
+
+        const loginForm =
+          await this
+            .findVfsLoginFields()
+            .catch(
+              () => null
+            );
+
+        const loginReady =
+          Boolean(
+            loginForm?.email &&
+            loginForm?.password
+          );
+
+        /*
+         * ======================================================
+         * SESSÃO JÁ AUTENTICADA
+         * ======================================================
+         */
+
+        const authenticated =
+          this.isAuthenticatedState();
+
+        /*
+         * ======================================================
+         * SUCESSO
+         * ======================================================
+         */
+
+        if (
+          loginReady
+        ) {
+          logger.info(
+            "Scrapeless VFS challenge cleared — login form available",
+            {
+              applicationId:
+                this.applicationId,
+
+              captchaDetected,
+
+              captchaFinished,
+
+              url:
+                pageSnapshot.url
+            }
+          );
+
+          return {
+            attempted:
+              true,
+
+            solved:
+              true,
+
+            status:
+              "LOGIN_FORM_READY"
+          };
+        }
+
+        if (
+          authenticated
+        ) {
+          logger.info(
+            "Scrapeless VFS challenge cleared — authenticated state detected",
+            {
+              applicationId:
+                this.applicationId,
+
+              captchaDetected,
+
+              captchaFinished,
+
+              url:
+                pageSnapshot.url
+            }
+          );
+
+          return {
+            attempted:
+              true,
+
+            solved:
+              true,
+
+            status:
+              "AUTHENTICATED"
+          };
+        }
+
+        /*
+         * O desafio terminou, mas a página ainda está
+         * a renderizar. Se não há mais sinais de página
+         * de segurança, consideramos o desafio limpo.
+         */
+        if (
+          !securityPage &&
+          (
+            captchaFinished ||
+            captchaDetected
+          )
+        ) {
+          logger.info(
+            "Scrapeless VFS security challenge cleared",
+            {
+              applicationId:
+                this.applicationId,
+
+              captchaDetected,
+
+              captchaFinished,
+
+              url:
+                pageSnapshot.url
+            }
+          );
+
+          return {
+            attempted:
+              true,
+
+            solved:
+              true,
+
+            status:
+              "CHALLENGE_CLEARED"
+          };
+        }
+
+        if (
+          captchaFailed &&
+          !securityPage
+        ) {
+          return {
+            attempted:
+              true,
+
+            solved:
+              true,
+
+            status:
+              "CHALLENGE_CLEARED_AFTER_EVENT"
+          };
+        }
+
+        await sleep(
+          1000
+        );
+      }
+
+      logger.warn(
+        "Scrapeless VFS security challenge timeout",
         {
           applicationId:
             this.applicationId,
 
-          detected,
+          captchaDetected,
 
-          status:
-            "SOLVED"
+          captchaFinished,
+
+          captchaFailed,
+
+          timeout:
+            captchaTimeout,
+
+          url:
+            page.url()
         }
       );
 
@@ -1375,18 +1616,15 @@ if (
           true,
 
         solved:
-          true,
+          false,
 
         status:
-          "SOLVED",
-
-        result:
-          solvedMessage
+          "TIMEOUT"
       };
 
     } catch (error) {
       logger.warn(
-        "Scrapeless CAPTCHA solve failed",
+        "Scrapeless CAPTCHA handling failed",
         {
           applicationId:
             this.applicationId,
@@ -1411,215 +1649,24 @@ if (
           error?.message ||
           String(error)
       };
+
+    } finally {
+      if (client) {
+        client.off(
+          "Captcha.detected"
+        );
+
+        client.off(
+          "Captcha.solveFinished"
+        );
+
+        client.off(
+          "Captcha.solveFailed"
+        );
+      }
     }
-  } 
-          
-    /*
- * ============================================================
- * BRIGHT DATA — NOVA SESSÃO POR LOGIN
- * ============================================================
- *
- * Cada novo login recebe uma sessão Bright Data própria.
- *
- * A sessão permanece a mesma durante aquele login.
- *
- * IMPORTANTE:
- * uma nova sessão não significa garantia matemática de que
- * o endereço IP numérico será diferente do login anterior.
- * A Bright Data escolhe/rota o proxy da nova sessão.
- */
-async startBrightDataLoginSession() {
-  const page =
-    this.page;
-
-  if (!page) {
-    throw new Error(
-      "Bright Data login session cannot start without a page."
-    );
   }
-
-  const sessionPrefix =
-    String(
-      process.env.BRIGHTDATA_BROWSER_SESSION_PREFIX ||
-        "travel-automation"
-    )
-      .trim()
-      .replace(
-        /[^a-zA-Z0-9_-]/g,
-        "-"
-      );
-
-  const randomPart =
-    `${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 12)}`;
-
-  this.brightDataSessionId =
-    `${sessionPrefix}-${randomPart}`;
-
-  try {
-    const cdpClient =
-      await page
-        .target()
-        .createCDPSession();
-
-    await cdpClient.send(
-      "Proxy.useSession",
-      {
-        sessionId:
-          this.brightDataSessionId
-      }
-    );
-
-    this.brightDataProxySessionConfigured =
-      true;
-
-    logger.info(
-      "Bright Data new login session configured",
-      {
-        applicationId:
-          this.applicationId,
-
-        sessionId:
-          this.brightDataSessionId,
-
-        rotationMode:
-          "new-session-per-login"
-      }
-    );
-
-    /*
-     * Diagnóstico do IP efetivamente observado
-     * dentro da sessão.
-     */
-    try {
-      const browserNetwork =
-        await page.evaluate(
-          async () => {
-            try {
-              const response =
-                await fetch(
-                  "https://api.ipify.org?format=json",
-                  {
-                    cache:
-                      "no-store"
-                  }
-                );
-
-              if (!response.ok) {
-                throw new Error(
-                  `IP service returned HTTP ${response.status}`
-                );
-              }
-
-              const data =
-                await response.json();
-
-              return {
-                ip:
-                  data?.ip ||
-                  null
-              };
-            } catch (error) {
-              return {
-                ip:
-                  null,
-
-                error:
-                  error?.message ||
-                  String(error)
-              };
-            }
-          }
-        );
-
-      this.brightDataObservedIp =
-        browserNetwork?.ip ||
-        null;
-
-      if (
-        this.brightDataObservedIp
-      ) {
-        logger.info(
-          "Bright Data login IP detected",
-          {
-            applicationId:
-              this.applicationId,
-
-            sessionId:
-              this.brightDataSessionId,
-
-            ip:
-              this.brightDataObservedIp,
-
-            rotationMode:
-              "new-session-per-login"
-          }
-        );
-      } else {
-        logger.warn(
-          "Bright Data login IP could not be detected",
-          {
-            applicationId:
-              this.applicationId,
-
-            sessionId:
-              this.brightDataSessionId,
-
-            error:
-              browserNetwork?.error ||
-              null
-          }
-        );
-      }
-    } catch (error) {
-      logger.warn(
-        "Bright Data IP diagnostic failed",
-        {
-          applicationId:
-            this.applicationId,
-
-          sessionId:
-            this.brightDataSessionId,
-
-          error:
-            error?.message ||
-            String(error)
-        }
-      );
-    }
-
-    return {
-      success:
-        true,
-
-      sessionId:
-        this.brightDataSessionId,
-
-      ip:
-        this.brightDataObservedIp ||
-        null
-    };
-
-  } catch (error) {
-    this.brightDataProxySessionConfigured =
-      false;
-
-    logger.error(
-      "Failed to configure Bright Data login session",
-      {
-        applicationId:
-          this.applicationId,
-
-        error:
-          error?.message ||
-          String(error)
-      }
-    );
-
-    throw error;
-  }
-}
+  
    /*
    * ============================================================
    * SAÚDE DA SESSÃO VFS DO RADAR
@@ -2373,8 +2420,8 @@ async startBrightDataLoginSession() {
   "CAPTCHA_REQUIRED"
 ) {
 
-  logger.info(
-    "VFS CAPTCHA detected — requesting Bright Data official solver",
+    logger.info(
+    "VFS CAPTCHA detected — requesting Scrapeless official solver",
     {
       applicationId:
         applicationId
@@ -2382,7 +2429,7 @@ async startBrightDataLoginSession() {
   );
 
   const captchaResult =
-    await this.solveBrightDataCaptcha();
+    await this.solveScrapelessCaptcha();
 
   /*
    * Se o Browser API resolveu o desafio,
@@ -2943,8 +2990,8 @@ if (
   "CAPTCHA_REQUIRED"
 ) {
 
-  logger.info(
-    "VFS CAPTCHA detected after login submission — requesting Bright Data official solver",
+    logger.info(
+    "VFS CAPTCHA detected after login submission — requesting Scrapeless official solver",
     {
       applicationId:
         applicationId
@@ -2952,7 +2999,7 @@ if (
   );
 
   const captchaResult =
-    await this.solveBrightDataCaptcha();
+    await this.solveScrapelessCaptcha();
 
   if (
     captchaResult.solved ===
@@ -3018,7 +3065,8 @@ if (
         "CAPTCHA_REQUIRED",
 
       reason:
-        "Bright Data could not complete the VFS CAPTCHA automatically.",
+        reason:
+  "Scrapeless could not complete the VFS security challenge automatically.",
 
       state:
         this.state,
