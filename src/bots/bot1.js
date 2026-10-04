@@ -335,75 +335,11 @@ async function moveState(
       application.workflow.transitionCount || 0
     ) + 1;
 
-  return application;
+    return application;
 }
 
 
 /*
- * =========================================================
- * BOT 1
- * =========================================================
- */
-
-class Bot1 {
-
-  constructor(
-  site
-) {
-
-  this.site =
-    site;
-
-  this.workerId =
-    crypto.randomUUID();
-
-  this.otp =
-    new OtpService();
-
-  this.facial =
-    new FacialService();
-
-  this.passportStorage =
-    new PassportStorageService();
-
-  /*
-   * Cada Bot 1 possui o seu próprio Navigator.
-   *
-   * O Navigator fica preso ao applicationId do
-   * adapter e nunca pode operar outra candidatura.
-   *
-   * Isto é importante quando começarmos a executar
-   * várias candidaturas simultaneamente.
-   */
-  this.navigator =
-    site?.applicationId
-      ? new VfsNavigator(
-          site,
-          {
-            applicationId:
-              site.applicationId,
-            logger
-          }
-        )
-      : null;
-}
-
-  /*
-   * =======================================================
-   * ADMIN AUTOMATION GATE
-   * =======================================================
-   */
-
-  async assertAdminRelease(
-    applicationId
-  ) {
-    await requireAutomationRelease(
-      applicationId
-    );
-
-    return true;
-  }
-  /*
  * =======================================================
  * VFS PROGRESS — ADMIN
  * =======================================================
@@ -606,6 +542,73 @@ function getBot1VfsStage(
     }
   );
 }
+
+
+/*
+ * =========================================================
+ * BOT 1
+ * =========================================================
+ */
+
+class Bot1 {
+
+  constructor(
+  site
+) {
+
+  this.site =
+    site;
+
+  this.workerId =
+    crypto.randomUUID();
+
+  this.otp =
+    new OtpService();
+
+  this.facial =
+    new FacialService();
+
+  this.passportStorage =
+    new PassportStorageService();
+
+  /*
+   * Cada Bot 1 possui o seu próprio Navigator.
+   *
+   * O Navigator fica preso ao applicationId do
+   * adapter e nunca pode operar outra candidatura.
+   *
+   * Isto é importante quando começarmos a executar
+   * várias candidaturas simultaneamente.
+   */
+  this.navigator =
+    site?.applicationId
+      ? new VfsNavigator(
+          site,
+          {
+            applicationId:
+              site.applicationId,
+            logger
+          }
+        )
+      : null;
+}
+
+  /*
+   * =======================================================
+   * ADMIN AUTOMATION GATE
+   * =======================================================
+   */
+
+  async assertAdminRelease(
+    applicationId
+  ) {
+    await requireAutomationRelease(
+      applicationId
+    );
+
+    return true;
+  }
+    
   /*
    * -------------------------------------------------------
    * HEARTBEAT
