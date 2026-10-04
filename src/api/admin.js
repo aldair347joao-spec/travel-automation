@@ -2086,19 +2086,81 @@ function createAdminRouter({
         }
 
         const result =
-          await AdminControlService
-            .pauseAutomation({
-              applicationId:
-                req.params.id,
+  await AdminControlService
+    .pauseAutomation({
+      applicationId:
+        req.params.id,
 
-              accountId:
-                req.user.accountId,
+      accountId:
+        req.user.accountId,
 
-              actorId:
-                req.user._id
-            });
+      actorId:
+        req.user._id
+    });
 
-        return res.json({
+
+/*
+ * =====================================================
+ * PARAR EXECUÇÃO REAL
+ * =====================================================
+ *
+ * O AdminControlService altera o estado no MongoDB.
+ *
+ * O Supervisor encerra a execução que já está viva:
+ *
+ * - adapter Scrapeless
+ * - sessão/browser
+ * - keep-alive
+ * - Bot 1 em memória
+ *
+ * Se não existir adapter ativo, a operação continua
+ * sendo considerada bem-sucedida.
+ * =====================================================
+ */
+
+if (
+  supervisor &&
+  typeof supervisor.stopApplicationAutomation ===
+    "function"
+) {
+
+  try {
+
+    await supervisor.stopApplicationAutomation(
+      req.params.id
+    );
+
+  } catch (
+    stopError
+  ) {
+
+    /*
+     * O estado administrativo já foi gravado como PAUSED.
+     *
+     * Não transformamos a pausa em erro HTTP apenas
+     * porque o encerramento físico encontrou uma falha.
+     *
+     * O erro fica registrado para diagnóstico.
+     */
+
+    console.error(
+      "[ADMIN] Failed to stop running automation after pause",
+      {
+        applicationId:
+          req.params.id,
+
+        error:
+          stopError?.message ||
+          String(
+            stopError
+          )
+      }
+    );
+  }
+}
+
+
+return res.json({
           success:
             true,
 
