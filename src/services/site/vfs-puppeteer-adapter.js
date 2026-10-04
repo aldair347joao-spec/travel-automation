@@ -251,15 +251,10 @@ this.radarSessionRecoveryRequired = false;
     return true;
   }
 
-  /*
+    /*
    * ============================================================
-   * BRIGHT DATA BROWSER API
+   * SCRAPELESS AGENT BROWSER — PRODUÇÃO
    * ============================================================
-   *
-   * O navegador Chromium deixa de ser iniciado no Render.
-   *
-   * O Puppeteer conecta-se ao navegador remoto da Bright Data
-   * através do endpoint WebSocket da zona scraping_browser1.
    *
    * Render
    *   ↓
@@ -267,173 +262,142 @@ this.radarSessionRecoveryRequired = false;
    *   ↓
    * Puppeteer
    *   ↓
-   * Bright Data Browser API
+   * Scrapeless Agent Browser
    *   ↓
    * VFS
+   *
+   * O Chromium é executado remotamente pelo Scrapeless.
    */
 
-  const brightDataEnabled =
+  const scrapelessApiKey =
     String(
-      process.env.BRIGHTDATA_BROWSER_ENABLED || ""
+      process.env.SCRAPELESS_API_KEY || ""
+    ).trim();
+
+  if (!scrapelessApiKey) {
+    const error =
+      new Error(
+        "SCRAPELESS_API_KEY is required for VFS production automation."
+      );
+
+    error.code =
+      "SCRAPELESS_API_KEY_REQUIRED";
+
+    logger.error(
+      "Scrapeless API key is missing",
+      {
+        applicationId:
+          this.applicationId
+      }
+    );
+
+    throw error;
+  }
+
+  const sessionTTL =
+    Math.max(
+      60,
+      Math.min(
+        Number(
+          process.env.SCRAPELESS_SESSION_TTL
+        ) || 900,
+        900
+      )
+    );
+
+  const proxyCountry =
+    String(
+      process.env.SCRAPELESS_PROXY_COUNTRY ||
+        "ANY"
+    )
+      .trim()
+      .toUpperCase();
+
+  const sessionPrefix =
+    String(
+      process.env.SCRAPELESS_SESSION_PREFIX ||
+        "travel-automation"
+    )
+      .trim()
+      .replace(
+        /[^a-zA-Z0-9_-]/g,
+        "-"
+      );
+
+  const randomPart =
+    `${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 12)}`;
+
+  const sessionName =
+    `${sessionPrefix}-${this.applicationId || "unknown"}-${randomPart}`;
+
+  const sessionRecording =
+    String(
+      process.env.SCRAPELESS_SESSION_RECORDING ||
+        "false"
     )
       .trim()
       .toLowerCase() === "true";
 
-  const brightDataHost =
-    String(
-      process.env.BRIGHTDATA_BROWSER_HOST ||
-        "brd.superproxy.io"
-    ).trim();
-
-  const brightDataPort =
-    String(
-      process.env.BRIGHTDATA_BROWSER_PORT ||
-        "9222"
-    ).trim();
-
-  const brightDataUsername =
-    String(
-      process.env.BRIGHTDATA_BROWSER_USERNAME || ""
-    ).trim();
-
-  const brightDataPassword =
-    String(
-      process.env.BRIGHTDATA_BROWSER_PASSWORD || ""
-    ).trim();
-
-  if (!brightDataEnabled) {
-    const error =
-      new Error(
-        "Bright Data Browser API is disabled. Set BRIGHTDATA_BROWSER_ENABLED=true."
-      );
-
-    error.code =
-      "BRIGHTDATA_BROWSER_DISABLED";
-
-    logger.error(
-      "Bright Data Browser API is disabled",
-      {
-        applicationId:
-          this.applicationId
-      }
-    );
-
-    throw error;
-  }
-
-  if (!brightDataUsername) {
-    const error =
-      new Error(
-        "BRIGHTDATA_BROWSER_USERNAME is required."
-      );
-
-    error.code =
-      "BRIGHTDATA_BROWSER_USERNAME_REQUIRED";
-
-    logger.error(
-      "Bright Data Browser username is missing",
-      {
-        applicationId:
-          this.applicationId
-      }
-    );
-
-    throw error;
-  }
-
-  if (!brightDataPassword) {
-    const error =
-      new Error(
-        "BRIGHTDATA_BROWSER_PASSWORD is required."
-      );
-
-    error.code =
-      "BRIGHTDATA_BROWSER_PASSWORD_REQUIRED";
-
-    logger.error(
-      "Bright Data Browser password is missing",
-      {
-        applicationId:
-          this.applicationId
-      }
-    );
-
-    throw error;
-  }
-
   /*
-   * ============================================================
-   * WEBSOCKET DA BRIGHT DATA
-   * ============================================================
+   * Fingerprint é opcional.
    *
-   * A senha pode conter caracteres especiais.
-   *
-   * encodeURIComponent evita quebrar o formato:
-   *
-   * wss://username:password@host:port
+   * Se não for configurado, o Agent Browser
+   * gera automaticamente um fingerprint para a sessão.
    */
+  const fingerprint =
+    String(
+      process.env.SCRAPELESS_FINGERPRINT || ""
+    ).trim();
 
-  const encodedUsername =
-    encodeURIComponent(
-      brightDataUsername
-    );
+  const query =
+    new URLSearchParams({
+      token:
+        scrapelessApiKey,
 
-  const encodedPassword =
-    encodeURIComponent(
-      brightDataPassword
+      sessionTTL:
+        String(sessionTTL),
+
+      sessionName,
+
+      proxyCountry,
+
+      sessionRecording:
+        String(sessionRecording)
+    });
+
+  if (fingerprint) {
+    query.set(
+      "fingerprint",
+      fingerprint
     );
+  }
 
   const browserWSEndpoint =
-    `wss://${encodedUsername}:${encodedPassword}` +
-    `@${brightDataHost}:${brightDataPort}`;
+    `wss://browser.scrapeless.com/api/v2/browser?${query.toString()}`;
 
   /*
-   * ============================================================
-   * LOG SEGURO
-   * ============================================================
-   *
-   * Nunca registramos:
-   *
-   * - password
-   * - API key
-   * - URL completa com credenciais
+   * Nunca registrar a API key nem a URL completa do WebSocket.
    */
-
   logger.info(
-    "Connecting to Bright Data Browser API",
+    "Connecting to Scrapeless Agent Browser",
     {
       applicationId:
         this.applicationId,
 
-      host:
-        brightDataHost,
+      sessionName,
 
-      port:
-        brightDataPort,
+      sessionTTL,
 
-      username:
-        brightDataUsername,
+      proxyCountry,
+
+      sessionRecording,
 
       remoteBrowser:
         true
     }
   );
-
-  /*
-   * ============================================================
-   * CONEXÃO PUPPETEER
-   * ============================================================
-   *
-   * Não usamos:
-   *
-   * puppeteer.launch()
-   *
-   * Não usamos:
-   *
-   * chromium.executablePath()
-   *
-   * O Chrome agora é gerenciado pela Bright Data.
-   */
 
   let connectAttempts = 0;
 
@@ -447,7 +411,7 @@ this.radarSessionRecoveryRequired = false;
 
     try {
       logger.info(
-        "Bright Data Browser connection attempt",
+        "Scrapeless Agent Browser connection attempt",
         {
           applicationId:
             this.applicationId,
@@ -474,13 +438,15 @@ this.radarSessionRecoveryRequired = false;
         });
 
       logger.info(
-        "Bright Data Browser connected successfully",
+        "Scrapeless Agent Browser connected successfully",
         {
           applicationId:
             this.applicationId,
 
           attempt:
-            connectAttempts
+            connectAttempts,
+
+          sessionName
         }
       );
 
@@ -490,7 +456,7 @@ this.radarSessionRecoveryRequired = false;
         String(error);
 
       logger.error(
-        "Bright Data Browser connection failed",
+        "Scrapeless Agent Browser connection failed",
         {
           applicationId:
             this.applicationId,
@@ -532,11 +498,11 @@ this.radarSessionRecoveryRequired = false;
   if (!this.browser) {
     const error =
       new Error(
-        "Bright Data Browser connection finished without a browser instance."
+        "Scrapeless Agent Browser connection finished without a browser instance."
       );
 
     error.code =
-      "BRIGHTDATA_BROWSER_NOT_CONNECTED";
+      "SCRAPELESS_BROWSER_NOT_CONNECTED";
 
     throw error;
   }
@@ -768,18 +734,6 @@ if (
     }
   );
 }
-    /*
-     * ==========================================================
-     * SESSÃO BRIGHT DATA — ANTES DA PRIMEIRA NAVEGAÇÃO
-     * ==========================================================
-     *
-     * Proxy.useSession só pode configurar a localização/proxy
-     * antes da página navegar.
-     *
-     * Portanto esta chamada obrigatoriamente acontece aqui,
-     * imediatamente depois de obter uma página em branco.
-     */
-    await this.startBrightDataLoginSession();
 
     /*
      * ==========================================================
@@ -1258,31 +1212,7 @@ if (
 
   return true;
 }
-    /*
-   * ============================================================
-   * CAPTCHA — RESOLUÇÃO OFICIAL BRIGHT DATA
-   * ============================================================
-   *
-   * O Browser API possui um comando CDP próprio para resolver
-   * CAPTCHA. Não fazemos bypass, não manipulamos tokens e não
-   * tentamos contornar a proteção da VFS.
-   *
-   * Fluxo:
-   *
-   * CAPTCHA detectado
-   *       ↓
-   * Captcha.solve
-   *       ↓
-   * resolved?
-   *       ↓
-   * continua login
-   *
-   * Se não resolver:
-   *       ↓
-   * CAPTCHA_REQUIRED
-   */
-
-  async solveBrightDataCaptcha() {
+      async solveScrapelessCaptcha() {
     const page =
       await this.ensurePage();
 
@@ -1300,35 +1230,143 @@ if (
           .target()
           .createCDPSession();
 
-      const result =
-        await client.send(
-          "Captcha.solve",
-          {
-            detectTimeout:
-              Number(
-                process.env.BRIGHTDATA_CAPTCHA_TIMEOUT_MS
-              ) || 30000
+      let solvedMessage =
+        null;
+
+      let detected =
+        false;
+
+      const captchaTimeout =
+        Number(
+          process.env.SCRAPELESS_CAPTCHA_TIMEOUT_MS
+        ) || 120000;
+
+      const solveFinishedPromise =
+        new Promise(resolve => {
+          const onDetected =
+            message => {
+              detected = true;
+
+              logger.info(
+                "Scrapeless CAPTCHA detected",
+                {
+                  applicationId:
+                    this.applicationId,
+
+                  message:
+                    message || null
+                }
+              );
+            };
+
+          const onFinished =
+            message => {
+              solvedMessage =
+                message || null;
+
+              client.off(
+                "Captcha.detected",
+                onDetected
+              );
+
+              client.off(
+                "Captcha.solveFinished",
+                onFinished
+              );
+
+              resolve(
+                message || {}
+              );
+            };
+
+          client.on(
+            "Captcha.detected",
+            onDetected
+          );
+
+          client.on(
+            "Captcha.solveFinished",
+            onFinished
+          );
+        });
+
+      /*
+       * O Agent Browser possui o solver oficial integrado.
+       */
+      await client
+        .send(
+          "Captcha.solve"
+        )
+        .catch(
+          error => {
+            logger.warn(
+              "Scrapeless Captcha.solve request returned an error",
+              {
+                applicationId:
+                  this.applicationId,
+
+                error:
+                  error?.message ||
+                  String(error)
+              }
+            );
           }
         );
 
-      const status =
-        String(
-          result?.status ||
-          ""
-        )
-          .trim()
-          .toLowerCase();
+      const result =
+        await Promise.race([
+          solveFinishedPromise,
+
+          new Promise(resolve =>
+            setTimeout(
+              () =>
+                resolve({
+                  timeout:
+                    true
+                }),
+              captchaTimeout
+            )
+          )
+        ]);
+
+      if (
+        result?.timeout
+      ) {
+        logger.warn(
+          "Scrapeless CAPTCHA solve timeout",
+          {
+            applicationId:
+              this.applicationId,
+
+            detected,
+
+            timeout:
+              captchaTimeout
+          }
+        );
+
+        return {
+          attempted:
+            true,
+
+          solved:
+            false,
+
+          status:
+            "TIMEOUT"
+        };
+      }
 
       logger.info(
-        "Bright Data CAPTCHA solve completed",
+        "Scrapeless CAPTCHA solve completed",
         {
           applicationId:
             this.applicationId,
 
-          status,
+          detected,
 
-          attempted:
-            true
+          status:
+            "SOLVED"
         }
       );
 
@@ -1337,20 +1375,18 @@ if (
           true,
 
         solved:
-          [
-            "solved",
-            "success",
-            "completed"
-          ].includes(
-            status
-          ),
+          true,
 
-        status
+        status:
+          "SOLVED",
+
+        result:
+          solvedMessage
       };
 
     } catch (error) {
       logger.warn(
-        "Bright Data CAPTCHA solve failed",
+        "Scrapeless CAPTCHA solve failed",
         {
           applicationId:
             this.applicationId,
@@ -1376,7 +1412,8 @@ if (
           String(error)
       };
     }
-  }
+  } 
+          
     /*
  * ============================================================
  * BRIGHT DATA — NOVA SESSÃO POR LOGIN
