@@ -85,6 +85,9 @@ this.prepareInFlight =
 this.adapterInFlight =
   new Map();
 
+this.stoppingApplications =
+  new Set();
+
 this.workerId =
   crypto.randomUUID();
 
@@ -139,13 +142,33 @@ this.workerId =
   /* =======================================================
    * ADAPTER
    * ======================================================= */
-
-  async getAdapter(
+async getAdapter(
   applicationId
 ) {
 
   const key =
     String(applicationId);
+
+
+  /*
+   * =======================================================
+   * APPLICATION EM PROCESSO DE PAUSA
+   * =======================================================
+   *
+   * Não permitimos criar ou reutilizar um adapter enquanto
+   * a candidatura está sendo encerrada pelo administrador.
+   */
+
+  if (
+    this.stoppingApplications.has(
+      key
+    )
+  ) {
+
+    throw new Error(
+      "Application automation is being stopped"
+    );
+  }
 
 
   /*
@@ -170,16 +193,6 @@ this.workerId =
    * =======================================================
    * ADAPTER JÁ EM PROCESSO DE INICIALIZAÇÃO
    * =======================================================
-   *
-   * Vários consumidores podem pedir o mesmo adapter
-   * simultaneamente:
-   *
-   * - Bot 1
-   * - Bot 2 / Radar
-   * - recuperação automática
-   * - rota administrativa
-   *
-   * Todos devem esperar a MESMA inicialização.
    */
 
   const existingInitialization =
@@ -212,7 +225,76 @@ this.workerId =
 
       try {
 
+        /*
+         * A candidatura pode ter sido pausada
+         * entre a criação deste adapter e o initialize().
+         */
+
+        if (
+          this.stoppingApplications.has(
+            key
+          )
+        ) {
+
+          throw new Error(
+            "Application automation was stopped before adapter initialization"
+          );
+        }
+
+
         await adapter.initialize();
+
+
+        /*
+         * IMPORTANTE:
+         *
+         * O administrador pode ter pausado a candidatura
+         * enquanto o Scrapeless ainda estava conectando.
+         *
+         * Nesse caso NÃO guardamos o adapter no cache.
+         */
+
+        if (
+          this.stoppingApplications.has(
+            key
+          )
+        ) {
+
+          try {
+
+            if (
+              typeof adapter.close ===
+              "function"
+            ) {
+
+              await adapter.close();
+
+            }
+
+          } catch (
+            closeError
+          ) {
+
+            logger.warn(
+              "Failed to close adapter after application stop",
+              {
+                applicationId:
+                  key,
+
+                error:
+                  closeError?.message ||
+                  String(
+                    closeError
+                  )
+              }
+            );
+          }
+
+
+          throw new Error(
+            "Application automation was stopped while adapter was initializing"
+          );
+        }
 
 
         this.adapters.set(
@@ -228,9 +310,8 @@ this.workerId =
       ) {
 
         /*
-         * Se a conexão falhar, não deixamos
-         * um adapter parcialmente inicializado
-         * dentro do cache.
+         * Nunca deixamos um adapter parcialmente
+         * inicializado vivo depois de uma falha.
          */
 
         try {
@@ -271,11 +352,7 @@ this.workerId =
 
 
   /*
-   * IMPORTANTE:
-   *
-   * Guardamos a Promise ANTES de esperar.
-   * Assim nenhuma segunda chamada consegue
-   * criar outro adapter para a mesma candidatura.
+   * Guardamos a Promise antes de esperar.
    */
 
   this.adapterInFlight.set(
@@ -296,6 +373,7 @@ this.workerId =
 
   }
 }
+ 
   /* =======================================================
    * BOT 1
    * ======================================================= */
@@ -2485,59 +2563,165 @@ async recoverReleasedApplications() {
     await this.recoverSlots();
   }
 
+/* =======================================================
+ * PARAR AUTOMAÇÃO DE UMA APPLICATION
+ * ======================================================= */
 
-  /* =======================================================
-   * FECHAR ADAPTER
-   * ======================================================= */
+async stopApplicationAutomation(
+  applicationId
+) {
 
-  async closeAdapter(
-    applicationId
+  const key =
+    String(applicationId);
+
+
+  /*
+   * Marca imediatamente a candidatura como
+   * sendo encerrada.
+   *
+   * Isto impede uma nova inicialização do adapter.
+   */
+
+  this.stoppingApplications.add(
+    key
+  );
+
+
+  /*
+   * Se existe uma inicialização em andamento,
+   * esperamos que ela termine.
+   *
+   * O próprio getAdapter() detectará o bloqueio
+   * e fechará o adapter caso o initialize() tenha
+   * conseguido terminar.
+   */
+
+  const initialization =
+    this.adapterInFlight.get(
+      key
+    );
+
+  if (
+    initialization
   ) {
-
-    const adapter =
-      this.adapters.get(
-        applicationId
-      );
-
-
-    if (
-      !adapter
-    ) {
-
-      return;
-    }
-
 
     try {
 
-      await adapter.close();
+      await initialization;
 
     } catch (
       error
     ) {
 
-      logger.warn(
-        "Site adapter close failed",
+      logger.info(
+        "Application adapter initialization stopped",
         {
-          applicationId,
+          applicationId:
+            key,
 
           error:
-            error.message
+            error?.message ||
+            String(
+              error
+            )
         }
       );
     }
-
-
-    this.adapters.delete(
-      applicationId
-    );
-
-
-    this.bot1.delete(
-      applicationId
-    );
   }
 
+
+  /*
+   * Se por algum motivo o adapter chegou ao cache,
+   * fechamos explicitamente.
+   */
+
+  await this.closeAdapter(
+    key
+  );
+
+
+  /*
+   * O Bot 1 também deixa de ser reutilizável.
+   */
+
+  this.bot1.delete(
+    key
+  );
+
+
+  logger.info(
+    "APPLICATION automation stopped by administrator",
+    {
+      applicationId:
+        key
+    }
+  );
+
+
+  return true;
+}
+  /* =======================================================
+   * FECHAR ADAPTER
+   * ======================================================= */
+
+  async closeAdapter(
+  applicationId
+) {
+
+  const key =
+    String(applicationId);
+
+  const adapter =
+    this.adapters.get(
+      key
+    );
+
+
+  if (
+    !adapter
+  ) {
+
+    this.bot1.delete(
+      key
+    );
+
+    return;
+  }
+
+
+  try {
+
+    await adapter.close();
+
+  } catch (
+    error
+  ) {
+
+    logger.warn(
+      "Site adapter close failed",
+      {
+        applicationId:
+          key,
+
+        error:
+          error?.message ||
+          String(
+            error
+          )
+      }
+    );
+
+  } finally {
+
+    this.adapters.delete(
+      key
+    );
+
+    this.bot1.delete(
+      key
+    );
+  }
+}
 
   /* =======================================================
    * START
