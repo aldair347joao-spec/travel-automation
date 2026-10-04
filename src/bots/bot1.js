@@ -404,39 +404,286 @@ class Bot1 {
     return true;
   }
   /*
+ * =======================================================
+ * VFS PROGRESS — ADMIN
+ * =======================================================
+ */
+
+const BOT1_VFS_STAGES = {
+
+  initializing_site: {
+    key: "SESSION",
+    label: "A iniciar sessão VFS"
+  },
+
+  vfs_session: {
+    key: "SESSION",
+    label: "Sessão VFS"
+  },
+
+  navigator_starting: {
+    key: "SESSION",
+    label: "Preparando navegação VFS"
+  },
+
+  navigator_login: {
+    key: "AUTHENTICATION",
+    label: "Autenticação"
+  },
+
+  captcha_required: {
+    key: "CAPTCHA",
+    label: "CAPTCHA — aguardando intervenção"
+  },
+
+  navigator_otp: {
+    key: "OTP",
+    label: "OTP"
+  },
+
+  otp_required: {
+    key: "OTP",
+    label: "OTP solicitado"
+  },
+
+  waiting_for_otp_email: {
+    key: "OTP",
+    label: "Aguardando OTP por email"
+  },
+
+  submitting_otp: {
+    key: "OTP",
+    label: "A validar OTP"
+  },
+
+  otp_verified: {
+    key: "OTP",
+    label: "OTP validado"
+  },
+
+  navigator_new_booking: {
+    key: "NEW_BOOKING",
+    label: "Nova reserva"
+  },
+
+  navigator_booking_form: {
+    key: "NEW_BOOKING",
+    label: "Formulário de nova reserva"
+  },
+
+  navigator_center: {
+    key: "CENTER",
+    label: "Selecionando centro Luanda"
+  },
+
+  navigator_visa_type: {
+    key: "VISA_TYPE",
+    label: "Selecionando categoria de visto"
+  },
+
+  navigator_check_availability: {
+    key: "AVAILABILITY",
+    label: "Verificando disponibilidade"
+  },
+
+  navigator_slot_found: {
+    key: "AVAILABILITY_FOUND",
+    label: "Disponibilidade encontrada"
+  },
+
+  navigator_handoff_radar: {
+    key: "BOT2",
+    label: "Sem disponibilidade — Bot 2 ativado"
+  },
+
+  selecting_slot: {
+    key: "SLOT",
+    label: "Selecionando data e horário"
+  },
+
+  slot_locked: {
+    key: "SLOT",
+    label: "Data e horário reservados"
+  },
+
+  navigator_slot_recovered: {
+    key: "SLOT",
+    label: "Recuperando nova vaga"
+  },
+
+  document_upload: {
+    key: "PASSPORT",
+    label: "Enviando passaporte"
+  },
+
+  passport_checkpoint: {
+    key: "PASSPORT",
+    label: "Aguardando validação do passaporte"
+  },
+
+  vfs_contact_details_checkpoint: {
+    key: "DETAILS",
+    label: "Aguardando dados de contacto VFS"
+  },
+
+  vfs_contact_details_filled: {
+    key: "DETAILS",
+    label: "Dados de contacto preenchidos"
+  },
+
+  facial_positions: {
+    key: "FACIAL",
+    label: "Reconhecimento facial"
+  },
+
+  waiting_for_vfs_camera: {
+    key: "FACIAL",
+    label: "Aguardando câmara VFS"
+  },
+
+  waiting_for_facial_instruction: {
+    key: "FACIAL",
+    label: "Aguardando instrução facial"
+  },
+
+  facial_video_active: {
+    key: "FACIAL",
+    label: "Reconhecimento facial em execução"
+  },
+
+  facial_positions_completed: {
+    key: "FACIAL_COMPLETED",
+    label: "Reconhecimento facial concluído"
+  },
+
+  review_pay: {
+    key: "REVIEW",
+    label: "Revisão da candidatura"
+  },
+
+  payment_pending: {
+    key: "PAYMENT",
+    label: "Pagamento pendente"
+  },
+
+  extracting_payment_details: {
+    key: "REFERENCE",
+    label: "A extrair referência"
+  },
+
+  reference_extracted: {
+    key: "REFERENCE",
+    label: "Referência extraída"
+  },
+
+  completed: {
+    key: "COMPLETED",
+    label: "Agendamento concluído"
+  }
+};
+
+
+function getBot1VfsStage(
+  action
+) {
+
+  const normalized =
+    String(
+      action ||
+      ""
+    ).trim();
+
+  return (
+    BOT1_VFS_STAGES[
+      normalized
+    ] || {
+      key:
+        "PROCESSING",
+
+      label:
+        normalized ||
+        "Processando VFS"
+    }
+  );
+}
+  /*
    * -------------------------------------------------------
    * HEARTBEAT
    * -------------------------------------------------------
    */
+async heartbeat(
+  applicationId,
+  action
+) {
 
-  async heartbeat(
-    applicationId,
-    action
-  ) {
-
-    await Application.updateOne(
-      {
-        _id:
-          applicationId,
-
-        "bot1.workerId":
-          this.workerId
-      },
-      {
-        $set: {
-
-          "bot1.heartbeatAt":
-            new Date(),
-
-          "bot1.lastAction":
-            action
-
-        }
-      }
+  const stage =
+    getBot1VfsStage(
+      action
     );
-  }
 
+  const now =
+    new Date();
 
+  await Application.updateOne(
+    {
+      _id:
+        applicationId,
+
+      "bot1.workerId":
+        this.workerId
+    },
+    {
+      $set: {
+
+        "bot1.heartbeatAt":
+          now,
+
+        "bot1.lastAction":
+          action,
+
+        "bot1.vfsProgress.stage":
+          stage.key,
+
+        "bot1.vfsProgress.stageLabel":
+          stage.label,
+
+        "bot1.vfsProgress.action":
+          action,
+
+        "bot1.vfsProgress.updatedAt":
+          now
+
+      },
+
+      $push: {
+
+        "bot1.vfsProgress.history": {
+
+          $each: [
+            {
+              stage:
+                stage.key,
+
+              stageLabel:
+                stage.label,
+
+              action:
+                action,
+
+              at:
+                now
+            }
+          ],
+
+          $slice:
+            -30
+        }
+
+      }
+    }
+  );
+}
+  
   /*
    * -------------------------------------------------------
    * LOCK APPLICATION
@@ -5533,6 +5780,23 @@ if (
 
 
     await application.save();
+    if (
+  payment.reference
+) {
+
+  await this.heartbeat(
+    applicationId,
+    "reference_extracted"
+  );
+
+} else {
+
+  await this.heartbeat(
+    applicationId,
+    "extracting_payment_details"
+  );
+
+}
 
 
     /*
@@ -6091,7 +6355,10 @@ if (
           "APPLICATION_COMPLETED"
       }
     );
-
+await this.heartbeat(
+  applicationId,
+  "completed"
+);
 
     application.status =
       "completed";
