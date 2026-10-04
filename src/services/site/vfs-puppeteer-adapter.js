@@ -2557,6 +2557,8 @@ try {
    * PROCURAR FORMULÁRIO DE LOGIN
    * ============================================================
    */
+
+      
 logger.info(
   "VFS LOGIN PAGE DIAGNOSTIC",
   {
@@ -2648,6 +2650,123 @@ logger.info(
         )
   }
 );
+
+/*
+ * ============================================================
+ * REVERIFICAR CHECKPOINT APÓS A RENDERIZAÇÃO DA PÁGINA
+ * ============================================================
+ *
+ * A VFS/Cloudflare pode terminar a renderização depois
+ * da primeira chamada de detectCheckpoint().
+ *
+ * Por isso verificamos novamente antes de procurar
+ * o formulário de login.
+ */
+await new Promise(
+  resolve =>
+    setTimeout(
+      resolve,
+      1000
+    )
+);
+
+await this.detectCheckpoint();
+
+if (
+  this.lastCheckpoint?.type ===
+  "CAPTCHA_REQUIRED"
+) {
+
+  logger.info(
+    "VFS SECURITY VERIFICATION DETECTED AFTER PAGE RENDER",
+    {
+      applicationId,
+
+      url:
+        (() => {
+          try {
+            return page.url();
+          } catch {
+            return null;
+          }
+        })(),
+
+      checkpoint:
+        this.lastCheckpoint
+    }
+  );
+
+  const captchaResult =
+    await this.solveScrapelessCaptcha();
+
+  if (
+    captchaResult.solved ===
+    true
+  ) {
+
+    await page
+      .waitForNetworkIdle({
+        idleTime:
+          700,
+
+        timeout:
+          15000
+      })
+      .catch(
+        () => {}
+      );
+
+    await this.detectState();
+
+    await this.inspectCurrentDom()
+      .catch(
+        () => {}
+      );
+
+    await this.detectCheckpoint();
+  }
+
+  if (
+    this.lastCheckpoint?.type ===
+    "CAPTCHA_REQUIRED"
+  ) {
+
+    return {
+      success:
+        false,
+
+      requiresUser:
+        true,
+
+      captchaRequired:
+        true,
+
+      authenticated:
+        false,
+
+      code:
+        "CAPTCHA_REQUIRED",
+
+      reason:
+        "Scrapeless could not complete the VFS CAPTCHA automatically.",
+
+      state:
+        this.state,
+
+      checkpoint:
+        this.lastCheckpoint,
+
+      dom:
+        this.getDomSummary(),
+
+      captchaSolveAttempted:
+        captchaResult.attempted,
+
+      captchaSolveStatus:
+        captchaResult.status
+    };
+  }
+}
 
 let loginForm =
   null;
