@@ -1199,19 +1199,28 @@ if (
       false;
 
     let client =
-      null;
+  null;
 
-    const sleep =
-      milliseconds =>
-        new Promise(
-          resolve =>
-            setTimeout(
-              resolve,
-              milliseconds
-            )
-        );
+let onDetected =
+  null;
 
-    try {
+let onFinished =
+  null;
+
+let onFailed =
+  null;
+
+const sleep =
+  milliseconds =>
+    new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          milliseconds
+        )
+    );
+
+try {
       client =
         await page
           .target()
@@ -1223,8 +1232,8 @@ if (
        * ========================================================
        */
 
-      const onDetected =
-        message => {
+      onDetected =
+      message => {
           captchaDetected =
             true;
 
@@ -1246,7 +1255,7 @@ if (
        * ========================================================
        */
 
-      const onFinished =
+      onFinished =
         message => {
           captchaFinished =
             true;
@@ -1269,7 +1278,7 @@ if (
        * ========================================================
        */
 
-      const onFailed =
+      onFailed =
         message => {
           captchaFailed =
             true;
