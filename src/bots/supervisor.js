@@ -2567,7 +2567,8 @@ async recoverReleasedApplications() {
  * PARAR AUTOMAÇÃO DE UMA APPLICATION
  * ======================================================= */
 
-async stopApplicationAutomation(
+
+    async stopApplicationAutomation(
   applicationId
 ) {
 
@@ -2579,7 +2580,8 @@ async stopApplicationAutomation(
    * Marca imediatamente a candidatura como
    * sendo encerrada.
    *
-   * Isto impede uma nova inicialização do adapter.
+   * Isto impede uma nova inicialização do adapter
+   * enquanto o encerramento está acontecendo.
    */
 
   this.stoppingApplications.add(
@@ -2587,78 +2589,98 @@ async stopApplicationAutomation(
   );
 
 
-  /*
-   * Se existe uma inicialização em andamento,
-   * esperamos que ela termine.
-   *
-   * O próprio getAdapter() detectará o bloqueio
-   * e fechará o adapter caso o initialize() tenha
-   * conseguido terminar.
-   */
+  try {
 
-  const initialization =
-    this.adapterInFlight.get(
+    /*
+     * Se existe uma inicialização em andamento,
+     * esperamos que ela termine.
+     *
+     * O próprio getAdapter() detectará o bloqueio
+     * e fechará o adapter caso o initialize()
+     * tenha conseguido terminar.
+     */
+
+    const initialization =
+      this.adapterInFlight.get(
+        key
+      );
+
+    if (
+      initialization
+    ) {
+
+      try {
+
+        await initialization;
+
+      } catch (
+        error
+      ) {
+
+        logger.info(
+          "Application adapter initialization stopped",
+          {
+            applicationId:
+              key,
+
+            error:
+              error?.message ||
+              String(
+                error
+              )
+          }
+        );
+      }
+    }
+
+
+    /*
+     * Se o adapter chegou ao cache,
+     * fechamos explicitamente.
+     */
+
+    await this.closeAdapter(
       key
     );
 
-  if (
-    initialization
-  ) {
 
-    try {
+    /*
+     * O Bot 1 também deixa de ser reutilizável.
+     */
 
-      await initialization;
+    this.bot1.delete(
+      key
+    );
 
-    } catch (
-      error
-    ) {
 
-      logger.info(
-        "Application adapter initialization stopped",
-        {
-          applicationId:
-            key,
+    logger.info(
+      "APPLICATION automation stopped by administrator",
+      {
+        applicationId:
+          key
+      }
+    );
 
-          error:
-            error?.message ||
-            String(
-              error
-            )
-        }
-      );
-    }
+
+    return true;
+
+  } finally {
+
+    /*
+     * IMPORTANTE:
+     *
+     * O bloqueio serve somente durante o processo
+     * de encerramento.
+     *
+     * Depois de concluído, removemos a candidatura
+     * do Set para permitir uma futura liberação
+     * administrativa.
+     */
+
+    this.stoppingApplications.delete(
+      key
+    );
   }
-
-
-  /*
-   * Se por algum motivo o adapter chegou ao cache,
-   * fechamos explicitamente.
-   */
-
-  await this.closeAdapter(
-    key
-  );
-
-
-  /*
-   * O Bot 1 também deixa de ser reutilizável.
-   */
-
-  this.bot1.delete(
-    key
-  );
-
-
-  logger.info(
-    "APPLICATION automation stopped by administrator",
-    {
-      applicationId:
-        key
-    }
-  );
-
-
-  return true;
 }
   /* =======================================================
    * FECHAR ADAPTER
