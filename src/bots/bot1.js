@@ -6264,12 +6264,13 @@ if (
     confirmation
   ) {
 
+        const applicationId =
+      application._id.toString();
+
     const normalized =
       normalizePaymentDetails(
         confirmation || {}
       );
-        const applicationId =
-      application._id.toString();
 
     application.result =
       application.result || {};
