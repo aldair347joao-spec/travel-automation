@@ -2565,7 +2565,9 @@ logger.info(
     title:
       await page
         .title()
-        .catch(() => null),
+        .catch(
+          () => null
+        ),
 
     htmlLength:
       await page
@@ -2581,35 +2583,48 @@ logger.info(
 
     inputCount:
       await page
-        .locator("input")
-        .count()
+        .evaluate(
+          () =>
+            document.querySelectorAll(
+              "input"
+            ).length
+        )
         .catch(
           () => -1
         ),
 
     iframeCount:
       await page
-        .locator("iframe")
-        .count()
+        .evaluate(
+          () =>
+            document.querySelectorAll(
+              "iframe"
+            ).length
+        )
         .catch(
           () => -1
         ),
 
     buttonCount:
       await page
-        .locator("button")
-        .count()
+        .evaluate(
+          () =>
+            document.querySelectorAll(
+              "button"
+            ).length
+        )
         .catch(
           () => -1
         ),
 
     bodyText:
       await page
-        .locator("body")
-        .innerText()
-        .then(
-          text =>
-            String(text || "")
+        .evaluate(
+          () =>
+            String(
+              document.body?.innerText ||
+              ""
+            )
               .replace(
                 /\s+/g,
                 " "
