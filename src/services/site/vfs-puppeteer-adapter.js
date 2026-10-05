@@ -3155,9 +3155,6 @@ if (
 let loginForm =
   null;
 
-let captchaSolverAlreadyAttempted =
-  false;
-
 const loginDetectionAttempts =
   40;
 
@@ -3263,7 +3260,8 @@ for (
    * 3. SE HOUVER CAPTCHA, DEIXAR O SCRAPELESS RESOLVER
    * ============================================================
    */
-if (
+
+    if (
   cloudflareChallenge
 ) {
 
@@ -3271,96 +3269,36 @@ if (
     "VFS LOGIN SECURITY CHALLENGE STILL PRESENT",
     {
       applicationId,
+
       attempt,
+
       url:
         challengeSnapshot.url,
 
       title:
         challengeSnapshot.title,
 
-      captchaSolverAlreadyAttempted
+      reason:
+        "CAPTCHA já foi tratado pela etapa inicial; aguardando a VFS liberar o formulário."
     }
   );
 
   /*
-   * O CAPTCHA já foi tratado antes da procura
-   * do formulário.
+   * NÃO chamar o solver novamente aqui.
    *
-   * NÃO chamamos o solver novamente a cada
-   * tentativa, porque isso bloqueava o login
-   * durante 120 segundos.
-   *
-   * Agora apenas aguardamos a VFS terminar
-   * de liberar os campos.
+   * A etapa inicial do login já tentou resolver
+   * o CAPTCHA. Neste ponto apenas esperamos a
+   * VFS terminar de reconstruir/liberar o formulário.
    */
 
-  if (
-    !captchaSolverAlreadyAttempted
-  ) {
-
-    captchaSolverAlreadyAttempted =
-      true;
-
-    logger.info(
-      "VFS LOGIN CAPTCHA SOLVER STARTING",
-      {
-        applicationId,
-        attempt
-      }
-    );
-
-    const captchaResult =
-      await this
-        .solveScrapelessCaptcha();
-
-    logger.info(
-      "VFS LOGIN SCRAPELESS RESULT",
-      {
-        applicationId,
-
-        attempt,
-
-        attempted:
-          captchaResult?.attempted ||
-          false,
-
-        solved:
-          captchaResult?.solved ||
-          false,
-
-        status:
-          captchaResult?.status ||
-          null,
-
-        url:
-          page.url()
-      }
-    );
-
-    if (
-      captchaResult?.solved ===
-      true
-    ) {
-
-      logger.info(
-        "VFS LOGIN CAPTCHA SOLVED — WAITING FOR FORM",
-        {
-          applicationId,
-          attempt
-        }
-      );
-
-      await new Promise(
-        resolve =>
-          setTimeout(
-            resolve,
-            2000
-          )
-      );
-    }
-  }
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        1000
+      )
+  );
 }
-      
 
   /*
    * ============================================================
