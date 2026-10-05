@@ -3477,194 +3477,510 @@ if (
    * IMPORTANTE:
    * não registamos email/password nos logs.
    */
+    /*
+ * ============================================================
+ * SUBMETER LOGIN
+ * ============================================================
+ *
+ * IMPORTANTE:
+ * O botão Sign In da VFS pode existir no DOM mas permanecer
+ * disabled enquanto o CAPTCHA/security challenge não termina.
+ *
+ * Fluxo:
+ * credentials -> CAPTCHA -> botão habilitado -> click ->
+ * resposta VFS -> OTP/autenticação
+ */
 
-  /*
-   * ============================================================
-   * SUBMETER LOGIN
-   * ============================================================
-   */
+let loginSubmitClicked = false;
+let loginSubmitReady = false;
 
-      if (
-  !loginForm?.submit
+const loginSubmitWaitStartedAt =
+  Date.now();
+
+const loginSubmitMaxWaitMs =
+  60000;
+
+while (
+  Date.now() -
+    loginSubmitWaitStartedAt <
+  loginSubmitMaxWaitMs
 ) {
   /*
-   * ============================================================
-   * ÚLTIMA VERIFICAÇÃO ANTES DE DECLARAR ERRO
-   * ============================================================
+   * ----------------------------------------------------------
+   * 1. Atualizar checkpoint/estado da página
+   * ----------------------------------------------------------
    */
 
-  await new Promise(
-    resolve =>
-      setTimeout(
-        resolve,
-        1200
-      )
-  );
+  await this.detectState()
+    .catch(() => {});
 
-  const finalSnapshot =
-    await page
-      .evaluate(() => {
-        const bodyText =
-          String(
-            document.body?.innerText ||
-            ""
-          )
-            .replace(/\s+/g, " ")
-            .trim()
-            .toLowerCase();
+  await this.inspectCurrentDom()
+    .catch(() => {});
 
-        return {
-          url:
-            window.location.href,
+  await this.detectCheckpoint()
+    .catch(() => {});
 
-          title:
-            document.title || "",
-
-          bodyText:
-            bodyText.slice(
-              0,
-              2500
-            )
-        };
-      })
-      .catch(() => ({
-        url:
-          page.url(),
-
-        title:
-          "",
-
-        bodyText:
-          ""
-      }));
-
-  const finalText =
-    `${finalSnapshot.title} ${finalSnapshot.bodyText}`
-      .toLowerCase();
-
-  const finalCloudflareChallenge =
-    finalSnapshot.url.includes(
-      "__cf_chl_tk="
-    ) ||
-    finalText.includes(
-      "just a moment"
-    ) ||
-    finalText.includes(
-      "performing security verification"
-    ) ||
-    finalText.includes(
-      "security verification"
-    ) ||
-    finalText.includes(
-      "checking your browser"
-    ) ||
-    finalText.includes(
-      "verify you are human"
-    );
+  /*
+   * ----------------------------------------------------------
+   * 2. Se ainda existir CAPTCHA/security challenge,
+   *    aguardar a resolução oficial do Scrapeless.
+   * ----------------------------------------------------------
+   */
 
   if (
-    finalCloudflareChallenge
+    this.lastCheckpoint?.type ===
+      "CAPTCHA_REQUIRED" ||
+    this.state ===
+      "CAPTCHA_REQUIRED"
   ) {
     logger.info(
-      "VFS FINAL CLOUDFLARE CHECK — CALLING SCRAPELESS SOLVER",
+      "VFS LOGIN AGUARDANDO RESOLUÇÃO DO CAPTCHA",
       {
         applicationId,
-        url:
-          finalSnapshot.url
-      }
-    );
-
-    const finalCaptchaResult =
-      await this.solveScrapelessCaptcha();
-
-    logger.info(
-      "VFS FINAL SCRAPELESS SOLVER RESULT",
-      {
-        applicationId,
-        attempted:
-          finalCaptchaResult?.attempted ||
-          false,
-        solved:
-          finalCaptchaResult?.solved ||
-          false,
-        status:
-          finalCaptchaResult?.status ||
+        state: this.state,
+        checkpoint:
+          this.lastCheckpoint?.type ||
           null
       }
     );
 
-    if (
-      finalCaptchaResult?.solved ===
-      true
-    ) {
-      await page
-        .waitForNetworkIdle({
-          idleTime:
-            700,
+    const captchaResult =
+      await this.solveScrapelessCaptcha()
+        .catch(error => ({
+          attempted: true,
+          solved: false,
+          status: "ERROR",
+          error:
+            error?.message ||
+            String(error)
+        }));
 
-          timeout:
-            15000
-        })
-        .catch(
-          () => {}
-        );
+    logger.info(
+      "VFS LOGIN CAPTCHA RESULT",
+      {
+        applicationId,
+        attempted:
+          captchaResult?.attempted ||
+          false,
+        solved:
+          captchaResult?.solved ||
+          false,
+        status:
+          captchaResult?.status ||
+          null
+      }
+    );
 
-      await this.detectState();
+    await page
+      .waitForNetworkIdle({
+        idleTime: 700,
+        timeout: 10000
+      })
+      .catch(() => {});
 
-      await this.inspectCurrentDom()
-        .catch(
-          () => {}
-        );
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          1200
+        )
+    );
 
-      await this.detectCheckpoint();
-    }
+    /*
+     * Depois do CAPTCHA a VFS pode recriar o formulário.
+     * Portanto, localizar novamente os elementos.
+     */
+
+    loginForm =
+      await this.findVfsLoginFields()
+        .catch(() => null);
+
+    continue;
   }
 
   /*
-   * Depois do Challenge, procurar novamente
-   * os três elementos do login.
+   * ----------------------------------------------------------
+   * 3. O formulário pode ter sido recriado depois do CAPTCHA.
+   *    Atualizar os seletores.
+   * ----------------------------------------------------------
    */
 
-  loginForm =
+  const refreshedLoginForm =
     await this.findVfsLoginFields()
-      .catch(
-        () => null
-      );
+      .catch(() => null);
 
   if (
-    loginForm?.email &&
-    loginForm?.password &&
-    loginForm?.submit
+    refreshedLoginForm?.email &&
+    refreshedLoginForm?.password &&
+    refreshedLoginForm?.submit
+  ) {
+    loginForm =
+      refreshedLoginForm;
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * 4. Sem botão -> aguardar renderização dinâmica.
+   * ----------------------------------------------------------
+   */
+
+  if (
+    !loginForm?.submit
   ) {
     logger.info(
-      "VFS LOGIN FORM RECOVERED AFTER SECURITY CHECK",
+      "VFS LOGIN SUBMIT AINDA NÃO DISPONÍVEL",
       {
-        applicationId
+        applicationId,
+        url: page.url()
       }
     );
-  } else {
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          1000
+        )
+    );
+
+    continue;
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * 5. Verificar o estado REAL do botão.
+   *
+   * Um botão visível não significa que está habilitado.
+   * ----------------------------------------------------------
+   */
+
+  const submitState =
+    await page
+      .$eval(
+        loginForm.submit,
+        element => {
+          const style =
+            window.getComputedStyle(
+              element
+            );
+
+          const rect =
+            element.getBoundingClientRect();
+
+          return {
+            disabled:
+              Boolean(
+                element.disabled
+              ),
+
+            ariaDisabled:
+              element.getAttribute(
+                "aria-disabled"
+              ),
+
+            hidden:
+              style.display ===
+                "none" ||
+              style.visibility ===
+                "hidden",
+
+            opacity:
+              style.opacity,
+
+            width:
+              rect.width,
+
+            height:
+              rect.height,
+
+            text:
+              String(
+                element.innerText ||
+                element.value ||
+                ""
+              )
+                .replace(
+                  /\s+/g,
+                  " "
+                )
+                .trim()
+                .slice(0, 100)
+          };
+        }
+      )
+      .catch(() => null);
+
+  /*
+   * ----------------------------------------------------------
+   * 6. Registrar o estado sem expor credenciais.
+   * ----------------------------------------------------------
+   */
+
+  logger.info(
+    "VFS LOGIN SUBMIT STATE",
+    {
+      applicationId,
+
+      found:
+        Boolean(submitState),
+
+      disabled:
+        submitState?.disabled ??
+        null,
+
+      ariaDisabled:
+        submitState?.ariaDisabled ??
+        null,
+
+      hidden:
+        submitState?.hidden ??
+        null,
+
+      visibleSize:
+        submitState
+          ? `${submitState.width}x${submitState.height}`
+          : null,
+
+      text:
+        submitState?.text ||
+        null
+    }
+  );
+
+  /*
+   * ----------------------------------------------------------
+   * 7. Só clicar quando o botão estiver realmente disponível.
+   * ----------------------------------------------------------
+   */
+
+  const submitDisabled =
+    submitState?.disabled === true ||
+    String(
+      submitState?.ariaDisabled ||
+      ""
+    ).toLowerCase() === "true";
+
+  const submitHidden =
+    submitState?.hidden === true;
+
+  const submitHasSize =
+    Number(
+      submitState?.width || 0
+    ) > 0 &&
+    Number(
+      submitState?.height || 0
+    ) > 0;
+
+  if (
+    submitDisabled ||
+    submitHidden ||
+    !submitHasSize
+  ) {
+    logger.info(
+      "VFS LOGIN BOTÃO AINDA DESABILITADO",
+      {
+        applicationId,
+        disabled:
+          submitDisabled,
+        hidden:
+          submitHidden,
+        hasSize:
+          submitHasSize
+      }
+    );
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          1000
+        )
+    );
+
+    continue;
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * 8. Botão finalmente habilitado.
+   * ----------------------------------------------------------
+   */
+
+  loginSubmitReady = true;
+
+  logger.info(
+    "VFS LOGIN SUBMIT READY",
+    {
+      applicationId,
+      buttonText:
+        submitState?.text ||
+        null,
+      url:
+        page.url()
+    }
+  );
+
+  /*
+   * ----------------------------------------------------------
+   * 9. CLICAR NO SIGN IN.
+   * ----------------------------------------------------------
+   */
+
+  try {
+    await page.click(
+      loginForm.submit
+    );
+
+    loginSubmitClicked = true;
+
+    logger.info(
+      "VFS LOGIN SUBMIT CLICKED",
+      {
+        applicationId,
+        url:
+          page.url()
+      }
+    );
+
+  } catch (error) {
+    logger.error(
+      "VFS LOGIN SUBMIT CLICK FAILED",
+      {
+        applicationId,
+        error:
+          error?.message ||
+          String(error)
+      }
+    );
+
     return {
-      success:
-        false,
+      success: false,
 
-      requiresUser:
-        true,
+      requiresUser: true,
 
-      authenticated:
-        false,
+      authenticated: false,
 
       code:
-        "VFS_LOGIN_SUBMIT_NOT_FOUND",
+        "VFS_LOGIN_SUBMIT_CLICK_FAILED",
 
       reason:
-        "Could not find an unambiguous VFS login submit control.",
+        error?.message ||
+        "Could not click the VFS Sign In button.",
 
       state:
-        this.state
+        this.state,
+
+      checkpoint:
+        this.lastCheckpoint
     };
   }
+
+  break;
 }
-  if (
+
+/*
+ * ============================================================
+ * 10. Não permitir continuar como se o login tivesse sido
+ *     enviado se o botão nunca chegou a ser clicado.
+ * ============================================================
+ */
+
+if (
+  !loginSubmitReady ||
+  !loginSubmitClicked
+) {
+  return {
+    success: false,
+
+    requiresUser: true,
+
+    authenticated: false,
+
+    code:
+      "VFS_LOGIN_SUBMIT_NOT_READY",
+
+    reason:
+      "VFS Sign In button did not become enabled after the security verification.",
+
+    state:
+      this.state,
+
+    checkpoint:
+      this.lastCheckpoint,
+
+    dom:
+      this.getDomSummary()
+  };
+}
+
+/*
+ * ============================================================
+ * 11. AGORA SIM: aguardar a VFS processar o login.
+ *
+ * A VFS pode ser SPA, portanto não dependemos exclusivamente
+ * de navigation.
+ * ============================================================
+ */
+
+await page
+  .waitForNetworkIdle({
+    idleTime: 700,
+    timeout: 15000
+  })
+  .catch(() => {});
+
+await new Promise(
+  resolve =>
+    setTimeout(
+      resolve,
+      1500
+    )
+);
+
+await this.detectState()
+  .catch(() => {});
+
+await this.inspectCurrentDom()
+  .catch(() => {});
+
+await this.detectCheckpoint()
+  .catch(() => {});
+
+logger.info(
+  "VFS LOGIN RESPONSE RECEIVED",
+  {
+    applicationId,
+    url:
+      page.url(),
+    state:
+      this.state,
+    checkpoint:
+      this.lastCheckpoint?.type ||
+      null
+  }
+);
+
+/*
+ * ============================================================
+ * 12. Se a VFS pediu OTP, parar aqui e devolver OTP_REQUIRED.
+ * ============================================================
+ */
+
+if (
+  this.lastCheckpoint?.type ===
+  "OTP_REQUIRED"
+) {
+  logger.info(
+    "VFS LOGIN OTP REQUIRED",
+    {
+      applicationId,
+      url:
+        page.url()
+    }
+  );
+}
+
+      if (
     this.lastCheckpoint?.type ===
     "OTP_REQUIRED"
   ) {
