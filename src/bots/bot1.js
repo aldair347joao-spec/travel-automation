@@ -42,7 +42,7 @@ const config = {
    timeoutMs:
     Number(process.env.BOT1_TIMEOUT_MS) || 180000
 
-
+};
 /*
  * =========================================================
  * TIMEOUT
