@@ -3899,30 +3899,54 @@ async findVfsLoginFields() {
               );
 
             const name =
-              normalize(
-                element.getAttribute(
-                  "name"
-                )
-              );
+  normalize(
+    element.getAttribute(
+      "name"
+    )
+  );
 
-            const id =
-              normalize(
-                element.id
-              );
+const id =
+  normalize(
+    element.id
+  );
 
-            const placeholder =
-              normalize(
-                element.getAttribute(
-                  "placeholder"
-                )
-              );
+const placeholder =
+  normalize(
+    element.getAttribute(
+      "placeholder"
+    )
+  );
 
-            const aria =
-              normalize(
-                element.getAttribute(
-                  "aria-label"
-                )
-              );
+const aria =
+  normalize(
+    element.getAttribute(
+      "aria-label"
+    )
+  );
+
+const label =
+  normalize(
+    element.id
+      ? document.querySelector(
+          `label[for="${CSS.escape(element.id)}"]`
+        )?.innerText
+      : ""
+  );
+
+const closestLabel =
+  normalize(
+    element.closest("label")?.innerText
+  );
+
+const parentText =
+  normalize(
+    element.parentElement?.innerText
+  );
+
+const grandParentText =
+  normalize(
+    element.parentElement?.parentElement?.innerText
+  );
 
             /*
              * Um campo password nunca pode ser
@@ -3951,12 +3975,16 @@ async findVfsLoginFields() {
             }
 
             const metadata =
-              [
-                name,
-                id,
-                placeholder,
-                aria
-              ].join(" ");
+  [
+    name,
+    id,
+    placeholder,
+    aria,
+    label,
+    closestLabel,
+    parentText,
+    grandParentText
+  ].join(" ");
 
             return (
               metadata.includes(
@@ -4064,20 +4092,137 @@ async findVfsLoginFields() {
       /*
        * Só aceitamos um par inequívoco.
        */
-      if (
-        emailCandidates.length === 1 &&
-        passwordCandidates.length === 1
-      ) {
-        formCandidates.push({
-          form,
+      /*
+ * A VFS pode renderizar mais de um input password
+ * no DOM, mesmo quando a tela de login possui
+ * apenas um campo Password visível.
+ *
+ * Por isso não exigimos exatamente um password.
+ */
 
-          email:
-            emailCandidates[0],
+if (
+  emailCandidates.length >= 1 &&
+  passwordCandidates.length >= 1
+) {
 
-          password:
-            passwordCandidates[0]
-        });
-      }
+  const email =
+    emailCandidates
+      .slice()
+      .sort(
+        (a, b) => {
+
+          const score = element => {
+
+            const metadata =
+              normalize(
+                [
+                  element.getAttribute(
+                    "autocomplete"
+                  ),
+                  element.getAttribute(
+                    "name"
+                  ),
+                  element.id,
+                  element.getAttribute(
+                    "placeholder"
+                  ),
+                  element.getAttribute(
+                    "aria-label"
+                  )
+                ].join(" ")
+              );
+
+            let value = 0;
+
+            if (
+              metadata.includes(
+                "email"
+              )
+            ) {
+              value += 100;
+            }
+
+            if (
+              metadata.includes(
+                "username"
+              )
+            ) {
+              value += 50;
+            }
+
+            return value;
+          };
+
+          return (
+            score(b) -
+            score(a)
+          );
+        }
+      )[0];
+
+  const password =
+    passwordCandidates
+      .slice()
+      .sort(
+        (a, b) => {
+
+          const score = element => {
+
+            const metadata =
+              normalize(
+                [
+                  element.getAttribute(
+                    "autocomplete"
+                  ),
+                  element.getAttribute(
+                    "name"
+                  ),
+                  element.id,
+                  element.getAttribute(
+                    "placeholder"
+                  ),
+                  element.getAttribute(
+                    "aria-label"
+                  )
+                ].join(" ")
+              );
+
+            let value = 0;
+
+            if (
+              metadata.includes(
+                "current-password"
+              )
+            ) {
+              value += 100;
+            }
+
+            if (
+              metadata.includes(
+                "password"
+              )
+            ) {
+              value += 50;
+            }
+
+            return value;
+          };
+
+          return (
+            score(b) -
+            score(a)
+          );
+        }
+      )[0];
+
+  formCandidates.push({
+    form,
+
+    email,
+
+    password
+  });
+}
     }
 
     /*
