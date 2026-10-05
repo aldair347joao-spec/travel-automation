@@ -4165,7 +4165,7 @@ let loginRejectedAfterLogin =
 
 for (
   let attempt = 1;
-  attempt <= 30;
+  attempt <= 60;
   attempt++
 ) {
   await new Promise(
@@ -4279,52 +4279,64 @@ for (
         }));
 
       const otpInput =
-        inputs.some(input => {
-          const metadata =
-            [
-              input.type,
-              input.name,
-              input.id,
-              input.placeholder,
-              input.autocomplete,
-              input.ariaLabel
-            ]
-              .join(" ")
-              .toLowerCase();
+  inputs.some(input => {
+    const metadata =
+      [
+        input.type,
+        input.name,
+        input.id,
+        input.placeholder,
+        input.autocomplete,
+        input.ariaLabel
+      ]
+        .join(" ")
+        .toLowerCase();
 
-          return (
-            metadata.includes("otp") ||
-            metadata.includes(
-              "one-time"
-            ) ||
-            metadata.includes(
-              "verification code"
-            ) ||
-            metadata.includes(
-              "verification"
-            ) ||
-            metadata.includes(
-              "security code"
-            )
-          );
-        });
+    return (
+      metadata.includes("otp") ||
+      metadata.includes("one-time") ||
+      metadata.includes("one time") ||
+      metadata.includes("verification") ||
+      metadata.includes("security code") ||
+      metadata.includes("verification code") ||
+      metadata.includes("verificationcode") ||
+      (
+        (
+          input.maxLength >= 4 &&
+          input.maxLength <= 8
+        ) &&
+        (
+          input.type === "text" ||
+          input.type === "number" ||
+          input.type === "tel"
+        )
+      )
+    );
+  });
 
-      const otpText =
-        [
-          "one-time password",
-          "one time password",
-          "enter otp",
-          "enter the otp",
-          "otp code",
-          "verification code",
-          "enter verification code",
-          "security code"
-        ].some(
-          indicator =>
-            bodyText.includes(
-              indicator
-            )
-        );
+const otpText =
+  [
+    "one-time password",
+    "one time password",
+    "enter otp",
+    "enter the otp",
+    "otp code",
+    "verification code",
+    "enter verification code",
+    "security code",
+    "verification code sent",
+    "code sent to your email",
+    "code has been sent",
+    "enter the code",
+    "enter code",
+    "check your email",
+    "check your inbox"
+  ].some(
+    indicator =>
+      bodyText.includes(
+        indicator
+      )
+  );
 
       const loginError =
         [
@@ -5766,58 +5778,226 @@ if (
   });
 }
   isAuthenticatedState() {
-    if (
-      [
-        "DASHBOARD",
-        "APPLICATION_DETAIL",
-        "YOUR_DETAILS",
-        "FACIAL",
-        "SERVICES",
-        "REVIEW_PAY",
-        "BOOK_APPOINTMENT",
-        "CONFIRMATION"
-      ].includes(this.state)
-    ) {
-      return true;
-    }
 
-    const inspection =
-      this.lastDomInspection;
+  /*
+   * ========================================================
+   * 1. ESTADOS VFS EXPLICITAMENTE AUTENTICADOS
+   * ========================================================
+   */
 
-    if (!inspection) {
-      return false;
-    }
-
-    const bodyText =
-      String(
-        inspection.bodyText ||
-        inspection.text ||
-        ""
-      ).toLowerCase();
-
-    const hasAuthenticatedNavigation =
-      [
-        "dashboard",
-        "application",
-        "appointment",
-        "visa application"
-      ].some(
-        term =>
-          bodyText.includes(term)
-      );
-
-    const hasLoginForm =
-      Boolean(
-        inspection.summary?.loginForm ||
-        inspection.loginForm
-      );
-
-    return (
-      hasAuthenticatedNavigation &&
-      !hasLoginForm
-    );
+  if (
+    [
+      "DASHBOARD",
+      "APPLICATION_DETAIL",
+      "YOUR_DETAILS",
+      "FACIAL",
+      "SERVICES",
+      "REVIEW_PAY",
+      "BOOK_APPOINTMENT",
+      "CONFIRMATION"
+    ].includes(
+      this.state
+    )
+  ) {
+    return true;
   }
 
+
+  /*
+   * ========================================================
+   * 2. URL DE UMA ÁREA INTERNA DA VFS
+   * ========================================================
+   *
+   * Algumas versões da VFS mantêm /login durante
+   * a transição da SPA. Por isso não dependemos
+   * exclusivamente da URL.
+   */
+
+  let currentUrl = "";
+
+  try {
+    currentUrl =
+      String(
+        this.page?.url?.() ||
+        ""
+      ).toLowerCase();
+  } catch {
+    currentUrl = "";
+  }
+
+  const authenticatedUrl =
+    [
+      "/dashboard",
+      "/application-detail",
+      "/your-details",
+      "/fv-instructions",
+      "/services",
+      "/review-pay",
+      "/book-appointment",
+      "/confirmation"
+    ].some(
+      route =>
+        currentUrl.includes(
+          route
+        )
+    );
+
+  if (
+    authenticatedUrl
+  ) {
+    return true;
+  }
+
+
+  /*
+   * ========================================================
+   * 3. INSPEÇÃO REAL DO DOM
+   * ========================================================
+   */
+
+  const inspection =
+    this.lastDomInspection;
+
+  if (
+    !inspection
+  ) {
+    return false;
+  }
+
+
+  const bodyText =
+    String(
+      inspection.bodyText ||
+      inspection.text ||
+      ""
+    )
+      .toLowerCase()
+      .replace(
+        /\s+/g,
+        " "
+      )
+      .trim();
+
+
+  /*
+   * ========================================================
+   * 4. FORMULÁRIO DE LOGIN AINDA PRESENTE?
+   * ========================================================
+   */
+
+  const hasLoginForm =
+    Boolean(
+      inspection.summary?.loginForm ||
+      inspection.loginForm
+    );
+
+
+  /*
+   * Se o formulário completo de login ainda existe,
+   * não consideramos autenticado apenas por palavras
+   * genéricas no DOM.
+   */
+
+  if (
+    hasLoginForm
+  ) {
+    return false;
+  }
+
+
+  /*
+   * ========================================================
+   * 5. SINAIS DE ÁREA AUTENTICADA
+   * ========================================================
+   */
+
+  const authenticatedTerms = [
+    "dashboard",
+    "application",
+    "appointment",
+    "visa application",
+    "start new booking",
+    "new booking",
+    "my applications",
+    "your applications",
+    "visa application centre",
+    "visa application center",
+    "book appointment",
+    "appointment availability"
+  ];
+
+
+  const hasAuthenticatedNavigation =
+    authenticatedTerms.some(
+      term =>
+        bodyText.includes(
+          term
+        )
+    );
+
+
+  /*
+   * ========================================================
+   * 6. CAMPOS DE LOGIN DESAPARECERAM
+   * ========================================================
+   *
+   * Se já não existe email/password e a página
+   * apresenta conteúdo VFS de aplicação, isso é
+   * evidência forte de sessão autenticada.
+   */
+
+  const inputs =
+    Array.isArray(
+      inspection.inputs
+    )
+      ? inspection.inputs
+      : [];
+
+  const hasEmailInput =
+    inputs.some(
+      input =>
+        String(
+          input?.name ||
+          input?.id ||
+          input?.placeholder ||
+          input?.type ||
+          ""
+        )
+          .toLowerCase()
+          .includes(
+            "email"
+          )
+    );
+
+  const hasPasswordInput =
+    inputs.some(
+      input =>
+        String(
+          input?.name ||
+          input?.id ||
+          input?.placeholder ||
+          input?.type ||
+          ""
+        )
+          .toLowerCase()
+          .includes(
+            "password"
+          )
+    );
+
+
+  /*
+   * ========================================================
+   * RESULTADO
+   * ========================================================
+   */
+
+  return (
+    hasAuthenticatedNavigation &&
+    !hasEmailInput &&
+    !hasPasswordInput
+  );
+}
   /*
    * ============================================================
    * APPLICATION DATA
