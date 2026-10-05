@@ -254,13 +254,145 @@ async function main() {
       }
     );
 
+    const challengeStart =
+  Date.now();
+
+let challengeResolved =
+  false;
+
+while (
+  Date.now() -
+    challengeStart <
+  60000
+) {
+  const snapshot =
+    await page.evaluate(
+      () => ({
+        url:
+          window.location.href,
+
+        title:
+          document.title,
+
+        bodyText:
+          (
+            document.body?.innerText ||
+            ""
+          )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim()
+            .slice(
+              0,
+              3000
+            ),
+
+        passwordCount:
+          document.querySelectorAll(
+            'input[type="password"]'
+          ).length,
+
+        emailCount:
+          document.querySelectorAll(
+            'input[type="email"]'
+          ).length
+      })
+    )
+    .catch(
+      () => null
+    );
+
+  if (!snapshot) {
     await new Promise(
       resolve =>
         setTimeout(
           resolve,
-          5000
+          1000
         )
     );
+
+    continue;
+  }
+
+  const text =
+    String(
+      snapshot.bodyText ||
+        ""
+    ).toLowerCase();
+
+  const title =
+    String(
+      snapshot.title ||
+        ""
+    ).toLowerCase();
+
+  const cloudflareChallenge =
+    title.includes(
+      "just a moment"
+    ) ||
+    text.includes(
+      "performing security verification"
+    ) ||
+    text.includes(
+      "security verification"
+    ) ||
+    text.includes(
+      "checking your browser"
+    ) ||
+    text.includes(
+      "verify you are human"
+    );
+
+  if (
+    !cloudflareChallenge &&
+    (
+      snapshot.passwordCount >
+        0 ||
+      snapshot.emailCount >
+        0
+    )
+  ) {
+    challengeResolved =
+      true;
+
+    console.log(
+      "[SCRAPELESS TEST] Cloudflare Challenge resolvida — formulário VFS detectado."
+    );
+
+    break;
+  }
+
+  console.log(
+    "[SCRAPELESS TEST] Aguardando resolução Cloudflare...",
+    {
+      elapsedMs:
+        Date.now() -
+        challengeStart,
+
+      title:
+        snapshot.title,
+
+      url:
+        snapshot.url
+    }
+  );
+
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        2000
+      )
+  );
+}
+
+if (!challengeResolved) {
+  console.warn(
+    "[SCRAPELESS TEST] Cloudflare Challenge não foi confirmada após 60 segundos."
+  );
+}
 
     /*
      * ========================================================
