@@ -1489,8 +1489,193 @@ await this.heartbeat(
       }
 
 
+            /*
+       * =======================================================
+       * VFS OTP AUTOMÁTICO
+       * =======================================================
+       *
+       * O login já foi enviado.
+       *
+       * A VFS confirmou:
+       *
+       * CAPTCHA resolvido
+       *        ↓
+       * OTP disponível
+       *
+       * Agora o Bot 1:
+       *
+       * 1. cria uma janela OTP;
+       * 2. valida a caixa de e-mail;
+       * 3. aguarda o código;
+       * 4. extrai o código automaticamente;
+       * 5. envia o OTP para a VFS;
+       * 6. confirma que a sessão chegou ao estado autenticado.
+       */
+
+      if (
+        loginResult?.otpRequired ===
+        true
+      ) {
+
+        application.bot1.status =
+          "running";
+
+        application.bot1.lastAction =
+          "vfs_otp_waiting_email";
+
+        await application.save();
+
+        logger.info(
+          "BOT1 VFS OTP CHECKPOINT",
+          {
+            applicationId:
+              applicationId,
+
+            reason:
+              "CAPTCHA resolvido; Bot 1 vai procurar o OTP no e-mail."
+          }
+        );
+
+        const otpRequest =
+          this.otp.createRequest(
+            applicationId
+          );
+
+        /*
+         * Valida a caixa de e-mail antes de esperar.
+         *
+         * O serviço utiliza as credenciais VFS
+         * configuradas para esta candidatura.
+         */
+        await withTimeout(
+          this.otp.requestCode(
+            otpRequest
+          ),
+          config.timeoutMs,
+          "VFS OTP mailbox validation"
+        );
+
+        application.bot1.lastAction =
+          "vfs_otp_waiting_email";
+
+        await application.save();
+
+        logger.info(
+          "BOT1 VFS OTP EMAIL WAITING",
+          {
+            applicationId:
+              applicationId,
+
+            requestId:
+              otpRequest.requestId,
+
+            expiresAt:
+              otpRequest.expiresAt
+          }
+        );
+
+        /*
+         * Mantém o lock do Bot 1 enquanto aguarda
+         * o e-mail.
+         */
+        const otpResult =
+          await withTimeout(
+            this.waitForOtpCodeWithLock(
+              applicationId,
+              otpRequest
+            ),
+            config.timeoutMs,
+            "VFS OTP email retrieval"
+          );
+
+        if (
+          !otpResult?.code
+        ) {
+          throw new Error(
+            "VFS OTP email was received but no valid OTP code was extracted."
+          );
+        }
+
+        application.bot1.lastAction =
+          "vfs_otp_received";
+
+        await application.save();
+
+        logger.info(
+          "BOT1 VFS OTP RECEIVED",
+          {
+            applicationId:
+              applicationId,
+
+            requestId:
+              otpRequest.requestId,
+
+            /*
+             * Nunca registamos o código OTP.
+             */
+            codeLength:
+              String(
+                otpResult.code
+              ).length
+          }
+        );
+
+        /*
+         * Enviar o OTP para a página VFS.
+         */
+        const submitOtpResult =
+          await withTimeout(
+            this.site.submitOtp(
+              otpResult.code
+            ),
+            config.timeoutMs,
+            "VFS OTP submission"
+          );
+
+        if (
+          submitOtpResult?.success !==
+          true
+        ) {
+          throw new Error(
+            submitOtpResult?.reason ||
+            "VFS OTP submission failed."
+          );
+        }
+
+        application.bot1.lastAction =
+          "vfs_otp_verified";
+
+        await application.save();
+
+        logger.info(
+          "BOT1 VFS OTP VERIFIED",
+          {
+            applicationId:
+              applicationId,
+
+            state:
+              submitOtpResult.state ||
+              null,
+
+            authenticated:
+              submitOtpResult.authenticated ===
+              true
+          }
+        );
+      }
+
+      /*
+       * -------------------------------------------------------
+       * CHECKPOINT MANUAL/OFICIAL DE FALLBACK
+       * -------------------------------------------------------
+       *
+       * Só chega aqui se o login devolveu
+       * requiresUser sem otpRequired.
+       */
       if (
         loginResult?.requiresUser ===
+        true &&
+        loginResult?.otpRequired !==
         true
       ) {
 
@@ -1507,13 +1692,11 @@ await this.heartbeat(
           }
         );
 
-
         application.bot1.status =
           "waiting";
 
         application.bot1.lastAction =
           "vfs_authentication_checkpoint";
-
 
         await application.save();
 
