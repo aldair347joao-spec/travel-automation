@@ -2571,46 +2571,226 @@ await this.detectCheckpoint();
 
   /*
    * ============================================================
-   * CAPTCHA
+   * CLOUDFLARE / CAPTCHA
    * ============================================================
+   *
+   * IMPORTANTE:
+   * O Scrapeless Agent Browser pode resolver o Cloudflare
+   * automaticamente sem emitir um evento CDP Captcha.solveFinished.
+   *
+   * Por isso primeiro aguardamos a página sair do
+   * "Just a moment..." e somente depois usamos o solver
+   * como fallback.
    */
-   if (
-  this.lastCheckpoint?.type ===
-  "CAPTCHA_REQUIRED"
-) {
 
-    logger.info(
-    "VFS CAPTCHA detected — requesting Scrapeless official solver",
-    {
-      applicationId:
-        applicationId
-    }
-  );
-
-  const captchaResult =
-    await this.solveScrapelessCaptcha();
-
-  /*
-   * Se o Browser API resolveu o desafio,
-   * damos tempo para a VFS atualizar a página.
-   */
   if (
-    captchaResult.solved ===
-    true
+    this.lastCheckpoint?.type ===
+    "CAPTCHA_REQUIRED"
   ) {
 
-    await page
-      .waitForNetworkIdle({
-        idleTime:
-          700,
+    const challengeStart =
+      Date.now();
 
-        timeout:
-          15000
-      })
-      .catch(
-        () => {}
+    let challengeResolved =
+      false;
+
+    logger.info(
+      "VFS SECURITY VERIFICATION DETECTED — AGUARDANDO SCRAPELESS AGENT BROWSER",
+      {
+        applicationId,
+        url:
+          page.url()
+      }
+    );
+
+    /*
+     * Aguardar até 60 segundos pela resolução automática.
+     *
+     * O teste isolado confirmou que a VFS passou de
+     * "Just a moment..." para "Login | VFS Global"
+     * em aproximadamente 26 segundos.
+     */
+    while (
+      Date.now() -
+        challengeStart <
+      60000
+    ) {
+
+      const snapshot =
+        await page
+          .evaluate(
+            () => ({
+              url:
+                window.location.href,
+
+              title:
+                document.title || "",
+
+              bodyText:
+                String(
+                  document.body?.innerText ||
+                  ""
+                )
+                  .replace(
+                    /\s+/g,
+                    " "
+                  )
+                  .trim()
+                  .slice(
+                    0,
+                    3000
+                  ),
+
+              passwordCount:
+                document.querySelectorAll(
+                  'input[type="password"]'
+                ).length,
+
+              inputCount:
+                document.querySelectorAll(
+                  "input"
+                ).length,
+
+              buttonCount:
+                document.querySelectorAll(
+                  "button"
+                ).length
+            })
+          )
+          .catch(
+            () => null
+          );
+
+      if (!snapshot) {
+
+        await new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              1000
+            )
+        );
+
+        continue;
+      }
+
+      const text =
+        String(
+          snapshot.bodyText ||
+            ""
+        ).toLowerCase();
+
+      const title =
+        String(
+          snapshot.title ||
+            ""
+        ).toLowerCase();
+
+      const cloudflareChallenge =
+        title.includes(
+          "just a moment"
+        ) ||
+        text.includes(
+          "performing security verification"
+        ) ||
+        text.includes(
+          "security verification"
+        ) ||
+        text.includes(
+          "checking your browser"
+        ) ||
+        text.includes(
+          "verify you are human"
+        );
+
+      /*
+       * O formulário VFS real contém password,
+       * botões e texto de login.
+       *
+       * Não dependemos de input[type=email],
+       * porque o diagnóstico real da VFS mostrou
+       * emailCount = 0.
+       */
+      const vfsLoginPage =
+        !cloudflareChallenge &&
+        (
+          snapshot.passwordCount >
+            0 ||
+          (
+            text.includes(
+              "sign in"
+            ) &&
+            text.includes(
+              "password"
+            )
+          )
+        );
+
+      if (
+        vfsLoginPage
+      ) {
+
+        challengeResolved =
+          true;
+
+        logger.info(
+          "VFS CLOUDFLARE CHALLENGE RESOLVED BY SCRAPELESS AGENT BROWSER",
+          {
+            applicationId,
+
+            elapsedMs:
+              Date.now() -
+              challengeStart,
+
+            title:
+              snapshot.title,
+
+            url:
+              snapshot.url,
+
+            passwordCount:
+              snapshot.passwordCount,
+
+            inputCount:
+              snapshot.inputCount,
+
+            buttonCount:
+              snapshot.buttonCount
+          }
+        );
+
+        break;
+      }
+
+      logger.info(
+        "VFS AGUARDANDO RESOLUÇÃO CLOUDFLARE",
+        {
+          applicationId,
+
+          elapsedMs:
+            Date.now() -
+            challengeStart,
+
+          title:
+            snapshot.title,
+
+          url:
+            snapshot.url
+        }
       );
 
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            2000
+          )
+      );
+    }
+
+    /*
+     * Atualizar o estado da página depois da espera.
+     */
     await this.detectState();
 
     await this.inspectCurrentDom()
@@ -2621,84 +2801,138 @@ await this.detectCheckpoint();
     await this.detectCheckpoint();
 
     /*
-     * CAPTCHA desapareceu:
-     * continuamos normalmente.
+     * Se o Cloudflare já desapareceu,
+     * NÃO chamamos o solver novamente.
      */
     if (
+      challengeResolved &&
       this.lastCheckpoint?.type !==
-      "CAPTCHA_REQUIRED"
+        "CAPTCHA_REQUIRED"
     ) {
 
       logger.info(
-        "VFS CAPTCHA resolved by Scrapeless",
+        "VFS SECURITY VERIFICATION CONFIRMADA — CONTINUANDO PARA LOGIN",
         {
-          applicationId:
-            applicationId
+          applicationId,
+          elapsedMs:
+            Date.now() -
+            challengeStart,
+          url:
+            page.url()
         }
       );
 
-    } else {
+    } else if (
+      this.lastCheckpoint?.type ===
+      "CAPTCHA_REQUIRED"
+    ) {
 
       /*
-       * O solver terminou, mas a VFS
-       * ainda apresenta o checkpoint.
+       * FALLBACK:
+       * somente agora, depois dos 60 segundos,
+       * pedimos explicitamente ao solver oficial.
        */
-      logger.warn(
-        "Scrapeless reported CAPTCHA solved but VFS still shows CAPTCHA",
+      logger.info(
+        "VFS SECURITY VERIFICATION AINDA PRESENTE — USANDO SCRAPELESS SOLVER COMO FALLBACK",
         {
-          applicationId:
-            applicationId
+          applicationId,
+          elapsedMs:
+            Date.now() -
+            challengeStart
         }
       );
+
+      const captchaResult =
+        await this.solveScrapelessCaptcha();
+
+      logger.info(
+        "VFS SCRAPELESS FALLBACK RESULT",
+        {
+          applicationId,
+
+          attempted:
+            captchaResult?.attempted ||
+            false,
+
+          solved:
+            captchaResult?.solved ||
+            false,
+
+          status:
+            captchaResult?.status ||
+            null
+        }
+      );
+
+      if (
+        captchaResult?.solved ===
+        true
+      ) {
+
+        await page
+          .waitForNetworkIdle({
+            idleTime:
+              700,
+
+            timeout:
+              15000
+          })
+          .catch(
+            () => {}
+          );
+
+        await this.detectState();
+
+        await this.inspectCurrentDom()
+          .catch(
+            () => {}
+          );
+
+        await this.detectCheckpoint();
+      }
+    }
+
+    /*
+     * Só declaramos CAPTCHA_REQUIRED se,
+     * depois de esperar + fallback, ele realmente
+     * continuar presente.
+     */
+    if (
+      this.lastCheckpoint?.type ===
+      "CAPTCHA_REQUIRED"
+    ) {
+
+      return {
+        success:
+          false,
+
+        requiresUser:
+          true,
+
+        captchaRequired:
+          true,
+
+        authenticated:
+          false,
+
+        code:
+          "CAPTCHA_REQUIRED",
+
+        reason:
+          "Scrapeless could not complete the VFS security verification automatically.",
+
+        state:
+          this.state,
+
+        checkpoint:
+          this.lastCheckpoint,
+
+        dom:
+          this.getDomSummary()
+      };
     }
   }
-
-  /*
-   * Se ainda existe CAPTCHA depois da tentativa,
-   * mantemos o checkpoint oficial.
-   */
-  if (
-    this.lastCheckpoint?.type ===
-    "CAPTCHA_REQUIRED"
-  ) {
-
-    return {
-      success:
-        false,
-
-      requiresUser:
-        true,
-
-      captchaRequired:
-        true,
-
-      authenticated:
-        false,
-
-      code:
-        "CAPTCHA_REQUIRED",
-
-      reason:
-        "Scrapeless could not complete the VFS CAPTCHA automatically.",
-
-      state:
-        this.state,
-
-      checkpoint:
-        this.lastCheckpoint,
-
-      dom:
-        this.getDomSummary(),
-
-      captchaSolveAttempted:
-        captchaResult.attempted,
-
-      captchaSolveStatus:
-        captchaResult.status
-    };
-  }
-}
-  
+      
   /*
    * ============================================================
    * PROCURAR FORMULÁRIO DE LOGIN
