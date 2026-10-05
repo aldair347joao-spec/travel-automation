@@ -633,9 +633,24 @@ try {
       "============================================================"
     );
 
-    console.log(
-      "[SCRAPELESS TEST] VFS navigation completed successfully."
-    );
+    if (
+  challengeResolved &&
+  !result?.diagnosticError
+) {
+  console.log(
+    "[SCRAPELESS TEST] SUCCESS: Cloudflare resolvido e diagnóstico VFS concluído."
+  );
+} else if (
+  !result?.diagnosticError
+) {
+  console.warn(
+    "[SCRAPELESS TEST] WARNING: Diagnóstico concluído, mas o Cloudflare não foi confirmado."
+  );
+} else {
+  console.error(
+    "[SCRAPELESS TEST] ERROR: Diagnóstico VFS não pôde ser concluído."
+  );
+}
   } finally {
     await browser.close();
 
