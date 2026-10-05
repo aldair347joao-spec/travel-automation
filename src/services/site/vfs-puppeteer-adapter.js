@@ -4124,12 +4124,218 @@ if (
    * ----------------------------------------------------------
    */
 
-  try {
-    await page.click(
-      loginForm.submit
-    );
+  /*
+ * ============================================================
+ * DIAGNÓSTICO DA API REAL DE LOGIN VFS
+ * ============================================================
+ *
+ * Não registra email, password, OTP nem token.
+ *
+ * Queremos descobrir:
+ *
+ * 1. O clique gera POST /user/login?
+ * 2. A requisição contém Turnstile?
+ * 3. Qual é o HTTP status da resposta?
+ *
+ * NÃO alteramos o comportamento do login.
+ */
 
-    loginSubmitClicked = true;
+let vfsLoginApiRequestDetected =
+  false;
+
+let vfsLoginApiResponseDetected =
+  false;
+
+let vfsLoginApiResponseStatus =
+  null;
+
+const vfsLoginRequestListener =
+  request => {
+    try {
+      const requestUrl =
+        String(
+          request.url() ||
+          ""
+        );
+
+      const parsedUrl =
+        new URL(
+          requestUrl
+        );
+
+      const pathName =
+        parsedUrl.pathname
+          .toLowerCase();
+
+      const isVfsLoginRequest =
+        request.method() ===
+          "POST" &&
+        (
+          pathName ===
+            "/user/login" ||
+          pathName.endsWith(
+            "/user/login"
+          )
+        );
+
+      if (
+        !isVfsLoginRequest
+      ) {
+        return;
+      }
+
+      vfsLoginApiRequestDetected =
+        true;
+
+      const postData =
+        String(
+          request.postData() ||
+          ""
+        );
+
+      const hasTurnstileToken =
+        postData.includes(
+          "cf-turnstile-response"
+        ) ||
+        postData.includes(
+          "turnstile"
+        );
+
+      logger.info(
+        "VFS LOGIN API REQUEST DETECTED",
+        {
+          applicationId,
+
+          method:
+            request.method(),
+
+          path:
+            parsedUrl.pathname,
+
+          hasPostData:
+            Boolean(postData),
+
+          hasTurnstileToken,
+
+          origin:
+            request.headers()
+              ?.origin ||
+            null
+        }
+      );
+    } catch (
+      error
+    ) {
+      logger.warn(
+        "VFS LOGIN API REQUEST DIAGNOSTIC FAILED",
+        {
+          applicationId,
+
+          error:
+            error?.message ||
+            String(error)
+        }
+      );
+    }
+  };
+
+const vfsLoginResponseListener =
+  async response => {
+    try {
+      const responseUrl =
+        String(
+          response.url() ||
+          ""
+        );
+
+      const parsedUrl =
+        new URL(
+          responseUrl
+        );
+
+      const pathName =
+        parsedUrl.pathname
+          .toLowerCase();
+
+      const isVfsLoginResponse =
+        response.request()
+          ?.method() ===
+          "POST" &&
+        (
+          pathName ===
+            "/user/login" ||
+          pathName.endsWith(
+            "/user/login"
+          )
+        );
+
+      if (
+        !isVfsLoginResponse
+      ) {
+        return;
+      }
+
+      vfsLoginApiResponseDetected =
+        true;
+
+      vfsLoginApiResponseStatus =
+        response.status();
+
+      logger.info(
+        "VFS LOGIN API RESPONSE DETECTED",
+        {
+          applicationId,
+
+          status:
+            response.status(),
+
+          statusText:
+            response.statusText(),
+
+          path:
+            parsedUrl.pathname,
+
+          contentType:
+            response.headers()
+              ?.["content-type"] ||
+            null,
+
+          ok:
+            response.ok()
+        }
+      );
+    } catch (
+      error
+    ) {
+      logger.warn(
+        "VFS LOGIN API RESPONSE DIAGNOSTIC FAILED",
+        {
+          applicationId,
+
+          error:
+            error?.message ||
+            String(error)
+        }
+      );
+    }
+  };
+
+page.on(
+  "request",
+  vfsLoginRequestListener
+);
+
+page.on(
+  "response",
+  vfsLoginResponseListener
+);
+
+try {
+  await page.click(
+    loginForm.submit
+  );
+
+  loginSubmitClicked = true;
 
     logger.info(
       "VFS LOGIN SUBMIT CLICKED",
