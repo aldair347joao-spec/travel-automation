@@ -4365,11 +4365,16 @@ if (
      * BOTÃO DE LOGIN
      * ========================================================
      */
-
-    const form =
+        const form =
       selectedForm.form;
 
     let submitCandidates = [];
+
+    /*
+     * ========================================================
+     * 1. PRIMEIRO: BOTÕES DENTRO DO FORM
+     * ========================================================
+     */
 
     if (form) {
       submitCandidates =
@@ -4380,100 +4385,180 @@ if (
         ).filter(
           visible
         );
-    } else {
-      /*
-       * Sem <form>, procuramos botões próximos aos campos.
-       */
-      const emailParent =
-        selectedForm.email
-          .parentElement;
-
-      const passwordParent =
-        selectedForm.password
-          .parentElement;
-
-      const containers =
-        [
-          emailParent,
-          passwordParent,
-          emailParent?.parentElement,
-          passwordParent?.parentElement
-        ].filter(
-          Boolean
-        );
-
-      const uniqueButtons =
-        new Set();
-
-      containers.forEach(
-        container => {
-          Array.from(
-            container.querySelectorAll(
-              "button, input[type='submit']"
-            )
-          )
-            .filter(
-              visible
-            )
-            .forEach(
-              button =>
-                uniqueButtons.add(
-                  button
-                )
-            );
-        }
-      );
-
-      submitCandidates =
-        Array.from(
-          uniqueButtons
-        );
     }
 
-    const loginButtons =
-      submitCandidates.filter(
-        element => {
-          const type =
-            normalize(
-              element.getAttribute(
-                "type"
-              )
-            );
+    /*
+     * ========================================================
+     * 2. IDENTIFICAR O SIGN IN
+     * ========================================================
+     */
 
-          const text =
-            normalize(
-              [
-                element.innerText,
-                element.value,
+    const getLoginCandidates =
+      candidates =>
+        candidates.filter(
+          element => {
+            const type =
+              normalize(
                 element.getAttribute(
-                  "aria-label"
-                ),
-                element.getAttribute(
-                  "title"
+                  "type"
                 )
-              ].join(" ")
-            );
+              );
 
-          return (
-            type === "submit" ||
-            text.includes(
-              "login"
-            ) ||
-            text.includes(
-              "log in"
-            ) ||
-            text.includes(
-              "sign in"
-            ) ||
-            text.includes(
-              "entrar"
-            ) ||
-            text.includes(
-              "continue"
-            )
-          );
-        }
+            const text =
+              normalize(
+                [
+                  element.innerText,
+                  element.value,
+                  element.getAttribute(
+                    "aria-label"
+                  ),
+                  element.getAttribute(
+                    "title"
+                  )
+                ].join(" ")
+              );
+
+            return (
+              type === "submit" ||
+              text === "login" ||
+              text === "log in" ||
+              text === "sign in" ||
+              text === "entrar" ||
+              text === "iniciar sessão" ||
+              text === "continue" ||
+              text.includes("sign in") ||
+              text.includes("iniciar sessão")
+            );
+          }
+        );
+
+    let loginButtons =
+      getLoginCandidates(
+        submitCandidates
       );
+
+    /*
+     * ========================================================
+     * 3. FALLBACK GLOBAL
+     * ========================================================
+     *
+     * A VFS pode colocar o botão Sign In fora do <form>
+     * que contém os inputs.
+     *
+     * Procuramos então na página inteira.
+     */
+
+    if (
+      loginButtons.length !== 1
+    ) {
+      const globalCandidates =
+        Array.from(
+          document.querySelectorAll(
+            "button, input[type='submit'], [role='button']"
+          )
+        ).filter(
+          visible
+        );
+
+      const globalLoginButtons =
+        getLoginCandidates(
+          globalCandidates
+        );
+
+      if (
+        globalLoginButtons.length === 1
+      ) {
+        loginButtons =
+          globalLoginButtons;
+      }
+    }
+
+    /*
+     * ========================================================
+     * 4. FALLBACK ESPECÍFICO PARA SIGN IN
+     * ========================================================
+     *
+     * Algumas versões da VFS usam elementos sem
+     * type=submit e sem role=button.
+     */
+
+    if (
+      loginButtons.length !== 1
+    ) {
+      const allVisibleElements =
+        Array.from(
+          document.querySelectorAll(
+            "button, input, a, div, span"
+          )
+        ).filter(
+          visible
+        );
+
+      const signInElements =
+        allVisibleElements.filter(
+          element => {
+            const text =
+              normalize(
+                [
+                  element.innerText,
+                  element.value,
+                  element.getAttribute(
+                    "aria-label"
+                  ),
+                  element.getAttribute(
+                    "title"
+                  )
+                ].join(" ")
+              );
+
+            return (
+              text === "sign in" ||
+              text === "iniciar sessão"
+            );
+          }
+        );
+
+      /*
+       * Removemos elementos que apenas contenham
+       * outro elemento Sign In.
+       *
+       * Queremos o elemento clicável mais próximo.
+       */
+
+      const clickableSignIn =
+        signInElements.filter(
+          element => {
+            const tag =
+              String(
+                element.tagName || ""
+              ).toLowerCase();
+
+            return (
+              tag === "button" ||
+              tag === "input" ||
+              tag === "a" ||
+              element.getAttribute(
+                "role"
+              ) === "button" ||
+              typeof element.onclick ===
+                "function"
+            );
+          }
+        );
+
+      if (
+        clickableSignIn.length === 1
+      ) {
+        loginButtons =
+          clickableSignIn;
+      }
+    }
+
+    /*
+     * ========================================================
+     * 5. SELECIONAR BOTÃO
+     * ========================================================
+     */
 
     let submit = null;
 
@@ -4487,9 +4572,12 @@ if (
     }
 
     /*
-     * Se não encontramos um botão textual mas existe
-     * exatamente um submit no formulário, podemos utilizá-lo.
+     * ========================================================
+     * 6. ÚLTIMO FALLBACK:
+     *    UM ÚNICO SUBMIT REAL NO FORM
+     * ========================================================
      */
+
     if (
       !submit &&
       form
@@ -4512,6 +4600,27 @@ if (
           );
       }
     }
+
+    return {
+      email,
+
+      password,
+
+      submit,
+
+      emailCandidates:
+        1,
+
+      passwordCandidates:
+        1,
+
+      submitCandidates:
+        loginButtons.length,
+
+      submitFound:
+        Boolean(submit)
+    };
+
 
     return {
       email,
