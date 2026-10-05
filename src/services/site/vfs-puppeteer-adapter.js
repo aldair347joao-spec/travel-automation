@@ -4387,15 +4387,112 @@ for (
       url: page.url()
     }));
 
-  /*
+    /*
    * ----------------------------------------------------------
-   * 1. OTP encontrado.
+   * 1. CAPTCHA / security checkpoint após o login.
    *
    * IMPORTANTE:
-   * success=true + requiresUser=true.
    *
-   * O Bot 1 trata requiresUser antes de considerar a
-   * autenticação concluída.
+   * A VFS pode apresentar simultaneamente:
+   *
+   * - página de OTP;
+   * - campo OTP;
+   * - CAPTCHA;
+   * - campo OTP desabilitado.
+   *
+   * Portanto CAPTCHA tem prioridade absoluta.
+   *
+   * Só depois de o desafio oficial desaparecer
+   * permitimos que o OTP seja processado.
+   * ----------------------------------------------------------
+   */
+
+  if (
+    this.lastCheckpoint?.type ===
+      "CAPTCHA_REQUIRED" ||
+    postLoginDom.securityChallenge ===
+      true
+  ) {
+    if (
+      !securityCheckpointAfterLogin
+    ) {
+      securityCheckpointAfterLogin =
+        true;
+
+      logger.info(
+        "VFS LOGIN SECURITY CHECKPOINT AFTER CLICK",
+        {
+          applicationId,
+          attempt,
+          url:
+            page.url(),
+          reason:
+            "VFS apresentou CAPTCHA antes de habilitar o OTP."
+        }
+      );
+    }
+
+    const captchaResult =
+      await this.solveScrapelessCaptcha()
+        .catch(error => ({
+          attempted: true,
+          solved: false,
+          status: "ERROR",
+          error:
+            error?.message ||
+            String(error)
+        }));
+
+    logger.info(
+      "VFS LOGIN CAPTCHA CHECK AFTER CLICK RESULT",
+      {
+        applicationId,
+        attempt,
+        attempted:
+          captchaResult?.attempted ||
+          false,
+        solved:
+          captchaResult?.solved ||
+          false,
+        status:
+          captchaResult?.status ||
+          null
+      }
+    );
+
+    /*
+     * Dar tempo para a VFS habilitar
+     * o campo OTP depois da resolução.
+     */
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          1500
+        )
+    );
+
+    await this.detectState()
+      .catch(() => {});
+
+    await this.inspectCurrentDom()
+      .catch(() => {});
+
+    await this.detectCheckpoint()
+      .catch(() => {});
+
+    continue;
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * 2. OTP encontrado DEPOIS do CAPTCHA.
+   *
+   * Neste ponto o CAPTCHA já não está presente.
+   *
+   * O findOtpInput() também exige que o campo esteja
+   * habilitado, portanto não tentamos escrever enquanto
+   * a VFS ainda o mantém disabled.
    * ----------------------------------------------------------
    */
 
@@ -4411,7 +4508,7 @@ for (
       true;
 
     logger.info(
-      "VFS LOGIN OTP REQUIRED",
+      "VFS LOGIN OTP REQUIRED AFTER CAPTCHA",
       {
         applicationId,
         attempt,
@@ -4441,7 +4538,7 @@ for (
         "OTP_REQUIRED",
 
       reason:
-        "VFS OTP checkpoint detected.",
+        "VFS CAPTCHA cleared and OTP checkpoint is ready.",
 
       state:
         this.state,
@@ -4454,54 +4551,6 @@ for (
       dom:
         this.getDomSummary()
     };
-  }
-
-  /*
-   * ----------------------------------------------------------
-   * 2. CAPTCHA / security checkpoint após o login.
-   *
-   * Não tentamos contornar a segurança. Apenas aguardamos
-   * o checkpoint oficial ser resolvido.
-   * ----------------------------------------------------------
-   */
-
-  if (
-    this.lastCheckpoint?.type ===
-      "CAPTCHA_REQUIRED" ||
-    postLoginDom.securityChallenge ===
-      true
-  ) {
-    if (
-      !securityCheckpointAfterLogin
-    ) {
-      securityCheckpointAfterLogin =
-        true;
-
-      logger.info(
-        "VFS LOGIN SECURITY CHECKPOINT AFTER CLICK",
-        {
-          applicationId,
-          attempt,
-          url:
-            page.url()
-        }
-      );
-    }
-
-    await this.solveScrapelessCaptcha()
-      .catch(error => {
-        logger.warn(
-          "VFS LOGIN CAPTCHA CHECK AFTER CLICK FAILED",
-          {
-            applicationId,
-            error:
-              error?.message ||
-              String(error)
-          }
-        );
-      });
-
-    continue;
   }
 
   /*
