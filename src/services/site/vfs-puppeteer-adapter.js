@@ -1,4 +1,4 @@
-"use strict";
+Me"use strict";
 
 const fs = require("fs");
 const path = require("path");
@@ -1185,9 +1185,12 @@ if (
     }
 
     const captchaTimeout =
-      Number(
-        process.env.SCRAPELESS_CAPTCHA_TIMEOUT_MS
-      ) || 120000;
+  Math.min(
+    Number(
+      process.env.SCRAPELESS_CAPTCHA_TIMEOUT_MS
+    ) || 30000,
+    30000
+  );
 
     let captchaDetected =
       false;
@@ -3152,6 +3155,9 @@ if (
 let loginForm =
   null;
 
+let captchaSolverAlreadyAttempted =
+  false;
+
 const loginDetectionAttempts =
   40;
 
@@ -3257,21 +3263,49 @@ for (
    * 3. SE HOUVER CAPTCHA, DEIXAR O SCRAPELESS RESOLVER
    * ============================================================
    */
+if (
+  cloudflareChallenge
+) {
+
+  logger.info(
+    "VFS LOGIN SECURITY CHALLENGE STILL PRESENT",
+    {
+      applicationId,
+      attempt,
+      url:
+        challengeSnapshot.url,
+
+      title:
+        challengeSnapshot.title,
+
+      captchaSolverAlreadyAttempted
+    }
+  );
+
+  /*
+   * O CAPTCHA já foi tratado antes da procura
+   * do formulário.
+   *
+   * NÃO chamamos o solver novamente a cada
+   * tentativa, porque isso bloqueava o login
+   * durante 120 segundos.
+   *
+   * Agora apenas aguardamos a VFS terminar
+   * de liberar os campos.
+   */
 
   if (
-    cloudflareChallenge
+    !captchaSolverAlreadyAttempted
   ) {
 
+    captchaSolverAlreadyAttempted =
+      true;
+
     logger.info(
-      "VFS LOGIN SECURITY CHALLENGE DETECTED",
+      "VFS LOGIN CAPTCHA SOLVER STARTING",
       {
         applicationId,
-        attempt,
-        url:
-          challengeSnapshot.url,
-
-        title:
-          challengeSnapshot.title
+        attempt
       }
     );
 
@@ -3303,12 +3337,6 @@ for (
       }
     );
 
-    /*
-     * O CAPTCHA pode ter sido resolvido,
-     * mas a VFS ainda precisa de tempo para
-     * reconstruir/liberar o formulário.
-     */
-
     if (
       captchaResult?.solved ===
       true
@@ -3329,38 +3357,10 @@ for (
             2000
           )
       );
-
-      await page
-        .waitForNetworkIdle({
-          idleTime:
-            700,
-
-          timeout:
-            15000
-        })
-        .catch(
-          () => {}
-        );
-
-      await this
-        .detectState()
-        .catch(
-          () => {}
-        );
-
-      await this
-        .inspectCurrentDom()
-        .catch(
-          () => {}
-        );
-
-      await this
-        .detectCheckpoint()
-        .catch(
-          () => {}
-        );
     }
   }
+}
+      
 
   /*
    * ============================================================
