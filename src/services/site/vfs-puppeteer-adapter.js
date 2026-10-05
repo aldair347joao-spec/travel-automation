@@ -1321,22 +1321,42 @@ try {
        */
 
       try {
-        await client.send(
-          "Captcha.solve"
-        );
-      } catch (error) {
-        logger.warn(
-          "Scrapeless Captcha.solve request failed",
-          {
-            applicationId:
-              this.applicationId,
-
-            error:
-              error?.message ||
-              String(error)
-          }
-        );
+  const solveResult =
+    await client.send(
+      "Captcha.solve",
+      {
+        detectTimeout:
+          Math.min(
+            captchaTimeout,
+            30000
+          )
       }
+    );
+
+  logger.info(
+    "Scrapeless Captcha.solve completed",
+    {
+      applicationId:
+        this.applicationId,
+
+      result:
+        solveResult || null
+    }
+  );
+
+} catch (error) {
+  logger.warn(
+    "Scrapeless Captcha.solve request failed",
+    {
+      applicationId:
+        this.applicationId,
+
+      error:
+        error?.message ||
+        String(error)
+    }
+  );
+}
 
       /*
        * ========================================================
@@ -2171,28 +2191,155 @@ try {
       await this.ensurePage();
 
     await page.goto(
-      url,
-      {
-        waitUntil:
-          "domcontentloaded",
-        timeout:
-          DEFAULT_TIMEOUT
-      }
-    );
+  url,
+  {
+    waitUntil:
+      "domcontentloaded",
+    timeout:
+      DEFAULT_TIMEOUT
+  }
+);
 
+/*
+ * ============================================================
+ * CLOUDFLARE / JUST A MOMENT
+ * ============================================================
+ *
+ * A VFS pode apresentar o Cloudflare imediatamente após
+ * o carregamento inicial. Neste ponto ainda não procuramos
+ * o formulário de login.
+ *
+ * O Agent Browser/Scrapeless recebe a oportunidade de
+ * resolver oficialmente o desafio antes de continuarmos.
+ */
+const initialChallengeSnapshot =
+  await page
+    .evaluate(() => {
+      const bodyText =
+        String(
+          document.body?.innerText ||
+          ""
+        )
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
+
+      return {
+        url:
+          window.location.href,
+
+        title:
+          document.title || "",
+
+        bodyText:
+          bodyText.slice(
+            0,
+            2500
+          )
+      };
+    })
+    .catch(() => ({
+      url:
+        page.url(),
+
+      title:
+        "",
+
+      bodyText:
+        ""
+    }));
+
+const initialChallengeText =
+  `${initialChallengeSnapshot.title} ${initialChallengeSnapshot.bodyText}`
+    .toLowerCase();
+
+const initialCloudflareChallenge =
+  initialChallengeSnapshot.url.includes(
+    "__cf_chl_tk="
+  ) ||
+  initialChallengeText.includes(
+    "just a moment"
+  ) ||
+  initialChallengeText.includes(
+    "performing security verification"
+  ) ||
+  initialChallengeText.includes(
+    "security verification"
+  ) ||
+  initialChallengeText.includes(
+    "checking your browser"
+  ) ||
+  initialChallengeText.includes(
+    "verify you are human"
+  );
+
+if (
+  initialCloudflareChallenge
+) {
+  logger.info(
+    "VFS INITIAL CLOUDFLARE CHALLENGE DETECTED — CALLING SCRAPELESS SOLVER",
+    {
+      applicationId:
+        this.applicationId,
+
+      url:
+        initialChallengeSnapshot.url,
+
+      title:
+        initialChallengeSnapshot.title
+    }
+  );
+
+  const initialCaptchaResult =
+    await this.solveScrapelessCaptcha();
+
+  logger.info(
+    "VFS INITIAL SCRAPELESS SOLVER RESULT",
+    {
+      applicationId:
+        this.applicationId,
+
+      attempted:
+        initialCaptchaResult?.attempted ||
+        false,
+
+      solved:
+        initialCaptchaResult?.solved ||
+        false,
+
+      status:
+        initialCaptchaResult?.status ||
+        null,
+
+      url:
+        page.url()
+    }
+  );
+
+  if (
+    initialCaptchaResult?.solved ===
+    true
+  ) {
     await page
       .waitForNetworkIdle({
-        idleTime: 500,
-        timeout: 10000
+        idleTime:
+          700,
+
+        timeout:
+          15000
       })
-      .catch(() => {});
+      .catch(
+        () => {}
+      );
+  }
+}
 
-    await this.detectState();
+await this.detectState();
 
-    await this.inspectCurrentDom()
-      .catch(() => {});
+await this.inspectCurrentDom()
+  .catch(() => {});
 
-    await this.detectCheckpoint();
+await this.detectCheckpoint();
 
     return {
       success: true,
