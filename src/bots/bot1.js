@@ -39,9 +39,8 @@ const config = {
   maxAttempts:
     Number(process.env.BOT1_MAX_ATTEMPTS) || 3,
 
- timeoutMs:
-  Number(process.env.BOT1_TIMEOUT_MS) || 120000
-};
+   timeoutMs:
+    Number(process.env.BOT1_TIMEOUT_MS) || 180000
 
 
 /*
