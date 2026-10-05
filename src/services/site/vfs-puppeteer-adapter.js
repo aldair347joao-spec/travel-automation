@@ -547,7 +547,9 @@ if (
               frame.url(),
 
             isMainFrame:
-              frame.isMainFrame(),
+  typeof frame?.isMainFrame === "function"
+    ? frame.isMainFrame()
+    : frame === this.page?.mainFrame(),
 
             parentUrl:
               frame.parentFrame()?.url() ||
@@ -590,7 +592,9 @@ if (
               frame.url(),
 
             isMainFrame:
-              frame.isMainFrame(),
+  typeof frame?.isMainFrame === "function"
+    ? frame.isMainFrame()
+    : frame === this.page?.mainFrame(),
 
             parentUrl:
               frame.parentFrame()?.url() ||
@@ -633,7 +637,9 @@ if (
               frame.url(),
 
             isMainFrame:
-              frame.isMainFrame(),
+  typeof frame?.isMainFrame === "function"
+    ? frame.isMainFrame()
+    : frame === this.page?.mainFrame(),
 
             parentUrl:
               frame.parentFrame()?.url() ||
@@ -1324,8 +1330,20 @@ try {
        */
 
       try {
-  const solveResult =
-    await client.send(
+  logger.info(
+  "Scrapeless Captcha.solve STARTED",
+  {
+    applicationId:
+      this.applicationId,
+
+    timeout:
+      captchaTimeout
+  }
+);
+
+const solveResult =
+  await Promise.race([
+    client.send(
       "Captcha.solve",
       {
         detectTimeout:
@@ -1334,18 +1352,32 @@ try {
             30000
           )
       }
-    );
+    ),
 
-  logger.info(
-    "Scrapeless Captcha.solve completed",
-    {
-      applicationId:
-        this.applicationId,
+    new Promise(
+      (_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                "Captcha.solve CDP timeout"
+              )
+            ),
+          captchaTimeout + 2000
+        )
+    )
+  ]);
 
-      result:
-        solveResult || null
-    }
-  );
+logger.info(
+  "Scrapeless Captcha.solve completed",
+  {
+    applicationId:
+      this.applicationId,
+
+    result:
+      solveResult || null
+  }
+);
 
 } catch (error) {
   logger.warn(
