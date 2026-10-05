@@ -4136,30 +4136,536 @@ if (
       this.getDomSummary()
   };
 }
-
 /*
  * ============================================================
  * 11. AGORA SIM: aguardar a VFS processar o login.
  *
- * A VFS pode ser SPA, portanto não dependemos exclusivamente
- * de navigation.
+ * A VFS pode funcionar como SPA. Portanto, depois do clique,
+ * não podemos assumir que o resultado estará disponível após
+ * apenas um waitForNetworkIdle().
+ *
+ * Monitoramos a página por até 30 segundos.
  * ============================================================
  */
 
-await page
-  .waitForNetworkIdle({
-    idleTime: 700,
-    timeout: 15000
-  })
-  .catch(() => {});
+const loginResponseStartedAt =
+  Date.now();
 
-await new Promise(
-  resolve =>
-    setTimeout(
-      resolve,
-      1500
-    )
-);
+let authenticatedAfterLogin =
+  false;
+
+let otpDetectedAfterLogin =
+  false;
+
+let securityCheckpointAfterLogin =
+  false;
+
+let loginRejectedAfterLogin =
+  false;
+
+for (
+  let attempt = 1;
+  attempt <= 30;
+  attempt++
+) {
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        attempt === 1
+          ? 500
+          : 1000
+      )
+  );
+
+  /*
+   * ----------------------------------------------------------
+   * Atualizar estado interno da VFS.
+   * ----------------------------------------------------------
+   */
+
+  await this.detectState()
+    .catch(() => {});
+
+  await this.inspectCurrentDom()
+    .catch(() => {});
+
+  await this.detectCheckpoint()
+    .catch(() => {});
+
+  /*
+   * ----------------------------------------------------------
+   * Diagnóstico adicional diretamente no DOM.
+   *
+   * Isto serve como fallback caso o detector de checkpoint
+   * ainda não tenha classificado a nova página.
+   * ----------------------------------------------------------
+   */
+
+  const postLoginDom =
+    await page.evaluate(() => {
+      const normalize =
+        value =>
+          String(value || "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+
+      const bodyText =
+        normalize(
+          document.body?.innerText ||
+            ""
+        );
+
+      const inputs =
+        Array.from(
+          document.querySelectorAll(
+            "input"
+          )
+        )
+        .filter(element => {
+          const style =
+            window.getComputedStyle(
+              element
+            );
+
+          return (
+            style.display !==
+              "none" &&
+            style.visibility !==
+              "hidden" &&
+            style.opacity !==
+              "0"
+          );
+        })
+        .map(element => ({
+          type:
+            normalize(
+              element.type
+            ),
+
+          name:
+            normalize(
+              element.name
+            ),
+
+          id:
+            normalize(
+              element.id
+            ),
+
+          placeholder:
+            normalize(
+              element.placeholder
+            ),
+
+          autocomplete:
+            normalize(
+              element.autocomplete
+            ),
+
+          ariaLabel:
+            normalize(
+              element.getAttribute(
+                "aria-label"
+              )
+            ),
+
+          maxLength:
+            Number(
+              element.maxLength ||
+                0
+            )
+        }));
+
+      const otpInput =
+        inputs.some(input => {
+          const metadata =
+            [
+              input.type,
+              input.name,
+              input.id,
+              input.placeholder,
+              input.autocomplete,
+              input.ariaLabel
+            ]
+              .join(" ")
+              .toLowerCase();
+
+          return (
+            metadata.includes("otp") ||
+            metadata.includes(
+              "one-time"
+            ) ||
+            metadata.includes(
+              "verification code"
+            ) ||
+            metadata.includes(
+              "verification"
+            ) ||
+            metadata.includes(
+              "security code"
+            )
+          );
+        });
+
+      const otpText =
+        [
+          "one-time password",
+          "one time password",
+          "enter otp",
+          "enter the otp",
+          "otp code",
+          "verification code",
+          "enter verification code",
+          "security code"
+        ].some(
+          indicator =>
+            bodyText.includes(
+              indicator
+            )
+        );
+
+      const loginError =
+        [
+          "invalid email",
+          "invalid password",
+          "invalid credentials",
+          "incorrect email",
+          "incorrect password",
+          "incorrect credentials",
+          "unable to sign in",
+          "login failed",
+          "authentication failed"
+        ].some(
+          indicator =>
+            bodyText.includes(
+              indicator
+            )
+        );
+
+      const securityChallenge =
+        [
+          "security verification",
+          "verify you are human",
+          "checking your browser",
+          "performing security verification",
+          "captcha",
+          "cloudflare"
+        ].some(
+          indicator =>
+            bodyText.includes(
+              indicator
+            )
+        );
+
+      return {
+        bodyText:
+          bodyText.slice(
+            0,
+            1500
+          ),
+
+        otpInput,
+
+        otpText,
+
+        loginError,
+
+        securityChallenge,
+
+        url:
+          window.location.href
+      };
+    })
+    .catch(() => ({
+      bodyText: "",
+      otpInput: false,
+      otpText: false,
+      loginError: false,
+      securityChallenge: false,
+      url: page.url()
+    }));
+
+  /*
+   * ----------------------------------------------------------
+   * 1. OTP encontrado.
+   *
+   * IMPORTANTE:
+   * success=true + requiresUser=true.
+   *
+   * O Bot 1 trata requiresUser antes de considerar a
+   * autenticação concluída.
+   * ----------------------------------------------------------
+   */
+
+  if (
+    this.lastCheckpoint?.type ===
+      "OTP_REQUIRED" ||
+    postLoginDom.otpInput ===
+      true ||
+    postLoginDom.otpText ===
+      true
+  ) {
+    otpDetectedAfterLogin =
+      true;
+
+    logger.info(
+      "VFS LOGIN OTP REQUIRED",
+      {
+        applicationId,
+        attempt,
+        elapsedMs:
+          Date.now() -
+          loginResponseStartedAt,
+        url:
+          page.url(),
+        state:
+          this.state,
+        checkpoint:
+          this.lastCheckpoint?.type ||
+          null
+      }
+    );
+
+    return {
+      success: true,
+
+      requiresUser: true,
+
+      otpRequired: true,
+
+      authenticated: false,
+
+      code:
+        "OTP_REQUIRED",
+
+      reason:
+        "VFS OTP checkpoint detected.",
+
+      state:
+        this.state,
+
+      applicationId,
+
+      checkpoint:
+        this.lastCheckpoint,
+
+      dom:
+        this.getDomSummary()
+    };
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * 2. CAPTCHA / security checkpoint após o login.
+   *
+   * Não tentamos contornar a segurança. Apenas aguardamos
+   * o checkpoint oficial ser resolvido.
+   * ----------------------------------------------------------
+   */
+
+  if (
+    this.lastCheckpoint?.type ===
+      "CAPTCHA_REQUIRED" ||
+    postLoginDom.securityChallenge ===
+      true
+  ) {
+    if (
+      !securityCheckpointAfterLogin
+    ) {
+      securityCheckpointAfterLogin =
+        true;
+
+      logger.info(
+        "VFS LOGIN SECURITY CHECKPOINT AFTER CLICK",
+        {
+          applicationId,
+          attempt,
+          url:
+            page.url()
+        }
+      );
+    }
+
+    await this.solveScrapelessCaptcha()
+      .catch(error => {
+        logger.warn(
+          "VFS LOGIN CAPTCHA CHECK AFTER CLICK FAILED",
+          {
+            applicationId,
+            error:
+              error?.message ||
+              String(error)
+          }
+        );
+      });
+
+    continue;
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * 3. Verificar autenticação real.
+   * ----------------------------------------------------------
+   */
+
+  authenticatedAfterLogin =
+    this.isAuthenticatedState();
+
+  if (
+    authenticatedAfterLogin
+  ) {
+    await markAutomationActive(
+      applicationId
+    ).catch(() => {});
+
+    logger.info(
+      "VFS LOGIN AUTHENTICATED",
+      {
+        applicationId,
+        attempt,
+        elapsedMs:
+          Date.now() -
+          loginResponseStartedAt,
+        url:
+          page.url(),
+        state:
+          this.state
+      }
+    );
+
+    return {
+      success: true,
+
+      authenticated: true,
+
+      requiresUser: false,
+
+      otpRequired: false,
+
+      state:
+        this.state,
+
+      applicationId,
+
+      checkpoint:
+        this.lastCheckpoint,
+
+      dom:
+        this.getDomSummary()
+    };
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * 4. Credenciais rejeitadas.
+   * ----------------------------------------------------------
+   */
+
+  if (
+    postLoginDom.loginError ===
+    true
+  ) {
+    loginRejectedAfterLogin =
+      true;
+
+    logger.warn(
+      "VFS LOGIN CREDENTIALS REJECTED",
+      {
+        applicationId,
+        attempt,
+        elapsedMs:
+          Date.now() -
+          loginResponseStartedAt,
+        url:
+          page.url()
+      }
+    );
+
+    return {
+      success: false,
+
+      requiresUser: true,
+
+      authenticated: false,
+
+      code:
+        "VFS_LOGIN_REJECTED",
+
+      reason:
+        "VFS rejected the login credentials.",
+
+      state:
+        this.state,
+
+      applicationId,
+
+      checkpoint:
+        this.lastCheckpoint,
+
+      dom:
+        this.getDomSummary()
+    };
+  }
+
+  /*
+   * ----------------------------------------------------------
+   * 5. Registrar o progresso enquanto a SPA muda de estado.
+   * ----------------------------------------------------------
+   */
+
+  if (
+    attempt === 1 ||
+    attempt % 5 === 0
+  ) {
+    logger.info(
+      "VFS LOGIN POST-CLICK MONITORING",
+      {
+        applicationId,
+
+        attempt,
+
+        elapsedMs:
+          Date.now() -
+          loginResponseStartedAt,
+
+        url:
+          page.url(),
+
+        state:
+          this.state,
+
+        checkpoint:
+          this.lastCheckpoint?.type ||
+          null,
+
+        otpDetected:
+          otpDetectedAfterLogin,
+
+        securityCheckpoint:
+          securityCheckpointAfterLogin,
+
+        loginRejected:
+          loginRejectedAfterLogin,
+
+        bodyText:
+          postLoginDom.bodyText.slice(
+            0,
+            500
+          )
+      }
+    );
+  }
+}
+
+/*
+ * ============================================================
+ * 12. Os 30 segundos terminaram sem autenticação.
+ *
+ * Fazer uma última leitura antes de declarar falha.
+ * ============================================================
+ */
 
 await this.detectState()
   .catch(() => {});
@@ -4170,90 +4676,36 @@ await this.inspectCurrentDom()
 await this.detectCheckpoint()
   .catch(() => {});
 
-logger.info(
-  "VFS LOGIN RESPONSE RECEIVED",
-  {
-    applicationId,
-    url:
-      page.url(),
-    state:
-      this.state,
-    checkpoint:
-      this.lastCheckpoint?.type ||
-      null
-  }
-);
-
-/*
- * ============================================================
- * 12. Se a VFS pediu OTP, parar aqui e devolver OTP_REQUIRED.
- * ============================================================
- */
+const finalAuthenticated =
+  this.isAuthenticatedState();
 
 if (
-  this.lastCheckpoint?.type ===
-  "OTP_REQUIRED"
+  finalAuthenticated
 ) {
+  await markAutomationActive(
+    applicationId
+  ).catch(() => {});
+
   logger.info(
-    "VFS LOGIN OTP REQUIRED",
+    "VFS LOGIN AUTHENTICATED ON FINAL CHECK",
     {
       applicationId,
+      elapsedMs:
+        Date.now() -
+        loginResponseStartedAt,
       url:
-        page.url()
+        page.url(),
+      state:
+        this.state
     }
   );
-}
-
-      if (
-    this.lastCheckpoint?.type ===
-    "OTP_REQUIRED"
-  ) {
-    return {
-      success: false,
-      requiresUser: true,
-      otpRequired: true,
-      authenticated: false,
-      code:
-        "OTP_REQUIRED",
-      reason:
-        "VFS OTP checkpoint detected.",
-      state:
-        this.state,
-      checkpoint:
-        this.lastCheckpoint,
-      dom:
-        this.getDomSummary()
-    };
-  }
-
-  /*
-   * ============================================================
-   * RESULTADO
-   * ============================================================
-   */
-
-  const authenticated =
-    this.isAuthenticatedState();
-
-  if (authenticated) {
-    await markAutomationActive(
-      applicationId
-    ).catch(() => {});
-  }
 
   return {
-    success:
-      authenticated,
+    success: true,
 
-    authenticated,
+    authenticated: true,
 
-    requiresUser:
-      !authenticated,
-
-    reason:
-      authenticated
-        ? null
-        : "VFS authentication was not completed.",
+    requiresUser: false,
 
     state:
       this.state,
@@ -4266,6 +4718,92 @@ if (
     dom:
       this.getDomSummary()
   };
+}
+
+if (
+  this.lastCheckpoint?.type ===
+  "OTP_REQUIRED"
+) {
+  return {
+    success: true,
+
+    requiresUser: true,
+
+    otpRequired: true,
+
+    authenticated: false,
+
+    code:
+      "OTP_REQUIRED",
+
+    reason:
+      "VFS OTP checkpoint detected.",
+
+    state:
+      this.state,
+
+    applicationId,
+
+    checkpoint:
+      this.lastCheckpoint,
+
+    dom:
+      this.getDomSummary()
+  };
+}
+
+logger.error(
+  "VFS LOGIN POST-CLICK TIMEOUT",
+  {
+    applicationId,
+
+    elapsedMs:
+      Date.now() -
+      loginResponseStartedAt,
+
+    url:
+      page.url(),
+
+    state:
+      this.state,
+
+    checkpoint:
+      this.lastCheckpoint?.type ||
+      null
+  }
+);
+
+return {
+  success: false,
+
+  requiresUser: true,
+
+  authenticated: false,
+
+  code:
+    "VFS_LOGIN_RESPONSE_TIMEOUT",
+
+  reason:
+    "VFS login was submitted, but authentication state was not detected within 30 seconds.",
+
+  state:
+    this.state,
+
+  applicationId,
+
+  checkpoint:
+    this.lastCheckpoint,
+
+  dom:
+    this.getDomSummary()
+};
+ 
+async ensureAuthenticated(
+  application
+) {
+  return this.login(
+    application
+  );
 }
   async ensureAuthenticated(
     application
