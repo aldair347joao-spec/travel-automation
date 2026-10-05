@@ -6702,9 +6702,32 @@ if (
 
     await this.detectCheckpoint();
 
+        const authenticated =
+      this.isAuthenticatedState();
+
     const verified =
+      authenticated === true &&
       this.lastCheckpoint?.type !==
-      "OTP_REQUIRED";
+        "OTP_REQUIRED";
+
+    logger.info(
+      "VFS OTP SUBMISSION RESULT",
+      {
+        applicationId:
+          this.applicationId,
+
+        authenticated,
+
+        verified,
+
+        state:
+          this.state,
+
+        checkpoint:
+          this.lastCheckpoint?.type ||
+          null
+      }
+    );
 
     return {
       success:
@@ -6712,6 +6735,8 @@ if (
 
       otpVerified:
         verified,
+
+      authenticated,
 
       state:
         this.state,
