@@ -3753,52 +3753,276 @@ while (
    * ----------------------------------------------------------
    */
 
-  const submitDisabled =
-    submitState?.disabled === true ||
-    String(
-      submitState?.ariaDisabled ||
-      ""
-    ).toLowerCase() === "true";
+    const submitDisabled =
+  submitState?.disabled === true ||
+  String(
+    submitState?.ariaDisabled ||
+    ""
+  ).toLowerCase() === "true";
 
-  const submitHidden =
-    submitState?.hidden === true;
+const submitHidden =
+  submitState?.hidden === true;
 
-  const submitHasSize =
-    Number(
-      submitState?.width || 0
-    ) > 0 &&
-    Number(
-      submitState?.height || 0
-    ) > 0;
+const submitHasSize =
+  Number(
+    submitState?.width || 0
+  ) > 0 &&
+  Number(
+    submitState?.height || 0
+  ) > 0;
 
-  if (
-    submitDisabled ||
-    submitHidden ||
-    !submitHasSize
-  ) {
-    logger.info(
-      "VFS LOGIN BOTÃO AINDA DESABILITADO",
-      {
-        applicationId,
-        disabled:
-          submitDisabled,
-        hidden:
-          submitHidden,
-        hasSize:
-          submitHasSize
-      }
-    );
+/*
+ * ----------------------------------------------------------
+ * Verificar se o botão está bloqueado por CAPTCHA/security
+ * verification mesmo quando o checkpoint ainda não foi
+ * classificado pelo detector.
+ * ----------------------------------------------------------
+ */
 
-    await new Promise(
-      resolve =>
-        setTimeout(
-          resolve,
-          1000
+const securityIndicators =
+  await page
+    .evaluate(() => {
+      const text =
+        String(
+          document.body?.innerText ||
+          ""
         )
-    );
+          .replace(/\s+/g, " ")
+          .trim()
+          .toLowerCase();
 
-    continue;
-  }
+      const captchaElements =
+        Array.from(
+          document.querySelectorAll(
+            [
+              "iframe[src*='captcha']",
+              "iframe[src*='recaptcha']",
+              "iframe[src*='turnstile']",
+              "[class*='captcha']",
+              "[id*='captcha']",
+              "[class*='turnstile']",
+              "[id*='turnstile']"
+            ].join(",")
+          )
+        ).filter(
+          element => {
+            const style =
+              window.getComputedStyle(
+                element
+              );
+
+            return (
+              style.display !==
+                "none" &&
+              style.visibility !==
+                "hidden"
+            );
+          }
+        );
+
+      const securityText =
+        [
+          "security verification",
+          "verify you are human",
+          "checking your browser",
+          "performing security verification",
+          "captcha",
+          "cloudflare"
+        ].some(
+          indicator =>
+            text.includes(
+              indicator
+            )
+        );
+
+      return {
+        captchaElementFound:
+          captchaElements.length > 0,
+
+        securityTextFound:
+          securityText,
+
+        bodyText:
+          text.slice(
+            0,
+            1200
+          )
+      };
+    })
+    .catch(() => ({
+      captchaElementFound:
+        false,
+
+      securityTextFound:
+        false,
+
+      bodyText:
+        ""
+    }));
+
+const captchaStillPresent =
+  Boolean(
+    securityIndicators
+      .captchaElementFound
+  ) ||
+  Boolean(
+    securityIndicators
+      .securityTextFound
+  );
+
+/*
+ * ----------------------------------------------------------
+ * Registrar o diagnóstico.
+ * ----------------------------------------------------------
+ */
+
+if (
+  submitDisabled ||
+  captchaStillPresent
+) {
+  logger.info(
+    "VFS LOGIN SECURITY/BUTTON STATE",
+    {
+      applicationId,
+
+      submitDisabled,
+
+      captchaStillPresent,
+
+      captchaElementFound:
+        securityIndicators
+          .captchaElementFound,
+
+      securityTextFound:
+        securityIndicators
+          .securityTextFound
+    }
+  );
+}
+
+/*
+ * ----------------------------------------------------------
+ * Se o CAPTCHA/security challenge estiver presente,
+ * pedir ao Scrapeless para concluir a resolução.
+ *
+ * O próprio Scrapeless documenta Captcha.solve como a
+ * operação manual para acionar a resolução.
+ * ----------------------------------------------------------
+ */
+
+if (
+  submitDisabled &&
+  captchaStillPresent
+) {
+  logger.info(
+    "VFS LOGIN BOTÃO BLOQUEADO POR SECURITY VERIFICATION",
+    {
+      applicationId
+    }
+  );
+
+  const captchaResult =
+    await this.solveScrapelessCaptcha()
+      .catch(error => ({
+        attempted: true,
+
+        solved: false,
+
+        status:
+          "ERROR",
+
+        error:
+          error?.message ||
+          String(error)
+      }));
+
+  logger.info(
+    "VFS LOGIN SECURITY VERIFICATION RESULT",
+    {
+      applicationId,
+
+      attempted:
+        captchaResult?.attempted ||
+        false,
+
+      solved:
+        captchaResult?.solved ||
+        false,
+
+      status:
+        captchaResult?.status ||
+        null
+    }
+  );
+
+  /*
+   * Dar tempo para a VFS atualizar o estado do botão
+   * depois da resolução.
+   */
+
+  await page
+    .waitForNetworkIdle({
+      idleTime: 700,
+
+      timeout: 10000
+    })
+    .catch(() => {});
+
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        1500
+      )
+  );
+
+  loginForm =
+    await this.findVfsLoginFields()
+      .catch(() => null);
+
+  continue;
+}
+
+/*
+ * ----------------------------------------------------------
+ * Se o botão continuar disabled mas NÃO existe CAPTCHA
+ * detectável, não tentamos forçar o clique.
+ *
+ * Apenas aguardamos a aplicação VFS atualizar o botão.
+ * ----------------------------------------------------------
+ */
+
+if (
+  submitDisabled ||
+  submitHidden ||
+  !submitHasSize
+) {
+  logger.info(
+    "VFS LOGIN BOTÃO AINDA NÃO DISPONÍVEL",
+    {
+      applicationId,
+
+      disabled:
+        submitDisabled,
+
+      hidden:
+        submitHidden,
+
+      hasSize:
+        submitHasSize
+    }
+  );
+
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        1000
+      )
+  );
+
+  continue;
+}
 
   /*
    * ----------------------------------------------------------
