@@ -3153,8 +3153,7 @@ let loginForm =
   null;
 
 const loginDetectionAttempts =
-  6;
-  
+  40;
 
 for (
   let attempt = 1;
@@ -3162,142 +3161,226 @@ for (
   loginDetectionAttempts;
   attempt++
 ) {
+
   /*
- * ============================================================
- * VERIFICAR CLOUDFLARE / SECURITY CHALLENGE EM CADA TENTATIVA
- * ============================================================
- */
+   * ============================================================
+   * 1. VERIFICAR O ESTADO ATUAL DA PÁGINA
+   * ============================================================
+   */
 
-const challengeSnapshot =
-  await page
-    .evaluate(() => {
-      const bodyText =
-        String(
-          document.body?.innerText ||
-          ""
-        )
-          .replace(/\s+/g, " ")
-          .trim()
-          .toLowerCase();
-
-      return {
-        url:
-          window.location.href,
-
-        title:
-          document.title || "",
-
-        bodyText:
-          bodyText.slice(
-            0,
-            2500
-          )
-      };
-    })
-    .catch(() => ({
-      url:
-        page.url(),
-
-      title:
-        "",
-
-      bodyText:
-        ""
-    }));
-
-const challengeText =
-  `${challengeSnapshot.title} ${challengeSnapshot.bodyText}`
-    .toLowerCase();
-
-const cloudflareChallenge =
-  challengeSnapshot.url.includes(
-    "__cf_chl_tk="
-  ) ||
-  challengeText.includes(
-    "just a moment"
-  ) ||
-  challengeText.includes(
-    "performing security verification"
-  ) ||
-  challengeText.includes(
-    "security verification"
-  ) ||
-  challengeText.includes(
-    "checking your browser"
-  ) ||
-  challengeText.includes(
-    "verify you are human"
-  );
-
-if (
-  cloudflareChallenge
-) {
-  logger.info(
-    "VFS CLOUDFLARE CHALLENGE DETECTED — CALLING SCRAPELESS SOLVER",
-    {
-      applicationId,
-      attempt,
-      url:
-        challengeSnapshot.url,
-      title:
-        challengeSnapshot.title
-    }
-  );
-
-  const captchaResult =
-    await this.solveScrapelessCaptcha();
-
-  logger.info(
-    "VFS SCRAPELESS SOLVER RESULT",
-    {
-      applicationId,
-      attempt,
-      attempted:
-        captchaResult?.attempted || false,
-      solved:
-        captchaResult?.solved || false,
-      status:
-        captchaResult?.status || null,
-      url:
-        page.url()
-    }
-  );
-
-  if (
-    captchaResult?.solved ===
-    true
-  ) {
+  const challengeSnapshot =
     await page
-      .waitForNetworkIdle({
-        idleTime:
-          700,
+      .evaluate(() => {
 
-        timeout:
-          15000
+        const bodyText =
+          String(
+            document.body?.innerText ||
+            ""
+          )
+            .replace(
+              /\s+/g,
+              " "
+            )
+            .trim()
+            .toLowerCase();
+
+        return {
+          url:
+            window.location.href,
+
+          title:
+            document.title ||
+            "",
+
+          bodyText:
+            bodyText.slice(
+              0,
+              2500
+            )
+        };
+
       })
       .catch(
-        () => {}
+        () => ({
+          url:
+            page.url(),
+
+          title:
+            "",
+
+          bodyText:
+            ""
+        })
       );
 
-    await this.detectState();
+  const challengeText =
+    `${challengeSnapshot.title} ${challengeSnapshot.bodyText}`
+      .toLowerCase();
 
-    await this.inspectCurrentDom()
-      .catch(
-        () => {}
+  /*
+   * ============================================================
+   * 2. DETECTAR CAPTCHA / SECURITY CHALLENGE
+   * ============================================================
+   */
+
+  const cloudflareChallenge =
+    challengeSnapshot.url.includes(
+      "__cf_chl_tk="
+    ) ||
+    challengeText.includes(
+      "just a moment"
+    ) ||
+    challengeText.includes(
+      "performing security verification"
+    ) ||
+    challengeText.includes(
+      "security verification"
+    ) ||
+    challengeText.includes(
+      "checking your browser"
+    ) ||
+    challengeText.includes(
+      "verify you are human"
+    ) ||
+    challengeText.includes(
+      "verify you are a human"
+    ) ||
+    challengeText.includes(
+      "captcha"
+    ) ||
+    challengeText.includes(
+      "turnstile"
+    );
+
+  /*
+   * ============================================================
+   * 3. SE HOUVER CAPTCHA, DEIXAR O SCRAPELESS RESOLVER
+   * ============================================================
+   */
+
+  if (
+    cloudflareChallenge
+  ) {
+
+    logger.info(
+      "VFS LOGIN SECURITY CHALLENGE DETECTED",
+      {
+        applicationId,
+        attempt,
+        url:
+          challengeSnapshot.url,
+
+        title:
+          challengeSnapshot.title
+      }
+    );
+
+    const captchaResult =
+      await this
+        .solveScrapelessCaptcha();
+
+    logger.info(
+      "VFS LOGIN SCRAPELESS RESULT",
+      {
+        applicationId,
+
+        attempt,
+
+        attempted:
+          captchaResult?.attempted ||
+          false,
+
+        solved:
+          captchaResult?.solved ||
+          false,
+
+        status:
+          captchaResult?.status ||
+          null,
+
+        url:
+          page.url()
+      }
+    );
+
+    /*
+     * O CAPTCHA pode ter sido resolvido,
+     * mas a VFS ainda precisa de tempo para
+     * reconstruir/liberar o formulário.
+     */
+
+    if (
+      captchaResult?.solved ===
+      true
+    ) {
+
+      logger.info(
+        "VFS LOGIN CAPTCHA SOLVED — WAITING FOR FORM",
+        {
+          applicationId,
+          attempt
+        }
       );
 
-    await this.detectCheckpoint();
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            2000
+          )
+      );
+
+      await page
+        .waitForNetworkIdle({
+          idleTime:
+            700,
+
+          timeout:
+            15000
+        })
+        .catch(
+          () => {}
+        );
+
+      await this
+        .detectState()
+        .catch(
+          () => {}
+        );
+
+      await this
+        .inspectCurrentDom()
+        .catch(
+          () => {}
+        );
+
+      await this
+        .detectCheckpoint()
+        .catch(
+          () => {}
+        );
+    }
   }
-}
+
+  /*
+   * ============================================================
+   * 4. PROCURAR O FORMULÁRIO
+   * ============================================================
+   */
+
   loginForm =
-    await this.findVfsLoginFields()
+    await this
+      .findVfsLoginFields()
       .catch(
         error => {
+
           logger.warn(
             "VFS LOGIN FORM DETECTION ATTEMPT FAILED",
             {
               applicationId,
+
               attempt,
+
               message:
                 error?.message ||
                 String(error)
@@ -3308,51 +3391,104 @@ if (
         }
       );
 
+  const emailReady =
+    Boolean(
+      loginForm?.email
+    );
+
+  const passwordReady =
+    Boolean(
+      loginForm?.password
+    );
+
+  const submitReady =
+    Boolean(
+      loginForm?.submit
+    );
+
+  /*
+   * ============================================================
+   * 5. REGISTAR O ESTADO SEM CREDENCIAIS
+   * ============================================================
+   */
+
   logger.info(
-    "VFS LOGIN FORM DETECTION ATTEMPT",
+    "VFS LOGIN FORM READINESS CHECK",
     {
       applicationId,
+
       attempt,
 
-      emailFieldFound:
-        Boolean(
-          loginForm?.email
-        ),
+      emailReady,
 
-      passwordFieldFound:
-        Boolean(
-          loginForm?.password
-        ),
+      passwordReady,
 
-      submitFound:
-        Boolean(
-          loginForm?.submit
-        ),
+      submitReady,
 
       url:
         page.url(),
 
       reason:
-        "Aguardando a renderização dinâmica do formulário de autenticação VFS."
+        "Aguardando a VFS terminar a renderização e liberar o formulário."
     }
   );
 
-  if (
-  loginForm?.email &&
-  loginForm?.password &&
-  loginForm?.submit
-) {
-  break;
-}
+  /*
+   * ============================================================
+   * 6. FORMULÁRIO REALMENTE PRONTO
+   * ============================================================
+   */
 
-  await new Promise(
-    resolve =>
-      setTimeout(
-        resolve,
-        1500
-      )
-  );
+  if (
+    emailReady &&
+    passwordReady &&
+    submitReady
+  ) {
+
+    logger.info(
+      "VFS LOGIN FORM READY",
+      {
+        applicationId,
+
+        attempt,
+
+        url:
+          page.url(),
+
+        reason:
+          "Email, password e Sign In estão disponíveis."
+      }
+    );
+
+    break;
+  }
+
+  /*
+   * ============================================================
+   * 7. AINDA NÃO ESTÁ PRONTO
+   * ============================================================
+   *
+   * Não falhamos imediatamente.
+   *
+   * A VFS pode precisar de vários segundos depois
+   * do CAPTCHA para habilitar os campos.
+   */
+
+  if (
+    attempt <
+    loginDetectionAttempts
+  ) {
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          1500
+        )
+    );
+  }
 }
+  
    logger.info(
   "VFS LOGIN FORM DETECTION",
   {
