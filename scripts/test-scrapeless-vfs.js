@@ -254,6 +254,7 @@ async function main() {
       }
     );
 
+  
     const challengeStart =
   Date.now();
 
@@ -265,44 +266,95 @@ while (
     challengeStart <
   60000
 ) {
-  const snapshot =
-    await page.evaluate(
-      () => ({
-        url:
-          window.location.href,
-
-        title:
-          document.title,
-
-        bodyText:
-          (
-            document.body?.innerText ||
-            ""
-          )
-            .replace(
-              /\s+/g,
-              " "
-            )
-            .trim()
-            .slice(
-              0,
-              3000
-            ),
-
-        passwordCount:
-          document.querySelectorAll(
-            'input[type="password"]'
-          ).length,
-
-        emailCount:
-          document.querySelectorAll(
-            'input[type="email"]'
-          ).length
-      })
-    )
-    .catch(
-      () => null
+  if (
+    page.isClosed()
+  ) {
+    console.warn(
+      "[SCRAPELESS TEST] Página foi fechada durante o Cloudflare Challenge."
     );
+
+    break;
+  }
+
+  let snapshot =
+    null;
+
+  try {
+    snapshot =
+      await page.evaluate(
+        () => {
+          const bodyText =
+            (
+              document.body?.innerText ||
+              ""
+            )
+              .replace(
+                /\s+/g,
+                " "
+              )
+              .trim()
+              .slice(
+                0,
+                3000
+              );
+
+          return {
+            url:
+              window.location.href,
+
+            title:
+              document.title || "",
+
+            bodyText,
+
+            inputCount:
+              document.querySelectorAll(
+                "input"
+              ).length,
+
+            passwordCount:
+              document.querySelectorAll(
+                'input[type="password"]'
+              ).length,
+
+            emailCount:
+              document.querySelectorAll(
+                'input[type="email"]'
+              ).length,
+
+            buttonCount:
+              document.querySelectorAll(
+                "button"
+              ).length
+          };
+        }
+      );
+  } catch (error) {
+    const message =
+      String(
+        error?.message ||
+        error ||
+        ""
+      );
+
+    console.warn(
+      "[SCRAPELESS TEST] Frame mudou durante diagnóstico. Repetindo...",
+      message.slice(
+        0,
+        300
+      )
+    );
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          1500
+        )
+    );
+
+    continue;
+  }
 
   if (!snapshot) {
     await new Promise(
@@ -343,22 +395,79 @@ while (
     ) ||
     text.includes(
       "verify you are human"
+    ) ||
+    text.includes(
+      "checking if the site connection is secure"
     );
 
-  if (
+  /*
+   * A confirmação real não depende do evento
+   * Captcha.solveFinished.
+   *
+   * Se o challenge desapareceu e a página já
+   * possui inputs/formulário, consideramos a
+   * página liberada.
+   */
+
+  const loginPageReady =
     !cloudflareChallenge &&
     (
       snapshot.passwordCount >
         0 ||
       snapshot.emailCount >
         0
-    )
+    );
+
+  if (
+    loginPageReady
   ) {
     challengeResolved =
       true;
 
     console.log(
-      "[SCRAPELESS TEST] Cloudflare Challenge resolvida — formulário VFS detectado."
+      "[SCRAPELESS TEST] Cloudflare Challenge resolvida — página VFS disponível.",
+      {
+        url:
+          snapshot.url,
+
+        title:
+          snapshot.title,
+
+        inputCount:
+          snapshot.inputCount,
+
+        passwordCount:
+          snapshot.passwordCount,
+
+        emailCount:
+          snapshot.emailCount
+      }
+    );
+
+    break;
+  }
+
+  /*
+   * Também aceitamos uma página VFS que já
+   * tenha saído do Cloudflare mesmo antes de
+   * todos os campos aparecerem.
+   */
+
+  const looksLikeVfs =
+    snapshot.url.includes(
+      "visa.vfsglobal.com"
+    ) &&
+    !cloudflareChallenge;
+
+  if (
+    looksLikeVfs &&
+    snapshot.inputCount > 0
+  ) {
+    challengeResolved =
+      true;
+
+    console.log(
+      "[SCRAPELESS TEST] Cloudflare desapareceu e a página VFS começou a renderizar."
     );
 
     break;
@@ -375,7 +484,16 @@ while (
         snapshot.title,
 
       url:
-        snapshot.url
+        snapshot.url,
+
+      inputCount:
+        snapshot.inputCount,
+
+      passwordCount:
+        snapshot.passwordCount,
+
+      emailCount:
+        snapshot.emailCount
     }
   );
 
@@ -404,63 +522,96 @@ if (!challengeResolved) {
       "[SCRAPELESS TEST] 5/5 - Diagnosticando página VFS..."
     );
 
-    const result =
-      await page.evaluate(
-        () => ({
-          url:
-            window.location.href,
+    let result =
+  null;
 
-          title:
-            document.title,
+try {
+  if (
+    page.isClosed()
+  ) {
+    throw new Error(
+      "A página foi fechada antes do diagnóstico final."
+    );
+  }
 
-          readyState:
-            document.readyState,
+  result =
+    await page.evaluate(
+      () => ({
+        url:
+          window.location.href,
 
-          inputCount:
-            document.querySelectorAll(
-              "input"
-            ).length,
+        title:
+          document.title,
 
-          passwordCount:
-            document.querySelectorAll(
-              'input[type="password"]'
-            ).length,
+        readyState:
+          document.readyState,
 
-          emailCount:
-            document.querySelectorAll(
-              'input[type="email"]'
-            ).length,
+        inputCount:
+          document.querySelectorAll(
+            "input"
+          ).length,
 
-          iframeCount:
-            document.querySelectorAll(
-              "iframe"
-            ).length,
+        passwordCount:
+          document.querySelectorAll(
+            'input[type="password"]'
+          ).length,
 
-          buttonCount:
-            document.querySelectorAll(
-              "button"
-            ).length,
+        emailCount:
+          document.querySelectorAll(
+            'input[type="email"]'
+          ).length,
 
-          videoCount:
-            document.querySelectorAll(
-              "video"
-            ).length,
+        iframeCount:
+          document.querySelectorAll(
+            "iframe"
+          ).length,
 
-          bodyText:
-            (
-              document.body?.innerText ||
-              ""
+        buttonCount:
+          document.querySelectorAll(
+            "button"
+          ).length,
+
+        videoCount:
+          document.querySelectorAll(
+            "video"
+          ).length,
+
+        bodyText:
+          (
+            document.body?.innerText ||
+            ""
+          )
+            .replace(
+              /\s+/g,
+              " "
             )
-              .replace(
-                /\s+/g,
-                " "
-              )
-              .slice(
-                0,
-                3000
-              )
-        })
-      );
+            .slice(
+              0,
+              3000
+            )
+      })
+    );
+} catch (error) {
+  console.warn(
+    "[SCRAPELESS TEST] Diagnóstico final não pôde usar o frame atual.",
+    error?.message ||
+      String(error)
+  );
+
+  result = {
+    url:
+      page.isClosed()
+        ? "PAGE_CLOSED"
+        : page.url(),
+
+    title:
+      "",
+
+    diagnosticError:
+      error?.message ||
+      String(error)
+  };
+}
 
     console.log(
       "============================================================"
