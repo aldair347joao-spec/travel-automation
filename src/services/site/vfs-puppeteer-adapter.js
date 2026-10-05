@@ -1191,11 +1191,14 @@ if (
     }
 
     const captchaTimeout =
-  Math.min(
-    Number(
-      process.env.SCRAPELESS_CAPTCHA_TIMEOUT_MS
-    ) || 30000,
-    30000
+  Math.max(
+    30000,
+    Math.min(
+      Number(
+        process.env.SCRAPELESS_CAPTCHA_TIMEOUT_MS
+      ) || 60000,
+      60000
+    )
   );
 
     let captchaDetected =
@@ -1347,10 +1350,7 @@ const solveResult =
       "Captcha.solve",
       {
         detectTimeout:
-          Math.min(
-            captchaTimeout,
-            30000
-          )
+  captchaTimeout
       }
     ),
 
