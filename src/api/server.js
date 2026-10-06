@@ -1,5 +1,9 @@
 const path =
   require("path");
+const {
+  spawn
+} =
+  require("child_process");
 
 const express =
   require("express");
@@ -74,7 +78,8 @@ function createApp({
   const app =
     express();
 
-
+let scrapelessVfsTestProcess =
+    null;
   app.disable(
     "x-powered-by"
   );
@@ -233,7 +238,191 @@ function createApp({
       });
     }
   );
+  /*
+   * =========================================================
+   * TEMPORARY SCRAPELESS VFS LOGIN TEST
+   * =========================================================
+   *
+   * REMOVER DEPOIS DO TESTE.
+   * =========================================================
+   */
 
+  app.get(
+    "/api/debug/scrapeless-vfs-login",
+    (
+      req,
+      res
+    ) => {
+      const expectedToken =
+        String(
+          process.env.SCRAPELESS_TEST_TOKEN ||
+          ""
+        ).trim();
+
+      const receivedToken =
+        String(
+          req.query?.token ||
+          ""
+        ).trim();
+
+      if (
+        !expectedToken ||
+        !receivedToken ||
+        receivedToken !== expectedToken
+      ) {
+        return res
+          .status(404)
+          .json({
+            success:
+              false
+          });
+      }
+
+      if (
+        scrapelessVfsTestProcess &&
+        !scrapelessVfsTestProcess.killed
+      ) {
+        return res
+          .status(409)
+          .json({
+            success:
+              false,
+
+            error:
+              "O teste Scrapeless já está em execução.",
+
+            pid:
+              scrapelessVfsTestProcess.pid
+          });
+      }
+
+      logger.info(
+        "SCRAPELESS VFS LOGIN TEST STARTING FROM HTTP"
+      );
+
+      scrapelessVfsTestProcess =
+        spawn(
+          process.execPath,
+          [
+            "scripts/test-scrapeless-vfs-login.js"
+          ],
+          {
+            env:
+              process.env,
+
+            stdio:
+              "inherit",
+
+            detached:
+              false
+          }
+        );
+
+      scrapelessVfsTestProcess.on(
+        "exit",
+        (
+          code,
+          signal
+        ) => {
+          logger.info(
+            "SCRAPELESS VFS LOGIN TEST FINISHED",
+            {
+              code,
+              signal
+            }
+          );
+
+          scrapelessVfsTestProcess =
+            null;
+        }
+      );
+
+      scrapelessVfsTestProcess.on(
+        "error",
+        error => {
+          logger.error(
+            "SCRAPELESS VFS LOGIN TEST PROCESS ERROR",
+            {
+              error:
+                error?.message ||
+                String(error)
+            }
+          );
+
+          scrapelessVfsTestProcess =
+            null;
+        }
+      );
+
+      return res
+        .status(202)
+        .json({
+          success:
+            true,
+
+          status:
+            "STARTED",
+
+          pid:
+            scrapelessVfsTestProcess.pid,
+
+          message:
+            "Teste de login VFS iniciado. Veja os logs do Render."
+        });
+    }
+  );
+
+
+  app.get(
+    "/api/debug/scrapeless-vfs-login/status",
+    (
+      req,
+      res
+    ) => {
+      const expectedToken =
+        String(
+          process.env.SCRAPELESS_TEST_TOKEN ||
+          ""
+        ).trim();
+
+      const receivedToken =
+        String(
+          req.query?.token ||
+          ""
+        ).trim();
+
+      if (
+        !expectedToken ||
+        !receivedToken ||
+        receivedToken !== expectedToken
+      ) {
+        return res
+          .status(404)
+          .json({
+            success:
+              false
+          });
+      }
+
+      const running =
+        Boolean(
+          scrapelessVfsTestProcess &&
+          !scrapelessVfsTestProcess.killed
+        );
+
+      return res.json({
+        success:
+          true,
+
+        running,
+
+        pid:
+          running
+            ? scrapelessVfsTestProcess.pid
+            : null
+      });
+    }
+  );
 
   /*
    * =========================================================
