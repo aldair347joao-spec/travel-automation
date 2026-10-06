@@ -1455,30 +1455,14 @@ if (
                   "sign in"
                 );
 
-              const authenticatedPage =
-                !url.includes(
-                  "/login"
-                ) &&
-                (
-                  url.includes(
-                    "/dashboard"
-                  ) ||
-                  url.includes(
-                    "/application-detail"
-                  ) ||
-                  url.includes(
-                    "/your-details"
-                  ) ||
-                  url.includes(
-                    "/services"
-                  ) ||
-                  url.includes(
-                    "/book-appointment"
-                  ) ||
-                  url.includes(
-                    "/fv-instructions"
-                  )
-                );
+              let authenticatedPage = false;
+
+        try {
+  authenticatedPage =
+    this.isAuthenticatedState() === true;
+} catch {
+  authenticatedPage = false;
+}
 
               const loginError =
                 body.includes(
@@ -4967,13 +4951,6 @@ return {
     application
   );
 }
-  async ensureAuthenticated(
-    application
-  ) {
-    return this.login(
-      application
-    );
-  }
 async findVfsLoginFields() {
   const page =
     await this.ensurePage();
