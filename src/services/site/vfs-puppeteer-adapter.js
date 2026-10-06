@@ -4981,7 +4981,7 @@ return {
   dom:
     this.getDomSummary()
 };
-  
+}
   async ensureAuthenticated(
   application
 ) {
