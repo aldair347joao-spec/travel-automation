@@ -80,145 +80,94 @@ async function main() {
   console.log(
     "[SCRAPELESS TEST] API key authenticated successfully."
   );
-
   /*
-   * ==========================================================
-   * 2. CRIAR SESSAO VIA API HTTP
-   * ==========================================================
-   *
-   * Este é o fluxo alternativo documentado pelo Scrapeless:
-   *
-   * GET /api/v2/browser
-   *
-   * A resposta deve fornecer um taskId.
-   */
+ * ==========================================================
+ * 2/3. CONECTAR DIRETAMENTE AO SCRAPELESS AGENT BROWSER
+ * ==========================================================
+ *
+ * Fluxo oficial atual:
+ *
+ * wss://browser.scrapeless.com/api/v2/browser
+ *
+ * Usamos proxyCountry=ANY para não forçar a saída por
+ * Angola enquanto estamos diagnosticando a VFS.
+ */
 
-  console.log(
-    "[SCRAPELESS TEST] 2/5 - Criando sessão Agent Browser via HTTP..."
-  );
+console.log(
+  "[SCRAPELESS TEST] 2/5 - Preparando conexão Agent Browser..."
+);
 
-  const sessionResponse =
-    await fetch(
-      "https://api.scrapeless.com/api/v2/browser",
-      {
-        method:
-          "GET",
-
-        headers: {
-          "x-api-token":
-            apiKey,
-
-          "Accept":
-            "application/json"
-        }
-      }
-    );
-
-  const sessionText =
-    await sessionResponse.text();
-
-  console.log(
-    "[SCRAPELESS TEST] SESSION CREATE STATUS:",
-    sessionResponse.status
-  );
-
-  console.log(
-    "[SCRAPELESS TEST] SESSION CREATE RESPONSE:",
-    sessionText.slice(
-      0,
-      3000
+const sessionTTL =
+  Math.max(
+    60,
+    Math.min(
+      Number(
+        process.env.SCRAPELESS_SESSION_TTL
+      ) || 900,
+      900
     )
   );
 
-  if (
-    !sessionResponse.ok
-  ) {
-    throw new Error(
-      `Scrapeless Agent Browser session creation failed with HTTP ${sessionResponse.status}`
-    );
+const sessionName =
+  `travel-automation-test-${Date.now()}`;
+
+const proxyCountry =
+  "ANY";
+
+const browserWebSocket =
+  "wss://browser.scrapeless.com/api/v2/browser?" +
+  new URLSearchParams({
+    token:
+      apiKey,
+
+    sessionTTL:
+      String(
+        sessionTTL
+      ),
+
+    sessionName:
+      sessionName,
+
+    proxyCountry:
+      proxyCountry
+  }).toString();
+
+console.log(
+  "[SCRAPELESS TEST] Configuração da sessão:",
+  {
+    sessionTTL,
+    sessionName,
+    proxyCountry
   }
+);
 
-  let sessionData =
-    null;
+console.log(
+  "[SCRAPELESS TEST] 3/5 - Conectando ao Agent Browser..."
+);
 
-  try {
-    sessionData =
-      JSON.parse(
-        sessionText
-      );
-  } catch {
-    throw new Error(
-      "Scrapeless respondeu à criação da sessão com conteúdo que não é JSON."
-    );
-  }
+console.log(
+  "[SCRAPELESS TEST] WebSocket:",
+  browserWebSocket.replace(
+    apiKey,
+    "[REDACTED]"
+  )
+);
 
-  const taskId =
-    sessionData?.taskId ||
-    sessionData?.data?.taskId ||
-    sessionData?.result?.taskId ||
-    null;
+const browser =
+  await puppeteer.connect({
+    browserWSEndpoint:
+      browserWebSocket,
 
-  if (!taskId) {
-    console.error(
-      "[SCRAPELESS TEST] Não foi encontrado taskId na resposta."
-    );
+    defaultViewport:
+      null,
 
-    console.error(
-      "[SCRAPELESS TEST] JSON RECEBIDO:",
-      JSON.stringify(
-        sessionData,
-        null,
-        2
-      )
-    );
+    protocolTimeout:
+      120000
+  });
 
-    throw new Error(
-      "Scrapeless não devolveu taskId para a sessão Agent Browser."
-    );
-  }
-
-  console.log(
-    "[SCRAPELESS TEST] Agent Browser taskId recebido:",
-    taskId
-  );
-
-  /*
-   * ==========================================================
-   * 3. CONECTAR AO NAVEGADOR PELO taskId
-   * ==========================================================
-   */
-
-  const browserWebSocket =
-    `wss://api.scrapeless.com/browser/${encodeURIComponent(
-      taskId
-    )}`;
-
-  console.log(
-    "[SCRAPELESS TEST] 3/5 - Conectando ao navegador..."
-  );
-
-  console.log(
-    "[SCRAPELESS TEST] WebSocket:",
-    browserWebSocket
-  );
-
-  const browser =
-    await puppeteer.connect({
-      browserWSEndpoint:
-        browserWebSocket,
-
-      headers: {
-        "x-api-token":
-          apiKey
-      },
-
-      defaultViewport:
-        null
-    });
-
-  console.log(
-    "[SCRAPELESS TEST] Browser Agent conectado com sucesso."
-  );
+console.log(
+  "[SCRAPELESS TEST] Browser Agent conectado com sucesso."
+);
 
   /*
    * ==========================================================
