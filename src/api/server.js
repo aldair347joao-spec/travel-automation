@@ -278,9 +278,9 @@ let scrapelessVfsTestProcess =
           });
       }
 
-      if (
+            if (
         scrapelessVfsTestProcess &&
-        !scrapelessVfsTestProcess.killed
+        scrapelessVfsTestProcess.exitCode === null
       ) {
         return res
           .status(409)
@@ -294,6 +294,14 @@ let scrapelessVfsTestProcess =
             pid:
               scrapelessVfsTestProcess.pid
           });
+      }
+
+      if (
+        scrapelessVfsTestProcess &&
+        scrapelessVfsTestProcess.exitCode !== null
+      ) {
+        scrapelessVfsTestProcess =
+          null;
       }
 
       logger.info(
@@ -317,7 +325,18 @@ let scrapelessVfsTestProcess =
               false
           }
         );
-
+             scrapelessVfsTestProcess.on(
+        "spawn",
+        () => {
+          logger.info(
+            "SCRAPELESS VFS LOGIN TEST PROCESS SPAWNED",
+            {
+              pid:
+                scrapelessVfsTestProcess.pid
+            }
+          );
+        }
+      );
       scrapelessVfsTestProcess.on(
         "exit",
         (
@@ -404,10 +423,10 @@ let scrapelessVfsTestProcess =
           });
       }
 
-      const running =
+            const running =
         Boolean(
           scrapelessVfsTestProcess &&
-          !scrapelessVfsTestProcess.killed
+          scrapelessVfsTestProcess.exitCode === null
         );
 
       return res.json({
