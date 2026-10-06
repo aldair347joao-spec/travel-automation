@@ -2862,16 +2862,103 @@ logger.info(
     ? 60000
     : DEFAULT_TIMEOUT;
 
-await page.goto(
-  url,
-  {
-    waitUntil:
-      "domcontentloaded",
+let navigationError = null;
 
-    timeout:
-      navigationTimeout
+for (
+  let navigationAttempt = 1;
+  navigationAttempt <= 2;
+  navigationAttempt += 1
+) {
+  try {
+    logger.info(
+      "VFS NAVIGATION ATTEMPT",
+      {
+        applicationId:
+          this.applicationId,
+
+        navigationAttempt,
+
+        maxAttempts:
+          2,
+
+        url
+      }
+    );
+
+    await page.goto(
+      url,
+      {
+        waitUntil:
+          "domcontentloaded",
+
+        timeout:
+          navigationTimeout
+      }
+    );
+
+    navigationError =
+      null;
+
+    logger.info(
+      "VFS NAVIGATION SUCCESS",
+      {
+        applicationId:
+          this.applicationId,
+
+        navigationAttempt,
+
+        url:
+          page.url()
+      }
+    );
+
+    break;
+
+  } catch (error) {
+    navigationError =
+      error;
+
+    logger.warn(
+      "VFS NAVIGATION ATTEMPT FAILED",
+      {
+        applicationId:
+          this.applicationId,
+
+        navigationAttempt,
+
+        maxAttempts:
+          2,
+
+        url,
+
+        code:
+          error?.code || null,
+
+        message:
+          error?.message ||
+          String(error)
+      }
+    );
+
+    if (
+      navigationAttempt >= 2
+    ) {
+      throw error;
+    }
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          2000
+        )
+    );
   }
-);
+}
+
+if (navigationError) {
+  throw navigationError;
+}
 
 /*
  * ============================================================
