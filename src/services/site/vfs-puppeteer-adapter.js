@@ -716,7 +716,7 @@ if (
      * O fluxo facial persistente existente continua utilizando
      * o MediaStream criado dentro da própria página.
      */
-
+    try {
     try {
       await this.page.evaluateOnNewDocument(() => {
         window.__travelAutomationMediaState = {
