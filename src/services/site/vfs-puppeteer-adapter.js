@@ -2312,7 +2312,7 @@ if (
   initialCloudflareChallenge
 ) {
   logger.info(
-    "VFS INITIAL CLOUDFLARE CHALLENGE DETECTED — CALLING SCRAPELESS SOLVER",
+    "VFS INITIAL CLOUDFLARE CHALLENGE DETECTED — AGUARDANDO SCRAPELESS",
     {
       applicationId:
         this.applicationId,
@@ -2325,50 +2325,141 @@ if (
     }
   );
 
-  const initialCaptchaResult =
-    await this.solveScrapelessCaptcha();
+  const challengeStart =
+    Date.now();
 
-  logger.info(
-    "VFS INITIAL SCRAPELESS SOLVER RESULT",
-    {
-      applicationId:
-        this.applicationId,
+  const challengeTimeout =
+    60000;
 
-      attempted:
-        initialCaptchaResult?.attempted ||
-        false,
-
-      solved:
-        initialCaptchaResult?.solved ||
-        false,
-
-      status:
-        initialCaptchaResult?.status ||
-        null,
-
-      url:
-        page.url()
-    }
-  );
-
-  if (
-    initialCaptchaResult?.solved ===
-    true
+  while (
+    Date.now() -
+      challengeStart <
+    challengeTimeout
   ) {
-    await page
-      .waitForNetworkIdle({
-        idleTime:
-          700,
+    const snapshot =
+      await page
+        .evaluate(() => {
+          const bodyText =
+            String(
+              document.body?.innerText ||
+              ""
+            )
+              .replace(
+                /\s+/g,
+                " "
+              )
+              .trim()
+              .toLowerCase();
 
-        timeout:
-          15000
-      })
-      .catch(
-        () => {}
+          return {
+            url:
+              window.location.href,
+
+            title:
+              document.title ||
+              "",
+
+            bodyText:
+              bodyText.slice(
+                0,
+                3000
+              ),
+
+            passwordCount:
+              document.querySelectorAll(
+                'input[type="password"]'
+              ).length
+          };
+        })
+        .catch(
+          () => null
+        );
+
+    if (!snapshot) {
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            1000
+          )
       );
+
+      continue;
+    }
+
+    const text =
+      `${snapshot.title} ${snapshot.bodyText}`
+        .toLowerCase();
+
+    const stillChallenge =
+      snapshot.url.includes(
+        "__cf_chl_tk="
+      ) ||
+      text.includes(
+        "just a moment"
+      ) ||
+      text.includes(
+        "performing security verification"
+      ) ||
+      text.includes(
+        "security verification"
+      ) ||
+      text.includes(
+        "checking your browser"
+      ) ||
+      text.includes(
+        "verify you are human"
+      ) ||
+      text.includes(
+        "verify you are a human"
+      );
+
+    const loginReady =
+      !stillChallenge &&
+      (
+        snapshot.passwordCount >
+          0 ||
+        (
+          text.includes(
+            "sign in"
+          ) &&
+          text.includes(
+            "password"
+          )
+        )
+      );
+
+    if (
+      loginReady
+    ) {
+      logger.info(
+        "VFS CLOUDFLARE RESOLVED — LOGIN PAGE AVAILABLE",
+        {
+          applicationId:
+            this.applicationId,
+
+          elapsedMs:
+            Date.now() -
+            challengeStart,
+
+          url:
+            snapshot.url
+        }
+      );
+
+      break;
+    }
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          1000
+        )
+    );
   }
 }
-
+    
 await this.detectState();
 
 await this.inspectCurrentDom()
@@ -3067,24 +3158,32 @@ logger.info(
   }
 );
 
+
 /*
  * ============================================================
  * REVERIFICAR CHECKPOINT APÓS A RENDERIZAÇÃO DA PÁGINA
  * ============================================================
  *
- * A VFS/Cloudflare pode terminar a renderização depois
- * da primeira chamada de detectCheckpoint().
+ * O navigate() já aguardou o Cloudflare.
  *
- * Por isso verificamos novamente antes de procurar
- * o formulário de login.
+ * Aqui apenas confirmamos o estado final.
+ * NÃO chamamos novamente o solver.
  */
+
 await new Promise(
   resolve =>
     setTimeout(
       resolve,
-      1000
+      500
     )
 );
+
+await this.detectState();
+
+await this.inspectCurrentDom()
+  .catch(
+    () => {}
+  );
 
 await this.detectCheckpoint();
 
@@ -3092,9 +3191,8 @@ if (
   this.lastCheckpoint?.type ===
   "CAPTCHA_REQUIRED"
 ) {
-
-  logger.info(
-    "VFS SECURITY VERIFICATION DETECTED AFTER PAGE RENDER",
+  logger.warn(
+    "VFS SECURITY VERIFICATION STILL PRESENT AFTER NAVIGATION",
     {
       applicationId,
 
@@ -3112,76 +3210,34 @@ if (
     }
   );
 
-  const captchaResult =
-    await this.solveScrapelessCaptcha();
+  return {
+    success:
+      false,
 
-  if (
-    captchaResult.solved ===
-    true
-  ) {
+    requiresUser:
+      true,
 
-    await page
-      .waitForNetworkIdle({
-        idleTime:
-          700,
+    captchaRequired:
+      true,
 
-        timeout:
-          15000
-      })
-      .catch(
-        () => {}
-      );
+    authenticated:
+      false,
 
-    await this.detectState();
+    code:
+      "CAPTCHA_REQUIRED",
 
-    await this.inspectCurrentDom()
-      .catch(
-        () => {}
-      );
+    reason:
+      "VFS security verification is still present after Scrapeless navigation.",
 
-    await this.detectCheckpoint();
-  }
+    state:
+      this.state,
 
-  if (
-    this.lastCheckpoint?.type ===
-    "CAPTCHA_REQUIRED"
-  ) {
+    checkpoint:
+      this.lastCheckpoint,
 
-    return {
-      success:
-        false,
-
-      requiresUser:
-        true,
-
-      captchaRequired:
-        true,
-
-      authenticated:
-        false,
-
-      code:
-        "CAPTCHA_REQUIRED",
-
-      reason:
-        "Scrapeless could not complete the VFS CAPTCHA automatically.",
-
-      state:
-        this.state,
-
-      checkpoint:
-        this.lastCheckpoint,
-
-      dom:
-        this.getDomSummary(),
-
-      captchaSolveAttempted:
-        captchaResult.attempted,
-
-      captchaSolveStatus:
-        captchaResult.status
-    };
-  }
+    dom:
+      this.getDomSummary()
+  };
 }
 
 let loginForm =
