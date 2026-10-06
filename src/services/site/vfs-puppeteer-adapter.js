@@ -480,29 +480,25 @@ this.radarSessionRecoveryRequired = false;
    * Reutilizamos uma página existente da sessão quando houver.
    */
 
-    try {
-    const pages =
-      await this.browser.pages();
-
-    const blankPage =
-      pages.find(
-        candidate => {
-          try {
-            return (
-              candidate &&
-              !candidate.isClosed() &&
-              candidate.url() ===
-                "about:blank"
-            );
-          } catch {
-            return false;
-          }
-        }
-      );
-
     this.page =
-      blankPage ||
-      await this.browser.newPage();
+  await this.browser.newPage();
+
+logger.info(
+  "VFS NEW SCRAPELESS PAGE CREATED",
+  {
+    applicationId:
+      this.applicationId,
+
+    url:
+      (() => {
+        try {
+          return this.page.url();
+        } catch {
+          return null;
+        }
+      })()
+  }
+);
     /*
  * ============================================================
  * DIAGNÓSTICO DO CICLO DE VIDA DOS FRAMES
