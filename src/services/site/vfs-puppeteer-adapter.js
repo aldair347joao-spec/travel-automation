@@ -34,12 +34,15 @@ const MAX_PASSPORT_BYTES =
 
 const CHECKPOINT_TERMS = {
   captcha: [
-    "captcha",
     "recaptcha",
     "i'm not a robot",
     "im not a robot",
     "security verification",
-    "verify you are human"
+    "verify you are human",
+    "captcha verification",
+    "complete the captcha",
+    "solve the captcha",
+    "captcha challenge"
   ],
 
   otp: [
@@ -4435,20 +4438,84 @@ const otpText =
             )
         );
 
-      const securityChallenge =
+            /*
+       * ========================================================
+       * CAPTCHA / SECURITY CHECKPOINT REAL
+       * ========================================================
+       *
+       * Não usamos mais "captcha" ou "cloudflare" isoladamente
+       * no bodyText, porque a aplicação pode conter esses termos
+       * sem que exista um desafio ativo.
+       *
+       * Procuramos:
+       * - texto explícito de desafio;
+       * - iframe real do Cloudflare;
+       * - elemento real de CAPTCHA/Turnstile.
+       */
+
+      const isVisible =
+        element => {
+          if (!element) {
+            return false;
+          }
+
+          const style =
+            window.getComputedStyle(
+              element
+            );
+
+          const rect =
+            element.getBoundingClientRect();
+
+          return (
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            style.opacity !== "0" &&
+            rect.width > 0 &&
+            rect.height > 0
+          );
+        };
+
+      const captchaElementFound =
+        Array.from(
+          document.querySelectorAll(
+            [
+              "iframe[src*='challenges.cloudflare.com']",
+              "iframe[title*='challenge']",
+              "iframe[title*='CAPTCHA']",
+              "[class*='captcha']",
+              "[id*='captcha']",
+              "[class*='turnstile']",
+              "[id*='turnstile']",
+              "[data-sitekey]"
+            ].join(",")
+          )
+        ).some(
+          isVisible
+        );
+
+      const securityChallengeText =
         [
           "security verification",
           "verify you are human",
           "checking your browser",
           "performing security verification",
-          "captcha",
-          "cloudflare"
+          "i'm not a robot",
+          "im not a robot",
+          "captcha verification",
+          "complete the captcha",
+          "solve the captcha",
+          "captcha challenge"
         ].some(
           indicator =>
             bodyText.includes(
               indicator
             )
         );
+
+      const securityChallenge =
+        captchaElementFound ||
+        securityChallengeText;
 
       return {
         bodyText:
@@ -4465,8 +4532,10 @@ const otpText =
 
         securityChallenge,
 
-        url:
-          window.location.href
+captchaElementFound,
+
+url:
+  window.location.href
       };
     })
     .catch(() => ({
@@ -4475,7 +4544,8 @@ const otpText =
       otpText: false,
       loginError: false,
       securityChallenge: false,
-      url: page.url()
+captchaElementFound: false,
+url: page.url()
     }));
 
     /*
@@ -12985,13 +13055,63 @@ async detectCheckpointOnce() {
             )
         );
 
-      /*
+            /*
        * ========================================================
        * CHECKPOINTS GERAIS
        * ========================================================
+       *
+       * CAPTCHA só é considerado ativo quando existe:
+       *
+       * 1. um indicador textual forte e visível; OU
+       * 2. um elemento real de CAPTCHA/Turnstile visível.
+       *
+       * A simples existência da palavra "captcha" no DOM
+       * não é suficiente.
        */
 
+      const isVisible =
+        element => {
+          if (!element) {
+            return false;
+          }
+
+          const style =
+            window.getComputedStyle(
+              element
+            );
+
+          const rect =
+            element.getBoundingClientRect();
+
+          return (
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            style.opacity !== "0" &&
+            rect.width > 0 &&
+            rect.height > 0
+          );
+        };
+
+      const captchaElement =
+        Array.from(
+          document.querySelectorAll(
+            [
+              "iframe[src*='challenges.cloudflare.com']",
+              "iframe[title*='challenge']",
+              "iframe[title*='CAPTCHA']",
+              "[class*='captcha']",
+              "[id*='captcha']",
+              "[class*='turnstile']",
+              "[id*='turnstile']",
+              "[data-sitekey]"
+            ].join(",")
+          )
+        ).some(
+          isVisible
+        );
+
       const captcha =
+        captchaElement ||
         has(terms.captcha);
 
       const facialGeneric =
