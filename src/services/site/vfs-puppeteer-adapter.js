@@ -1177,7 +1177,620 @@ if (
 
   return true;
 }
-      
+    /*
+   * ============================================================
+   * SCRAPELESS AGENT BROWSER — AUTENTICAÇÃO VFS
+   * ============================================================
+   *
+   * O Agent Browser é responsável por manter a página viva
+   * durante Cloudflare / CAPTCHA / transição pós-login.
+   *
+   * Não fazemos uma sequência pesada de:
+   *
+   * detectState()
+   * inspectCurrentDom()
+   * detectCheckpoint()
+   *
+   * a cada segundo.
+   *
+   * O navegador remoto precisa de tempo para concluir a
+   * transição da página.
+   */
+
+  async waitForVfsLoginResult({
+    page,
+    applicationId,
+    timeoutMs = 120000
+  }) {
+    const startedAt =
+      Date.now();
+
+    let captchaClient = null;
+
+    let captchaDetected = false;
+    let captchaSolved = false;
+    let captchaFailed = false;
+
+    try {
+      /*
+       * --------------------------------------------------------
+       * CDP DO SCRAPELESS
+       * --------------------------------------------------------
+       */
+
+      try {
+        captchaClient =
+          await page.createCDPSession();
+
+        captchaClient.on(
+          "Captcha.detected",
+          message => {
+            captchaDetected = true;
+
+            logger.info(
+              "SCRAPELESS CAPTCHA DETECTED DURING VFS LOGIN",
+              {
+                applicationId,
+                type:
+                  message?.type ||
+                  null
+              }
+            );
+          }
+        );
+
+        captchaClient.on(
+          "Captcha.solveFinished",
+          message => {
+            captchaSolved =
+              message?.success !== false;
+
+            logger.info(
+              "SCRAPELESS CAPTCHA SOLVE FINISHED",
+              {
+                applicationId,
+                success:
+                  message?.success ??
+                  null,
+                type:
+                  message?.type ||
+                  null
+              }
+            );
+          }
+        );
+
+        captchaClient.on(
+          "Captcha.solveFailed",
+          message => {
+            captchaFailed = true;
+
+            logger.warn(
+              "SCRAPELESS CAPTCHA SOLVE FAILED",
+              {
+                applicationId,
+                type:
+                  message?.type ||
+                  null,
+                message:
+                  message?.message ||
+                  null
+              }
+            );
+          }
+        );
+      } catch (error) {
+        logger.warn(
+          "SCRAPELESS CAPTCHA CDP LISTENER COULD NOT BE ATTACHED",
+          {
+            applicationId,
+            error:
+              error?.message ||
+              String(error)
+          }
+        );
+      }
+
+      /*
+       * --------------------------------------------------------
+       * LOOP DE AUTENTICAÇÃO
+       * --------------------------------------------------------
+       *
+       * 120 segundos.
+       *
+       * Isto é intencional.
+       *
+       * O Cloudflare pode deixar o DOM vazio durante a
+       * transição. DOM vazio NÃO significa login falhado.
+       */
+
+      while (
+        Date.now() -
+          startedAt <
+        timeoutMs
+      ) {
+        let snapshot = null;
+
+        try {
+          snapshot =
+            await page.evaluate(() => {
+              const normalize =
+                value =>
+                  String(value || "")
+                    .replace(/\s+/g, " ")
+                    .trim()
+                    .toLowerCase();
+
+              const body =
+                normalize(
+                  document.body?.innerText ||
+                    ""
+                );
+
+              const url =
+                String(
+                  window.location.href ||
+                    ""
+                );
+
+              const title =
+                normalize(
+                  document.title ||
+                    ""
+                );
+
+              const visibleInputs =
+                Array.from(
+                  document.querySelectorAll(
+                    "input"
+                  )
+                ).filter(
+                  element => {
+                    const style =
+                      window.getComputedStyle(
+                        element
+                      );
+
+                    const rect =
+                      element.getBoundingClientRect();
+
+                    return (
+                      style.display !==
+                        "none" &&
+                      style.visibility !==
+                        "hidden" &&
+                      style.opacity !==
+                        "0" &&
+                      rect.width > 0 &&
+                      rect.height > 0
+                    );
+                  }
+                );
+
+              const otpInput =
+                visibleInputs.some(
+                  element => {
+                    const values = [
+                      element.name,
+                      element.id,
+                      element.placeholder,
+                      element.getAttribute(
+                        "aria-label"
+                      )
+                    ]
+                      .map(normalize)
+                      .join(" ");
+
+                    return (
+                      values.includes(
+                        "otp"
+                      ) ||
+                      values.includes(
+                        "one time password"
+                      ) ||
+                      values.includes(
+                        "verification code"
+                      ) ||
+                      values.includes(
+                        "security code"
+                      )
+                    );
+                  }
+                );
+
+              const passwordInput =
+                visibleInputs.some(
+                  element =>
+                    normalize(
+                      element.type
+                    ) ===
+                    "password"
+                );
+
+              const signInVisible =
+                Array.from(
+                  document.querySelectorAll(
+                    "button, input[type='submit'], [role='button']"
+                  )
+                ).some(
+                  element => {
+                    const style =
+                      window.getComputedStyle(
+                        element
+                      );
+
+                    const rect =
+                      element.getBoundingClientRect();
+
+                    if (
+                      style.display ===
+                        "none" ||
+                      style.visibility ===
+                        "hidden" ||
+                      rect.width <= 0 ||
+                      rect.height <= 0
+                    ) {
+                      return false;
+                    }
+
+                    return normalize(
+                      [
+                        element.innerText,
+                        element.value,
+                        element.getAttribute(
+                          "aria-label"
+                        )
+                      ].join(" ")
+                    ).includes(
+                      "sign in"
+                    );
+                  }
+                );
+
+              const loginPage =
+                url.includes(
+                  "/login"
+                ) ||
+                body.includes(
+                  "sign in"
+                );
+
+              const authenticatedPage =
+                !url.includes(
+                  "/login"
+                ) &&
+                (
+                  url.includes(
+                    "/dashboard"
+                  ) ||
+                  url.includes(
+                    "/application-detail"
+                  ) ||
+                  url.includes(
+                    "/your-details"
+                  ) ||
+                  url.includes(
+                    "/services"
+                  ) ||
+                  url.includes(
+                    "/book-appointment"
+                  ) ||
+                  url.includes(
+                    "/fv-instructions"
+                  )
+                );
+
+              const loginError =
+                body.includes(
+                  "invalid username"
+                ) ||
+                body.includes(
+                  "invalid password"
+                ) ||
+                body.includes(
+                  "incorrect password"
+                ) ||
+                body.includes(
+                  "invalid credentials"
+                ) ||
+                body.includes(
+                  "authentication failed"
+                );
+
+              return {
+                url,
+                title,
+                body,
+                otpInput,
+                passwordInput,
+                signInVisible,
+                loginPage,
+                authenticatedPage,
+                loginError
+              };
+            });
+        } catch (error) {
+          /*
+           * Durante Cloudflare é normal o documento/frame
+           * ser substituído.
+           *
+           * NÃO transformar isso imediatamente em erro.
+           */
+
+          logger.debug?.(
+            "VFS AUTH DOM TEMPORARILY UNAVAILABLE",
+            {
+              applicationId,
+              error:
+                error?.message ||
+                String(error)
+            }
+          );
+
+          await new Promise(
+            resolve =>
+              setTimeout(
+                resolve,
+                1000
+              )
+          );
+
+          continue;
+        }
+
+        /*
+         * --------------------------------------------------------
+         * 1. OTP
+         * --------------------------------------------------------
+         *
+         * CAPTCHA tem prioridade antes de aceitar OTP.
+         */
+
+        if (
+          snapshot?.otpInput ||
+          snapshot?.body.includes(
+            "one time password"
+          ) ||
+          snapshot?.body.includes(
+            "verification code"
+          )
+        ) {
+          logger.info(
+            "VFS AUTHENTICATION REACHED OTP",
+            {
+              applicationId,
+              elapsedMs:
+                Date.now() -
+                startedAt,
+              url:
+                snapshot.url
+            }
+          );
+
+          this.state =
+            "OTP_REQUIRED";
+
+          this.lastCheckpoint = {
+            type:
+              "OTP_REQUIRED",
+            reason:
+              "VFS OTP checkpoint detected after Agent Browser authentication."
+          };
+
+          return {
+            success: false,
+            authenticated: false,
+            otpRequired: true,
+            captchaDetected,
+            captchaSolved,
+            state:
+              this.state,
+            checkpoint:
+              this.lastCheckpoint
+          };
+        }
+
+        /*
+         * --------------------------------------------------------
+         * 2. AUTENTICADO
+         * --------------------------------------------------------
+         */
+
+        if (
+          snapshot?.authenticatedPage
+        ) {
+          await this.detectState()
+            .catch(() => {});
+
+          this.lastCheckpoint =
+            null;
+
+          logger.info(
+            "VFS AGENT BROWSER AUTHENTICATED",
+            {
+              applicationId,
+              elapsedMs:
+                Date.now() -
+                startedAt,
+              url:
+                snapshot.url,
+              state:
+                this.state
+            }
+          );
+
+          return {
+            success: true,
+            authenticated: true,
+            otpRequired: false,
+            captchaDetected,
+            captchaSolved,
+            state:
+              this.state,
+            checkpoint:
+              null
+          };
+        }
+
+        /*
+         * --------------------------------------------------------
+         * 3. ERRO REAL DE LOGIN
+         * --------------------------------------------------------
+         *
+         * Só rejeitamos se a VFS mostrar explicitamente
+         * que as credenciais foram recusadas.
+         */
+
+        if (
+          snapshot?.loginError
+        ) {
+          logger.warn(
+            "VFS LOGIN EXPLICITLY REJECTED",
+            {
+              applicationId,
+              elapsedMs:
+                Date.now() -
+                startedAt,
+              url:
+                snapshot.url
+            }
+          );
+
+          return {
+            success: false,
+            authenticated: false,
+            otpRequired: false,
+            code:
+              "VFS_LOGIN_REJECTED",
+            reason:
+              "VFS explicitly rejected the supplied credentials.",
+            state:
+              "LOGIN_REJECTED"
+          };
+        }
+
+        /*
+         * --------------------------------------------------------
+         * 4. CLOUDFLARE / CAPTCHA EM PROGRESSO
+         * --------------------------------------------------------
+         *
+         * DOM vazio, title vazio ou URL /login NÃO são
+         * considerados falha.
+         */
+
+        if (
+          captchaDetected &&
+          !captchaSolved &&
+          !captchaFailed
+        ) {
+          logger.info(
+            "VFS LOGIN WAITING FOR SCRAPELESS CAPTCHA",
+            {
+              applicationId,
+              elapsedMs:
+                Date.now() -
+                startedAt,
+              url:
+                snapshot?.url ||
+                null
+            }
+          );
+        }
+
+        /*
+         * --------------------------------------------------------
+         * 5. LOG DE PROGRESSO A CADA ~5s
+         * --------------------------------------------------------
+         */
+
+        const elapsed =
+          Date.now() -
+          startedAt;
+
+        if (
+          elapsed % 5000 <
+          1200
+        ) {
+          logger.info(
+            "VFS LOGIN AUTHENTICATION WAIT",
+            {
+              applicationId,
+              elapsedMs:
+                elapsed,
+              title:
+                snapshot?.title ||
+                "",
+              url:
+                snapshot?.url ||
+                "",
+              inputCount:
+                snapshot?.passwordInput
+                  ? 1
+                  : 0,
+              captchaDetected,
+              captchaSolved
+            }
+          );
+        }
+
+        await new Promise(
+          resolve =>
+            setTimeout(
+              resolve,
+              1000
+            )
+        );
+      }
+
+      logger.error(
+        "VFS AGENT BROWSER AUTHENTICATION TIMEOUT",
+        {
+          applicationId,
+          elapsedMs:
+            Date.now() -
+            startedAt,
+          timeoutMs,
+          captchaDetected,
+          captchaSolved,
+          captchaFailed,
+          url:
+            (() => {
+              try {
+                return page.url();
+              } catch {
+                return null;
+              }
+            })()
+        }
+      );
+
+      return {
+        success: false,
+        authenticated: false,
+        otpRequired: false,
+        requiresUser: true,
+        code:
+          "VFS_AGENT_AUTH_TIMEOUT",
+        reason:
+          "Agent Browser did not reach OTP or authenticated VFS state within the authentication window."
+      };
+    } finally {
+      /*
+       * A sessão CDP criada por esta função não deve
+       * fechar o browser.
+       *
+       * O browser continua vivo para o Bot 1.
+       */
+
+      try {
+        if (
+          captchaClient
+        ) {
+          await captchaClient.detach();
+        }
+      } catch {}
+    }
+  }    
   async solveScrapelessCaptcha() {
     const page =
       await this.ensurePage();
@@ -4218,724 +4831,46 @@ if (
       this.getDomSummary()
   };
 }
-/*
+        
+    /*
  * ============================================================
- * 11. AGORA SIM: aguardar a VFS processar o login.
- *
- * A VFS pode funcionar como SPA. Portanto, depois do clique,
- * não podemos assumir que o resultado estará disponível após
- * apenas um waitForNetworkIdle().
- *
- * Monitoramos a página por até 30 segundos.
+ * 11. AGORA SIM: entregar a autenticação ao
+ *     SCRAPELESS AGENT BROWSER.
  * ============================================================
+ *
+ * O Agent Browser continua responsável pela transição
+ * Cloudflare / CAPTCHA / login.
+ *
+ * O Bot 1 só recupera o controle quando:
+ *
+ *     OTP_REQUIRED
+ *
+ * ou
+ *
+ *     AUTHENTICATED
+ *
+ * A mesma page e o mesmo browser continuam vivos.
  */
 
-const loginResponseStartedAt =
-  Date.now();
-
-let authenticatedAfterLogin =
-  false;
-
-let otpDetectedAfterLogin =
-  false;
-
-let securityCheckpointAfterLogin =
-  false;
-
-let loginRejectedAfterLogin =
-  false;
-
-for (
-  let attempt = 1;
-  attempt <= 60;
-  attempt++
-) {
-  await new Promise(
-    resolve =>
-      setTimeout(
-        resolve,
-        attempt === 1
-          ? 500
-          : 1000
+const agentAuthResult =
+  await this.waitForVfsLoginResult({
+    page,
+    applicationId,
+    timeoutMs:
+      Math.max(
+        90000,
+        Number(
+          process.env.SCRAPELESS_AUTH_TIMEOUT_MS
+        ) || 120000
       )
-  );
-
-  /*
-   * ----------------------------------------------------------
-   * Atualizar estado interno da VFS.
-   * ----------------------------------------------------------
-   */
-
-  await this.detectState()
-    .catch(() => {});
-
-  await this.inspectCurrentDom()
-    .catch(() => {});
-
-  await this.detectCheckpoint()
-    .catch(() => {});
-
-  /*
-   * ----------------------------------------------------------
-   * Diagnóstico adicional diretamente no DOM.
-   *
-   * Isto serve como fallback caso o detector de checkpoint
-   * ainda não tenha classificado a nova página.
-   * ----------------------------------------------------------
-   */
-
-  const postLoginDom =
-    await page.evaluate(() => {
-      const normalize =
-        value =>
-          String(value || "")
-            .replace(/\s+/g, " ")
-            .trim()
-            .toLowerCase();
-
-      const bodyText =
-        normalize(
-          document.body?.innerText ||
-            ""
-        );
-
-      const inputs =
-        Array.from(
-          document.querySelectorAll(
-            "input"
-          )
-        )
-        .filter(element => {
-          const style =
-            window.getComputedStyle(
-              element
-            );
-
-          return (
-            style.display !==
-              "none" &&
-            style.visibility !==
-              "hidden" &&
-            style.opacity !==
-              "0"
-          );
-        })
-        .map(element => ({
-          type:
-            normalize(
-              element.type
-            ),
-
-          name:
-            normalize(
-              element.name
-            ),
-
-          id:
-            normalize(
-              element.id
-            ),
-
-          placeholder:
-            normalize(
-              element.placeholder
-            ),
-
-          autocomplete:
-            normalize(
-              element.autocomplete
-            ),
-
-          ariaLabel:
-            normalize(
-              element.getAttribute(
-                "aria-label"
-              )
-            ),
-
-          maxLength:
-            Number(
-              element.maxLength ||
-                0
-            )
-        }));
-
-      const otpInput =
-  inputs.some(input => {
-    const metadata =
-      [
-        input.type,
-        input.name,
-        input.id,
-        input.placeholder,
-        input.autocomplete,
-        input.ariaLabel
-      ]
-        .join(" ")
-        .toLowerCase();
-
-    return (
-      metadata.includes("otp") ||
-      metadata.includes("one-time") ||
-      metadata.includes("one time") ||
-      metadata.includes("verification") ||
-      metadata.includes("security code") ||
-      metadata.includes("verification code") ||
-      metadata.includes("verificationcode") ||
-      (
-        (
-          input.maxLength >= 4 &&
-          input.maxLength <= 8
-        ) &&
-        (
-          input.type === "text" ||
-          input.type === "number" ||
-          input.type === "tel"
-        )
-      )
-    );
   });
 
-const otpText =
-  [
-    "one-time password",
-    "one time password",
-    "enter otp",
-    "enter the otp",
-    "otp code",
-    "verification code",
-    "enter verification code",
-    "security code",
-    "verification code sent",
-    "code sent to your email",
-    "code has been sent",
-    "enter the code",
-    "enter code",
-    "check your email",
-    "check your inbox"
-  ].some(
-    indicator =>
-      bodyText.includes(
-        indicator
-      )
-  );
-
-      const loginError =
-        [
-          "invalid email",
-          "invalid password",
-          "invalid credentials",
-          "incorrect email",
-          "incorrect password",
-          "incorrect credentials",
-          "unable to sign in",
-          "login failed",
-          "authentication failed"
-        ].some(
-          indicator =>
-            bodyText.includes(
-              indicator
-            )
-        );
-
-            /*
-       * ========================================================
-       * CAPTCHA / SECURITY CHECKPOINT REAL
-       * ========================================================
-       *
-       * Não usamos mais "captcha" ou "cloudflare" isoladamente
-       * no bodyText, porque a aplicação pode conter esses termos
-       * sem que exista um desafio ativo.
-       *
-       * Procuramos:
-       * - texto explícito de desafio;
-       * - iframe real do Cloudflare;
-       * - elemento real de CAPTCHA/Turnstile.
-       */
-
-      const isVisible =
-        element => {
-          if (!element) {
-            return false;
-          }
-
-          const style =
-            window.getComputedStyle(
-              element
-            );
-
-          const rect =
-            element.getBoundingClientRect();
-
-          return (
-            style.display !== "none" &&
-            style.visibility !== "hidden" &&
-            style.opacity !== "0" &&
-            rect.width > 0 &&
-            rect.height > 0
-          );
-        };
-
-      const captchaElementFound =
-        Array.from(
-          document.querySelectorAll(
-            [
-              "iframe[src*='challenges.cloudflare.com']",
-              "iframe[title*='challenge']",
-              "iframe[title*='CAPTCHA']",
-              "[class*='captcha']",
-              "[id*='captcha']",
-              "[class*='turnstile']",
-              "[id*='turnstile']",
-              "[data-sitekey]"
-            ].join(",")
-          )
-        ).some(
-          isVisible
-        );
-
-      const securityChallengeText =
-        [
-          "security verification",
-          "verify you are human",
-          "checking your browser",
-          "performing security verification",
-          "i'm not a robot",
-          "im not a robot",
-          "captcha verification",
-          "complete the captcha",
-          "solve the captcha",
-          "captcha challenge"
-        ].some(
-          indicator =>
-            bodyText.includes(
-              indicator
-            )
-        );
-
-      const securityChallenge =
-        captchaElementFound ||
-        securityChallengeText;
-
-      return {
-        bodyText:
-          bodyText.slice(
-            0,
-            1500
-          ),
-
-        otpInput,
-
-        otpText,
-
-        loginError,
-
-        securityChallenge,
-
-captchaElementFound,
-
-url:
-  window.location.href
-      };
-    })
-    .catch(() => ({
-      bodyText: "",
-      otpInput: false,
-      otpText: false,
-      loginError: false,
-      securityChallenge: false,
-captchaElementFound: false,
-url: page.url()
-    }));
-
-    /*
-   * ----------------------------------------------------------
-   * 1. CAPTCHA / security checkpoint após o login.
-   *
-   * IMPORTANTE:
-   *
-   * A VFS pode apresentar simultaneamente:
-   *
-   * - página de OTP;
-   * - campo OTP;
-   * - CAPTCHA;
-   * - campo OTP desabilitado.
-   *
-   * Portanto CAPTCHA tem prioridade absoluta.
-   *
-   * Só depois de o desafio oficial desaparecer
-   * permitimos que o OTP seja processado.
-   * ----------------------------------------------------------
-   */
-
-  if (
-    this.lastCheckpoint?.type ===
-      "CAPTCHA_REQUIRED" ||
-    postLoginDom.securityChallenge ===
-      true
-  ) {
-    if (
-      !securityCheckpointAfterLogin
-    ) {
-      securityCheckpointAfterLogin =
-        true;
-
-      logger.info(
-        "VFS LOGIN SECURITY CHECKPOINT AFTER CLICK",
-        {
-          applicationId,
-          attempt,
-          url:
-            page.url(),
-          reason:
-            "VFS apresentou CAPTCHA antes de habilitar o OTP."
-        }
-      );
-    }
-
-    const captchaResult =
-      await this.solveScrapelessCaptcha()
-        .catch(error => ({
-          attempted: true,
-          solved: false,
-          status: "ERROR",
-          error:
-            error?.message ||
-            String(error)
-        }));
-
-    logger.info(
-      "VFS LOGIN CAPTCHA CHECK AFTER CLICK RESULT",
-      {
-        applicationId,
-        attempt,
-        attempted:
-          captchaResult?.attempted ||
-          false,
-        solved:
-          captchaResult?.solved ||
-          false,
-        status:
-          captchaResult?.status ||
-          null
-      }
-    );
-
-    /*
-     * Dar tempo para a VFS habilitar
-     * o campo OTP depois da resolução.
-     */
-    await new Promise(
-      resolve =>
-        setTimeout(
-          resolve,
-          1500
-        )
-    );
-
-    await this.detectState()
-      .catch(() => {});
-
-    await this.inspectCurrentDom()
-      .catch(() => {});
-
-    await this.detectCheckpoint()
-      .catch(() => {});
-
-    continue;
-  }
-
-  /*
-   * ----------------------------------------------------------
-   * 2. OTP encontrado DEPOIS do CAPTCHA.
-   *
-   * Neste ponto o CAPTCHA já não está presente.
-   *
-   * O findOtpInput() também exige que o campo esteja
-   * habilitado, portanto não tentamos escrever enquanto
-   * a VFS ainda o mantém disabled.
-   * ----------------------------------------------------------
-   */
-
-  if (
-    this.lastCheckpoint?.type ===
-      "OTP_REQUIRED" ||
-    postLoginDom.otpInput ===
-      true ||
-    postLoginDom.otpText ===
-      true
-  ) {
-    otpDetectedAfterLogin =
-      true;
-
-    logger.info(
-      "VFS LOGIN OTP REQUIRED AFTER CAPTCHA",
-      {
-        applicationId,
-        attempt,
-        elapsedMs:
-          Date.now() -
-          loginResponseStartedAt,
-        url:
-          page.url(),
-        state:
-          this.state,
-        checkpoint:
-          this.lastCheckpoint?.type ||
-          null
-      }
-    );
-
-    return {
-      success: true,
-
-      requiresUser: true,
-
-      otpRequired: true,
-
-      authenticated: false,
-
-      code:
-        "OTP_REQUIRED",
-
-      reason:
-        "VFS CAPTCHA cleared and OTP checkpoint is ready.",
-
-      state:
-        this.state,
-
-      applicationId,
-
-      checkpoint:
-        this.lastCheckpoint,
-
-      dom:
-        this.getDomSummary()
-    };
-  }
-
-  /*
-   * ----------------------------------------------------------
-   * 3. Verificar autenticação real.
-   * ----------------------------------------------------------
-   */
-
-  authenticatedAfterLogin =
-    this.isAuthenticatedState();
-
-  if (
-    authenticatedAfterLogin
-  ) {
-    await markAutomationActive(
-      applicationId
-    ).catch(() => {});
-
-    logger.info(
-      "VFS LOGIN AUTHENTICATED",
-      {
-        applicationId,
-        attempt,
-        elapsedMs:
-          Date.now() -
-          loginResponseStartedAt,
-        url:
-          page.url(),
-        state:
-          this.state
-      }
-    );
-
-    return {
-      success: true,
-
-      authenticated: true,
-
-      requiresUser: false,
-
-      otpRequired: false,
-
-      state:
-        this.state,
-
-      applicationId,
-
-      checkpoint:
-        this.lastCheckpoint,
-
-      dom:
-        this.getDomSummary()
-    };
-  }
-
-  /*
-   * ----------------------------------------------------------
-   * 4. Credenciais rejeitadas.
-   * ----------------------------------------------------------
-   */
-
-  if (
-    postLoginDom.loginError ===
-    true
-  ) {
-    loginRejectedAfterLogin =
-      true;
-
-    logger.warn(
-      "VFS LOGIN CREDENTIALS REJECTED",
-      {
-        applicationId,
-        attempt,
-        elapsedMs:
-          Date.now() -
-          loginResponseStartedAt,
-        url:
-          page.url()
-      }
-    );
-
-    return {
-      success: false,
-
-      requiresUser: true,
-
-      authenticated: false,
-
-      code:
-        "VFS_LOGIN_REJECTED",
-
-      reason:
-        "VFS rejected the login credentials.",
-
-      state:
-        this.state,
-
-      applicationId,
-
-      checkpoint:
-        this.lastCheckpoint,
-
-      dom:
-        this.getDomSummary()
-    };
-  }
-
-  /*
-   * ----------------------------------------------------------
-   * 5. Registrar o progresso enquanto a SPA muda de estado.
-   * ----------------------------------------------------------
-   */
-
-  if (
-    attempt === 1 ||
-    attempt % 5 === 0
-  ) {
-    logger.info(
-      "VFS LOGIN POST-CLICK MONITORING",
-      {
-        applicationId,
-
-        attempt,
-
-        elapsedMs:
-          Date.now() -
-          loginResponseStartedAt,
-
-        url:
-          page.url(),
-
-        state:
-          this.state,
-
-        checkpoint:
-          this.lastCheckpoint?.type ||
-          null,
-
-        otpDetected:
-          otpDetectedAfterLogin,
-
-        securityCheckpoint:
-          securityCheckpointAfterLogin,
-
-        loginRejected:
-          loginRejectedAfterLogin,
-
-        bodyText:
-          postLoginDom.bodyText.slice(
-            0,
-            500
-          )
-      }
-    );
-  }
-}
-
-/*
- * ============================================================
- * 12. Os 30 segundos terminaram sem autenticação.
- *
- * Fazer uma última leitura antes de declarar falha.
- * ============================================================
- */
-
-await this.detectState()
-  .catch(() => {});
-
-await this.inspectCurrentDom()
-  .catch(() => {});
-
-await this.detectCheckpoint()
-  .catch(() => {});
-
-const finalAuthenticated =
-  this.isAuthenticatedState();
-
 if (
-  finalAuthenticated
-) {
-  await markAutomationActive(
-    applicationId
-  ).catch(() => {});
-
-  logger.info(
-    "VFS LOGIN AUTHENTICATED ON FINAL CHECK",
-    {
-      applicationId,
-      elapsedMs:
-        Date.now() -
-        loginResponseStartedAt,
-      url:
-        page.url(),
-      state:
-        this.state
-    }
-  );
-
-  return {
-    success: true,
-
-    authenticated: true,
-
-    requiresUser: false,
-
-    state:
-      this.state,
-
-    applicationId,
-
-    checkpoint:
-      this.lastCheckpoint,
-
-    dom:
-      this.getDomSummary()
-  };
-}
-
-if (
-  this.lastCheckpoint?.type ===
-  "OTP_REQUIRED"
+  agentAuthResult?.otpRequired ===
+  true
 ) {
   return {
-    success: true,
+    success: false,
 
     requiresUser: true,
 
@@ -4947,54 +4882,71 @@ if (
       "OTP_REQUIRED",
 
     reason:
-      "VFS OTP checkpoint detected.",
+      "VFS OTP checkpoint detected by Scrapeless Agent Browser.",
 
     state:
-      this.state,
+      "OTP_REQUIRED",
 
     applicationId,
 
     checkpoint:
-      this.lastCheckpoint,
+      agentAuthResult.checkpoint,
 
     dom:
       this.getDomSummary()
   };
 }
 
-logger.error(
-  "VFS LOGIN POST-CLICK TIMEOUT",
-  {
-    applicationId,
+if (
+  agentAuthResult?.authenticated ===
+  true
+) {
+  return {
+    success: true,
 
-    elapsedMs:
-      Date.now() -
-      loginResponseStartedAt,
+    requiresUser: false,
 
-    url:
-      page.url(),
+    otpRequired: false,
+
+    authenticated: true,
+
+    code:
+      "VFS_AUTHENTICATED",
+
+    reason:
+      "VFS authentication completed by Scrapeless Agent Browser.",
 
     state:
       this.state,
 
+    applicationId,
+
     checkpoint:
-      this.lastCheckpoint?.type ||
-      null
-  }
-);
+      null,
+
+    dom:
+      this.getDomSummary()
+  };
+}
 
 return {
   success: false,
 
-  requiresUser: true,
+  requiresUser:
+    agentAuthResult?.requiresUser !==
+    false,
 
   authenticated: false,
 
+  otpRequired: false,
+
   code:
-    "VFS_LOGIN_RESPONSE_TIMEOUT",
+    agentAuthResult?.code ||
+    "VFS_AGENT_AUTH_FAILED",
 
   reason:
-    "VFS login was submitted, but authentication state was not detected within 30 seconds.",
+    agentAuthResult?.reason ||
+    "Scrapeless Agent Browser did not complete VFS authentication.",
 
   state:
     this.state,
@@ -5007,9 +4959,8 @@ return {
   dom:
     this.getDomSummary()
 };
- }
- 
-async ensureAuthenticated(
+  
+  async ensureAuthenticated(
   application
 ) {
   return this.login(
