@@ -1455,14 +1455,30 @@ if (
                   "sign in"
                 );
 
-              let authenticatedPage = false;
-
-        try {
-  authenticatedPage =
-    this.isAuthenticatedState() === true;
-} catch {
-  authenticatedPage = false;
-}
+                            const authenticatedPage =
+                !url.includes(
+                  "/login"
+                ) &&
+                (
+                  url.includes(
+                    "/dashboard"
+                  ) ||
+                  url.includes(
+                    "/application-detail"
+                  ) ||
+                  url.includes(
+                    "/your-details"
+                  ) ||
+                  url.includes(
+                    "/services"
+                  ) ||
+                  url.includes(
+                    "/book-appointment"
+                  ) ||
+                  url.includes(
+                    "/fv-instructions"
+                  )
+                );
 
               const loginError =
                 body.includes(
@@ -1521,7 +1537,22 @@ if (
 
           continue;
         }
-
+                /*
+         * O evaluate() apenas lê o DOM.
+         * Aqui já estamos novamente no contexto
+         * Node.js da classe VFS.
+         */
+        try {
+          if (
+            this.isAuthenticatedState() ===
+            true
+          ) {
+            snapshot.authenticatedPage =
+              true;
+          }
+        } catch {
+          // Estado interno ainda não disponível.
+        }
         /*
          * --------------------------------------------------------
          * 1. OTP
