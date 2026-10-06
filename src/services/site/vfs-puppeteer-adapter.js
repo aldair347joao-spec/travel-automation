@@ -1242,8 +1242,8 @@ if (
         captchaClient.on(
           "Captcha.solveFinished",
           message => {
-            captchaSolved =
-              message?.success !== false;
+                        captchaSolved =
+              message?.success === true;
 
             logger.info(
               "SCRAPELESS CAPTCHA SOLVE FINISHED",
@@ -1561,13 +1561,20 @@ if (
          * CAPTCHA tem prioridade antes de aceitar OTP.
          */
 
-        if (
-          snapshot?.otpInput ||
-          snapshot?.body.includes(
-            "one time password"
-          ) ||
-          snapshot?.body.includes(
-            "verification code"
+                if (
+          !captchaFailed &&
+          (
+            !captchaDetected ||
+            captchaSolved
+          ) &&
+          (
+            snapshot?.otpInput ||
+            snapshot?.body.includes(
+              "one time password"
+            ) ||
+            snapshot?.body.includes(
+              "verification code"
+            )
           )
         ) {
           logger.info(
