@@ -2862,7 +2862,7 @@ logger.info(
     ? 60000
     : DEFAULT_TIMEOUT;
 
-let navigationError = null;
+    let navigationError = null;
 
 for (
   let navigationAttempt = 1;
@@ -2881,9 +2881,19 @@ for (
         maxAttempts:
           2,
 
-        url
+        url,
+
+        pageClosed:
+          !page ||
+          page.isClosed()
       }
     );
+
+    /*
+     * ============================================================
+     * NAVEGAÇÃO NORMAL
+     * ============================================================
+     */
 
     await page.goto(
       url,
@@ -2918,6 +2928,22 @@ for (
     navigationError =
       error;
 
+    const errorMessage =
+      error?.message ||
+      String(error);
+
+    const connectionClosed =
+      errorMessage
+        .toLowerCase()
+        .includes(
+          "err_connection_closed"
+        ) ||
+      errorMessage
+        .toLowerCase()
+        .includes(
+          "connection closed"
+        );
+
     logger.warn(
       "VFS NAVIGATION ATTEMPT FAILED",
       {
@@ -2932,27 +2958,195 @@ for (
         url,
 
         code:
-          error?.code || null,
+          error?.code ||
+          null,
 
         message:
-          error?.message ||
-          String(error)
+          errorMessage,
+
+        connectionClosed,
+
+        pageClosed:
+          !page ||
+          page.isClosed()
       }
     );
 
+    /*
+     * ============================================================
+     * RECUPERAÇÃO DE ERR_CONNECTION_CLOSED
+     * ============================================================
+     *
+     * Não criamos uma nova sessão Scrapeless.
+     *
+     * Recriamos somente a página dentro da sessão atual.
+     *
+     * Isso mantém:
+     *
+     * - mesma sessão Agent Browser
+     * - mesmo browser remoto
+     * - mesmo applicationId
+     *
+     * mas elimina uma página que pode ter ficado
+     * com a conexão de navegação quebrada.
+     */
+
     if (
+      connectionClosed &&
+      navigationAttempt === 1
+    ) {
+      logger.warn(
+        "VFS CONNECTION CLOSED — RECREATING PAGE",
+        {
+          applicationId:
+            this.applicationId,
+
+          url,
+
+          sessionRecovery:
+            "same_browser_new_page"
+        }
+      );
+
+      try {
+        /*
+         * A página antiga não será mais reutilizada.
+         */
+
+        try {
+          if (
+            page &&
+            !page.isClosed()
+          ) {
+            await page.close();
+          }
+        } catch (
+          closeError
+        ) {
+          logger.warn(
+            "VFS OLD PAGE CLOSE FAILED",
+            {
+              applicationId:
+                this.applicationId,
+
+              message:
+                closeError?.message ||
+                String(closeError)
+            }
+          );
+        }
+
+        /*
+         * Forçamos initialize() a reconstruir a página.
+         *
+         * IMPORTANTE:
+         * não desligamos o browser Scrapeless.
+         */
+
+        this.page =
+          null;
+
+        this.context =
+          null;
+
+        this.initialized =
+          false;
+
+        this.state =
+          "UNKNOWN";
+
+        /*
+         * initialize() criará uma nova página
+         * dentro da mesma sessão Scrapeless.
+         */
+
+        await this.initialize();
+
+        /*
+         * Atualizamos a referência local.
+         */
+
+        page =
+          this.page;
+
+        if (
+          !page ||
+          page.isClosed()
+        ) {
+          throw new Error(
+            "Scrapeless page recovery failed: new page is unavailable."
+          );
+        }
+
+        logger.info(
+          "VFS SCRAPELESS PAGE RECOVERED",
+          {
+            applicationId:
+              this.applicationId,
+
+            url,
+
+            pageClosed:
+              page.isClosed()
+          }
+        );
+
+      } catch (
+        recoveryError
+      ) {
+        logger.error(
+          "VFS SCRAPELESS PAGE RECOVERY FAILED",
+          {
+            applicationId:
+              this.applicationId,
+
+            url,
+
+            originalError:
+              errorMessage,
+
+            recoveryError:
+              recoveryError?.message ||
+              String(recoveryError)
+          }
+        );
+
+        navigationError =
+          recoveryError;
+
+        /*
+         * Não escondemos o erro original.
+         *
+         * A segunda tentativa abaixo será feita
+         * somente se a recuperação conseguiu concluir.
+         */
+
+        if (
+          navigationAttempt >= 2
+        ) {
+          throw recoveryError;
+        }
+      }
+
+    } else if (
       navigationAttempt >= 2
     ) {
       throw error;
-    }
 
-    await new Promise(
-      resolve =>
-        setTimeout(
-          resolve,
-          2000
-        )
-    );
+    } else {
+      /*
+       * Erro diferente de ERR_CONNECTION_CLOSED:
+       * aguardamos antes da segunda tentativa.
+       */
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            2000
+          )
+      );
+    }
   }
 }
 
