@@ -566,22 +566,22 @@ async function main() {
     }
 
     const emailField =
-      emailSelector.email.id
-        ? `#${CSS.escape(
-            emailSelector.email.id
-          )}`
-        : `input[name="${CSS.escape(
-            emailSelector.email.name
-          )}"]`;
+  emailSelector.email.id
+    ? `[id="${String(
+        emailSelector.email.id
+      ).replace(/"/g, '\\"')}"]`
+    : `[name="${String(
+        emailSelector.email.name
+      ).replace(/"/g, '\\"')}"]`;
 
-    const passwordField =
-      emailSelector.password.id
-        ? `#${CSS.escape(
-            emailSelector.password.id
-          )}`
-        : `input[name="${CSS.escape(
-            emailSelector.password.name
-          )}"]`;
+const passwordField =
+  emailSelector.password.id
+    ? `[id="${String(
+        emailSelector.password.id
+      ).replace(/"/g, '\\"')}"]`
+    : `[name="${String(
+        emailSelector.password.name
+      ).replace(/"/g, '\\"')}"]`;
 
     await page.click(
       emailField
