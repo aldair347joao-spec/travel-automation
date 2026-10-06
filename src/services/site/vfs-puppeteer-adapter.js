@@ -2853,8 +2853,8 @@ logger.info(
   }
 
   async navigate(url) {
-    const page =
-      await this.ensurePage();
+    let page =
+  await this.ensurePage();
 
     const navigationTimeout =
   String(url || "")
