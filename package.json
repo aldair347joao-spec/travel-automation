@@ -7,8 +7,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "test": "node tests/simulation.js",
-    "prepare-models": "node scripts/prepare-face-models.js",
-    "test:scrapeless-vfs": "node scripts/test-scrapeless-vfs.js"
+    "prepare-models": "node scripts/prepare-face-models.js"
   },
   "engines": {
     "node": ">=20"
