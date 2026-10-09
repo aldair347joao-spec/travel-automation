@@ -535,6 +535,7 @@ try {
             "video"
           ).length,
 
+        
         bodyText:
           (
             document.body?.innerText ||
@@ -547,7 +548,70 @@ try {
             .slice(
               0,
               3000
+            ),
+
+        formCount:
+          document.querySelectorAll(
+            "form"
+          ).length,
+
+        inputs:
+          Array.from(
+            document.querySelectorAll(
+              "input"
             )
+          ).map(
+            (el, index) => ({
+              index,
+              type: el.getAttribute("type"),
+              name: el.getAttribute("name"),
+              id: el.id,
+              placeholder:
+                el.getAttribute("placeholder"),
+              autocomplete:
+                el.getAttribute("autocomplete"),
+              ariaLabel:
+                el.getAttribute("aria-label"),
+              visible: Boolean(
+                el.getClientRects().length &&
+                getComputedStyle(el).visibility !== "hidden" &&
+                getComputedStyle(el).display !== "none"
+              ),
+              label: el.id
+                ? document.querySelector(
+                    `label[for="${CSS.escape(el.id)}"]`
+                  )?.innerText || ""
+                : "",
+              parentText: (
+                el.parentElement?.innerText || ""
+              )
+                .replace(/\s+/g, " ")
+                .trim()
+                .slice(0, 120)
+            })
+          ),
+
+        buttons:
+          Array.from(
+            document.querySelectorAll(
+              "button, input[type='submit'], [role='button']"
+            )
+          ).map(
+            (el, index) => ({
+              index,
+              text: (
+                el.innerText ||
+                el.value ||
+                el.getAttribute("aria-label") ||
+                ""
+              )
+                .replace(/\s+/g, " ")
+                .trim()
+                .slice(0, 100),
+              type: el.getAttribute("type"),
+              disabled: Boolean(el.disabled)
+            })
+          )
       })
     );
 } catch (error) {
