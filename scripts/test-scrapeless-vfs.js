@@ -1,7 +1,9 @@
+
 require("dotenv").config();
 
-const puppeteer =
-  require("puppeteer");
+const { chromium } =
+  require("playwright-core");
+
 
 const TARGET_URL =
   "https://visa.vfsglobal.com/ago/en/prt/login";
