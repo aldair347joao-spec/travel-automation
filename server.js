@@ -42,6 +42,36 @@ const {
 const logger =
   require("./src/utils/logger");
 
+const productionMode =
+  String(process.env.NODE_ENV || "")
+    .trim()
+    .toLowerCase() === "production";
+
+logger.info("BROWSER PROVIDER CONFIGURATION", {
+  environment: String(process.env.NODE_ENV || "").trim(),
+  productionMode,
+  siteAdapter: String(
+    process.env.SITE_ADAPTER ||
+      (productionMode ? "vfs" : "mock")
+  ).trim().toLowerCase(),
+  scrapelessApiKeyConfigured: Boolean(
+    String(process.env.SCRAPELESS_API_KEY || "").trim()
+  ),
+  playwrightCoreAvailable: (() => {
+    try {
+      require.resolve("playwright-core");
+      return true;
+    } catch {
+      return false;
+    }
+  })(),
+  scrapelessProxyCountry:
+    process.env.SCRAPELESS_PROXY_COUNTRY || "ANY",
+  scrapelessSessionTtl:
+    process.env.SCRAPELESS_SESSION_TTL || "900"
+});
+
+
 async function main() {
   await connectDatabase();
 
