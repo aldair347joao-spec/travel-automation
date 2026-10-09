@@ -114,7 +114,7 @@ const sessionName =
   `travel-automation-test-${Date.now()}`;
 
 const proxyCountry =
-  "ANY";
+  "AO";
 
 const browserWebSocket =
   "wss://browser.scrapeless.com/api/v2/browser?" +
