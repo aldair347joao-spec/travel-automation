@@ -155,21 +155,19 @@ console.log(
   )
 );
 
+
 const browser =
-  await puppeteer.connect({
-    browserWSEndpoint:
-      browserWebSocket,
-
-    defaultViewport:
-      null,
-
-    protocolTimeout:
-      120000
-  });
+  await chromium.connectOverCDP(
+    browserWebSocket,
+    {
+      timeout: 120000
+    }
+  );
 
 console.log(
   "[SCRAPELESS TEST] Browser Agent conectado com sucesso."
 );
+
 
   /*
    * ==========================================================
@@ -178,8 +176,18 @@ console.log(
    */
 
   try {
-    const page =
-      await browser.newPage();
+    
+const contexts = browser.contexts();
+
+if (!contexts.length) {
+  throw new Error(
+    "Scrapeless não disponibilizou um contexto de navegador."
+  );
+}
+
+const context = contexts[0];
+
+const page = await context.newPage();
 
     page.setDefaultNavigationTimeout(
       60000
