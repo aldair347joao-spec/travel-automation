@@ -1083,13 +1083,20 @@ if (
       await this.browser.close();
     } catch {}
 
-    this.browser =
-      null;
+   
+this.browser =
+  null;
 
-    this.page =
-      null;
+this.page =
+  null;
 
-    throw error;
+this.context =
+  null;
+
+this.frameDiagnosticsAttached =
+  false;
+
+throw error;
   }
 
   /*
@@ -13888,9 +13895,12 @@ async close() {
     );
   }
 
-  this.page = null;
-  this.context = null;
-  this.browser = null;
+  
+this.page = null;
+this.context = null;
+this.browser = null;
+this.frameDiagnosticsAttached = false;
+
 
   this.initialized = false;
   this.state = "UNKNOWN";
