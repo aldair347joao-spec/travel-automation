@@ -261,7 +261,51 @@ this.radarSessionRecoveryRequired = false;
 
     throw error;
   }
+   /*
+   * DIAGNÓSTICO SCRAPELESS — VALIDAR API KEY
+   */
 
+  try {
+    logger.info(
+      "SCRAPELESS API KEY PREFLIGHT STARTED",
+      {
+        applicationId: this.applicationId
+      }
+    );
+
+    const preflightResponse = await fetch(
+      "https://api.scrapeless.com/api/v1/me",
+      {
+        method: "GET",
+        headers: {
+          "x-api-token": scrapelessApiKey
+        },
+        signal: AbortSignal.timeout(15000)
+      }
+    );
+
+    logger.info(
+      "SCRAPELESS API KEY PREFLIGHT RESULT",
+      {
+        applicationId: this.applicationId,
+        status: preflightResponse.status,
+        ok: preflightResponse.ok
+      }
+    );
+
+    await preflightResponse.body?.cancel();
+
+  } catch (preflightError) {
+    logger.error(
+      "SCRAPELESS API KEY PREFLIGHT FAILED",
+      {
+        applicationId: this.applicationId,
+        error:
+          preflightError?.message ||
+          String(preflightError)
+      }
+    );
+  }
   const sessionTTL =
     Math.max(
       60,
