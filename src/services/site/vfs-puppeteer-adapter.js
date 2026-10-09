@@ -479,20 +479,47 @@ this.browser = await chromium.connectOverCDP(
    */
 
     
-const browserContexts =
-  this.browser.contexts();
 
-if (!browserContexts.length) {
-  throw new Error(
-    "Scrapeless não disponibilizou um contexto de navegador."
-  );
+try {
+  const browserContexts =
+    this.browser.contexts();
+
+  if (!browserContexts.length) {
+    throw new Error(
+      "Scrapeless não disponibilizou um contexto de navegador."
+    );
+  }
+
+  this.context =
+    browserContexts[0];
+
+  this.page =
+    await this.context.newPage();
+
+} catch (error) {
+  try {
+    if (this.browser) {
+      await this.browser.close();
+    }
+  } catch (cleanupError) {
+    logger.warn(
+      "Falha ao limpar navegador após erro de inicialização",
+      {
+        applicationId: this.applicationId,
+        error:
+          cleanupError?.message ||
+          String(cleanupError)
+      }
+    );
+  }
+
+  this.browser = null;
+  this.page = null;
+  this.context = null;
+  this.frameDiagnosticsAttached = false;
+
+  throw error;
 }
-
-this.context =
-  browserContexts[0];
-
-this.page =
-  await this.context.newPage();
 
 
 logger.info(
