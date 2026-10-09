@@ -430,31 +430,14 @@ while (
   }
 
   /*
-   * Também aceitamos uma página VFS que já
-   * tenha saído do Cloudflare mesmo antes de
-   * todos os campos aparecerem.
+   * Não considerar a página pronta apenas porque
+   * existem inputs. Podem ser campos de cookies.
+   *
+   * A confirmação de que o login está disponível
+   * é feita exclusivamente pelo bloco loginPageReady
+   * acima. Se os campos não aparecerem, continuamos
+   * o diagnóstico sem declarar sucesso.
    */
-
-  const looksLikeVfs =
-    snapshot.url.includes(
-      "visa.vfsglobal.com"
-    ) &&
-    !cloudflareChallenge;
-
-  if (
-    looksLikeVfs &&
-    snapshot.inputCount > 0
-  ) {
-    challengeResolved =
-      true;
-
-    console.log(
-      "[SCRAPELESS TEST] Cloudflare desapareceu e a página VFS começou a renderizar."
-    );
-
-    break;
-  }
-
   console.log(
     "[SCRAPELESS TEST] Aguardando resolução Cloudflare...",
     {
@@ -543,10 +526,36 @@ try {
             'input[type="email"]'
           ).length,
 
-        iframeCount:
+                iframeCount:
           document.querySelectorAll(
             "iframe"
           ).length,
+
+        iframes:
+          Array.from(
+            document.querySelectorAll(
+              "iframe"
+            )
+          ).map(
+            (el, index) => ({
+              index,
+
+              src:
+                el.src || "",
+
+              title:
+                el.getAttribute("title") || "",
+
+              name:
+                el.getAttribute("name") || "",
+
+              visible: Boolean(
+                el.getClientRects().length &&
+                getComputedStyle(el).visibility !== "hidden" &&
+                getComputedStyle(el).display !== "none"
+              )
+            })
+          ),
 
         buttonCount:
           document.querySelectorAll(
