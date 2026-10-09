@@ -1,150 +1,100 @@
+
 "use strict";
 
-const logger =
-  require("../../utils/logger");
+const logger = require("../../utils/logger");
 
-const MockSiteAdapter =
-  require("./mock-site-adapter");
+const isProduction =
+  String(process.env.NODE_ENV || "")
+    .trim()
+    .toLowerCase() === "production";
 
-let PuppeteerSiteAdapter = null;
-let puppeteerAdapterLoadError = null;
+const adapterName = String(
+  process.env.SITE_ADAPTER ||
+    (isProduction ? "vfs" : "mock")
+)
+  .trim()
+  .toLowerCase();
 
-try {
-  PuppeteerSiteAdapter =
-    require(
-      "./vfs-puppeteer-adapter"
-    );
-} catch (error) {
-  puppeteerAdapterLoadError =
-    error;
+let VfsSiteAdapter = null;
+let vfsAdapterLoadError = null;
 
-  logger.error(
-    "Failed to load VFS Puppeteer adapter",
-    {
-      error:
-        error?.message ||
-        String(error),
-
-      code:
-        error?.code ||
-        null,
-
-      stack:
-        error?.stack ||
-        null
-    }
+if (isProduction && adapterName !== "vfs") {
+  const error = new Error(
+    `Production requires SITE_ADAPTER=vfs; received "${adapterName}".`
   );
+
+  error.code = "PRODUCTION_REQUIRES_VFS";
+  logger.error("Invalid production browser configuration", {
+    adapterName,
+    requiredAdapter: "vfs"
+  });
+
+  throw error;
 }
 
+if (adapterName === "vfs" || (!isProduction && adapterName === "puppeteer")) {
+  try {
+    VfsSiteAdapter = require("./vfs-puppeteer-adapter");
 
-function createSiteAdapter(
-  applicationId
-) {
+    logger.info("VFS SITE ADAPTER MODULE LOADED", {
+      provider: "Scrapeless Agent Browser",
+      browserEngine: "playwright-core",
+      production: isProduction
+    });
+  } catch (error) {
+    vfsAdapterLoadError = error;
 
-  const adapterName =
-    (
-      process.env.SITE_ADAPTER ||
-      "mock"
-    )
-      .trim()
-      .toLowerCase();
+    logger.error("VFS SITE ADAPTER MODULE LOAD FAILED", {
+      error: error?.message || String(error),
+      code: error?.code || null
+    });
 
+    if (isProduction) {
+      throw error;
+    }
+  }
+}
 
-  /*
-   * ==========================================================
-   * MOCK
-   * ==========================================================
-   *
-   * Mantemos o adapter mock exatamente como fallback explícito.
-   */
+function createSiteAdapter(applicationId) {
+  if (adapterName === "vfs" || (!isProduction && adapterName === "puppeteer")) {
+    if (!VfsSiteAdapter) {
+      const error = new Error(
+        `VFS adapter unavailable: ${
+          vfsAdapterLoadError?.message || "module failed to load"
+        }`
+      );
 
-  if (
-    adapterName ===
-    "mock"
-  ) {
+      error.code = "VFS_ADAPTER_LOAD_FAILED";
+      throw error;
+    }
 
-    const adapter =
-      new MockSiteAdapter();
+    logger.info("VFS SITE ADAPTER CREATED", {
+      applicationId: String(applicationId),
+      provider: "Scrapeless Agent Browser"
+    });
 
-    adapter.applicationId =
-      applicationId;
+    return new VfsSiteAdapter({
+      applicationId: String(applicationId)
+    });
+  }
+
+  if (!isProduction && adapterName === "mock") {
+    const MockSiteAdapter = require("./mock-site-adapter");
+    const adapter = new MockSiteAdapter();
+
+    adapter.applicationId = String(applicationId);
+
+    logger.warn("DEVELOPMENT MOCK ADAPTER CREATED", {
+      applicationId: String(applicationId)
+    });
 
     return adapter;
   }
 
-
-  /*
-   * ==========================================================
-   * VFS / PUPPETEER
-   * ==========================================================
-   */
-
-  if (
-    adapterName === "vfs" ||
-    adapterName === "puppeteer"
-  ) {
-
-    if (
-      !PuppeteerSiteAdapter
-    ) {
-
-      const originalError =
-        puppeteerAdapterLoadError;
-
-      const message =
-        originalError?.message ||
-        String(
-          originalError ||
-          "unknown adapter loading error"
-        );
-
-      const error =
-        new Error(
-          `VFS Puppeteer adapter could not be loaded: ${message}`
-        );
-
-      error.code =
-        "VFS_PUPPETEER_ADAPTER_LOAD_FAILED";
-
-      error.cause =
-        originalError ||
-        null;
-
-      logger.error(
-        "VFS Puppeteer adapter unavailable",
-        {
-          applicationId,
-
-          error:
-            message,
-
-          code:
-            originalError?.code ||
-            null
-        }
-      );
-
-      throw error;
-    }
-
-
-    return new PuppeteerSiteAdapter({
-      applicationId
-    });
-  }
-
-
-  /*
-   * ==========================================================
-   * INVALID CONFIGURATION
-   * ==========================================================
-   */
-
   throw new Error(
-    `Site adapter "${adapterName}" is not configured`
+    `Site adapter "${adapterName}" is not permitted in this environment`
   );
 }
-
 
 module.exports = {
   createSiteAdapter
