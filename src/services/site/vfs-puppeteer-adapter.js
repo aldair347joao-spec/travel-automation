@@ -5319,7 +5319,7 @@ async findVfsLoginFields() {
           .toLowerCase()
           .replace(/\s+/g, " ");
 
-    const visible =
+        const visible =
       element => {
         if (!element) {
           return false;
@@ -5331,10 +5331,10 @@ async findVfsLoginFields() {
           );
 
         return (
-          !element.disabled &&
           style.display !== "none" &&
           style.visibility !== "hidden" &&
-          style.opacity !== "0"
+          style.opacity !== "0" &&
+          element.getClientRects().length > 0
         );
       };
 
@@ -5397,13 +5397,15 @@ async findVfsLoginFields() {
     )}"]`;
   };
 
-    const inputs =
+        const inputs =
       Array.from(
         document.querySelectorAll(
           "input"
         )
       ).filter(
-        visible
+        element =>
+          visible(element) &&
+          !element.disabled
       );
 
     /*
@@ -5418,14 +5420,16 @@ async findVfsLoginFields() {
      * seja interpretado como se fosse um campo de email.
      */
 
-    const forms =
-      Array.from(
-        document.querySelectorAll(
-          "form"
-        )
-      ).filter(
-        visible
-      );
+          const formInputs =
+        Array.from(
+          form.querySelectorAll(
+            "input"
+          )
+        ).filter(
+          element =>
+            visible(element) &&
+            !element.disabled
+        );
 
     const formCandidates = [];
 
@@ -5822,18 +5826,68 @@ if (
      * <form>. Nesse caso procuramos apenas campos fortemente
      * identificados.
      */
-
-    if (
+        if (
       !selectedForm
     ) {
-      const emailByType =
+      /*
+       * A VFS pode apresentar o email como
+       * input type="text", e não type="email".
+       *
+       * Procuramos campos visíveis usando também
+       * o id, o name, o autocomplete e os rótulos.
+       */
+
+      const emailByMetadata =
         inputs.filter(
-          element =>
-            normalize(
-              element.getAttribute(
-                "type"
-              )
-            ) === "email"
+          element => {
+            const type =
+              normalize(
+                element.getAttribute(
+                  "type"
+                )
+              );
+
+            if (
+              type === "password"
+            ) {
+              return false;
+            }
+
+            const metadata =
+              normalize(
+                [
+                  element.getAttribute(
+                    "autocomplete"
+                  ),
+                  element.getAttribute(
+                    "name"
+                  ),
+                  element.id,
+                  element.getAttribute(
+                    "placeholder"
+                  ),
+                  element.getAttribute(
+                    "aria-label"
+                  ),
+                  element.id
+                    ? document.querySelector(
+                        `label[for="${CSS.escape(element.id)}"]`
+                      )?.innerText || ""
+                    : "",
+                  element.closest(
+                    "label"
+                  )?.innerText || ""
+                ].join(" ")
+              );
+
+            return (
+              type === "email" ||
+              metadata.includes("email") ||
+              metadata.includes("e-mail") ||
+              metadata.includes("username") ||
+              metadata.includes("user name")
+            );
+          }
         );
 
       const passwordByType =
@@ -5846,15 +5900,20 @@ if (
             ) === "password"
         );
 
+      /*
+       * Só aceitamos um campo de email inequívoco
+       * e um campo de palavra-passe inequívoco.
+       */
+
       if (
-        emailByType.length === 1 &&
+        emailByMetadata.length === 1 &&
         passwordByType.length === 1
       ) {
         selectedForm = {
           form: null,
 
           email:
-            emailByType[0],
+            emailByMetadata[0],
 
           password:
             passwordByType[0]
