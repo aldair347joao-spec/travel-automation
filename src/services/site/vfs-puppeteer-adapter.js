@@ -5441,7 +5441,7 @@ async findVfsLoginFields() {
     )}"]`;
   };
 
-        const inputs =
+            const inputs =
       Array.from(
         document.querySelectorAll(
           "input"
@@ -5458,22 +5458,17 @@ async findVfsLoginFields() {
      * ========================================================
      *
      * Primeiro procuramos pares de email/password
-     * dentro do MESMO formulário.
-     *
-     * Isto evita que o texto do container de password
-     * seja interpretado como se fosse um campo de email.
+     * dentro do mesmo formulário.
      */
 
-          const formInputs =
-        Array.from(
-          form.querySelectorAll(
-            "input"
-          )
-        ).filter(
-          element =>
-            visible(element) &&
-            !element.disabled
-        );
+    const forms =
+      Array.from(
+        document.querySelectorAll(
+          "form"
+        )
+      ).filter(
+        visible
+      );
 
     const formCandidates = [];
 
@@ -5486,9 +5481,10 @@ async findVfsLoginFields() {
             "input"
           )
         ).filter(
-          visible
+          element =>
+            visible(element) &&
+            !element.disabled
         );
-
       /*
        * ------------------------------------------------------
        * EMAIL
