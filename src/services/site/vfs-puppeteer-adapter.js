@@ -276,7 +276,7 @@ this.radarSessionRecoveryRequired = false;
   const proxyCountry =
     String(
       process.env.SCRAPELESS_PROXY_COUNTRY ||
-        "ANY"
+        "AO"
     )
       .trim()
       .toUpperCase();
