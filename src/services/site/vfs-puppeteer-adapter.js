@@ -13943,6 +13943,6 @@ this.frameDiagnosticsAttached = false;
     }
   );
 }
-
+    }
 module.exports =
   VfsPuppeteerAdapter;
