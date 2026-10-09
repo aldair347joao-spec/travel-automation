@@ -2,7 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const puppeteer = require("puppeteer");
+const { chromium } = require("playwright-core");
 const {
   getCredentialsForAutomation,
   markAutomationActive
@@ -392,16 +392,14 @@ this.radarSessionRecoveryRequired = false;
         }
       );
 
-      this.browser =
-  await puppeteer.connect({
-    browserWSEndpoint,
+      
+this.browser = await chromium.connectOverCDP(
+  browserWSEndpoint,
+  {
+    timeout: 120000
+  }
+);
 
-    defaultViewport:
-      null,
-
-    protocolTimeout:
-      120000
-  });
       logger.info(
         "Scrapeless Agent Browser connected successfully",
         {
@@ -480,8 +478,22 @@ this.radarSessionRecoveryRequired = false;
    * Reutilizamos uma página existente da sessão quando houver.
    */
 
-    this.page =
-  await this.browser.newPage();
+    
+const browserContexts =
+  this.browser.contexts();
+
+if (!browserContexts.length) {
+  throw new Error(
+    "Scrapeless não disponibilizou um contexto de navegador."
+  );
+}
+
+this.context =
+  browserContexts[0];
+
+this.page =
+  await this.context.newPage();
+
 
 logger.info(
   "VFS NEW SCRAPELESS PAGE CREATED",
@@ -718,7 +730,7 @@ if (
      */
     try {
     try {
-      await this.page.evaluateOnNewDocument(() => {
+      await this.page.addInitScript(() => {
         window.__travelAutomationMediaState = {
           requested: false,
           opened: false,
@@ -1068,7 +1080,7 @@ if (
     );
 
     try {
-      await this.browser.disconnect();
+      await this.browser.close();
     } catch {}
 
     this.browser =
@@ -1087,7 +1099,7 @@ if (
    */
 
   this.context =
-    this.page.browserContext();
+  this.page.context();
 
   /*
    * ============================================================
@@ -1216,7 +1228,7 @@ if (
 
       try {
         captchaClient =
-          await page.createCDPSession();
+  await page.context().newCDPSession(page);
 
         captchaClient.on(
           "Captcha.detected",
@@ -1865,9 +1877,7 @@ const sleep =
 
 try {
       client =
-        await page
-          .target()
-          .createCDPSession();
+  await page.context().newCDPSession(page);
 
       /*
        * ========================================================
@@ -11571,9 +11581,11 @@ async detectFacialPositionRequest() {
       };
     }
 
-    await input.uploadFile(
-      passportPath
-    );
+    
+await input.setInputFiles(
+  passportPath
+);
+
 
     return {
       success: true,
@@ -13863,44 +13875,43 @@ async detectCheckpointOnce() {
     return this.state;
   }
 
-  async close() {
+  
+async close() {
   this.stopRadarKeepAlive();
-    try {
-      if (this.context) {
-        await this.context.close();
-      }
-    } catch {}
 
-    try {
-      if (this.browser) {
-        await this.browser.close();
-      }
-    } catch {}
-
-    this.page = null;
-    this.context = null;
-    this.browser = null;
-
-    this.initialized = false;
-    this.state = "UNKNOWN";
-
-    this.lastDomInspection =
-      null;
-
-    this.lastCheckpoint =
-      null;
-
-    this.lastSlotSnapshot =
-      [];
-
-    logger.info(
-      "VFS browser closed",
+  try {
+    if (this.browser) {
+      await this.browser.close();
+    }
+  } catch (error) {
+    logger.warn(
+      "VFS browser cleanup failed",
       {
-        applicationId:
-          this.applicationId
+        applicationId: this.applicationId,
+        error:
+          error?.message ||
+          String(error)
       }
     );
   }
+
+  this.page = null;
+  this.context = null;
+  this.browser = null;
+
+  this.initialized = false;
+  this.state = "UNKNOWN";
+
+  this.lastDomInspection = null;
+  this.lastCheckpoint = null;
+  this.lastSlotSnapshot = [];
+
+  logger.info(
+    "VFS browser closed",
+    {
+      applicationId: this.applicationId
+    }
+  );
 }
 
 module.exports =
