@@ -66,7 +66,7 @@ logger.info("BROWSER PROVIDER CONFIGURATION", {
     }
   })(),
   scrapelessProxyCountry:
-    process.env.SCRAPELESS_PROXY_COUNTRY || "ANY",
+    process.env.SCRAPELESS_PROXY_COUNTRY || "AO",
   scrapelessSessionTtl:
     process.env.SCRAPELESS_SESSION_TTL || "900"
 });
