@@ -189,9 +189,32 @@ const context = contexts[0];
 
 const page = await context.newPage();
 
-    page.setDefaultNavigationTimeout(
-      60000
+page.on("framenavigated", frame => {
+  if (frame === page.mainFrame()) {
+    console.log(
+      "[SCRAPELESS TEST] NAVEGAÇÃO PRINCIPAL:",
+      frame.url()
     );
+  }
+});
+
+page.on("close", () => {
+  console.error(
+    "[SCRAPELESS TEST] ALERTA: a página foi fechada."
+  );
+});
+
+page.on("crash", () => {
+  console.error(
+    "[SCRAPELESS TEST] ALERTA: a página sofreu um crash."
+  );
+});
+
+console.log(
+  "[SCRAPELESS TEST] Monitorização de navegação ativada."
+);
+
+page.setDefaultNavigationTimeout(60000);
 
     console.log(
       "[SCRAPELESS TEST] 4/5 - Abrindo VFS..."
