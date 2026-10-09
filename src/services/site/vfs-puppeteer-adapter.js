@@ -4370,11 +4370,10 @@ while (
     );
 
     await page
-      .waitForNetworkIdle({
-        idleTime: 700,
-        timeout: 10000
-      })
-      .catch(() => {});
+  .waitForLoadState("networkidle", {
+    timeout: 10000
+  })
+  .catch(() => {});
 
     await new Promise(
       resolve =>
@@ -4759,12 +4758,10 @@ if (
    */
 
   await page
-    .waitForNetworkIdle({
-      idleTime: 700,
-
-      timeout: 10000
-    })
-    .catch(() => {});
+  .waitForLoadState("networkidle", {
+    timeout: 10000
+  })
+  .catch(() => {});
 
   await new Promise(
     resolve =>
@@ -7271,11 +7268,10 @@ if (
     }
 
     await page
-      .waitForNetworkIdle({
-        idleTime: 400,
-        timeout: 8000
-      })
-      .catch(() => {});
+  .waitForLoadState("networkidle", {
+    timeout: 8000
+  })
+  .catch(() => {});
 
     await this.detectState();
 
@@ -11463,11 +11459,10 @@ async detectFacialPositionRequest() {
     );
 
     await page
-      .waitForNetworkIdle({
-        idleTime: 400,
-        timeout: 8000
-      })
-      .catch(() => {});
+  .waitForLoadState("networkidle", {
+    timeout: 8000
+  })
+  .catch(() => {});
 
     await this.detectState();
 
@@ -12540,11 +12535,10 @@ await input.setInputFiles(
       await this.ensurePage();
 
     await page
-      .waitForNetworkIdle({
-        idleTime: 500,
-        timeout: 10000
-      })
-      .catch(() => {});
+  .waitForLoadState("networkidle", {
+    timeout: 10000
+  })
+  .catch(() => {});
 
     await this.detectState();
 
@@ -12815,11 +12809,10 @@ await input.setInputFiles(
       await this.ensurePage();
 
     await page
-      .waitForNetworkIdle({
-        idleTime: 700,
-        timeout: 15000
-      })
-      .catch(() => {});
+  .waitForLoadState("networkidle", {
+    timeout: 15000
+  })
+  .catch(() => {});
 
     await this.detectState();
 
