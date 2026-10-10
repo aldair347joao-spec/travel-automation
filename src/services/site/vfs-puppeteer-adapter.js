@@ -7540,91 +7540,408 @@ if (
     };
   }
 
+  
   async findOtpInput() {
-    const page =
-      await this.ensurePage();
+    const page = await this.ensurePage();
+    const terms = CHECKPOINT_TERMS.otp;
 
-    return page.evaluate(
-      terms => {
-        const normalize =
-          value =>
-            String(value || "")
-              .trim()
-              .toLowerCase()
-              .replace(
-                /\s+/g,
-                " "
-              );
+    const diagnostic = {
+      url: null,
+      title: null,
+      frameCount: 0,
+      frames: [],
+      controls: [],
+      captcha: {},
+      buttons: []
+    };
 
-        const candidates =
-          Array.from(
-            document.querySelectorAll(
-              "input"
-            )
-          ).filter(
-            input => {
-              if (
-                input.disabled ||
-                input.readOnly
-              ) {
-                return false;
-              }
+    const safeUrl = value => {
+      try {
+        const parsed = new URL(String(value || ""));
+        return parsed.origin + parsed.pathname;
+      } catch {
+        return null;
+      }
+    };
 
-              const haystack =
-                normalize(
-                  [
-                    input.name,
-                    input.id,
-                    input.placeholder,
-                    input.getAttribute(
-                      "aria-label"
-                    ),
-                    input.autocomplete,
-                    input.parentElement
-                      ?.innerText
-                  ].join(" ")
-                );
+    diagnostic.url = safeUrl(page.url());
 
-              return terms.some(
-                term =>
-                  haystack.includes(
-                    normalize(term)
-                  )
-              );
-            }
+    diagnostic.title = await page.title().catch(() => null);
+
+    const frames = page.frames();
+    diagnostic.frameCount = frames.length;
+
+    for (const frame of frames) {
+      const isMainFrame = frame === page.mainFrame();
+
+      const result = await frame.evaluate(otpTerms => {
+        const normalize = value =>
+          String(value || "")
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, " ");
+
+        const visible = element => {
+          const style = window.getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            style.opacity !== "0"
+          );
+        };
+
+        const body = normalize(document.body?.innerText || "");
+        const title = normalize(document.title || "");
+
+        const captchaTerms = [
+          "captcha",
+          "recaptcha",
+          "turnstile",
+          "i'm not a robot",
+          "im not a robot",
+          "verify you are human",
+          "security verification",
+          "checking your browser",
+          "just a moment",
+          "complete the challenge",
+          "cloudflare"
+        ];
+
+        const captchaTextMatches = captchaTerms.filter(term =>
+          (body + " " + title).includes(term)
+        );
+
+        const captchaFrames = Array.from(
+          document.querySelectorAll("iframe")
+        ).map(iframe => {
+          let src = "";
+
+          try {
+            const parsed = new URL(
+              iframe.getAttribute("src") || "",
+              location.href
+            );
+
+            src = parsed.origin + parsed.pathname;
+          } catch {}
+
+          const marker = normalize([
+            src,
+            iframe.title,
+            iframe.getAttribute("aria-label"),
+            iframe.name
+          ].join(" "));
+
+          return {
+            src,
+            visible: visible(iframe),
+            possibleCaptcha: [
+              "captcha",
+              "recaptcha",
+              "turnstile",
+              "challenges.cloudflare.com",
+              "hcaptcha"
+            ].some(term => marker.includes(term))
+          };
+        });
+
+        const elements = Array.from(
+          document.querySelectorAll(
+            'input, textarea, [role="textbox"], [contenteditable="true"]'
+          )
+        );
+
+        const controls = elements.map(element => {
+          const labelText = element.labels
+            ? Array.from(element.labels)
+                .map(label => label.innerText || label.textContent || "")
+                .join(" ")
+            : "";
+
+          const parentText = element.parentElement?.innerText || "";
+
+          const metadata = [
+            element.tagName,
+            element.getAttribute("type"),
+            element.id,
+            element.getAttribute("name"),
+            element.getAttribute("placeholder"),
+            element.getAttribute("aria-label"),
+            element.getAttribute("autocomplete"),
+            element.getAttribute("inputmode"),
+            labelText,
+            parentText
+          ].map(normalize).join(" ");
+
+          const maxLength =
+            typeof element.maxLength === "number" &&
+            element.maxLength >= 0
+              ? element.maxLength
+              : null;
+
+          const autocomplete = normalize(
+            element.getAttribute("autocomplete")
           );
 
-        if (
-          candidates.length !== 1
-        ) {
-          return {
-            found: false,
-            ambiguous:
-              candidates.length > 1,
-            count:
-              candidates.length
-          };
-        }
+          const inputMode = normalize(
+            element.getAttribute("inputmode")
+          );
 
-        const input =
-          candidates[0];
+          const type = normalize(
+            element.getAttribute("type")
+          );
+
+          const otpTermMatch = otpTerms.some(term =>
+            metadata.includes(normalize(term))
+          );
+
+          const otpShapeHint =
+            autocomplete === "one-time-code" ||
+            (
+              maxLength !== null &&
+              maxLength >= 4 &&
+              maxLength <= 8 &&
+              (
+                inputMode === "numeric" ||
+                type === "tel" ||
+                type === "number"
+              )
+            );
+
+          return {
+            tag: element.tagName.toLowerCase(),
+            type: type || null,
+            id: element.id || null,
+            name: element.getAttribute("name"),
+            role: element.getAttribute("role"),
+            placeholder: element.getAttribute("placeholder"),
+            ariaLabel: element.getAttribute("aria-label"),
+            autocomplete: autocomplete || null,
+            inputMode: inputMode || null,
+            maxLength,
+            visible: visible(element),
+            disabled: Boolean(element.disabled),
+            readOnly: Boolean(element.readOnly),
+            ariaDisabled:
+              element.getAttribute("aria-disabled") === "true",
+            contentEditable: Boolean(element.isContentEditable),
+            otpTermMatch,
+            otpShapeHint
+          };
+        });
+
+        const visibleButtons = Array.from(
+          document.querySelectorAll(
+            'button, input[type="submit"], input[type="button"], [role="button"]'
+          )
+        )
+          .filter(visible)
+          .map(element => {
+            const text = normalize([
+              element.innerText,
+              element.getAttribute("value"),
+              element.getAttribute("aria-label"),
+              element.getAttribute("title")
+            ].join(" "));
+
+            return {
+              tag: element.tagName.toLowerCase(),
+              id: element.id || null,
+              text: text.slice(0, 80),
+              disabled:
+                Boolean(element.disabled) ||
+                element.getAttribute("aria-disabled") === "true",
+              possibleSubmit:
+                /verify|continue|submit|confirm|next|send code/.test(text),
+              possibleCaptcha:
+                /captcha|verify you are human|robot/.test(text)
+            };
+          });
+
+        const numericSingleBoxes = controls.filter(control =>
+          control.visible &&
+          !control.disabled &&
+          control.maxLength === 1 &&
+          (
+            control.inputMode === "numeric" ||
+            control.type === "tel" ||
+            control.type === "number"
+          )
+        ).length;
 
         return {
-          found: true,
-
-          selectorData: {
-            id:
-              input.id ||
-              null,
-
-            name:
-              input.name ||
-              null
-          }
+          url: (() => {
+            try {
+              return location.origin + location.pathname;
+            } catch {
+              return null;
+            }
+          })(),
+          title: document.title || "",
+          bodySignals: {
+            captchaTextMatches,
+            mentionsOtp:
+              body.includes("otp") ||
+              body.includes("one time password") ||
+              body.includes("verification code") ||
+              body.includes("security code"),
+            mentionsEmailVerification:
+              body.includes("check your email") ||
+              body.includes("email verification"),
+            mentionsCloudflare:
+              body.includes("cloudflare") ||
+              body.includes("checking your browser"),
+            mentionsError:
+              body.includes("something went wrong") ||
+              body.includes("try again") ||
+              body.includes("error")
+          },
+          captchaFrames,
+          controlCount: controls.length,
+          controls,
+          numericSingleBoxes,
+          buttons: visibleButtons
         };
-      },
-      CHECKPOINT_TERMS.otp
+      }, terms).catch(error => ({
+        url: safeUrl(frame.url()),
+        title: null,
+        error: String(error?.message || error).slice(0, 180),
+        bodySignals: {},
+        captchaFrames: [],
+        controlCount: 0,
+        controls: [],
+        numericSingleBoxes: 0,
+        buttons: []
+      }));
+
+      const frameUrl = safeUrl(result.url || frame.url());
+
+      diagnostic.frames.push({
+        url: frameUrl,
+        isMainFrame,
+        title: result.title,
+        controlCount: result.controlCount || 0,
+        error: result.error || null,
+        bodySignals: result.bodySignals || {},
+        captchaFrames: result.captchaFrames || [],
+        numericSingleBoxes: result.numericSingleBoxes || 0
+      });
+
+      for (const control of result.controls || []) {
+        diagnostic.controls.push({
+          frameUrl,
+          isMainFrame,
+          ...control
+        });
+      }
+
+      diagnostic.buttons.push(
+        ...(result.buttons || []).map(button => ({
+          frameUrl,
+          isMainFrame,
+          ...button
+        }))
+      );
+    }
+
+    const captchaTextFound = diagnostic.frames.some(frame =>
+      (frame.bodySignals?.captchaTextMatches || []).length > 0
     );
+
+    const captchaFrameFound = diagnostic.frames.some(frame =>
+      (frame.captchaFrames || []).some(item => item.possibleCaptcha)
+    );
+
+    const otpCandidates = diagnostic.controls.filter(control =>
+      control.visible &&
+      control.otpTermMatch
+    );
+
+    const enabledOtpCandidates = otpCandidates.filter(control =>
+      !control.disabled &&
+      !control.readOnly &&
+      !control.ariaDisabled
+    );
+
+    const mainEnabledCandidates = enabledOtpCandidates.filter(
+      control => control.isMainFrame
+    );
+
+    diagnostic.captcha = {
+      domTextSignal: captchaTextFound,
+      iframeSignal: captchaFrameFound,
+      possibleCaptcha:
+        captchaTextFound || captchaFrameFound,
+      otpCandidates: otpCandidates.length,
+      enabledOtpCandidates: enabledOtpCandidates.length,
+      disabledOtpCandidates: otpCandidates.filter(control =>
+        control.disabled ||
+        control.readOnly ||
+        control.ariaDisabled
+      ).length,
+      otpCandidatesOutsideMainFrame:
+        enabledOtpCandidates.filter(control => !control.isMainFrame).length,
+      numericSingleBoxCount: diagnostic.frames.reduce(
+        (total, frame) => total + (frame.numericSingleBoxes || 0),
+        0
+      )
+    };
+
+    logger.info("VFS OTP GENERAL DIAGNOSTIC", {
+      applicationId: this.applicationId,
+      url: diagnostic.url,
+      title: diagnostic.title,
+      frameCount: diagnostic.frameCount,
+      frames: diagnostic.frames,
+      controls: diagnostic.controls,
+      buttons: diagnostic.buttons,
+      captcha: diagnostic.captcha
+    });
+
+    if (
+      diagnostic.captcha.possibleCaptcha &&
+      diagnostic.captcha.disabledOtpCandidates > 0
+    ) {
+      logger.warn("VFS OTP MAY BE BLOCKED BY CAPTCHA", {
+        applicationId: this.applicationId,
+        captcha: diagnostic.captcha
+      });
+    }
+
+    if (
+      diagnostic.captcha.otpCandidatesOutsideMainFrame > 0 &&
+      mainEnabledCandidates.length === 0
+    ) {
+      logger.warn("VFS OTP FIELD IS OUTSIDE MAIN FRAME", {
+        applicationId: this.applicationId,
+        frameCount: diagnostic.frameCount,
+        captcha: diagnostic.captcha
+      });
+    }
+
+    if (mainEnabledCandidates.length !== 1) {
+      return {
+        found: false,
+        ambiguous: mainEnabledCandidates.length > 1,
+        count: mainEnabledCandidates.length,
+        diagnostic
+      };
+    }
+
+    const candidate = mainEnabledCandidates[0];
+
+    return {
+      found: true,
+      selectorData: {
+        id: candidate.id || null,
+        name: candidate.name || null
+      },
+      diagnostic
+    };
   }
 
   /*
