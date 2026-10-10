@@ -7856,9 +7856,10 @@ if (
       (frame.captchaFrames || []).some(item => item.possibleCaptcha)
     );
 
+    
     const otpCandidates = diagnostic.controls.filter(control =>
       control.visible &&
-      control.otpTermMatch
+      (control.otpTermMatch || control.otpShapeHint)
     );
 
     const enabledOtpCandidates = otpCandidates.filter(control =>
@@ -7928,20 +7929,48 @@ if (
         found: false,
         ambiguous: mainEnabledCandidates.length > 1,
         count: mainEnabledCandidates.length,
+        reason: mainEnabledCandidates.length === 0
+          ? "NO_ENABLED_OTP_FIELD_IN_MAIN_FRAME"
+          : "MULTIPLE_ENABLED_OTP_FIELDS_IN_MAIN_FRAME",
         diagnostic
       };
     }
 
     const candidate = mainEnabledCandidates[0];
 
+    const selectorId = String(candidate.id || "").trim();
+    const selectorName = String(candidate.name || "").trim();
+
+    if (!selectorId && !selectorName) {
+      logger.warn("VFS OTP CANDIDATE HAS NO STABLE SELECTOR", {
+        applicationId: this.applicationId,
+        tag: candidate.tag,
+        type: candidate.type,
+        autocomplete: candidate.autocomplete,
+        inputMode: candidate.inputMode,
+        maxLength: candidate.maxLength,
+        otpTermMatch: candidate.otpTermMatch,
+        otpShapeHint: candidate.otpShapeHint
+      });
+
+      return {
+        found: false,
+        ambiguous: false,
+        count: 1,
+        reason: "OTP_CANDIDATE_HAS_NO_ID_OR_NAME",
+        diagnostic
+      };
+    }
+
     return {
       found: true,
       selectorData: {
-        id: candidate.id || null,
-        name: candidate.name || null
+        id: selectorId || null,
+        name: selectorName || null
       },
       diagnostic
     };
+
   }
 
   /*
