@@ -37,7 +37,12 @@ const applicationAdminControlSchema =
     default: null
   },
 
-  passwordEncrypted: {
+   passwordEncrypted: {
+    type: String,
+    default: null
+  },
+
+  imapPasswordEncrypted: {
     type: String,
     default: null
   },
