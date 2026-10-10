@@ -650,11 +650,12 @@ class OtpService {
     }
 
 
-    return {
+       return {
 
       email,
 
       password:
+        credentials.imapPassword ||
         credentials.password,
 
       host,
@@ -667,7 +668,7 @@ class OtpService {
 
       mailbox:
         this.imapMailbox
-    };
+    }; 
   }
 
     /*
