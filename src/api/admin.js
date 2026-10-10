@@ -21,8 +21,12 @@ const {
 } =
   require("../middleware/auth");
 
+
 const AdminControlService =
   require("../services/admin/admin-control-service");
+
+const logger =
+  require("../utils/logger");
 
 
 function createAdminRouter({
@@ -1926,10 +1930,10 @@ function createAdminRouter({
 
   /*
    * =========================================================
-   * RELEASE
+   * RELEASE — DIAGNÓSTICO BOT 1
    * =========================================================
    */
-    router.post(
+  router.post(
     "/applications/:id/release",
     requireRole(
       "owner",
@@ -1940,87 +1944,111 @@ function createAdminRouter({
       res,
       next
     ) => {
+      const applicationId =
+        req.params.id;
+
+      logger.info(
+        "ADMIN RELEASE REQUEST RECEIVED",
+        {
+          applicationId,
+          supervisorAvailable: Boolean(
+            supervisor &&
+            typeof supervisor.prepare === "function"
+          )
+        }
+      );
+
       try {
         if (
           !mongoose.isValidObjectId(
-            req.params.id
+            applicationId
           )
         ) {
+          logger.warn(
+            "ADMIN RELEASE INVALID APPLICATION ID",
+            {
+              applicationId
+            }
+          );
+
           return res
             .status(400)
             .json({
-              success:
-                false,
-
-              error:
-                "Invalid application ID"
+              success: false,
+              error: "Invalid application ID"
             });
         }
 
         if (
           !supervisor ||
-          typeof supervisor.prepare !==
-            "function"
+          typeof supervisor.prepare !== "function"
         ) {
           const error =
             new Error(
               "Automation Supervisor is not available"
             );
 
-          error.statusCode =
-            503;
+          error.statusCode = 503;
 
           throw error;
         }
 
+        logger.info(
+          "ADMIN RELEASE AUTHORIZATION STARTING",
+          {
+            applicationId
+          }
+        );
+
         const result =
           await AdminControlService
             .releaseForAutomation({
-              applicationId:
-                req.params.id,
-
-              accountId:
-                req.user.accountId,
-
-              actorId:
-                req.user._id
+              applicationId,
+              accountId: req.user.accountId,
+              actorId: req.user._id
             });
 
-        /*
-         * =====================================================
-         * START AUTOMATION
-         * =====================================================
-         *
-         * O release administrativo apenas autoriza
-         * a candidatura.
-         *
-         * Depois do release precisamos iniciar
-         * explicitamente o Bot 1 através do Supervisor.
-         *
-         * O Bot 1 será responsável por:
-         *
-         * - reivindicar a candidatura;
-         * - preparar a identidade;
-         * - abrir/inicializar o VFS;
-         * - executar a preparação;
-         * - colocar a candidatura no estado correto;
-         * - ativar o Bot 2 e o Radar quando estiver pronta.
-         *
-         * Sem esta chamada a candidatura fica apenas
-         * "liberada", enquanto os bots continuam parados.
-         * =====================================================
-         */
+        logger.info(
+          "ADMIN RELEASE AUTHORIZATION COMPLETED",
+          {
+            applicationId
+          }
+        );
+
+        logger.info(
+          "ADMIN RELEASE STARTING BOT1",
+          {
+            applicationId
+          }
+        );
 
         try {
           await supervisor.prepare(
-            req.params.id
+            applicationId
+          );
+
+          logger.info(
+            "ADMIN RELEASE BOT1 PREPARE COMPLETED",
+            {
+              applicationId
+            }
           );
         } catch (
           automationError
         ) {
+          logger.error(
+            "ADMIN RELEASE BOT1 PREPARE FAILED",
+            {
+              applicationId,
+              code: automationError?.code || null,
+              error:
+                automationError?.message ||
+                String(automationError)
+            }
+          );
+
           automationError.statusCode =
-            automationError.statusCode ||
-            500;
+            automationError.statusCode || 500;
 
           automationError.message =
             `Application released, but automation could not be started: ${
@@ -2032,25 +2060,31 @@ function createAdminRouter({
         }
 
         return res.json({
-          success:
-            true,
-
+          success: true,
           message:
             "Application released and automation started",
-
-          admin:
-            result
+          admin: result
         });
       } catch (
         error
       ) {
-        return next(
-          error
+        logger.error(
+          "ADMIN RELEASE ROUTE FAILED",
+          {
+            applicationId,
+            statusCode: error?.statusCode || 500,
+            code: error?.code || null,
+            error:
+              error?.message ||
+              String(error)
+          }
         );
+
+        return next(error);
       }
     }
   );
-
+    
   /*
    * =========================================================
    * PAUSE
