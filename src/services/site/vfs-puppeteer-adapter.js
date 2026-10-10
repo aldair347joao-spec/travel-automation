@@ -7409,20 +7409,118 @@ if (
     const descriptor =
       await this.findOtpInput();
 
-    if (
-      !descriptor?.found
-    ) {
-      return {
-        success: false,
-        requiresUser: true,
-        reason:
-          descriptor?.ambiguous
-            ? "Multiple OTP fields detected."
-            : "No unambiguous OTP field detected.",
-        dom:
-          this.getDomSummary()
+    
+if (
+  !descriptor?.found
+) {
+  const otpDiagnostic = [];
+
+  const frames = page.frames();
+
+  for (
+    let frameIndex = 0;
+    frameIndex < frames.length;
+    frameIndex++
+  ) {
+    const frame = frames[frameIndex];
+
+    let frameData = null;
+
+    try {
+      frameData = await frame.evaluate(() => {
+        const visible = element =>
+          element.getClientRects().length > 0;
+
+        const inputs = Array.from(
+          document.querySelectorAll("input")
+        ).slice(0, 40).map(input => ({
+          type: input.type || null,
+          id: input.id || null,
+          name: input.name || null,
+          placeholder: input.placeholder || null,
+          ariaLabel:
+            input.getAttribute("aria-label"),
+          autocomplete: input.autocomplete || null,
+          inputMode:
+            input.getAttribute("inputmode"),
+          maxLength: input.maxLength,
+          disabled: input.disabled,
+          readOnly: input.readOnly,
+          visible: visible(input)
+        }));
+
+        const buttons = Array.from(
+          document.querySelectorAll(
+            "button, input[type='submit'], [role='button']"
+          )
+        ).slice(0, 20).map(button => ({
+          tag: button.tagName,
+          type: button.getAttribute("type"),
+          text: (
+            button.innerText ||
+            button.getAttribute("aria-label") ||
+            button.value ||
+            ""
+          ).trim().slice(0, 80),
+          disabled: Boolean(button.disabled),
+          visible: visible(button)
+        }));
+
+        return {
+          title: document.title,
+          inputCount:
+            document.querySelectorAll("input").length,
+          inputs,
+          buttons,
+          formCount:
+            document.querySelectorAll("form").length,
+          iframeCount:
+            document.querySelectorAll("iframe").length
+        };
+      });
+    } catch (error) {
+      frameData = {
+        inspectionError: error.message
       };
     }
+
+    let safeUrl = "unavailable";
+
+    try {
+      const url = new URL(frame.url());
+      safeUrl = url.origin + url.pathname;
+    } catch (_) {}
+
+    otpDiagnostic.push({
+      frameIndex,
+      url: safeUrl,
+      ...frameData
+    });
+  }
+
+  logger.info(
+    "BOT1_OTP_FIELD_DIAGNOSTIC",
+    {
+      applicationId: this.applicationId,
+      candidateCount: descriptor?.count ?? null,
+      ambiguous: descriptor?.ambiguous ?? false,
+      frameCount: frames.length,
+      frames: otpDiagnostic
+    }
+  );
+
+  return {
+    success: false,
+    requiresUser: true,
+    reason:
+      descriptor?.ambiguous
+        ? "Multiple OTP fields detected."
+        : "No unambiguous OTP field detected.",
+    diagnosticLogged: true,
+    dom: this.getDomSummary()
+  };
+}
+
 
     const selector =
       this.buildSelector(
