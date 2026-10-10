@@ -4280,12 +4280,99 @@ for (
     
   /*
    * ============================================================
+   * TRATAR CONSENTIMENTO DE COOKIES ANTES DO LOGIN
+   * ============================================================
+   */
+
+  const consentSelectors = [
+    "#onetrust-reject-all-handler",
+    "#onetrust-accept-btn-handler"
+  ];
+
+  let consentHandled = false;
+
+  for (const selector of consentSelectors) {
+    const consentButton = await page.$(selector);
+
+    if (
+      consentButton &&
+      await consentButton.isVisible()
+    ) {
+      logger.info(
+        "VFS ONETRUST CONSENT BUTTON FOUND",
+        {
+          applicationId,
+          selector
+        }
+      );
+
+      await consentButton.click({
+        timeout: 10000
+      });
+
+      await page.waitForTimeout(1000);
+
+      consentHandled = true;
+
+      logger.info(
+        "VFS ONETRUST CONSENT HANDLED",
+        {
+          applicationId,
+          selector
+        }
+      );
+
+      break;
+    }
+  }
+
+  const consentOverlayVisible = await page.evaluate(() => {
+    const overlay = document.querySelector(
+      "#onetrust-pc-dark-filter"
+    );
+
+    if (!overlay) {
+      return false;
+    }
+
+    const style = window.getComputedStyle(overlay);
+
+    const rect = overlay.getBoundingClientRect();
+
+    return (
+      style.display !== "none" &&
+      style.visibility !== "hidden" &&
+      rect.width > 0 &&
+      rect.height > 0
+    );
+  });
+
+  if (consentOverlayVisible) {
+    logger.warn(
+      "VFS ONETRUST OVERLAY STILL BLOCKING LOGIN",
+      {
+        applicationId,
+        consentHandled
+      }
+    );
+
+    throw new Error(
+      "VFS_ONETRUST_CONSENT_BLOCKING_LOGIN: " +
+      "The cookie consent overlay is still visible."
+    );
+  }
+
+  /*
+   * ============================================================
    * PREENCHER EMAIL
    * ============================================================
    */
 
   await page.click(
-    loginForm.email
+    loginForm.email,
+    {
+      timeout: 15000
+    }
   );
 
   await page.$eval(
@@ -4296,13 +4383,6 @@ for (
     }
   );
 
-  await page.type(
-    loginForm.email,
-    credentials.email,
-    {
-      delay: 15
-    }
-  );
 
   /*
    * ============================================================
