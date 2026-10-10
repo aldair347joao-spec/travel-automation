@@ -4383,6 +4383,14 @@ for (
     }
   );
 
+  await page.type(
+    loginForm.email,
+    credentials.email,
+    {
+      delay: 15
+    }
+  );
+
 
   /*
    * ============================================================
