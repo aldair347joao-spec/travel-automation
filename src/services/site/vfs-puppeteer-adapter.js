@@ -7540,186 +7540,92 @@ if (
     };
   }
 
-  
   async findOtpInput() {
     const page =
       await this.ensurePage();
 
-    const diagnostic = {
-      url: page.url(),
-      title: await page.title().catch(() => null),
-      frames: [],
-      inputs: []
-    };
-
-    const terms =
-      CHECKPOINT_TERMS.otp;
-
-    for (const frame of page.frames()) {
-      const frameData =
-        await frame.evaluate(
-          otpTerms => {
-            const normalize = value =>
-              String(value || "")
-                .trim()
-                .toLowerCase()
-                .replace(/\s+/g, " ");
-
-            const visible = element => {
-              const style =
-                window.getComputedStyle(element);
-
-              return (
-                style.display !== "none" &&
-                style.visibility !== "hidden" &&
-                element.getClientRects().length > 0
+    return page.evaluate(
+      terms => {
+        const normalize =
+          value =>
+            String(value || "")
+              .trim()
+              .toLowerCase()
+              .replace(
+                /\s+/g,
+                " "
               );
-            };
 
-            const inputs =
-              Array.from(
-                document.querySelectorAll("input")
-              ).map(input => {
-                const label =
-                  input.labels
-                    ? Array.from(input.labels)
-                        .map(item => item.innerText)
-                        .join(" ")
-                    : "";
+        const candidates =
+          Array.from(
+            document.querySelectorAll(
+              "input"
+            )
+          ).filter(
+            input => {
+              if (
+                input.disabled ||
+                input.readOnly
+              ) {
+                return false;
+              }
 
-                const nearbyText =
-                  input.parentElement?.innerText || "";
+              const haystack =
+                normalize(
+                  [
+                    input.name,
+                    input.id,
+                    input.placeholder,
+                    input.getAttribute(
+                      "aria-label"
+                    ),
+                    input.autocomplete,
+                    input.parentElement
+                      ?.innerText
+                  ].join(" ")
+                );
 
-                const metadata = {
-                  tag: input.tagName,
-                  type: input.type || null,
-                  id: input.id || null,
-                  name: input.name || null,
-                  placeholder: input.placeholder || null,
-                  autocomplete: input.autocomplete || null,
-                  inputMode: input.inputMode || null,
-                  maxLength: input.maxLength,
-                  ariaLabel:
-                    input.getAttribute("aria-label"),
-                  label: label.slice(0, 120),
-                  nearbyText: nearbyText.slice(0, 180),
-                  visible: visible(input),
-                  disabled: input.disabled,
-                  readOnly: input.readOnly
-                };
+              return terms.some(
+                term =>
+                  haystack.includes(
+                    normalize(term)
+                  )
+              );
+            }
+          );
 
-                const searchable =
-                  normalize([
-                    metadata.type,
-                    metadata.id,
-                    metadata.name,
-                    metadata.placeholder,
-                    metadata.autocomplete,
-                    metadata.inputMode,
-                    metadata.ariaLabel,
-                    metadata.label,
-                    metadata.nearbyText
-                  ].join(" "));
-
-                metadata.matchesOtpTerms =
-                  otpTerms.some(term =>
-                    searchable.includes(normalize(term))
-                  );
-
-                return metadata;
-              });
-
-            return {
-              url: window.location.href,
-              title: document.title,
-              inputCount: inputs.length,
-              inputs
-            };
-          },
-          terms
-        ).catch(error => ({
-          url: frame.url(),
-          error: error.message,
-          inputCount: 0,
-          inputs: []
-        }));
-
-      diagnostic.frames.push({
-        url: frameData.url || frame.url(),
-        title: frameData.title || null,
-        inputCount: frameData.inputCount || 0
-      });
-
-      diagnostic.inputs.push(
-        ...(frameData.inputs || []).map(input => ({
-          frameUrl: frameData.url || frame.url(),
-          ...input
-        }))
-      );
-    }
-
-    const candidates =
-      diagnostic.inputs.filter(input =>
-        input.visible &&
-        !input.disabled &&
-        !input.readOnly &&
-        input.matchesOtpTerms
-      );
-
-    logger.info(
-      "VFS OTP FIELD DIAGNOSTIC",
-      {
-        applicationId: this.applicationId,
-        url: diagnostic.url,
-        title: diagnostic.title,
-        frameCount: diagnostic.frames.length,
-        frames: diagnostic.frames,
-        inputCount: diagnostic.inputs.length,
-        inputs: diagnostic.inputs,
-        otpCandidateCount: candidates.length
-      }
-    );
-
-    if (candidates.length !== 1) {
-      return {
-        found: false,
-        ambiguous: candidates.length > 1,
-        count: candidates.length,
-        diagnostic
-      };
-    }
-
-    const candidate = candidates[0];
-
-    if (!candidate.frameUrl ||
-        candidate.frameUrl !== page.url()) {
-      logger.warn(
-        "VFS OTP FIELD IS INSIDE A FRAME",
-        {
-          applicationId: this.applicationId,
-          frameUrl: candidate.frameUrl
+        if (
+          candidates.length !== 1
+        ) {
+          return {
+            found: false,
+            ambiguous:
+              candidates.length > 1,
+            count:
+              candidates.length
+          };
         }
-      );
 
-      return {
-        found: false,
-        ambiguous: false,
-        count: 1,
-        diagnostic,
-        reason: "OTP field is inside a frame."
-      };
-    }
+        const input =
+          candidates[0];
 
-    return {
-      found: true,
-      selectorData: {
-        id: candidate.id || null,
-        name: candidate.name || null
+        return {
+          found: true,
+
+          selectorData: {
+            id:
+              input.id ||
+              null,
+
+            name:
+              input.name ||
+              null
+          }
+        };
       },
-      diagnostic
-    };
+      CHECKPOINT_TERMS.otp
+    );
   }
-
 
   /*
  * ============================================================
