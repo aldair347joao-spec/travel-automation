@@ -1641,15 +1641,14 @@ logger.info("BOT1_DIAG_OTP_START", {
         /*
          * Enviar o OTP para a página VFS.
          */
+                logger.info("BOT1_DIAG_OTP_SUBMIT_START", {
+          applicationId: String(applicationId),
+          stage: "CODE_EXTRACTED_SUBMISSION_START",
+          codeLength: String(otpResult.code).length
+        });
+
         const submitOtpResult =
           await withTimeout(
-            
-logger.info("BOT1_DIAG_OTP_SUBMIT_START", {
-  applicationId: String(applicationId),
-  stage: "CODE_EXTRACTED_SUBMISSION_START",
-  codeLength: String(otpResult.code).length
-});
-
             this.site.submitOtp(
               otpResult.code
             ),
