@@ -155,6 +155,7 @@ async function configureVfsCredentials({
   applicationId,
   email,
   password,
+  imapPassword,
   phone,
   actorId
 }) {
@@ -167,6 +168,10 @@ async function configureVfsCredentials({
     String(
       password || ""
     );
+    const normalizedImapPassword =
+    String(
+      imapPassword || ""
+    ).trim();
 
   if (!normalizedEmail) {
     const error =
@@ -233,6 +238,12 @@ async function configureVfsCredentials({
       encrypt(
         normalizedPassword
       ),
+        imapPasswordEncrypted:
+      normalizedImapPassword
+        ? encrypt(
+            normalizedImapPassword
+          )
+        : control.vfsCredentials?.imapPasswordEncrypted || null,
 
     phoneEncrypted:
       phone
@@ -958,7 +969,7 @@ async function getCredentialsForAutomation(
     throw error;
   }
 
-  return {
+    return {
     email:
       decrypt(
         control.vfsCredentials
@@ -970,6 +981,14 @@ async function getCredentialsForAutomation(
         control.vfsCredentials
           .passwordEncrypted
       ),
+
+    imapPassword:
+      control.vfsCredentials?.imapPasswordEncrypted
+        ? decrypt(
+            control.vfsCredentials
+              .imapPasswordEncrypted
+          )
+        : null,
 
     phone:
       control.vfsCredentials
