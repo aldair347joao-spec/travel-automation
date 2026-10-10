@@ -1406,6 +1406,18 @@ await this.heartbeat(
           config.timeoutMs,
           "Site login"
         );
+     
+logger.info("BOT1_DIAG_LOGIN_RESULT", {
+  applicationId: String(applicationId),
+  success: loginResult?.success ?? null,
+  otpRequired: loginResult?.otpRequired === true,
+  requiresUser: loginResult?.requiresUser === true,
+  authenticated: loginResult?.authenticated === true,
+  state: loginResult?.state || null,
+  code: loginResult?.code || null,
+  reason: loginResult?.reason || null,
+  checkpointType: loginResult?.checkpoint?.type || null
+});
 
 
       if (
@@ -1444,10 +1456,12 @@ await this.heartbeat(
       }
 
 
-      if (
-        loginResult?.success ===
-        false
-      ) {
+      
+if (
+  loginResult?.success === false &&
+  loginResult?.otpRequired !== true
+) {
+
 
         if (
           loginResult?.restricted ===
@@ -1534,6 +1548,11 @@ await this.heartbeat(
               "CAPTCHA resolvido; Bot 1 vai procurar o OTP no e-mail."
           }
         );
+        
+logger.info("BOT1_DIAG_OTP_START", {
+  applicationId: String(applicationId),
+  stage: "OTP_FLOW_ENTERED"
+});
 
         const otpRequest =
           this.otp.createRequest(
@@ -1624,6 +1643,13 @@ await this.heartbeat(
          */
         const submitOtpResult =
           await withTimeout(
+            
+logger.info("BOT1_DIAG_OTP_SUBMIT_START", {
+  applicationId: String(applicationId),
+  stage: "CODE_EXTRACTED_SUBMISSION_START",
+  codeLength: String(otpResult.code).length
+});
+
             this.site.submitOtp(
               otpResult.code
             ),
