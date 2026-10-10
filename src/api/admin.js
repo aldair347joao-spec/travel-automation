@@ -1888,7 +1888,7 @@ function createAdminRouter({
             }
           );
 
-        const result =
+                const result =
   await AdminControlService
     .configureVfsCredentials({
       applicationId:
@@ -1899,6 +1899,9 @@ function createAdminRouter({
 
       password:
         req.body?.password,
+
+      imapPassword:
+        req.body?.imapPassword,
 
       phone:
         req.body?.phone,
