@@ -4375,14 +4375,6 @@ for (
     }
   );
 
-  await page.$eval(
-    loginForm.email,
-    element => {
-      element.focus();
-      element.value = "";
-    }
-  );
-
   await page.type(
     loginForm.email,
     credentials.email,
