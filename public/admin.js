@@ -3737,6 +3737,10 @@ function renderVfsReference(
             $(
                 "#vfsPassword"
             )?.value || "";
+                const imapPassword =
+            $(
+                "#imapPassword"
+            )?.value.trim() || "";
         const phone =
     $(
         "#vfsPhone"
@@ -3797,9 +3801,10 @@ function renderVfsReference(
                         "POST",
 
                     body:
-    JSON.stringify({
+        JSON.stringify({
         email,
         password,
+        imapPassword,
         phone
     })
                 }
