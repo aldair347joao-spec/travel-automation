@@ -13774,6 +13774,93 @@ async detectCheckpointOnce() {
    * ============================================================
    */
 
+  logger.warn(
+    "VFS CAPTCHA DETECTION DIAGNOSTICS",
+    {
+      applicationId:
+        this.applicationId,
+
+      url:
+        (() => {
+          try {
+            const current =
+              new URL(page.url());
+
+            return (
+              current.origin +
+              current.pathname
+            );
+          } catch {
+            return null;
+          }
+        })(),
+
+      title:
+        await page.title()
+          .catch(() => null),
+
+      captchaDetected:
+        data.captcha,
+
+      bodySignals: {
+        checkingBrowser:
+          data.body.includes(
+            "checking your browser"
+          ),
+
+        verifyHuman:
+          data.body.includes(
+            "verify you are human"
+          ) ||
+          data.body.includes(
+            "verify you are a human"
+          ),
+
+        captchaText:
+          data.body.includes(
+            "captcha"
+          ),
+
+        securityVerification:
+          data.body.includes(
+            "security verification"
+          )
+      },
+
+      frames:
+        page.frames().map(
+          frame => {
+            let frameUrl = null;
+
+            try {
+              const parsed =
+                new URL(frame.url());
+
+              frameUrl =
+                parsed.origin +
+                parsed.pathname;
+            } catch {}
+
+            return {
+              name:
+                frame.name(),
+
+              url:
+                frameUrl,
+
+              cloudflare:
+                Boolean(
+                  frameUrl &&
+                  frameUrl.includes(
+                    "challenges.cloudflare.com"
+                  )
+                )
+            };
+          }
+        ).slice(0, 15)
+    }
+  );
+
   if (
     data.captcha
   ) {
