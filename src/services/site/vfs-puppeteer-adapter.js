@@ -7579,13 +7579,6 @@ if (
       selector
     );
 
-    await page.$eval(
-      selector,
-      element => {
-        element.value = "";
-      }
-    );
-
     await page.type(
       selector,
       String(code).trim(),
@@ -7600,7 +7593,8 @@ if (
           "verify",
           "verify otp",
           "submit",
-          "continue"
+          "continue",
+           "sign in"
         ]
       );
 
@@ -7678,104 +7672,81 @@ if (
   }
 
   
-          async findOtpInput() {
-    const page = await this.ensurePage();
+   
+async findOtpInput() {
+  const page = await this.ensurePage();
 
-    const diagnostics = {
-      url: page.url(),
-      title: "",
-      frames: []
-    };
-
-    try {
-      diagnostics.title = await page.title();
-    } catch (_) {}
-
-    for (const frame of page.frames()) {
-      try {
-        const frameInfo = await frame.evaluate(() => {
-          const visible = element => {
-            const style = window.getComputedStyle(element);
-            const rect = element.getBoundingClientRect();
-
-            return (
-              style.display !== "none" &&
-              style.visibility !== "hidden" &&
-              rect.width > 0 &&
-              rect.height > 0
-            );
-          };
-
-          const inputs = Array.from(
-            document.querySelectorAll("input")
-          ).filter(visible).map(input => ({
-            type: input.type || null,
-            id: input.id || null,
-            name: input.name || null,
-            placeholder: input.placeholder || null,
-            autocomplete: input.autocomplete || null,
-            inputmode: input.getAttribute("inputmode"),
-            disabled: input.disabled,
-            readOnly: input.readOnly,
-            required: input.required,
-            maxLength: input.maxLength,
-            ariaLabel: input.getAttribute("aria-label"),
-            parentText: (
-              input.parentElement?.innerText || ""
-            ).replace(/\s+/g, " ").trim().slice(0, 180)
-          }));
-
-          const buttons = Array.from(
-            document.querySelectorAll(
-              'button, input[type="submit"], [role="button"]'
-            )
-          ).filter(visible).map(button => ({
-            tag: button.tagName,
-            text: (
-              button.innerText ||
-              button.value ||
-              button.getAttribute("aria-label") ||
-              ""
-            ).replace(/\s+/g, " ").trim().slice(0, 100),
-            disabled: Boolean(button.disabled)
-          }));
-
-          return {
-            url: location.href,
-            title: document.title,
-            inputCount: inputs.length,
-            inputs,
-            buttons
-          };
-        });
-
-        diagnostics.frames.push({
-          isMainFrame: frame === page.mainFrame(),
-          ...frameInfo
-        });
-      } catch (error) {
-        diagnostics.frames.push({
-          isMainFrame: frame === page.mainFrame(),
-          url: frame.url(),
-          inspectionError: String(error.message || error)
-        });
-      }
-    }
-
-    logger.info("VFS OTP FIELD DIAGNOSTICS", {
+  if (this.lastCheckpoint?.type !== "OTP_REQUIRED") {
+    logger.warn("VFS OTP FIELD REJECTED", {
       applicationId: this.applicationId,
-      ...diagnostics
+      reason: "OTP_REQUIRED checkpoint not confirmed",
+      checkpoint: this.lastCheckpoint?.type || null
     });
 
     return {
       found: false,
       ambiguous: false,
-      count: 0,
-      diagnosticOnly: true,
-      reason:
-        "OTP field diagnostics collected; inspect Render logs before changing field handling."
+      reason: "VFS OTP checkpoint not confirmed."
     };
   }
+
+  const selector = "#mat-input-3";
+
+  try {
+    const field = await page.$eval(selector, element => {
+      const style = window.getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+
+      return {
+        visible:
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0,
+        enabled: !element.disabled && !element.readOnly,
+        type: element.type || null,
+        id: element.id || null,
+        placeholder: element.placeholder || null
+      };
+    });
+
+    if (!field.visible || !field.enabled || field.id !== "mat-input-3") {
+      return {
+        found: false,
+        ambiguous: false,
+        reason: "OTP field is hidden, disabled, read-only, or unexpected."
+      };
+    }
+
+    logger.info("VFS OTP FIELD CONFIRMED", {
+      applicationId: this.applicationId,
+      fieldId: field.id,
+      fieldType: field.type,
+      visible: field.visible,
+      enabled: field.enabled
+    });
+
+    return {
+      found: true,
+      ambiguous: false,
+      count: 1,
+      selectorData: { id: "mat-input-3" }
+    };
+  } catch (error) {
+    logger.warn("VFS OTP FIELD NOT FOUND", {
+      applicationId: this.applicationId,
+      error: error.message || String(error)
+    });
+
+    return {
+      found: false,
+      ambiguous: false,
+      reason: "Expected OTP field was not available."
+    };
+  }
+}
+       
+    
 
   /*
  * ============================================================
