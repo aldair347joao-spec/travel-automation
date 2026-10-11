@@ -7587,20 +7587,34 @@ if (
       }
     );
 
-    const submitted =
-      await this.clickUnambiguousAction(
-        [
-          "verify",
-          "verify otp",
-          "submit",
-          "continue",
-           "sign in"
-        ]
-      );
+    
+const submitted =
+  await this.clickUnambiguousAction(
+    [
+      "verify",
+      "verify otp",
+      "submit",
+      "continue",
+      "sign in"
+    ]
+  );
 
-    if (
-      !submitted.clicked
-    ) {
+logger.info(
+  "VFS OTP SUBMIT ACTION DIAGNOSTICS",
+  {
+    applicationId: this.applicationId,
+    clicked: submitted.clicked,
+    ambiguous: submitted.ambiguous,
+    candidates: submitted.candidates || [],
+    reason: submitted.reason || null,
+    selector: submitted.selector || null,
+    candidate: submitted.candidate || null
+  }
+);
+
+if (
+  !submitted.clicked
+) {
       return {
         success: false,
         requiresUser: true,
