@@ -600,111 +600,125 @@ logger.info(
       })()
   }
 );
-   /*
-
-* ============================================================
-* DIAGNÓSTICO REAL DO IP DE SAÍDA — SCRAPELESS / IPROYAL
-* ============================================================
-* 
-* Verifica o IP público através de uma página temporária
-* no mesmo contexto do navegador remoto.
-* 
-* Não regista utilizador, palavra-passe ou API key.
-  */
+  /*
+ * ============================================================
+ * DIAGNÓSTICO DO IP DE SAÍDA — SCRAPELESS / IPROYAL
+ * ============================================================
+ *
+ * Consulta o IP público numa página temporária do mesmo
+ * contexto do navegador remoto.
+ *
+ * Nunca regista credenciais nem a API key.
+ */
 
 let ipCheckPage = null;
 
 try {
-logger.info(
-"IPROYAL PROXY EGRESS DIAGNOSTIC STARTED",
-{
-applicationId: this.applicationId,
-proxyConfigured: Boolean(
-iproyalHost &&
-iproyalPort &&
-iproyalUsername &&
-iproyalPassword
-),
-proxyHost: iproyalHost,
-proxyPort: iproyalPort
-}
-);
+  logger.info(
+    "IPROYAL PROXY EGRESS DIAGNOSTIC STARTED",
+    {
+      applicationId: this.applicationId,
 
-ipCheckPage = await this.context.newPage();
+      proxyConfigured: Boolean(
+        iproyalHost &&
+        iproyalPort &&
+        iproyalUsername &&
+        iproyalPassword
+      ),
 
-const ipResponse = await ipCheckPage.goto(
-"https://api.ipify.org?format=json",
-{
-waitUntil: "domcontentloaded",
-timeout: 15000
-}
-);
+      proxyHost: iproyalHost,
+      proxyPort: iproyalPort
+    }
+  );
 
-const ipText = (
-await ipCheckPage.locator("body").innerText()
-).trim();
+  ipCheckPage = await this.context.newPage();
 
-let ipData;
+  const ipResponse = await ipCheckPage.goto(
+    "https://api.ipify.org?format=json",
+    {
+      waitUntil: "domcontentloaded",
+      timeout: 15000
+    }
+  );
 
-try {
-ipData = JSON.parse(ipText);
-} catch {
-throw new Error(
-"Resposta de IP inválida. HTTP: ${ ipResponse ? ipResponse.status() : "desconhecido" }"
-);
-}
+  if (!ipResponse || !ipResponse.ok()) {
+    throw new Error(
+      "Falha ao consultar o IP público. HTTP: " +
+      (
+        ipResponse
+          ? String(ipResponse.status())
+          : "sem resposta HTTP"
+      )
+    );
+  }
 
-if (
-!ipData ||
-typeof ipData.ip !== "string" ||
-!ipData.ip.trim()
-) {
-throw new Error(
-"O serviço de diagnóstico não devolveu um IP público válido."
-);
-}
+  const ipText = (
+    await ipCheckPage.locator("body").innerText()
+  ).trim();
 
-logger.info(
-"IPROYAL PROXY EGRESS DIAGNOSTIC",
-{
-applicationId: this.applicationId,
-httpStatus: ipResponse
-? ipResponse.status()
-: null,
-publicIp: ipData.ip,
-proxyHost: iproyalHost,
-proxyPort: iproyalPort
-}
-);
+  let ipData;
+
+  try {
+    ipData = JSON.parse(ipText);
+  } catch (parseError) {
+    throw new Error(
+      "A resposta do serviço de IP não é JSON válido."
+    );
+  }
+
+  if (
+    !ipData ||
+    typeof ipData.ip !== "string" ||
+    !ipData.ip.trim()
+  ) {
+    throw new Error(
+      "O serviço não devolveu um IP público válido."
+    );
+  }
+
+  logger.info(
+    "IPROYAL PROXY EGRESS DIAGNOSTIC",
+    {
+      applicationId: this.applicationId,
+      httpStatus: ipResponse.status(),
+      publicIp: ipData.ip,
+      proxyHost: iproyalHost,
+      proxyPort: iproyalPort
+    }
+  );
 
 } catch (ipCheckError) {
-logger.error(
-"IPROYAL PROXY EGRESS DIAGNOSTIC FAILED",
-{
-applicationId: this.applicationId,
-error:
-ipCheckError?.message ||
-String(ipCheckError)
-}
-);
+  logger.error(
+    "IPROYAL PROXY EGRESS DIAGNOSTIC FAILED",
+    {
+      applicationId: this.applicationId,
+
+      error:
+        ipCheckError && ipCheckError.message
+          ? ipCheckError.message
+          : String(ipCheckError)
+    }
+  );
 
 } finally {
-if (ipCheckPage) {
-try {
-await ipCheckPage.close();
-} catch (closeError) {
-logger.warn(
-"IP diagnostic page cleanup failed",
-{
-applicationId: this.applicationId,
-error:
-closeError?.message ||
-String(closeError)
-}
-);
-}
-}
-} 
+  if (ipCheckPage) {
+    try {
+      await ipCheckPage.close();
+    } catch (closeError) {
+      logger.warn(
+        "IP diagnostic page cleanup failed",
+        {
+          applicationId: this.applicationId,
+
+          error:
+            closeError && closeError.message
+              ? closeError.message
+              : String(closeError)
+        }
+      );
+    }
+  }
+}  
     /*
  * ============================================================
  * DIAGNÓSTICO DO CICLO DE VIDA DOS FRAMES
