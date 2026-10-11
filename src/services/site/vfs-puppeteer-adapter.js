@@ -317,14 +317,9 @@ this.radarSessionRecoveryRequired = false;
       )
     );
 
-  const proxyCountry =
-    String(
-      process.env.SCRAPELESS_PROXY_COUNTRY ||
-        "AO"
-    )
-      .trim()
-      .toUpperCase();
-
+    
+  
+    
   const sessionPrefix =
     String(
       process.env.SCRAPELESS_SESSION_PREFIX ||
@@ -352,12 +347,37 @@ this.radarSessionRecoveryRequired = false;
       .trim()
       .toLowerCase() === "true";
 
-  /*
-   * Fingerprint é opcional.
-   *
-   * Se não for configurado, o Agent Browser
-   * gera automaticamente um fingerprint para a sessão.
-   */
+  const iproyalHost =
+    String(process.env.IPROYAL_PROXY_HOST || "").trim();
+
+  const iproyalPort =
+    String(process.env.IPROYAL_PROXY_PORT || "").trim();
+
+  const iproyalUsername =
+    String(process.env.IPROYAL_PROXY_USERNAME || "").trim();
+
+  const iproyalPassword =
+    String(process.env.IPROYAL_PROXY_PASSWORD || "").trim();
+
+  if (
+    !iproyalHost ||
+    !/^\d+$/.test(iproyalPort) ||
+    Number(iproyalPort) < 1 ||
+    Number(iproyalPort) > 65535 ||
+    !iproyalUsername ||
+    !iproyalPassword
+  ) {
+    const error = new Error(
+      "IPROYAL_PROXY_CONFIGURATION_REQUIRED: configure host, porta, utilizador e palavra-passe válidos no Render."
+    );
+
+    error.code = "IPROYAL_PROXY_CONFIGURATION_REQUIRED";
+    throw error;
+  }
+
+  const proxyURL =
+    `http://${encodeURIComponent(iproyalUsername)}:${encodeURIComponent(iproyalPassword)}@${iproyalHost}:${iproyalPort}`;
+
   const fingerprint =
     String(
       process.env.SCRAPELESS_FINGERPRINT || ""
@@ -365,19 +385,13 @@ this.radarSessionRecoveryRequired = false;
 
   const query =
     new URLSearchParams({
-      token:
-        scrapelessApiKey,
-
-      sessionTTL:
-        String(sessionTTL),
-
+      token: scrapelessApiKey,
+      sessionTTL: String(sessionTTL),
       sessionName,
-
-      proxyCountry,
-
-      sessionRecording:
-        String(sessionRecording)
+      sessionRecording: String(sessionRecording)
     });
+
+  query.set("proxyURL", proxyURL);
 
   if (fingerprint) {
     query.set(
@@ -386,6 +400,10 @@ this.radarSessionRecoveryRequired = false;
     );
   }
 
+    
+
+
+    
   const browserWSEndpoint =
     `wss://browser.scrapeless.com/api/v2/browser?${query.toString()}`;
 
@@ -402,7 +420,7 @@ this.radarSessionRecoveryRequired = false;
 
       sessionTTL,
 
-      proxyCountry,
+      proxyProvider: "IPROYAL",
 
       sessionRecording,
 
