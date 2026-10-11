@@ -7541,13 +7541,10 @@ if (
     ) +
     " | OTP_DIAG_V2=" +
     diagnosticText;
-  return {
+    return {
     success: false,
     requiresUser: true,
-     reason: diagnosticReason,
-      descriptor?.ambiguous
-        ? "Multiple OTP fields detected."
-        : "No unambiguous OTP field detected.",
+    reason: diagnosticReason,
     diagnosticLogged: true,
     dom: this.getDomSummary()
   };
