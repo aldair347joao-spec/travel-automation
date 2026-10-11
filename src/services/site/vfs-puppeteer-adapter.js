@@ -13344,11 +13344,13 @@ await input.setInputFiles(
               normalize
             );
 
+          
           return Array.from(
             document.querySelectorAll(
-              "button, a, [role='button']"
+              "button, a, [role='button'], input[type='submit'], input[type='button']"
             )
           )
+
             .filter(
               element => {
                 const rect =
@@ -13359,8 +13361,8 @@ await input.setInputFiles(
                     element
                   );
 
+                
                 if (
-                  element.disabled ||
                   rect.width <= 0 ||
                   rect.height <= 0 ||
                   style.display ===
@@ -13370,6 +13372,7 @@ await input.setInputFiles(
                 ) {
                   return false;
                 }
+
 
                 const text =
                   normalize(
@@ -13393,6 +13396,7 @@ await input.setInputFiles(
                 );
               }
             )
+            
             .map(
               element => ({
                 id:
@@ -13410,10 +13414,36 @@ await input.setInputFiles(
                     element.getAttribute(
                       "aria-label"
                     ) ||
+                    element.value ||
                     ""
-                  ).trim()
+                  ).trim(),
+
+                tag:
+                  element.tagName,
+
+                disabled:
+                  Boolean(
+                    element.disabled
+                  ),
+
+                type:
+                  element.getAttribute(
+                    "type"
+                  ) || null,
+
+                ariaLabel:
+                  element.getAttribute(
+                    "aria-label"
+                  ) || null,
+
+                className:
+                  typeof element.className ===
+                  "string"
+                    ? element.className
+                    : null
               })
             );
+
         },
         labels
       );
@@ -13430,7 +13460,20 @@ await input.setInputFiles(
         candidates
       };
     }
-
+   
+    if (
+      candidates.length === 1 &&
+      candidates[0].disabled
+    ) {
+      return {
+        clicked: false,
+        ambiguous: false,
+        reason:
+          "Matched action is disabled.",
+        candidates
+      };
+    }
+ 
     const selector =
       this.buildSelector(
         candidates[0]
