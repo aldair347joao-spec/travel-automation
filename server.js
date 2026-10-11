@@ -57,6 +57,12 @@ logger.info("BROWSER PROVIDER CONFIGURATION", {
   scrapelessApiKeyConfigured: Boolean(
     String(process.env.SCRAPELESS_API_KEY || "").trim()
   ),
+    iproyalProxyCredentialsConfigured: Boolean(
+    String(process.env.IPROYAL_PROXY_HOST || "").trim() &&
+    String(process.env.IPROYAL_PROXY_PORT || "").trim() &&
+    String(process.env.IPROYAL_PROXY_USERNAME || "").trim() &&
+    String(process.env.IPROYAL_PROXY_PASSWORD || "").trim()
+  ),
   playwrightCoreAvailable: (() => {
     try {
       require.resolve("playwright-core");
