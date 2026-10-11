@@ -7677,91 +7677,104 @@ if (
     };
   }
 
-  async findOtpInput() {
-    const page =
-      await this.ensurePage();
+  
+          async findOtpInput() {
+    const page = await this.ensurePage();
 
-    return page.evaluate(
-      terms => {
-        const normalize =
-          value =>
-            String(value || "")
-              .trim()
-              .toLowerCase()
-              .replace(
-                /\s+/g,
-                " "
-              );
+    const diagnostics = {
+      url: page.url(),
+      title: "",
+      frames: []
+    };
 
-        const candidates =
-          Array.from(
-            document.querySelectorAll(
-              "input"
-            )
-          ).filter(
-            input => {
-              if (
-                input.disabled ||
-                input.readOnly
-              ) {
-                return false;
-              }
+    try {
+      diagnostics.title = await page.title();
+    } catch (_) {}
 
-              const haystack =
-                normalize(
-                  [
-                    input.name,
-                    input.id,
-                    input.placeholder,
-                    input.getAttribute(
-                      "aria-label"
-                    ),
-                    input.autocomplete,
-                    input.parentElement
-                      ?.innerText
-                  ].join(" ")
-                );
+    for (const frame of page.frames()) {
+      try {
+        const frameInfo = await frame.evaluate(() => {
+          const visible = element => {
+            const style = window.getComputedStyle(element);
+            const rect = element.getBoundingClientRect();
 
-              return terms.some(
-                term =>
-                  haystack.includes(
-                    normalize(term)
-                  )
-              );
-            }
-          );
-
-        if (
-          candidates.length !== 1
-        ) {
-          return {
-            found: false,
-            ambiguous:
-              candidates.length > 1,
-            count:
-              candidates.length
+            return (
+              style.display !== "none" &&
+              style.visibility !== "hidden" &&
+              rect.width > 0 &&
+              rect.height > 0
+            );
           };
-        }
 
-        const input =
-          candidates[0];
+          const inputs = Array.from(
+            document.querySelectorAll("input")
+          ).filter(visible).map(input => ({
+            type: input.type || null,
+            id: input.id || null,
+            name: input.name || null,
+            placeholder: input.placeholder || null,
+            autocomplete: input.autocomplete || null,
+            inputmode: input.getAttribute("inputmode"),
+            disabled: input.disabled,
+            readOnly: input.readOnly,
+            required: input.required,
+            maxLength: input.maxLength,
+            ariaLabel: input.getAttribute("aria-label"),
+            parentText: (
+              input.parentElement?.innerText || ""
+            ).replace(/\s+/g, " ").trim().slice(0, 180)
+          }));
 
-        return {
-          found: true,
+          const buttons = Array.from(
+            document.querySelectorAll(
+              'button, input[type="submit"], [role="button"]'
+            )
+          ).filter(visible).map(button => ({
+            tag: button.tagName,
+            text: (
+              button.innerText ||
+              button.value ||
+              button.getAttribute("aria-label") ||
+              ""
+            ).replace(/\s+/g, " ").trim().slice(0, 100),
+            disabled: Boolean(button.disabled)
+          }));
 
-          selectorData: {
-            id:
-              input.id ||
-              null,
+          return {
+            url: location.href,
+            title: document.title,
+            inputCount: inputs.length,
+            inputs,
+            buttons
+          };
+        });
 
-            name:
-              input.name ||
-              null
-          }
-        };
-      },
-      CHECKPOINT_TERMS.otp
-    );
+        diagnostics.frames.push({
+          isMainFrame: frame === page.mainFrame(),
+          ...frameInfo
+        });
+      } catch (error) {
+        diagnostics.frames.push({
+          isMainFrame: frame === page.mainFrame(),
+          url: frame.url(),
+          inspectionError: String(error.message || error)
+        });
+      }
+    }
+
+    logger.info("VFS OTP FIELD DIAGNOSTICS", {
+      applicationId: this.applicationId,
+      ...diagnostics
+    });
+
+    return {
+      found: false,
+      ambiguous: false,
+      count: 0,
+      diagnosticOnly: true,
+      reason:
+        "OTP field diagnostics collected; inspect Render logs before changing field handling."
+    };
   }
 
   /*
