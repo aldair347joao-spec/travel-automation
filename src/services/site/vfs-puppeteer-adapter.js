@@ -600,6 +600,111 @@ logger.info(
       })()
   }
 );
+   /*
+
+* ============================================================
+* DIAGNÓSTICO REAL DO IP DE SAÍDA — SCRAPELESS / IPROYAL
+* ============================================================
+* 
+* Verifica o IP público através de uma página temporária
+* no mesmo contexto do navegador remoto.
+* 
+* Não regista utilizador, palavra-passe ou API key.
+  */
+
+let ipCheckPage = null;
+
+try {
+logger.info(
+"IPROYAL PROXY EGRESS DIAGNOSTIC STARTED",
+{
+applicationId: this.applicationId,
+proxyConfigured: Boolean(
+iproyalHost &&
+iproyalPort &&
+iproyalUsername &&
+iproyalPassword
+),
+proxyHost: iproyalHost,
+proxyPort: iproyalPort
+}
+);
+
+ipCheckPage = await this.context.newPage();
+
+const ipResponse = await ipCheckPage.goto(
+"https://api.ipify.org?format=json",
+{
+waitUntil: "domcontentloaded",
+timeout: 15000
+}
+);
+
+const ipText = (
+await ipCheckPage.locator("body").innerText()
+).trim();
+
+let ipData;
+
+try {
+ipData = JSON.parse(ipText);
+} catch {
+throw new Error(
+"Resposta de IP inválida. HTTP: ${ ipResponse ? ipResponse.status() : "desconhecido" }"
+);
+}
+
+if (
+!ipData ||
+typeof ipData.ip !== "string" ||
+!ipData.ip.trim()
+) {
+throw new Error(
+"O serviço de diagnóstico não devolveu um IP público válido."
+);
+}
+
+logger.info(
+"IPROYAL PROXY EGRESS DIAGNOSTIC",
+{
+applicationId: this.applicationId,
+httpStatus: ipResponse
+? ipResponse.status()
+: null,
+publicIp: ipData.ip,
+proxyHost: iproyalHost,
+proxyPort: iproyalPort
+}
+);
+
+} catch (ipCheckError) {
+logger.error(
+"IPROYAL PROXY EGRESS DIAGNOSTIC FAILED",
+{
+applicationId: this.applicationId,
+error:
+ipCheckError?.message ||
+String(ipCheckError)
+}
+);
+
+} finally {
+if (ipCheckPage) {
+try {
+await ipCheckPage.close();
+} catch (closeError) {
+logger.warn(
+"IP diagnostic page cleanup failed",
+{
+applicationId: this.applicationId,
+error:
+closeError?.message ||
+String(closeError)
+}
+);
+}
+}
+} 
     /*
  * ============================================================
  * DIAGNÓSTICO DO CICLO DE VIDA DOS FRAMES
