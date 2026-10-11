@@ -7498,8 +7498,8 @@ if (
     });
   }
 
-  logger.info(
-    "BOT1_OTP_FIELD_DIAGNOSTIC",
+  logger.error(
+  "BOT1_OTP_FIELD_DIAGNOSTIC_V2",
     {
       applicationId: this.applicationId,
       candidateCount: descriptor?.count ?? null,
@@ -7508,11 +7508,43 @@ if (
       frames: otpDiagnostic
     }
   );
+   const diagnosticSummary = otpDiagnostic.map(frame => ({
+    frameIndex: frame.frameIndex,
+    url: frame.url,
+    title: frame.title || null,
+    inputCount: frame.inputCount ?? null,
+    inputs: (frame.inputs || []).slice(0, 12).map(input => ({
+      type: input.type,
+      id: input.id,
+      name: input.name,
+      placeholder: input.placeholder,
+      ariaLabel: input.ariaLabel,
+      autocomplete: input.autocomplete,
+      inputMode: input.inputMode,
+      maxLength: input.maxLength,
+      visible: input.visible,
+      disabled: input.disabled
+    })),
+    formCount: frame.formCount ?? null,
+    iframeCount: frame.iframeCount ?? null,
+    inspectionError: frame.inspectionError || null
+  }));
 
+  const diagnosticText =
+    JSON.stringify(diagnosticSummary).slice(0, 3500);
+
+  const diagnosticReason =
+    (
+      descriptor?.ambiguous
+        ? "Multiple OTP fields detected."
+        : "No unambiguous OTP field detected."
+    ) +
+    " | OTP_DIAG_V2=" +
+    diagnosticText;
   return {
     success: false,
     requiresUser: true,
-    reason:
+     reason: diagnosticReason,
       descriptor?.ambiguous
         ? "Multiple OTP fields detected."
         : "No unambiguous OTP field detected.",
