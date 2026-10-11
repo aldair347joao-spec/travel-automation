@@ -4390,84 +4390,8 @@ for (
    * ============================================================
    */
 
-    const passwordOverlayVisible = await page.evaluate(() => {
-    const overlay = document.querySelector(
-      "#onetrust-pc-dark-filter"
-    );
-
-    if (!overlay) {
-      return false;
-    }
-
-    const style = window.getComputedStyle(overlay);
-    const rect = overlay.getBoundingClientRect();
-
-    return (
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      style.opacity !== "0" &&
-      rect.width > 0 &&
-      rect.height > 0
-    );
-  });
-
-  if (passwordOverlayVisible) {
-    logger.warn(
-      "VFS PASSWORD CLICK BLOCKED BY ONETRUST",
-      { applicationId }
-    );
-
-    for (const selector of [
-      "#onetrust-reject-all-handler",
-      "#onetrust-accept-btn-handler"
-    ]) {
-      const consentButton = await page.$(selector);
-
-      if (
-        consentButton &&
-        await consentButton.isVisible()
-      ) {
-        await consentButton.click({
-          timeout: 10000
-        });
-
-        await page.waitForTimeout(1500);
-        break;
-      }
-    }
-  }
-
-  const passwordOverlayStillVisible = await page.evaluate(() => {
-    const overlay = document.querySelector(
-      "#onetrust-pc-dark-filter"
-    );
-
-    if (!overlay) {
-      return false;
-    }
-
-    const style = window.getComputedStyle(overlay);
-    const rect = overlay.getBoundingClientRect();
-
-    return (
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      style.opacity !== "0" &&
-      rect.width > 0 &&
-      rect.height > 0
-    );
-  });
-
-  if (passwordOverlayStillVisible) {
-    throw new Error(
-      "VFS_ONETRUST_CONSENT_BLOCKING_PASSWORD: " +
-      "The cookie consent overlay still blocks the password field."
-    );
-  }
-
   await page.click(
-    loginForm.password,
-    { timeout: 15000 }
+    loginForm.password
   );
 
   await page.$eval(
