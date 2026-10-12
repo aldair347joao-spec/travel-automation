@@ -8131,35 +8131,30 @@ if (
         ]
       );
 
-    /*
+
+/*
      * FALLBACK SEGURO PARA O BOTÃO SIGN IN DA VFS.
-     * O botão não tem id nem name.
-     * Só clicar se existir exactamente um botão
-     * Sign In visível e activo no formulário do OTP.
+     * O botão pode estar fora do elemento FORM do OTP.
+     * Procurar na página inteira e clicar apenas
+     * quando existir exactamente um Sign In visível e activo.
      */
 
-        
     if (
       !submitted.clicked &&
       submitted.reason ===
         "Matched action has no safe selector."
     ) {
       try {
-        const otpForm =
-          page.locator("form").filter({
-            has: page.locator(selector)
+        const signInButtons =
+          page.locator('button[type="submit"]').filter({
+            hasText: /^Sign In$/
           });
 
-        const submitButtons =
-          otpForm.locator(
-            'button[type="submit"]'
-          );
-
         const buttonCount =
-          await submitButtons.count();
+          await signInButtons.count();
 
         if (buttonCount === 1) {
-          const button = submitButtons;
+          const button = signInButtons;
 
           const buttonText =
             (await button.innerText()).trim();
@@ -8189,8 +8184,7 @@ if (
                 }
               ],
               reason: null,
-              selector:
-                'form containing OTP field button[type="submit"]',
+              selector: 'button[type="submit"]',
               candidate: buttonText
             };
           } else {
@@ -8199,7 +8193,7 @@ if (
               ambiguous: false,
               candidates: [],
               reason:
-                "O botão Sign In não está visível, activo ou identificado correctamente.",
+                "O botão Sign In não está visível ou activo.",
               selector: null,
               candidate: buttonText
             };
@@ -8210,7 +8204,7 @@ if (
             ambiguous: buttonCount > 1,
             candidates: [],
             reason:
-              `Esperado exactamente um botão submit no formulário OTP; encontrados: ${buttonCount}.`,
+              `Esperado exactamente um botão Sign In; encontrados: ${buttonCount}.`,
             selector: null,
             candidate: null
           };
@@ -8238,8 +8232,7 @@ if (
         }
       );
     }
-
-
+    
     logger.info(
       "VFS OTP SUBMIT ACTION DIAGNOSTICS",
       {
