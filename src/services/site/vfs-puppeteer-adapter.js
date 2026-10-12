@@ -205,51 +205,89 @@ this.radarSessionHealthCheckedAt = null;
 this.radarSessionRecoveryRequired = false;
   }
 
-  async clearRemoteBrowserCache() {
+ async clearRemoteBrowserCache() {
     if (
       !this.context ||
       !this.page ||
       this.page.isClosed()
     ) {
       throw new Error(
-        "Não foi possível limpar a cache: página remota indisponível."
+        "Não foi possível limpar os dados: página remota indisponível."
       );
     }
 
     let cacheSession = null;
 
+    const vfsOrigin = "https://visa.vfsglobal.com";
+
     try {
+      logger.info(
+        "SCRAPELESS CLEAN SESSION STARTED",
+        {
+          applicationId: this.applicationId,
+          targetOrigin: vfsOrigin
+        }
+      );
+
+      // 1. Limpar todos os cookies do contexto remoto.
+      await this.context.clearCookies();
+
+      // 2. Abrir uma sessão CDP para limpar a cache e
+      // os dados de armazenamento da origem da VFS.
       cacheSession =
         await this.context.newCDPSession(this.page);
 
       await cacheSession.send("Network.enable");
-      await cacheSession.send("Network.clearBrowserCache");
+
+      await cacheSession.send(
+        "Network.clearBrowserCache"
+      );
+
+      await cacheSession.send(
+        "Storage.clearDataForOrigin",
+        {
+          origin: vfsOrigin,
+          storageTypes: "all"
+        }
+      );
 
       logger.info(
-        "SCRAPELESS REMOTE CACHE CLEARED",
+        "SCRAPELESS CLEAN SESSION COMPLETED",
         {
           applicationId: this.applicationId,
-          pageUrl: this.page.url(),
-          cookiesCleared: false
+          targetOrigin: vfsOrigin,
+          cacheCleared: true,
+          cookiesCleared: true,
+          originStorageCleared: true,
+          pageUrl: this.page.url()
         }
       );
+
     } catch (error) {
       logger.error(
-        "SCRAPELESS REMOTE CACHE CLEAR FAILED",
+        "SCRAPELESS CLEAN SESSION FAILED",
         {
           applicationId: this.applicationId,
-          error: error?.message || String(error)
+          targetOrigin: vfsOrigin,
+          error:
+            error?.message || String(error),
+          code: error?.code || null
         }
       );
 
+      // Não iniciar o fluxo VFS se a limpeza falhar.
       throw error;
+
     } finally {
       if (cacheSession) {
-        await cacheSession.detach().catch(() => {});
+        await cacheSession
+          .detach()
+          .catch(() => {});
       }
     }
-  }
+  } 
 
+  
   /*
    * ============================================================
    * BROWSER
