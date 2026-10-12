@@ -8138,113 +8138,81 @@ if (
      * Sign In visível e activo no formulário do OTP.
      */
 
+        
     if (
       !submitted.clicked &&
       submitted.reason ===
         "Matched action has no safe selector."
     ) {
-      const safeOtpSubmit =
+      const otpSubmitDiagnostics =
         await page.$eval(
           selector,
           otp => {
             const form = otp.form;
 
             if (!form) {
-              return false;
+              return {
+                formExists: false,
+                otpId: otp.id || null,
+                otpName: otp.name || null,
+                buttons: []
+              };
             }
 
             const buttons =
               Array.from(
-                form.querySelectorAll(
-                  'button[type="submit"]'
-                )
-              ).filter(button => {
+                form.querySelectorAll("button")
+              ).map(button => {
                 const style =
                   window.getComputedStyle(button);
 
                 const rect =
                   button.getBoundingClientRect();
 
-                return (
-                  !button.disabled &&
-                  style.display !== "none" &&
-                  style.visibility !== "hidden" &&
-                  rect.width > 0 &&
-                  rect.height > 0 &&
-                  /sign in/i.test(
-                    (button.innerText || "").trim()
-                  )
-                );
-              });
-
-            return buttons.length === 1;
-          }
-        ).catch(() => false);
-
-      const anchoredSelector =
-        `form:has(${selector}) button[type="submit"]`;
-
-      const matchingButtons =
-        safeOtpSubmit
-          ? await page.$$eval(
-              anchoredSelector,
-              buttons =>
-                buttons.filter(button => {
-                  const style =
-                    window.getComputedStyle(button);
-
-                  const rect =
-                    button.getBoundingClientRect();
-
-                  return (
-                    !button.disabled &&
+                return {
+                  text:
+                    (button.innerText || "").trim(),
+                  type: button.type,
+                  disabled:
+                    Boolean(button.disabled),
+                  visible:
                     style.display !== "none" &&
                     style.visibility !== "hidden" &&
                     rect.width > 0 &&
-                    rect.height > 0 &&
-                    /sign in/i.test(
-                      (button.innerText || "").trim()
-                    )
-                  );
-                }).length
-            ).catch(() => 0)
-          : 0;
+                    rect.height > 0,
+                  width: rect.width,
+                  height: rect.height,
+                  className:
+                    button.className || ""
+                };
+              });
 
-      if (
-        safeOtpSubmit &&
-        matchingButtons === 1
-      ) {
-        await page.click(anchoredSelector);
-
-        submitted.clicked = true;
-        submitted.ambiguous = false;
-        submitted.selector = anchoredSelector;
-        submitted.reason = null;
-        submitted.candidate = {
-          tag: "BUTTON",
-          type: "submit",
-          text: "Sign In",
-          fallback: "OTP form anchored selector"
-        };
-
-        logger.info(
-          "VFS OTP SAFE SUBMIT FALLBACK CLICKED",
-          {
-            applicationId: this.applicationId,
-            selector: anchoredSelector,
-            matchingButtons
+            return {
+              formExists: true,
+              formTag: form.tagName,
+              formClass: form.className,
+              otpId: otp.id || null,
+              otpName: otp.name || null,
+              otpValueLength:
+                (otp.value || "").length,
+              buttons
+            };
           }
-        );
-      } else {
-        logger.warn(
-          "VFS OTP SAFE SUBMIT FALLBACK REJECTED",
-          {
-            applicationId: this.applicationId,
-            safeOtpSubmit,
-            matchingButtons
-          }
-        );
-      }
+        ).catch(error => ({
+          diagnosticError:
+            error?.message || String(error),
+          buttons: []
+        }));
+
+      logger.info(
+        "VFS OTP SUBMIT FALLBACK DIAGNOSTICS",
+        {
+          applicationId: this.applicationId,
+          diagnostics: otpSubmitDiagnostics
+        }
+      );
+    }
+
     }
 
     logger.info(
