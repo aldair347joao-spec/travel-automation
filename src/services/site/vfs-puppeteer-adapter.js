@@ -8213,8 +8213,6 @@ if (
       );
     }
 
-    }
-
     logger.info(
       "VFS OTP SUBMIT ACTION DIAGNOSTICS",
       {
