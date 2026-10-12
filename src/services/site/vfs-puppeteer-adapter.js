@@ -204,6 +204,51 @@ this.radarSessionHealthCheckedAt = null;
 this.radarSessionRecoveryRequired = false;
   }
 
+  async clearRemoteBrowserCache() {
+    if (
+      !this.context ||
+      !this.page ||
+      this.page.isClosed()
+    ) {
+      throw new Error(
+        "Não foi possível limpar a cache: página remota indisponível."
+      );
+    }
+
+    let cacheSession = null;
+
+    try {
+      cacheSession =
+        await this.context.newCDPSession(this.page);
+
+      await cacheSession.send("Network.enable");
+      await cacheSession.send("Network.clearBrowserCache");
+
+      logger.info(
+        "SCRAPELESS REMOTE CACHE CLEARED",
+        {
+          applicationId: this.applicationId,
+          pageUrl: this.page.url(),
+          cookiesCleared: false
+        }
+      );
+    } catch (error) {
+      logger.error(
+        "SCRAPELESS REMOTE CACHE CLEAR FAILED",
+        {
+          applicationId: this.applicationId,
+          error: error?.message || String(error)
+        }
+      );
+
+      throw error;
+    } finally {
+      if (cacheSession) {
+        await cacheSession.detach().catch(() => {});
+      }
+    }
+  }
+
   /*
    * ============================================================
    * BROWSER
@@ -211,13 +256,17 @@ this.radarSessionRecoveryRequired = false;
    */
 
   async initialize() {
+  
   if (
     this.initialized &&
     this.page &&
     !this.page.isClosed()
   ) {
+    await this.clearRemoteBrowserCache();
+
     return true;
   }
+
 
     /*
    * ============================================================
@@ -600,6 +649,7 @@ logger.info(
       })()
   }
 );
+    await this.clearRemoteBrowserCache();
   /*
  * ============================================================
  * DIAGNÓSTICO DO IP DE SAÍDA — SCRAPELESS / IPROYAL
