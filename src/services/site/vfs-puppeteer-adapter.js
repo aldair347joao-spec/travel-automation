@@ -8139,35 +8139,41 @@ if (
      * quando existir exactamente um Sign In visível e activo.
      */
 
- if (
+
+
+   
+     if (
   !submitted.clicked &&
   submitted.reason ===
     "Matched action has no safe selector."
 ) {
   try {
-    // Estratégia 1: Usar o seletor de acessibilidade nativo do Playwright (Ignora variações de nós e espaços)
-    let button = page.getByRole('button', { name: /sign in/i });
-    let buttonCount = await button.count();
+    // Aguarda breves instantes para o Angular aplicar as classes de validação e o Turnstile acalmar os frames
+    await this.page.waitForTimeout(1500);
 
-    // Estratégia 2: Fallback rápido por classe CSS estrutural se o papel de acessibilidade falhar devido aos frames
+    // Estratégia A: Localizar pelo papel de acessibilidade ARIA com Regex flexível (Tolerante a espaços)
+    let signInButtons = this.page.getByRole('button', { name: /sign in/i });
+    let buttonCount = await signInButtons.count();
+
+    // Estratégia B: Fallback se o ARIA falhar devido ao anidamento de frames da VFS
     if (buttonCount !== 1) {
-      button = page.locator('button.btn-brand-orange, button[type="submit"]').filter({ hasText: /Sign In/i });
-      buttonCount = await button.count();
+      signInButtons = this.page.locator('button[type="submit"], button.btn-brand-orange').filter({
+        hasText: /Sign In/i
+      });
+      buttonCount = await signInButtons.count();
     }
 
     if (buttonCount >= 1) {
-      // Se houver ambiguidade acidental, foca sempre no primeiro elemento válido e visível
-      const targetButton = button.first(); 
-
-      const buttonText = (await targetButton.innerText() || 'Sign In').trim();
-      const visible = await targetButton.isVisible();
-      const enabled = await targetButton.isEnabled();
+      const button = signInButtons.first();
+      const buttonText = (await button.innerText() || 'Sign In').trim();
+      const visible = await button.isVisible();
+      const enabled = await button.isEnabled();
 
       if (visible && enabled) {
-        // Clica ignorando verificações estritas de interseção (evita bloqueios causados por overlays invisíveis do Turnstile)
-        await targetButton.click({
+        // O parâmetro force: true evita que o Playwright aborte o clique por falta de "actionability" (causada pelos overlays do Turnstile)
+        await button.click({
           timeout: 10000,
-          force: true 
+          force: true
         });
 
         submitted = {
@@ -8175,42 +8181,68 @@ if (
           ambiguous: false,
           candidates: [{ text: buttonText, type: "submit" }],
           reason: null,
-          selector: 'getByRole(button, Sign In)',
+          selector: 'getByRole.button.force',
           candidate: buttonText
         };
       } else {
-        // Estratégia 3: O botão existe mas o Cloudflare/Angular mantém-no artificialmente oculto/desativado no DOM
-        // Disparar o clique via JavaScript diretamente no motor do browser
-        await targetButton.evaluate((el) => {
+        // Estratégia C: O botão existe mas o DOM diz que está desativado (Falta de sincronia do token)
+        // Bypass total do motor de cliques do Playwright usando execução JavaScript injetada
+        logger.warn("Botão presente mas inativo/oculto. A forçar submissão direta via DOM...");
+        
+        await button.evaluate((el) => {
           el.removeAttribute('disabled');
-          el.click();
+          if (typeof el.click === 'function') {
+            el.click();
+          }
         });
 
         submitted = {
           clicked: true,
           ambiguous: false,
           candidates: [{ text: buttonText, type: "submit" }],
-          reason: "Clique forçado via evaluate JS devido a restrições de visibilidade/ativação.",
+          reason: "Bypass JavaScript executado com sucesso sobre botão inativo.",
           selector: 'evaluate.click',
           candidate: buttonText
         };
       }
     } else {
-      submitted = {
-        clicked: false,
-        ambiguous: false,
-        candidates: [],
-        reason: `Impossível localizar o botão através de ARIA ou Classe CSS. Encontrados: ${buttonCount}.`,
-        selector: null,
-        candidate: null
-      };
+      // Estratégia D: Último recurso absoluto se o botão evaporar do DOM
+      // Disparar o evento submit diretamente no elemento pai <form>
+      const formExists = await this.page.locator('form').count();
+      if (formExists > 0) {
+        logger.warn("Botão não encontrado. A disparar evento de submissão diretamente no formulário...");
+        await this.page.evaluate(() => {
+          const form = document.querySelector('form');
+          if (form) {
+            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          }
+        });
+        
+        submitted = {
+          clicked: true,
+          ambiguous: false,
+          candidates: [],
+          reason: "Evento de submit disparado diretamente no formulário nativo.",
+          selector: 'form.submit',
+          candidate: null
+        };
+      } else {
+        submitted = {
+          clicked: false,
+          ambiguous: false,
+          candidates: [],
+          reason: `Não foi possível encontrar o botão nem o formulário na árvore do DOM. Encontrados: ${buttonCount}.`,
+          selector: null,
+          candidate: null
+        };
+      }
     }
   } catch (error) {
     submitted = {
       clicked: false,
       ambiguous: false,
       candidates: [],
-      reason: `Excepção no fallback: ${error?.message || String(error)}`,
+      reason: `Excepção no Fallback Playwright: ${error?.message || String(error)}`,
       selector: null,
       candidate: null
     };
@@ -8227,6 +8259,7 @@ if (
     }
   );
 }
+
 
 
     
