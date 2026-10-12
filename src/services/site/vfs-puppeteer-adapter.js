@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { chromium } = require("playwright-core");
 const {
   getCredentialsForAutomation,
@@ -257,14 +258,22 @@ this.radarSessionRecoveryRequired = false;
 
   async initialize() {
   
-  if (
-    this.initialized &&
-    this.page &&
-    !this.page.isClosed()
-  ) {
-    await this.clearRemoteBrowserCache();
 
-    return true;
+  if (
+    this.browser ||
+    this.context ||
+    this.page ||
+    this.initialized
+  ) {
+    logger.info(
+      "IPROYAL ROTATION STARTING FOR BOT RELEASE",
+      {
+        applicationId: this.applicationId,
+        reason: "new browser session requested"
+      }
+    );
+
+    await this.close();
   }
 
 
@@ -405,8 +414,30 @@ this.radarSessionRecoveryRequired = false;
   const iproyalUsername =
     String(process.env.IPROYAL_PROXY_USERNAME || "").trim();
 
+ 
   const iproyalPassword =
     String(process.env.IPROYAL_PROXY_PASSWORD || "").trim();
+
+  const iproyalSessionId =
+    crypto.randomBytes(4).toString("hex");
+
+  let iproyalPasswordForSession =
+    iproyalPassword.replace(
+      /_session-[a-z0-9]+/gi,
+      ""
+    );
+
+  if (/_lifetime-[^_]+/i.test(iproyalPasswordForSession)) {
+    iproyalPasswordForSession =
+      iproyalPasswordForSession.replace(
+        /_lifetime-[^_]+/i,
+        `_session-${iproyalSessionId}$&`
+      );
+  } else {
+    iproyalPasswordForSession +=
+      `_session-${iproyalSessionId}`;
+  }
+ 
 
   if (
     !iproyalHost ||
@@ -424,8 +455,10 @@ this.radarSessionRecoveryRequired = false;
     throw error;
   }
 
+  
   const proxyURL =
-    `http://${encodeURIComponent(iproyalUsername)}:${encodeURIComponent(iproyalPassword)}@${iproyalHost}:${iproyalPort}`;
+    `http://${encodeURIComponent(iproyalUsername)}:${encodeURIComponent(iproyalPasswordForSession)}@${iproyalHost}:${iproyalPort}`;
+
 
   const fingerprint =
     String(
@@ -470,6 +503,8 @@ this.radarSessionRecoveryRequired = false;
       sessionTTL,
 
       proxyProvider: "IPROYAL",
+
+      iproyalSessionId,
 
       sessionRecording,
 
