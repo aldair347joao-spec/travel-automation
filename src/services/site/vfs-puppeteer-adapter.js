@@ -8144,74 +8144,101 @@ if (
       submitted.reason ===
         "Matched action has no safe selector."
     ) {
-      const otpSubmitDiagnostics =
-        await page.$eval(
-          selector,
-          otp => {
-            const form = otp.form;
+      try {
+        const otpForm =
+          page.locator("form").filter({
+            has: page.locator(selector)
+          });
 
-            if (!form) {
-              return {
-                formExists: false,
-                otpId: otp.id || null,
-                otpName: otp.name || null,
-                buttons: []
-              };
-            }
+        const submitButtons =
+          otpForm.locator(
+            'button[type="submit"]'
+          );
 
-            const buttons =
-              Array.from(
-                form.querySelectorAll("button")
-              ).map(button => {
-                const style =
-                  window.getComputedStyle(button);
+        const buttonCount =
+          await submitButtons.count();
 
-                const rect =
-                  button.getBoundingClientRect();
+        if (buttonCount === 1) {
+          const button = submitButtons;
 
-                return {
-                  text:
-                    (button.innerText || "").trim(),
-                  type: button.type,
-                  disabled:
-                    Boolean(button.disabled),
-                  visible:
-                    style.display !== "none" &&
-                    style.visibility !== "hidden" &&
-                    rect.width > 0 &&
-                    rect.height > 0,
-                  width: rect.width,
-                  height: rect.height,
-                  className:
-                    button.className || ""
-                };
-              });
+          const buttonText =
+            (await button.innerText()).trim();
 
-            return {
-              formExists: true,
-              formTag: form.tagName,
-              formClass: form.className,
-              otpId: otp.id || null,
-              otpName: otp.name || null,
-              otpValueLength:
-                (otp.value || "").length,
-              buttons
+          const visible =
+            await button.isVisible();
+
+          const enabled =
+            await button.isEnabled();
+
+          if (
+            /^sign in$/i.test(buttonText) &&
+            visible &&
+            enabled
+          ) {
+            await button.click({
+              timeout: 10000
+            });
+
+            submitted = {
+              clicked: true,
+              ambiguous: false,
+              candidates: [
+                {
+                  text: buttonText,
+                  type: "submit"
+                }
+              ],
+              reason: null,
+              selector:
+                'form containing OTP field button[type="submit"]',
+              candidate: buttonText
+            };
+          } else {
+            submitted = {
+              clicked: false,
+              ambiguous: false,
+              candidates: [],
+              reason:
+                "O botão Sign In não está visível, activo ou identificado correctamente.",
+              selector: null,
+              candidate: buttonText
             };
           }
-        ).catch(error => ({
-          diagnosticError:
+        } else {
+          submitted = {
+            clicked: false,
+            ambiguous: buttonCount > 1,
+            candidates: [],
+            reason:
+              `Esperado exactamente um botão submit no formulário OTP; encontrados: ${buttonCount}.`,
+            selector: null,
+            candidate: null
+          };
+        }
+      } catch (error) {
+        submitted = {
+          clicked: false,
+          ambiguous: false,
+          candidates: [],
+          reason:
             error?.message || String(error),
-          buttons: []
-        }));
+          selector: null,
+          candidate: null
+        };
+      }
 
       logger.info(
         "VFS OTP SUBMIT FALLBACK DIAGNOSTICS",
         {
           applicationId: this.applicationId,
-          diagnostics: otpSubmitDiagnostics
+          clicked: submitted.clicked,
+          reason: submitted.reason,
+          selector: submitted.selector,
+          candidate: submitted.candidate
         }
       );
     }
+
 
     logger.info(
       "VFS OTP SUBMIT ACTION DIAGNOSTICS",
