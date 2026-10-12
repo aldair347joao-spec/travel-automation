@@ -7913,40 +7913,244 @@ if (
       }
     );
 
-const submitted =
-  await this.clickUnambiguousAction(
-    [
-      "verify",
-      "verify otp",
-      "submit",
-      "continue",
-      "sign in"
-    ]
-  );
 
-logger.info(
-  "VFS OTP SUBMIT ACTION DIAGNOSTICS",
-  {
-    applicationId: this.applicationId,
-    clicked: submitted.clicked,
-    ambiguous: submitted.ambiguous,
-    candidates: submitted.candidates || [],
-    reason: submitted.reason || null,
-    selector: submitted.selector || null,
-    candidate: submitted.candidate || null
-  }
-);
+    /*
+     * ============================================================
+     * VFS OTP — VERIFICAR E RESOLVER O DESAFIO DE SEGURANÇA
+     * ============================================================
+     *
+     * Se o botão estiver bloqueado e existir um indicador
+     * de Turnstile/CAPTCHA, reutilizar o resolvedor Scrapeless.
+     * Nunca preencher manualmente o token oculto.
+     */
 
-if (
-  !submitted.clicked
-) {
+    const readOtpSecurityState = async () =>
+      page.$eval(
+        selector,
+        otp => {
+          const form = otp.form;
+
+          const button = form
+            ? Array.from(
+                form.querySelectorAll("button")
+              ).find(item =>
+                /sign in|verify|continue|submit/i.test(
+                  item.innerText || ""
+                )
+              )
+            : null;
+
+          const turnstile = form?.querySelector(
+            'input[name="cf-turnstile-response"]'
+          );
+
+          const isVisible = element => {
+            if (!element) return false;
+
+            const style =
+              window.getComputedStyle(element);
+
+            const rect =
+              element.getBoundingClientRect();
+
+            return (
+              style.display !== "none" &&
+              style.visibility !== "hidden" &&
+              style.opacity !== "0" &&
+              rect.width > 0 &&
+              rect.height > 0
+            );
+          };
+
+          const challengeVisible =
+            Array.from(
+              document.querySelectorAll(
+                [
+                  "iframe[src*='challenges.cloudflare.com']",
+                  "iframe[src*='turnstile']",
+                  "iframe[title*='challenge']",
+                  "[class*='turnstile']",
+                  "[id*='turnstile']"
+                ].join(",")
+              )
+            ).some(isVisible);
+
+          return {
+            buttonText:
+              (button?.innerText || "").trim(),
+
+            buttonDisabled:
+              button ? Boolean(button.disabled) : true,
+
+            turnstilePresent:
+              Boolean(turnstile),
+
+            turnstileTokenPresent:
+              Boolean(turnstile?.value?.trim()),
+
+            challengeVisible
+          };
+        }
+      );
+
+    let otpSecurityState =
+      await readOtpSecurityState().catch(error => ({
+        diagnosticError:
+          error?.message || String(error),
+        buttonDisabled: true,
+        turnstilePresent: false,
+        turnstileTokenPresent: false,
+        challengeVisible: false
+      }));
+
+    logger.info(
+      "VFS OTP SECURITY STATE BEFORE SOLVER",
+      {
+        applicationId: this.applicationId,
+        state: otpSecurityState
+      }
+    );
+
+    const otpSecurityBlocked =
+      otpSecurityState.buttonDisabled === true &&
+      (
+        otpSecurityState.challengeVisible === true ||
+        (
+          otpSecurityState.turnstilePresent === true &&
+          otpSecurityState.turnstileTokenPresent !== true
+        )
+      );
+
+    if (otpSecurityBlocked) {
+      logger.warn(
+        "VFS OTP SECURITY CHALLENGE — SCRAPELESS SOLVER STARTING",
+        {
+          applicationId: this.applicationId,
+          state: otpSecurityState
+        }
+      );
+
+      const captchaResult =
+        await this.solveScrapelessCaptcha()
+          .catch(error => ({
+            attempted: true,
+            solved: false,
+            status: "ERROR",
+            error:
+              error?.message || String(error)
+          }));
+
+      logger.info(
+        "VFS OTP SCRAPELESS SOLVER RESULT",
+        {
+          applicationId: this.applicationId,
+          attempted:
+            captchaResult?.attempted === true,
+          solved:
+            captchaResult?.solved === true,
+          status:
+            captchaResult?.status || null,
+          error:
+            captchaResult?.error || null
+        }
+      );
+
+      /*
+       * Dar tempo à VFS para actualizar o estado
+       * do desafio e activar o botão.
+       */
+      const otpSecurityWaitStartedAt =
+        Date.now();
+
+      while (
+        Date.now() - otpSecurityWaitStartedAt < 15000
+      ) {
+        await new Promise(resolve =>
+          setTimeout(resolve, 1000)
+        );
+
+        otpSecurityState =
+          await readOtpSecurityState().catch(error => ({
+            diagnosticError:
+              error?.message || String(error),
+            buttonDisabled: true,
+            turnstilePresent: false,
+            turnstileTokenPresent: false,
+            challengeVisible: false
+          }));
+
+        if (
+          otpSecurityState.buttonDisabled === false &&
+          (
+            otpSecurityState.turnstilePresent !== true ||
+            otpSecurityState.turnstileTokenPresent === true
+          )
+        ) {
+          break;
+        }
+      }
+    }
+
+    logger.info(
+      "VFS OTP SECURITY STATE BEFORE SUBMIT",
+      {
+        applicationId: this.applicationId,
+        state: otpSecurityState
+      }
+    );
+
+    /*
+     * Não submeter o OTP enquanto a VFS mantiver
+     * o botão desactivado ou o token obrigatório vazio.
+     */
+    if (
+      otpSecurityState.buttonDisabled === true ||
+      (
+        otpSecurityState.turnstilePresent === true &&
+        otpSecurityState.turnstileTokenPresent !== true
+      )
+    ) {
       return {
         success: false,
         requiresUser: true,
         reason:
-          "OTP was entered, but no unambiguous VFS submission action was found.",
-        dom:
-          this.getDomSummary()
+          "A validação de segurança da VFS continua pendente. O resolvedor Scrapeless foi chamado, mas o formulário ainda não confirmou que está pronto.",
+        securityState: otpSecurityState,
+        dom: this.getDomSummary()
+      };
+    }
+
+    const submitted =
+      await this.clickUnambiguousAction(
+        [
+          "verify",
+          "verify otp",
+          "submit",
+          "continue",
+          "sign in"
+        ]
+      );
+
+    logger.info(
+      "VFS OTP SUBMIT ACTION DIAGNOSTICS",
+      {
+        applicationId: this.applicationId,
+        clicked: submitted.clicked,
+        ambiguous: submitted.ambiguous,
+        candidates: submitted.candidates || [],
+        reason: submitted.reason || null,
+        selector: submitted.selector || null,
+        candidate: submitted.candidate || null
+      }
+    );
+
+    if (!submitted.clicked) {
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "A validação de segurança foi verificada, mas não foi possível confirmar uma acção de submissão inequívoca do OTP.",
+        dom: this.getDomSummary()
       };
     }
 
