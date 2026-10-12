@@ -7700,7 +7700,134 @@ if (
           otpSecurityDiagnostics
       }
     );
-   
+
+    const otpFormDiagnostics =
+      await page.$eval(
+        selector,
+        element => {
+          const form = element.form;
+
+          const controls = form
+            ? Array.from(form.elements)
+            : [];
+
+          const describeControl = control => ({
+            tag:
+              control.tagName,
+
+            type:
+              control.type || null,
+
+            name:
+              control.name || null,
+
+            id:
+              control.id || null,
+
+            disabled:
+              Boolean(control.disabled),
+
+            required:
+              Boolean(control.required),
+
+            checked:
+              "checked" in control
+                ? Boolean(control.checked)
+                : null,
+
+            valueLength:
+              typeof control.value === "string"
+                ? control.value.length
+                : null,
+
+            ariaInvalid:
+              control.getAttribute("aria-invalid"),
+
+            ariaChecked:
+              control.getAttribute("aria-checked"),
+
+            ngModel:
+              control.getAttribute("ng-reflect-model"),
+
+            ngControl:
+              control.getAttribute("formcontrolname"),
+
+            classes:
+              typeof control.className === "string"
+                ? control.className.slice(0, 240)
+                : null
+          });
+
+          const button = form
+            ? Array.from(
+                form.querySelectorAll("button")
+              ).find(item =>
+                /sign in/i.test(
+                  item.innerText || ""
+                )
+              )
+            : null;
+
+          return {
+            formId:
+              form?.id || null,
+
+            formClass:
+              form?.className || null,
+
+            formControlCount:
+              controls.length,
+
+            controls:
+              controls.map(describeControl),
+
+            button:
+              button
+                ? {
+                    disabled:
+                      Boolean(button.disabled),
+
+                    disabledAttribute:
+                      button.hasAttribute("disabled"),
+
+                    className:
+                      button.className,
+
+                    ariaDisabled:
+                      button.getAttribute(
+                        "aria-disabled"
+                      ),
+
+                    type:
+                      button.type,
+
+                    text:
+                      (button.innerText || "").trim()
+                  }
+                : null,
+
+            angularVersion:
+              document
+                .querySelector("[ng-version]")
+                ?.getAttribute("ng-version") || null
+          };
+        }
+      ).catch(error => ({
+        error:
+          error.message || String(error)
+      }));
+
+    logger.info(
+      "VFS OTP FORM INTERNAL DIAGNOSTICS",
+      {
+        applicationId:
+          this.applicationId,
+
+        diagnostics:
+          otpFormDiagnostics
+      }
+    );
+
 const submitted =
   await this.clickUnambiguousAction(
     [
