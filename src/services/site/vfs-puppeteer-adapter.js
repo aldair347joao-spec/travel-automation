@@ -7587,7 +7587,120 @@ if (
       }
     );
 
-    
+ 
+    const otpFieldDiagnostics =
+      await page.$eval(
+        selector,
+        element => ({
+          valueLength:
+            element.value.length,
+
+          valuePresent:
+            element.value.length > 0,
+
+          disabled:
+            Boolean(element.disabled),
+
+          readOnly:
+            Boolean(element.readOnly),
+
+          inputType:
+            element.type,
+
+          formPresent:
+            Boolean(element.form),
+
+          formValid:
+            element.form
+              ? element.form.checkValidity()
+              : null,
+
+          validationMessage:
+            element.validationMessage || null,
+
+          ariaInvalid:
+            element.getAttribute("aria-invalid")
+        })
+      ).catch(error => ({
+        error:
+          error.message || String(error)
+      }));
+
+    const otpButtonDiagnostics =
+      await page.$$eval(
+        "button",
+        buttons =>
+          buttons
+            .filter(button =>
+              /sign in|verify|continue|submit/i
+                .test(button.innerText || "")
+            )
+            .map(button => ({
+              text:
+                (button.innerText || "").trim(),
+
+              disabled:
+                Boolean(button.disabled),
+
+              ariaDisabled:
+                button.getAttribute("aria-disabled"),
+
+              formPresent:
+                Boolean(button.form),
+
+              formValid:
+                button.form
+                  ? button.form.checkValidity()
+                  : null
+            }))
+      ).catch(error => [{
+        error:
+          error.message || String(error)
+      }]);
+
+    const otpSecurityDiagnostics =
+      await page.$$eval(
+        "iframe",
+        frames =>
+          frames
+            .filter(frame =>
+              /captcha|challenge|turnstile|cloudflare/i
+                .test(
+                  (frame.title || "") + " " +
+                  (frame.src || "")
+                )
+            )
+            .map(frame => ({
+              title:
+                frame.title || null,
+
+              src:
+                frame.src
+                  ? frame.src.slice(0, 180)
+                  : null
+            }))
+      ).catch(error => [{
+        error:
+          error.message || String(error)
+      }]);
+
+    logger.info(
+      "VFS OTP FIELD AND BUTTON STATE",
+      {
+        applicationId:
+          this.applicationId,
+
+        otpField:
+          otpFieldDiagnostics,
+
+        buttons:
+          otpButtonDiagnostics,
+
+        securityFrames:
+          otpSecurityDiagnostics
+      }
+    );
+   
 const submitted =
   await this.clickUnambiguousAction(
     [
