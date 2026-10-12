@@ -8139,99 +8139,94 @@ if (
      * quando existir exactamente um Sign In visível e activo.
      */
 
-    if (
-      !submitted.clicked &&
-      submitted.reason ===
-        "Matched action has no safe selector."
-    ) {
-      try {
-        const signInButtons =
-          page.locator('button[type="submit"]').filter({
-            hasText: /^Sign In$/
-          });
+   if (
+  !submitted.clicked &&
+  submitted.reason ===
+    "Matched action has no safe selector."
+) {
+  try {
+    // 1. Procurar por botões de submit que CONTENHAM o texto "Sign In" (ignora espaços extras)
+    const signInButtons = page.locator('button[type="submit"]').filter({
+      hasText: 'Sign In'
+    });
 
-        const buttonCount =
-          await signInButtons.count();
+    const buttonCount = await signInButtons.count();
 
-        if (buttonCount === 1) {
-          const button = signInButtons;
+    if (buttonCount === 1) {
+      const button = signInButtons.first(); // Garante a referência ao elemento único
 
-          const buttonText =
-            (await button.innerText()).trim();
+      const buttonText = (await button.innerText()).trim();
+      const visible = await button.isVisible();
+      const enabled = await button.isEnabled();
 
-          const visible =
-            await button.isVisible();
+      // 2. Usar a flag 'i' (case-insensitive) e permitir espaços em branco nas extremidades com \s*
+      if (
+        /^\s*sign in\s*\$/i.test(buttonText) &&
+        visible &&
+        enabled
+      ) {
+        // 3. Forçar o clique se houver alguma sobreposição visual leve (comum em SPAs Angular)
+        await button.click({
+          timeout: 10000,
+          force: true 
+        });
 
-          const enabled =
-            await button.isEnabled();
-
-          if (
-            /^sign in$/i.test(buttonText) &&
-            visible &&
-            enabled
-          ) {
-            await button.click({
-              timeout: 10000
-            });
-
-            submitted = {
-              clicked: true,
-              ambiguous: false,
-              candidates: [
-                {
-                  text: buttonText,
-                  type: "submit"
-                }
-              ],
-              reason: null,
-              selector: 'button[type="submit"]',
-              candidate: buttonText
-            };
-          } else {
-            submitted = {
-              clicked: false,
-              ambiguous: false,
-              candidates: [],
-              reason:
-                "O botão Sign In não está visível ou activo.",
-              selector: null,
-              candidate: buttonText
-            };
-          }
-        } else {
-          submitted = {
-            clicked: false,
-            ambiguous: buttonCount > 1,
-            candidates: [],
-            reason:
-              `Esperado exactamente um botão Sign In; encontrados: ${buttonCount}.`,
-            selector: null,
-            candidate: null
-          };
-        }
-      } catch (error) {
+        submitted = {
+          clicked: true,
+          ambiguous: false,
+          candidates: [
+            {
+              text: buttonText,
+              type: "submit"
+            }
+          ],
+          reason: null,
+          selector: 'button[type="submit"]',
+          candidate: buttonText
+        };
+      } else {
         submitted = {
           clicked: false,
           ambiguous: false,
           candidates: [],
-          reason:
-            error?.message || String(error),
+          reason: `O botão Sign In não está visível ou activo. (Texto: "${buttonText}", Visível: ${visible}, Activo: ${enabled})`,
           selector: null,
-          candidate: null
+          candidate: buttonText
         };
       }
-
-      logger.info(
-        "VFS OTP SUBMIT FALLBACK DIAGNOSTICS",
-        {
-          applicationId: this.applicationId,
-          clicked: submitted.clicked,
-          reason: submitted.reason,
-          selector: submitted.selector,
-          candidate: submitted.candidate
-        }
-      );
+    } else {
+      submitted = {
+        clicked: false,
+        ambiguous: buttonCount > 1,
+        candidates: [],
+        reason: `Esperado exactamente um botão Sign In; encontrados: ${buttonCount}.`,
+        selector: null,
+        candidate: null
+      };
     }
+  } catch (error) {
+    submitted = {
+      clicked: false,
+      ambiguous: false,
+      candidates: [],
+      reason: error?.message || String(error),
+      selector: null,
+      candidate: null
+    };
+  }
+
+  logger.info(
+    "VFS OTP SUBMIT FALLBACK DIAGNOSTICS",
+    {
+      applicationId: this.applicationId,
+      clicked: submitted.clicked,
+      reason: submitted.reason,
+      selector: submitted.selector,
+      candidate: submitted.candidate
+    }
+  );
+}
+
     
     logger.info(
       "VFS OTP SUBMIT ACTION DIAGNOSTICS",
