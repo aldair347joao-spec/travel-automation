@@ -249,6 +249,159 @@ this.radarSessionRecoveryRequired = false;
       }
     }
   }
+ 
+  async cleanupOldRemoteBrowserSessions(sessionPrefix, sessionTTL) {
+    const apiKey = String(
+      process.env.SCRAPELESS_API_KEY || ""
+    ).trim();
+
+    if (!apiKey || !sessionPrefix) {
+      logger.warn(
+        "SCRAPELESS SESSION CLEANUP SKIPPED",
+        {
+          applicationId: this.applicationId,
+          reason: "API key or session prefix missing"
+        }
+      );
+      return;
+    }
+
+    const apiBase = "https://api.scrapeless.com";
+    const headers = {
+      "x-api-token": apiKey
+    };
+
+    // TTL configurado + 2 minutos de margem.
+    // Com TTL de 900 segundos, só procuramos sessões
+    // com mais de 17 minutos.
+    const maxAgeMs = (sessionTTL + 120) * 1000;
+    const cutoffTime = Date.now() - maxAgeMs;
+
+    try {
+      const listResponse = await fetch(
+        `${apiBase}/browser/running`,
+        {
+          method: "GET",
+          headers,
+          signal: AbortSignal.timeout(15000)
+        }
+      );
+
+      if (!listResponse.ok) {
+        throw new Error(
+          `Falha ao listar sessões: HTTP ${listResponse.status}`
+        );
+      }
+
+      const payload = await listResponse.json();
+      const sessions = payload?.data;
+
+      if (!Array.isArray(sessions)) {
+        throw new Error(
+          "Resposta do Scrapeless sem lista válida de sessões."
+        );
+      }
+
+      let stoppedCount = 0;
+      let skippedCount = 0;
+
+      for (const session of sessions) {
+        const taskId = session?.taskId;
+        const sessionName = String(
+          session?.metadata?.session_name || ""
+        );
+        const createdAt = Date.parse(
+          session?.createTime || ""
+        );
+
+        // Nunca tocar em sessões de outros projetos.
+        if (
+          !taskId ||
+          !sessionName.startsWith(`${sessionPrefix}-`)
+        ) {
+          skippedCount++;
+          continue;
+        }
+
+        // Sem data válida, não arriscar encerrar a sessão.
+        if (
+          !Number.isFinite(createdAt) ||
+          createdAt > cutoffTime
+        ) {
+          skippedCount++;
+          continue;
+        }
+
+        try {
+          const stopResponse = await fetch(
+            `${apiBase}/browser/stop/${encodeURIComponent(taskId)}`,
+            {
+              method: "GET",
+              headers,
+              signal: AbortSignal.timeout(15000)
+            }
+          );
+
+          if (!stopResponse.ok) {
+            logger.warn(
+              "SCRAPELESS OLD SESSION STOP FAILED",
+              {
+                applicationId: this.applicationId,
+                sessionName,
+                taskId,
+                status: stopResponse.status
+              }
+            );
+            continue;
+          }
+
+          await stopResponse.body?.cancel().catch(() => {});
+          stoppedCount++;
+
+          logger.info(
+            "SCRAPELESS OLD SESSION STOPPED",
+            {
+              applicationId: this.applicationId,
+              sessionName,
+              taskId,
+              createdAt: session.createTime
+            }
+          );
+        } catch (stopError) {
+          logger.warn(
+            "SCRAPELESS SESSION STOP REQUEST FAILED",
+            {
+              applicationId: this.applicationId,
+              taskId,
+              error:
+                stopError?.message || String(stopError)
+            }
+          );
+        }
+      }
+
+      logger.info(
+        "SCRAPELESS SESSION CLEANUP FINISHED",
+        {
+          applicationId: this.applicationId,
+          sessionPrefix,
+          sessionsFound: sessions.length,
+          stoppedCount,
+          skippedCount
+        }
+      );
+    } catch (error) {
+      // A limpeza é uma operação auxiliar.
+      // Uma falha não deve impedir a criação da nova sessão.
+      logger.error(
+        "SCRAPELESS SESSION CLEANUP FAILED",
+        {
+          applicationId: this.applicationId,
+          error: error?.message || String(error)
+        }
+      );
+    }
+  }
 
   /*
    * ============================================================
@@ -389,6 +542,13 @@ this.radarSessionRecoveryRequired = false;
         "-"
       );
 
+  
+  // Limpar sessões antigas deste projeto antes de abrir outra.
+  await this.cleanupOldRemoteBrowserSessions(
+    sessionPrefix,
+    sessionTTL
+  );
+
   const randomPart =
     `${Date.now()}-${Math.random()
       .toString(36)
@@ -396,6 +556,7 @@ this.radarSessionRecoveryRequired = false;
 
   const sessionName =
     `${sessionPrefix}-${this.applicationId || "unknown"}-${randomPart}`;
+
 
   const sessionRecording =
     String(
