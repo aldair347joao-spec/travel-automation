@@ -320,15 +320,15 @@ const STATE_ALIASES = Object.freeze({
     "main menu"
   ],
 
-  NEW_BOOKING: [
-    "start new booking",
-    "start booking",
-    "new booking",
-    "iniciar nova reserva",
-    "nova reserva",
-    "book now",
-    "appointment"
-  ],
+  
+NEW_BOOKING: [
+  "application detail",
+  "application details",
+  "appointment details",
+  "booking details",
+  "new application"
+],
+
 
   CENTER: [
     "visa application centre",
@@ -631,25 +631,42 @@ function classifyState(
    * A URL é uma evidência forte.
    */
 
-  if (
-    urlState !==
-    STATES.UNKNOWN
-  ) {
+  
+  /*
+   * O botão START NEW BOOKING indica que
+   * estamos no dashboard, ainda não dentro
+   * da nova reserva.
+   */
+  const normalizeButtonText =
+    value =>
+      normalizeText(value);
 
-    /*
-     * /services pode representar
-     * disponibilidade, calendário ou serviços.
-     *
-     * O DOM decide entre eles.
-     */
-    if (
-      urlState !==
-      STATES.SERVICES
-    ) {
-      return urlState;
-    }
+  const hasStartNewBookingButton =
+    (observation.buttons || []).some(
+      button => {
+        const label =
+          normalizeButtonText(
+            typeof button === "string"
+              ? button
+              : (
+                  button?.text ||
+                  button?.label ||
+                  button?.ariaLabel ||
+                  ""
+                )
+          );
 
+        return [
+          "start new booking",
+          "iniciar nova reserva"
+        ].includes(label);
+      }
+    );
+
+  if (hasStartNewBookingButton) {
+    return STATES.DASHBOARD;
   }
+
 
   const parts = [
     observation.title,
