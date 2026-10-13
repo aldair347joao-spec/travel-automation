@@ -4502,8 +4502,15 @@ for (
     
   /*
    * ============================================================
-   * TRATAR CONSENTIMENTO DE COOKIES ANTES DO LOGIN
+   * CONSENTIMENTO DE COOKIES COM PRIORIDADE ABSOLUTA
    * ============================================================
+   *
+   * A VFS pode apresentar o aviso antes ou durante o login.
+   * Antes de cada carácter e antes de submeter, verificamos
+   * novamente o consentimento.
+   *
+   * Preferimos rejeitar cookies opcionais. Se essa opção não
+   * existir, usamos a opção de aceitar disponibilizada pela VFS.
    */
 
   const consentSelectors = [
@@ -4511,126 +4518,182 @@ for (
     "#onetrust-accept-btn-handler"
   ];
 
-  let consentHandled = false;
-
-  for (const selector of consentSelectors) {
-    const consentButton = await page.$(selector);
-
-    if (
-      consentButton &&
-      await consentButton.isVisible()
-    ) {
-      logger.info(
-        "VFS ONETRUST CONSENT BUTTON FOUND",
-        {
-          applicationId,
-          selector
-        }
+  const isCookieOverlayVisible = async () => {
+    return await page.evaluate(() => {
+      const overlay = document.querySelector(
+        "#onetrust-pc-dark-filter"
       );
 
-      await consentButton.click({
-        timeout: 10000
+      if (!overlay) {
+        return false;
+      }
+
+      const style = window.getComputedStyle(overlay);
+      const rect = overlay.getBoundingClientRect();
+
+      return (
+        style.display !== "none" &&
+        style.visibility !== "hidden" &&
+        style.opacity !== "0" &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    }).catch(() => false);
+  };
+
+  const handleCookieConsent = async () => {
+    let consentHandled = false;
+
+    for (const selector of consentSelectors) {
+      const button = await page.$(selector).catch(() => null);
+
+      if (
+        !button ||
+        !(await button.isVisible().catch(() => false))
+      ) {
+        continue;
+      }
+
+      logger.info("VFS COOKIE CONSENT BUTTON FOUND", {
+        applicationId,
+        selector
       });
 
-      await page.waitForTimeout(1000);
+      await button.click({ timeout: 10000 });
 
       consentHandled = true;
 
-      logger.info(
-        "VFS ONETRUST CONSENT HANDLED",
-        {
-          applicationId,
-          selector
-        }
-      );
+      await page.waitForTimeout(500);
+
+      logger.info("VFS COOKIE CONSENT ACTION COMPLETED", {
+        applicationId,
+        selector
+      });
 
       break;
     }
-  }
 
-  const consentOverlayVisible = await page.evaluate(() => {
-    const overlay = document.querySelector(
-      "#onetrust-pc-dark-filter"
-    );
+    const overlayStillVisible =
+      await isCookieOverlayVisible();
 
-    if (!overlay) {
-      return false;
-    }
-
-    const style = window.getComputedStyle(overlay);
-
-    const rect = overlay.getBoundingClientRect();
-
-    return (
-      style.display !== "none" &&
-      style.visibility !== "hidden" &&
-      rect.width > 0 &&
-      rect.height > 0
-    );
-  });
-
-  if (consentOverlayVisible) {
-    logger.warn(
-      "VFS ONETRUST OVERLAY STILL BLOCKING LOGIN",
-      {
+    if (overlayStillVisible) {
+      logger.warn("VFS COOKIE CONSENT STILL BLOCKING LOGIN", {
         applicationId,
         consentHandled
+      });
+
+      throw new Error(
+        "VFS_COOKIE_CONSENT_BLOCKING_LOGIN: " +
+        "O aviso de cookies continua visível; o login foi pausado."
+      );
+    }
+
+    return consentHandled;
+  };
+
+  /*
+   * Preenche um campo carácter a carácter.
+   * Antes de cada carácter, trata qualquer aviso de cookies.
+   */
+  const typeWithCookiePriority = async (
+    fieldName,
+    value,
+    clearFirst = false
+  ) => {
+    await handleCookieConsent();
+
+    let fields = await this.findVfsLoginFields()
+      .catch(() => null);
+
+    if (fields?.[fieldName]) {
+      loginForm = fields;
+    }
+
+    let selector = loginForm?.[fieldName];
+
+    if (!selector) {
+      throw new Error(
+        "VFS_LOGIN_FIELD_MISSING: " + fieldName
+      );
+    }
+
+    await page.click(selector, { timeout: 15000 });
+
+    if (clearFirst) {
+      await page.$eval(selector, element => {
+        element.focus();
+        element.value = "";
+        element.dispatchEvent(
+          new Event("input", { bubbles: true })
+        );
+        element.dispatchEvent(
+          new Event("change", { bubbles: true })
+        );
+      });
+    }
+
+    const text = String(value ?? "");
+
+    for (const character of text) {
+      /*
+       * PRIORIDADE: se o consentimento surgir durante
+       * o preenchimento, tratamo-lo antes do próximo carácter.
+       */
+      await handleCookieConsent();
+
+      fields = await this.findVfsLoginFields()
+        .catch(() => null);
+
+      if (fields?.[fieldName]) {
+        loginForm = fields;
+        selector = fields[fieldName];
       }
-    );
 
-    throw new Error(
-      "VFS_ONETRUST_CONSENT_BLOCKING_LOGIN: " +
-      "The cookie consent overlay is still visible."
-    );
-  }
+      if (!selector) {
+        throw new Error(
+          "VFS_LOGIN_FIELD_DISAPPEARED: " + fieldName
+        );
+      }
+
+      await page.type(selector, character, {
+        delay: 15
+      });
+    }
+
+    /*
+     * Verificação final do campo.
+     */
+    await handleCookieConsent();
+  };
 
   /*
    * ============================================================
-   * PREENCHER EMAIL
+   * PREENCHER EMAIL — COM VERIFICAÇÃO DE COOKIES
    * ============================================================
    */
 
-  await page.click(
-    loginForm.email,
-    {
-      timeout: 15000
-    }
+  await typeWithCookiePriority(
+    "email",
+    credentials.email
   );
-
-  await page.type(
-    loginForm.email,
-    credentials.email,
-    {
-      delay: 15
-    }
-  );
-
 
   /*
    * ============================================================
-   * PREENCHER PASSWORD
+   * PREENCHER PASSWORD — COM VERIFICAÇÃO DE COOKIES
    * ============================================================
    */
 
-  await page.click(
-    loginForm.password
-  );
-
-  await page.$eval(
-    loginForm.password,
-    element => {
-      element.focus();
-      element.value = "";
-    }
-  );
-
-  await page.type(
-    loginForm.password,
+  await typeWithCookiePriority(
+    "password",
     credentials.password,
-    {
-      delay: 15
-    }
+    true
   );
+
+  /*
+   * VERIFICAÇÃO OBRIGATÓRIA APÓS O PREENCHIMENTO.
+   */
+  await handleCookieConsent();
+
     logger.info(
   "VFS LOGIN CREDENTIALS ENTERED",
   {
@@ -4683,6 +4746,12 @@ while (
     loginSubmitWaitStartedAt <
   loginSubmitMaxWaitMs
 ) {
+    /*
+   * COOKIES TÊM PRIORIDADE SOBRE O LOGIN.
+   * Se o aviso aparecer depois de preencher os campos,
+   * tratamo-lo antes de verificar ou clicar em Sign In.
+   */
+  await handleCookieConsent();
   /*
    * ----------------------------------------------------------
    * 1. Atualizar checkpoint/estado da página
