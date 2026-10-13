@@ -8218,7 +8218,7 @@ if (
 ) {
   try {
     // Aguarda breves instantes para o Angular aplicar as classes de validação e o Turnstile acalmar os frames
-    await this.page.waitForTimeout(1500);
+    await this.page.waitForTimeout(10000);
 
     // Estratégia A: Localizar pelo papel de acessibilidade ARIA com Regex flexível (Tolerante a espaços)
     let signInButtons = this.page.getByRole('button', { name: /sign in/i });
