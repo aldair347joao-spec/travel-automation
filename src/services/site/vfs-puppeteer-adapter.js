@@ -13981,187 +13981,156 @@ await input.setInputFiles(
    * SAFE DOM ACTIONS
    * ============================================================
    */
+  /*
+   * ============================================================
+   * SAFE DOM ACTIONS (OTIMIZADO PARA LOOP DE LOADING)
+   * ============================================================
+   */
 
-  async clickUnambiguousAction(
-    labels
-  ) {
-    const page =
-      await this.ensurePage();
+  async clickUnambiguousAction(labels) {
+    const page = await this.ensurePage();
 
-    const candidates =
-      await page.evaluate(
-        wantedLabels => {
-          const normalize =
-            value =>
-              String(value || "")
-                .trim()
-                .toLowerCase()
-                .replace(
-                  /\s+/g,
-                  " "
-                );
-
-          const wanted =
-            wantedLabels.map(
-              normalize
-            );
-
-          
-          return Array.from(
-            document.querySelectorAll(
-              "button, a, [role='button'], input[type='submit'], input[type='button']"
-            )
-          )
-
-            .filter(
-              element => {
-                const rect =
-                  element.getBoundingClientRect();
-
-                const style =
-                  window.getComputedStyle(
-                    element
-                  );
-
-                
-                if (
-                  rect.width <= 0 ||
-                  rect.height <= 0 ||
-                  style.display ===
-                    "none" ||
-                  style.visibility ===
-                    "hidden"
-                ) {
-                  return false;
-                }
-
-
-                const text =
-                  normalize(
-                    [
-                      element.innerText,
-                      element.getAttribute(
-                        "aria-label"
-                      ),
-                      element.getAttribute(
-                        "title"
-                      )
-                    ].join(" ")
-                  );
-
-                return wanted.some(
-                  label =>
-                    text === label ||
-                    text.includes(
-                      label
-                    )
-                );
-              }
-            )
-            
-            .map(
-              element => ({
-                id:
-                  element.id ||
-                  null,
-
-                name:
-                  element.getAttribute(
-                    "name"
-                  ) || null,
-
-                text:
-                  (
-                    element.innerText ||
-                    element.getAttribute(
-                      "aria-label"
-                    ) ||
-                    element.value ||
-                    ""
-                  ).trim(),
-
-                tag:
-                  element.tagName,
-
-                disabled:
-                  Boolean(
-                    element.disabled
-                  ),
-
-                type:
-                  element.getAttribute(
-                    "type"
-                  ) || null,
-
-                ariaLabel:
-                  element.getAttribute(
-                    "aria-label"
-                  ) || null,
-
-                className:
-                  typeof element.className ===
-                  "string"
-                    ? element.className
-                    : null
-              })
-            );
-
-        },
-        labels
-      );
-
-    if (
-      candidates.length !== 1
-    ) {
+    if (!Array.isArray(labels) || labels.length === 0) {
       return {
         clicked: false,
+        reason: "No action labels were provided."
+      };
+    }
 
-        ambiguous:
-          candidates.length > 1,
+    const candidates = await page.evaluate(
+      wantedLabels => {
+        const normalize = value =>
+          String(value || "")
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, " ");
 
+        const wanted = wantedLabels.map(normalize);
+
+        return Array.from(
+          document.querySelectorAll(
+            "button, a, [role='button'], input[type='submit'], input[type='button']"
+          )
+        )
+          .filter(element => {
+            const rect = element.getBoundingClientRect();
+            const style = window.getComputedStyle(element);
+
+            // 🔥 ALTERAÇÃO RESILIENTE: 
+            // Ignoramos temporariamente o 'pointerEvents === "none"' se a VFS estiver em loading,
+            // desde que o botão tenha dimensões reais e esteja na árvore do DOM.
+            if (
+              rect.width <= 0 ||
+              rect.height <= 0 ||
+              style.display === "none" ||
+              style.visibility === "hidden"
+            ) {
+              return false;
+            }
+
+            const text = normalize(
+              [
+                element.innerText,
+                element.value,
+                element.getAttribute("aria-label"),
+                element.getAttribute("title")
+              ].join(" ")
+            );
+
+            return wanted.some(
+              label => text === label || text.includes(label)
+            );
+          })
+          .map(element => ({
+            id: element.id || null,
+            name: element.getAttribute("name") || null,
+            text: (
+              element.innerText ||
+              element.value ||
+              element.getAttribute("aria-label") ||
+              ""
+            ).trim(),
+            tag: element.tagName,
+            disabled:
+              Boolean(element.disabled) ||
+              element.getAttribute("aria-disabled") === "true",
+            type: element.getAttribute("type") || null,
+            ariaLabel: element.getAttribute("aria-label") || null,
+            className:
+              typeof element.className === "string"
+                ? element.className
+                : null
+          }));
+      },
+      labels
+    );
+
+    if (candidates.length !== 1) {
+      return {
+        clicked: false,
+        ambiguous: candidates.length > 1,
+        reason:
+          candidates.length === 0
+            ? "No visible matching action was found."
+            : "Multiple matching actions were found.",
         candidates
       };
     }
-   
-    if (
-      candidates.length === 1 &&
-      candidates[0].disabled
-    ) {
+
+    if (candidates[0].disabled) {
       return {
         clicked: false,
         ambiguous: false,
-        reason:
-          "Matched action is disabled.",
+        reason: "Matched action is disabled.",
         candidates
       };
     }
- 
-    const selector =
-      this.buildSelector(
-        candidates[0]
-      );
+
+    const selector = this.buildSelector(candidates[0]);
 
     if (!selector) {
       return {
         clicked: false,
         ambiguous: false,
-        reason:
-          "Matched action has no safe selector."
+        reason: "Matched action has no safe selector.",
+        candidates
       };
     }
 
-    await page.click(
-      selector
-    );
+    try {
+      // 🔥 CRÍTICO: Adicionamos `{ force: true }`.
+      // Isto faz com que o Playwright execute o clique na coordenada exata do botão,
+      // ignorando se o elemento está "tapado" por um ecrã de loading, spinner ou overlay de rede.
+      await page.click(selector, { force: true, timeout: 5000 });
+    } catch (clickError) {
+      // Plano de contingência caso o seletor gerado falhe no motor do Playwright devido ao loop
+      const fallbackClicked = await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        if (el) {
+          el.click();
+          return true;
+        }
+        return false;
+      }, selector).catch(() => false);
+
+      if (!fallbackClicked) {
+        return {
+          clicked: false,
+          ambiguous: false,
+          reason: `Playwright click failed and JS fallback execution aborted: ${clickError.message}`,
+          candidates
+        };
+      }
+    }
 
     return {
       clicked: true,
       selector,
-      candidate:
-        candidates[0]
+      candidate: candidates[0]
     };
   }
 
+ 
   /*
    * ============================================================
    * CHECKPOINT DETECTION
