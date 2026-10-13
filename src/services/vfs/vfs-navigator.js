@@ -637,36 +637,46 @@ function classifyState(
    * estamos no dashboard, ainda não dentro
    * da nova reserva.
    */
-  const normalizeButtonText =
-    value =>
-      normalizeText(value);
+  const normalizeButtonText = value =>
+    normalizeText(value);
+
+  const startBookingLabels = [
+    "start new booking",
+    "iniciar nova reserva"
+  ];
+
+  const buttonLabels = (observation.buttons || [])
+    .map(button =>
+      normalizeButtonText(
+        typeof button === "string"
+          ? button
+          : [
+              button?.text,
+              button?.label,
+              button?.ariaLabel,
+              button?.title
+            ].filter(Boolean).join(" ")
+      )
+    );
+
+  const bodyLabel = normalizeButtonText(
+    observation.bodyText || ""
+  );
 
   const hasStartNewBookingButton =
-    (observation.buttons || []).some(
-      button => {
-        const label =
-          normalizeButtonText(
-            typeof button === "string"
-              ? button
-              : (
-                  button?.text ||
-                  button?.label ||
-                  button?.ariaLabel ||
-                  ""
-                )
-          );
-
-        return [
-          "start new booking",
-          "iniciar nova reserva"
-        ].includes(label);
-      }
+    buttonLabels.some(label =>
+      startBookingLabels.some(expected =>
+        label.includes(expected)
+      )
+    ) ||
+    startBookingLabels.some(expected =>
+      bodyLabel.includes(expected)
     );
 
   if (hasStartNewBookingButton) {
     return STATES.DASHBOARD;
   }
-
+  
 
   const parts = [
     observation.title,
