@@ -469,12 +469,12 @@ function stateFromUrl(
   }
 
   if (
-    value.includes(
-      "/application-detail"
-    )
-  ) {
-    return STATES.NEW_BOOKING;
-  }
+  value.includes(
+    "/application-detail"
+  )
+) {
+  return STATES.UNKNOWN;
+}
 
   if (
     value.includes(
