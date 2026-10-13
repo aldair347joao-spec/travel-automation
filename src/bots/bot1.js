@@ -3027,21 +3027,131 @@ logger.info("BOT1_DIAG_OTP_START", {
        * ---------------------------------------------------
        */
 
-      START_NEW_BOOKING:
-        async (
-          app
-        ) => {
+     START_NEW_BOOKING: async (app) => {
+  await this.assertAdminRelease(applicationId);
+  await this.heartbeat(applicationId, "navigator_new_booking");
 
-          await this.heartbeat(
-            applicationId,
-            "navigator_new_booking"
-          );
+  const page = await this.site.ensurePage();
 
-          return {
-            success:
-              true
-          };
-        },
+  /*
+   * 1. CLIQUE FORÇADO (CONTRA O CICLO DE ESPERA)
+   * Em vez de confiar apenas na automação padrão, tentamos o clique normal,
+   * mas se a VFS estiver travada com um loader por cima, injetamos JavaScript direto.
+   */
+  let clickResult = await this.site.clickUnambiguousAction([
+    "start new booking",
+    "iniciar nova reserva"
+  ]).catch(() => null);
+
+  // Plano de Contingência: Se o clique do adaptador falhar ou não confirmar por causa do loader
+  if (!clickResult || clickResult.clicked !== true) {
+    logger.warn("Standard click failed or timed out. Injecting forced JS click due to VFS loading cycle.", { applicationId });
+    
+    const forcedClicked = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('button, a, span'));
+      const targetBtn = buttons.find(el => {
+        const text = el.textContent ? el.textContent.toLowerCase().trim() : '';
+        return text.includes('start new booking') || text.includes('iniciar nova reserva');
+      });
+      if (targetBtn) {
+        // Força o clique nativo do elemento HTML ignorando bloqueios visuais de CSS/Spinners
+        targetBtn.click();
+        return true;
+      }
+      return false;
+    }).catch(() => false);
+
+    if (!forcedClicked) {
+      throw new Error(
+        "START_NEW_BOOKING_CLICK_FAILED: Both standard and forced JS clicks failed to find the button."
+      );
+    }
+    
+    clickResult = { clicked: true, selector: "forced_javascript_evaluation" };
+  }
+
+  logger.info("VFS START NEW BOOKING CLICKED (FORCED)", {
+    applicationId,
+    selector: clickResult.selector,
+    candidate: clickResult.candidate
+  });
+
+  /*
+   * 2. CORREÇÃO DA ESPERA DO URL (DOMCONTENTLOADED / TIME OUT FLEXÍVEL)
+   * Mudamos a estratégia do waitForURL. Adicionamos 'waitUntil: "commit"' ou "domcontentloaded".
+   * Isto faz o Playwright avançar assim que o URL muda, SEM esperar que os scripts lentos/infinitos da VFS carreguem.
+   */
+  try {
+    await page.waitForURL(
+      url => url.pathname.toLowerCase().includes("/application-detail"),
+      {
+        timeout: 25000,
+        waitUntil: "domcontentloaded" // 🔥 CRÍTICO: Avança assim que o HTML base responde, ignorando o loading infinito da rede!
+      }
+    );
+  } catch (navigationError) {
+    logger.warn("waitForURL timed out or failed. Checking current URL directly as fallback.", { applicationId });
+    
+    // Fallback Secundário: Se o waitForURL falhar mas o URL no navegador JÁ MUDOU, nós ignoramos o erro e continuamos!
+    const instantUrl = page.url().toLowerCase();
+    if (!instantUrl.includes("/application-detail")) {
+      const checkpoint = await this.site.detectCheckpoint();
+      if (checkpoint) {
+        return {
+          success: true,
+          requiresUser: true,
+          officialCheckpoint: true,
+          checkpoint
+        };
+      }
+
+      throw new Error(
+        "START_NEW_BOOKING_NAVIGATION_FAILED: " +
+        JSON.stringify({
+          currentUrl: page.url(),
+          expectedPath: "/application-detail",
+          cause: navigationError.message
+        })
+      );
+    }
+  }
+
+  /*
+   * 3. INSPEÇÃO DE SEGURANÇA
+   */
+  const observation = await this.navigator.inspect(app);
+  if (observation.checkpoint) {
+    return {
+      success: true,
+      requiresUser: true,
+      officialCheckpoint: true,
+      checkpoint: observation.checkpoint
+    };
+  }
+
+  const currentUrl = page.url();
+  if (!currentUrl.toLowerCase().includes("/application-detail")) {
+    throw new Error(
+      "START_NEW_BOOKING_DESTINATION_NOT_CONFIRMED: " + currentUrl
+    );
+  }
+
+  await this.heartbeat(applicationId, "navigator_booking_form");
+
+  logger.info("VFS NEW BOOKING PAGE CONFIRMED", {
+    applicationId,
+    url: currentUrl,
+    navigatorState: this.navigator.state
+  });
+
+  return {
+    success: true,
+    clicked: true,
+    navigationConfirmed: true,
+    action: "START_NEW_BOOKING",
+    url: currentUrl
+  };
+},
 
 
       /*
