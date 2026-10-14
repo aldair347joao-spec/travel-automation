@@ -7294,9 +7294,13 @@ if (
 
           const candidates =
             Array.from(
-              document.querySelectorAll(
-                "input, select, textarea"
-              )
+              
+document.querySelectorAll(
+  "input, select, textarea, " +
+  "mat-select, [role='combobox'], " +
+  "[aria-haspopup='listbox']"
+)
+
             ).filter(
               element => {
                 const style =
@@ -7434,25 +7438,45 @@ if (
           return {
             found: true,
 
-            selectorData: {
-              tag:
-                element.tagName
-                  .toLowerCase(),
+            
+selectorData: {
+  tag:
+    element.tagName
+      .toLowerCase(),
 
-              id:
-                element.id ||
-                null,
+  id:
+    element.id ||
+    null,
 
-              name:
-                element.getAttribute(
-                  "name"
-                ) || null,
+  name:
+    element.getAttribute(
+      "name"
+    ) || null,
 
-              type:
-                element.getAttribute(
-                  "type"
-                ) || null
-            }
+  type:
+    element.getAttribute(
+      "type"
+    ) || null,
+
+  role:
+    element.getAttribute(
+      "role"
+    ) || null,
+
+  ariaLabel:
+    element.getAttribute(
+      "aria-label"
+    ) || null,
+
+  customDropdown:
+    element.tagName.toLowerCase() ===
+      "mat-select" ||
+    element.getAttribute("role") ===
+      "combobox" ||
+    element.getAttribute("aria-haspopup") ===
+      "listbox"
+}
+
           };
         },
         semantic
@@ -7656,6 +7680,280 @@ if (
           selected.text
       };
     }
+   
+/*
+ * ========================================================
+ * DROPDOWN PERSONALIZADO DA VFS
+ * ========================================================
+ */
+
+if (
+  descriptor.selectorData.customDropdown
+) {
+  const requested =
+    String(value || "")
+      .trim()
+      .toUpperCase();
+
+  let acceptedLabels = [];
+
+  if (semantic === "visaType") {
+    if (requested === "SCHENGEN") {
+      acceptedLabels = [
+        "visto schengen",
+        "schengen",
+        "schengen visa",
+        "schengen visa application"
+      ];
+    } else if (requested === "NACIONAL") {
+      acceptedLabels = [
+        "visto nacional",
+        "national visa",
+        "national",
+        "nacional visa",
+        "nacional"
+      ];
+    }
+  }
+
+  if (!acceptedLabels.length) {
+    return {
+      filled: false,
+      ambiguous: false,
+      reason:
+        "Unsupported value for custom VFS dropdown.",
+      requested,
+      semantic
+    };
+  }
+
+const triggerCount =
+  await page.locator(selector).count();
+
+if (triggerCount !== 1) {
+  return {
+    filled: false,
+    ambiguous: triggerCount > 1,
+    reason:
+      "VFS dropdown selector is missing or not unique.",
+    requested,
+    triggerCount,
+    selector
+  };
+}
+
+  /*
+   * Abrir o dropdown com Playwright.
+   */
+  await page.locator(selector).click({
+    timeout: 10000
+  });
+
+  const optionsSelector =
+    "mat-option, .mat-option, " +
+    ".mat-mdc-option, [role='option'], " +
+    ".ng-option, [role='radio']";
+
+  /*
+   * Procurar a opção pelo texto visível.
+   * Não seleccionar se houver zero ou várias
+   * correspondências.
+   */
+  const matchingOptions =
+    await page
+      .locator(optionsSelector)
+      .evaluateAll(
+        (elements, labels) => {
+          const normalize = text =>
+            String(text || "")
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/\s+/g, " ")
+              .trim()
+              .toLowerCase();
+
+          const visible = element => {
+            const rect =
+              element.getBoundingClientRect();
+
+            const style =
+              window.getComputedStyle(element);
+
+            return (
+              rect.width > 0 &&
+              rect.height > 0 &&
+              style.display !== "none" &&
+              style.visibility !== "hidden" &&
+              style.pointerEvents !== "none" &&
+              element.getAttribute(
+                "aria-disabled"
+              ) !== "true"
+            );
+          };
+
+          const normalizedLabels =
+            labels.map(normalize);
+
+          const matches = [];
+
+          elements.forEach(
+            (element, index) => {
+              if (!visible(element)) {
+                return;
+              }
+
+              const text = normalize(
+                element.innerText ||
+                element.textContent ||
+                ""
+              );
+
+              const matched =
+                normalizedLabels.some(
+                  label =>
+                    text === label ||
+                    text.startsWith(
+                      label + " "
+                    ) ||
+                    text.startsWith(
+                      label + " -"
+                    )
+                );
+
+              if (matched) {
+                matches.push({
+                  index,
+                  text:
+                    element.innerText ||
+                    element.textContent ||
+                    ""
+                });
+              }
+            }
+          );
+
+          return matches;
+        },
+        acceptedLabels
+      );
+
+  if (
+    !matchingOptions ||
+    matchingOptions.length !== 1
+  ) {
+    return {
+      filled: false,
+      ambiguous:
+        Boolean(
+          matchingOptions &&
+          matchingOptions.length > 1
+        ),
+      reason:
+        matchingOptions &&
+        matchingOptions.length > 1
+          ? "Multiple visible VFS options match the requested visa type."
+          : "Requested VFS visa option was not found.",
+      requested,
+      acceptedLabels,
+      matchesFound:
+        matchingOptions
+          ? matchingOptions.length
+          : 0
+    };
+  }
+
+  const matchingOption =
+    matchingOptions[0];
+
+  /*
+   * Clicar na única opção correspondente.
+   */
+  await page
+    .locator(optionsSelector)
+    .nth(matchingOption.index)
+    .click({
+      timeout: 10000
+    });
+
+  await page.waitForTimeout(300);
+
+  /*
+   * Confirmar se o dropdown reflecte
+   * a opção seleccionada.
+   */
+  const selectionVerified =
+    await page
+      .locator(selector)
+      .evaluate(
+        (element, labels) => {
+          const normalize = text =>
+            String(text || "")
+              .normalize("NFD")
+              .replace(/[\u0300-\u036f]/g, "")
+              .replace(/\s+/g, " ")
+              .trim()
+              .toLowerCase();
+
+          const selectedText = normalize(
+            element.innerText ||
+            element.textContent ||
+            element.getAttribute(
+              "aria-label"
+            ) ||
+            ""
+          );
+
+          const selectedValue = normalize(
+            element.value ||
+            element.getAttribute(
+              "aria-valuetext"
+            ) ||
+            element.getAttribute(
+              "title"
+            ) ||
+            ""
+          );
+
+          return labels.some(label => {
+            const wanted = normalize(label);
+
+            return (
+              selectedText === wanted ||
+              selectedText.includes(wanted) ||
+              selectedValue === wanted ||
+              selectedValue.includes(wanted)
+            );
+          });
+        },
+        acceptedLabels
+      );
+
+  if (!selectionVerified) {
+    return {
+      filled: false,
+      ambiguous: false,
+      reason:
+        "VFS option was clicked, but the selected value could not be verified.",
+      requested,
+      clickedText:
+        String(matchingOption.text).trim(),
+      selector:
+        descriptor.selectorData
+    };
+  }
+
+  return {
+    filled: true,
+    ambiguous: false,
+    selected: true,
+    customDropdown: true,
+    requested,
+    text:
+      String(matchingOption.text).trim(),
+    selector:
+      descriptor.selectorData
+  };
+}
 
     /*
      * ========================================================
@@ -15258,27 +15556,58 @@ async detectCheckpointOnce() {
       );
   }
 
-  buildSelector(
-    data
-  ) {
-    if (!data) {
-      return null;
-    }
-
-    if (data.id) {
-      return `#${this.escapeCss(
-        data.id
-      )}`;
-    }
-
-    if (data.name) {
-      return `[name="${this.escapeCssAttribute(
-        data.name
-      )}"]`;
-    }
-
+  
+buildSelector(
+  data
+) {
+  if (!data) {
     return null;
   }
+
+  if (data.id) {
+    return `#${this.escapeCss(
+      data.id
+    )}`;
+  }
+
+  if (data.name) {
+    return `[name="${this.escapeCssAttribute(
+      data.name
+    )}"]`;
+  }
+
+  if (data.role && data.ariaLabel) {
+    return `[role="${this.escapeCssAttribute(
+      data.role
+    )}"][aria-label="${this.escapeCssAttribute(
+      data.ariaLabel
+    )}"]`;
+  }
+
+  
+if (data.ariaLabel) {
+  return `[aria-label="${this.escapeCssAttribute(
+    data.ariaLabel
+  )}"]`;
+}
+
+if (data.customDropdown && data.role) {
+  return `[role="${this.escapeCssAttribute(
+    data.role
+  )}"]`;
+}
+
+if (
+  data.customDropdown &&
+  data.tag === "mat-select"
+) {
+  return "mat-select";
+}
+
+return null;
+
+}
+
 
   async detectState() {
     if (!this.page) {
