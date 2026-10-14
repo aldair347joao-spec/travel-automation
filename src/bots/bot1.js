@@ -3027,98 +3027,157 @@ logger.info("BOT1_DIAG_OTP_START", {
        * ---------------------------------------------------
        */
 
-     START_NEW_BOOKING: async (app) => {
+     
+        
+START_NEW_BOOKING: async (app) => {
   await this.assertAdminRelease(applicationId);
   await this.heartbeat(applicationId, "navigator_new_booking");
 
   const page = await this.site.ensurePage();
-
-  /*
-   * 1. CLIQUE FORÇADO (CONTRA O CICLO DE ESPERA)
-   * Em vez de confiar apenas na automação padrão, tentamos o clique normal,
-   * mas se a VFS estiver travada com um loader por cima, injetamos JavaScript direto.
-   */
-  let clickResult = await this.site.clickUnambiguousAction([
+  const expectedPath = "/application-detail";
+  const navigationTimeoutMs = Math.max(
+    10000,
+    Number(config.timeoutMs) || 300000
+  );
+  const deadline = Date.now() + navigationTimeoutMs;
+  const initialWaitMs = 5000;
+  const retryIntervalMs = 5000;
+  const actionLabels = [
     "start new booking",
     "iniciar nova reserva"
-  ]).catch(() => null);
+  ];
 
-  // Plano de Contingência: Se o clique do adaptador falhar ou não confirmar por causa do loader
-  if (!clickResult || clickResult.clicked !== true) {
-    logger.warn("Standard click failed or timed out. Injecting forced JS click due to VFS loading cycle.", { applicationId });
-    
-    const forcedClicked = await page.evaluate(() => {
-      const buttons = Array.from(document.querySelectorAll('button, a, span'));
-      const targetBtn = buttons.find(el => {
-        const text = el.textContent ? el.textContent.toLowerCase().trim() : '';
-        return text.includes('start new booking') || text.includes('iniciar nova reserva');
-      });
-      if (targetBtn) {
-        // Força o clique nativo do elemento HTML ignorando bloqueios visuais de CSS/Spinners
-        targetBtn.click();
-        return true;
-      }
-      return false;
-    }).catch(() => false);
+  let attempt = 0;
+  let lastClickResult = null;
 
-    if (!forcedClicked) {
-      throw new Error(
-        "START_NEW_BOOKING_CLICK_FAILED: Both standard and forced JS clicks failed to find the button."
-      );
-    }
-    
-    clickResult = { clicked: true, selector: "forced_javascript_evaluation" };
-  }
-
-  logger.info("VFS START NEW BOOKING CLICKED (FORCED)", {
+  logger.info("VFS START NEW BOOKING WAIT STARTED", {
     applicationId,
-    selector: clickResult.selector,
-    candidate: clickResult.candidate
+    timeoutMs: navigationTimeoutMs,
+    initialWaitMs,
+    retryIntervalMs,
+    currentUrl: page.url()
   });
 
-  /*
-   * 2. CORREÇÃO DA ESPERA DO URL (DOMCONTENTLOADED / TIME OUT FLEXÍVEL)
-   * Mudamos a estratégia do waitForURL. Adicionamos 'waitUntil: "commit"' ou "domcontentloaded".
-   * Isto faz o Playwright avançar assim que o URL muda, SEM esperar que os scripts lentos/infinitos da VFS carreguem.
-   */
-  try {
-    await page.waitForURL(
-      url => url.pathname.toLowerCase().includes("/application-detail"),
-      {
-        timeout: 25000,
-        waitUntil: "domcontentloaded" // 🔥 CRÍTICO: Avança assim que o HTML base responde, ignorando o loading infinito da rede!
-      }
-    );
-  } catch (navigationError) {
-    logger.warn("waitForURL timed out or failed. Checking current URL directly as fallback.", { applicationId });
-    
-    // Fallback Secundário: Se o waitForURL falhar mas o URL no navegador JÁ MUDOU, nós ignoramos o erro e continuamos!
-    const instantUrl = page.url().toLowerCase();
-    if (!instantUrl.includes("/application-detail")) {
-      const checkpoint = await this.site.detectCheckpoint();
-      if (checkpoint) {
-        return {
-          success: true,
-          requiresUser: true,
-          officialCheckpoint: true,
-          checkpoint
-        };
-      }
+  // Dá tempo ao dashboard para terminar o ciclo inicial de carregamento.
+  await page.waitForTimeout(
+    Math.min(initialWaitMs, Math.max(0, deadline - Date.now()))
+  );
 
-      throw new Error(
-        "START_NEW_BOOKING_NAVIGATION_FAILED: " +
-        JSON.stringify({
-          currentUrl: page.url(),
-          expectedPath: "/application-detail",
-          cause: navigationError.message
-        })
-      );
+  while (Date.now() < deadline) {
+    const currentUrl = page.url();
+
+    // Nunca repetir o clique depois de chegar ao destino.
+    if (currentUrl.toLowerCase().includes(expectedPath)) {
+      break;
     }
+
+    // Respeitar checkpoints oficiais da VFS.
+    const checkpoint = await this.site
+      .detectCheckpoint()
+      .catch(() => null);
+
+    if (checkpoint) {
+      return {
+        success: true,
+        requiresUser: true,
+        officialCheckpoint: true,
+        checkpoint
+      };
+    }
+
+    attempt += 1;
+
+    lastClickResult = await this.site
+      .clickUnambiguousAction(actionLabels, {
+        force: false,
+        allowJsFallback: false
+      })
+      .catch(error => ({
+        clicked: false,
+        reason: error?.message || String(error)
+      }));
+
+    if (lastClickResult?.clicked === true) {
+      logger.info("VFS START NEW BOOKING CLICK ATTEMPT", {
+        applicationId,
+        attempt,
+        timeoutMs: navigationTimeoutMs,
+        urlBeforeClick: currentUrl,
+        selector: lastClickResult.selector || null
+      });
+    } else {
+      logger.info("VFS START NEW BOOKING NOT READY — RETRYING", {
+        applicationId,
+        attempt,
+        reason: lastClickResult?.reason ||
+          "Button unavailable, disabled or not actionable",
+        currentUrl: page.url()
+      });
+    }
+
+    // Aguarda até 5 segundos para a navegação.
+    // Se o endereço não mudar, o ciclo tenta novamente.
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+
+    try {
+      await page.waitForURL(
+        url => url.pathname.toLowerCase().includes(expectedPath),
+        {
+          timeout: Math.min(retryIntervalMs, remainingMs),
+          waitUntil: "domcontentloaded"
+        }
+      );
+    } catch {
+      // Sem navegação confirmada neste intervalo: voltar a verificar.
+    }
+
+    if (page.url().toLowerCase().includes(expectedPath)) {
+      break;
+    }
+  }
+
+  const destinationUrl = page.url();
+
+  if (!destinationUrl.toLowerCase().includes(expectedPath)) {
+    const checkpoint = await this.site
+      .detectCheckpoint()
+      .catch(() => null);
+
+    if (checkpoint) {
+      return {
+        success: true,
+        requiresUser: true,
+        officialCheckpoint: true,
+        checkpoint
+      };
+    }
+
+    logger.error("VFS START NEW BOOKING NAVIGATION EXHAUSTED", {
+      applicationId,
+      attempts: attempt,
+      timeoutMs: navigationTimeoutMs,
+      currentUrl: destinationUrl,
+      expectedPath,
+      lastClickReason: lastClickResult?.reason || null
+    });
+
+    throw new Error(
+      "START_NEW_BOOKING_NAVIGATION_FAILED: " +
+      JSON.stringify({
+        currentUrl: destinationUrl,
+        expectedPath,
+        attempts: attempt,
+        timeoutMs: navigationTimeoutMs,
+        lastClickReason: lastClickResult?.reason || null
+      })
+    );
   }
 
   /*
    * 3. INSPEÇÃO DE SEGURANÇA
    */
+
   const observation = await this.navigator.inspect(app);
   if (observation.checkpoint) {
     return {
