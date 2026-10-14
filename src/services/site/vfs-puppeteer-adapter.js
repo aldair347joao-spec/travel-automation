@@ -14352,28 +14352,35 @@ await input.setInputFiles(
           }, selector).catch(() => false)
         : false;
 
-      if (!fallbackClicked) {
-        return {
-          clicked: false,
-          ambiguous: false,
-          reason:
-            `Playwright click${
-              allowJsFallback
-                ? " and JS fallback execution aborted"
-                : ""
-            } failed: ${clickError.message}`,
-          candidates
-        };
-      }
-    }
+if (!fallbackClicked) {
+    return {
+      clicked: false,
+      ambiguous: false,
+      reason:
+        `Playwright click${
+          allowJsFallback
+            ? " and JS fallback execution aborted"
+            : ""
+        } failed: ${clickError.message}`,
+      candidates
+    };
+  }
+}
 
+return {
+  clicked: true,
+  selector,
+  candidate: candidates[0]
+};
 
- 
-  /*
-   * ============================================================
-   * CHECKPOINT DETECTION
-   * ============================================================
-   */
+}
+
+/*
+
+* ============================================================
+* CHECKPOINT DETECTION
+* ============================================================
+  */
   async detectCheckpoint() {
   const maxAttempts = 3;
 
