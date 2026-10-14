@@ -14217,7 +14217,10 @@ await input.setInputFiles(
    * ============================================================
    */
 
-  async clickUnambiguousAction(labels) {
+  async clickUnambiguousAction(
+  labels,
+  { force = true, allowJsFallback = true } = {}
+) {
     const page = await this.ensurePage();
 
     if (!Array.isArray(labels) || labels.length === 0) {
@@ -14327,38 +14330,43 @@ await input.setInputFiles(
       };
     }
 
+    
     try {
-      // 🔥 CRÍTICO: Adicionamos `{ force: true }`.
-      // Isto faz com que o Playwright execute o clique na coordenada exata do botão,
-      // ignorando se o elemento está "tapado" por um ecrã de loading, spinner ou overlay de rede.
-      await page.click(selector, { force: true, timeout: 5000 });
+      await page.click(selector, {
+        force,
+        timeout: 5000
+      });
     } catch (clickError) {
-      // Plano de contingência caso o seletor gerado falhe no motor do Playwright devido ao loop
-      const fallbackClicked = await page.evaluate((sel) => {
-        const el = document.querySelector(sel);
-        if (el) {
-          el.click();
-          return true;
-        }
-        return false;
-      }, selector).catch(() => false);
+      // O fallback JavaScript fica disponível para os fluxos antigos,
+      // mas pode ser desativado em ações que exigem clique real.
+      const fallbackClicked = allowJsFallback
+        ? await page.evaluate((sel) => {
+            const el = document.querySelector(sel);
+
+            if (el) {
+              el.click();
+              return true;
+            }
+
+            return false;
+          }, selector).catch(() => false)
+        : false;
 
       if (!fallbackClicked) {
         return {
           clicked: false,
           ambiguous: false,
-          reason: `Playwright click failed and JS fallback execution aborted: ${clickError.message}`,
+          reason:
+            `Playwright click${
+              allowJsFallback
+                ? " and JS fallback execution aborted"
+                : ""
+            } failed: ${clickError.message}`,
           candidates
         };
       }
     }
 
-    return {
-      clicked: true,
-      selector,
-      candidate: candidates[0]
-    };
-  }
 
  
   /*
