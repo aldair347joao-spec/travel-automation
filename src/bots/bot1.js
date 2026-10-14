@@ -3531,25 +3531,20 @@ START_NEW_BOOKING: async (app) => {
 
       return result;
     }
-
-    /*
-     * Só avançamos depois de o centro ter
-     * sido efetivamente preenchido.
-     */
-    const continued =
-      await withTimeout(
-        this.site.continueApplication(
-          app,
-          app.client
-        ),
-        config.timeoutMs,
-        "Navigator center continuation"
-      );
-
-    return continued || {
-      success:
-        true
-    };
+/*
+ * O centro não deve provocar um clique prematuro
+ * no Continue da página de nova reserva.
+ *
+ * A categoria do cliente será seleccionada
+ * em SET_VISA_TYPE. Só essa etapa chama
+ * continueApplication() neste fluxo.
+ */
+return {
+  success: true,
+  centerPrepared: true,
+  continueDeferred: true
+};
+    
   },
 
 
