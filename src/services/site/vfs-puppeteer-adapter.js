@@ -4900,7 +4900,7 @@ const loginSubmitWaitStartedAt =
   Date.now();
 
 const loginSubmitMaxWaitMs =
-  60000;
+  180000;
 
 while (
   Date.now() -
@@ -5317,10 +5317,7 @@ if (
  * ----------------------------------------------------------
  */
 
-if (
-  submitDisabled &&
-  captchaStillPresent
-) {
+if (captchaStillPresent) {
   logger.info(
     "VFS LOGIN BOTÃO BLOQUEADO POR SECURITY VERIFICATION",
     {
@@ -5676,39 +5673,29 @@ try {
           page.url()
       }
     );
-
-  } catch (error) {
-    logger.error(
-      "VFS LOGIN SUBMIT CLICK FAILED",
-      {
-        applicationId,
-        error:
-          error?.message ||
-          String(error)
-      }
-    );
-
-    return {
-      success: false,
-
-      requiresUser: true,
-
-      authenticated: false,
-
-      code:
-        "VFS_LOGIN_SUBMIT_CLICK_FAILED",
-
-      reason:
+} catch (error) {
+  logger.warn(
+    "VFS LOGIN SUBMIT CLICK FAILED — WILL RECHECK",
+    {
+      applicationId,
+      error:
         error?.message ||
-        "Could not click the VFS Sign In button.",
+        String(error),
+      retryable: true
+    }
+  );
 
-      state:
-        this.state,
+  loginSubmitClicked = false;
+  loginSubmitReady = false;
 
-      checkpoint:
-        this.lastCheckpoint
-    };
-  }
+  loginForm =
+    await this.findVfsLoginFields()
+      .catch(() => null);
+
+  await page.waitForTimeout(1000);
+
+  continue;
+}
 
   break;
 }
@@ -8542,25 +8529,157 @@ if (triggerCount !== 1) {
       }
     );
 
-    const otpSecurityBlocked =
-      otpSecurityState.buttonDisabled === true &&
-      (
-        otpSecurityState.challengeVisible === true ||
-        (
-          otpSecurityState.turnstilePresent === true &&
-          otpSecurityState.turnstileTokenPresent !== true
-        )
-      );
+   const otpSecurityBlocked =
+  otpSecurityState.challengeVisible === true ||
+  (
+    otpSecurityState.turnstilePresent === true &&
+    otpSecurityState.turnstileTokenPresent !== true
+  ) ||
+  otpSecurityState.buttonDisabled === true;
 
-    if (otpSecurityBlocked) {
-      logger.warn(
-        "VFS OTP SECURITY CHALLENGE — SCRAPELESS SOLVER STARTING",
-        {
-          applicationId: this.applicationId,
-          state: otpSecurityState
-        }
-      );
+const otpSecurityWaitStartedAt =
+  Date.now();
 
+const otpSecurityMaxWaitMs =
+  180000;
+
+let otpCaptchaSolverCalled = false;
+let otpLastSolverCallAt = 0;
+
+while (
+  Date.now() - otpSecurityWaitStartedAt <
+  otpSecurityMaxWaitMs
+) {
+  const challengePending =
+    otpSecurityState.challengeVisible === true ||
+    (
+      otpSecurityState.turnstilePresent === true &&
+      otpSecurityState.turnstileTokenPresent !== true
+    );
+
+  const buttonReady =
+    otpSecurityState.buttonDisabled === false;
+
+  if (
+    !challengePending &&
+    buttonReady
+  ) {
+    break;
+  }
+
+  /*
+   * Chamar o resolvedor quando há sinais de desafio.
+   * Se o desafio persistir, voltar a verificar antes
+   * de fazer uma nova chamada.
+   */
+  if (
+    challengePending &&
+    (
+      !otpCaptchaSolverCalled ||
+      Date.now() - otpLastSolverCallAt >= 15000
+    )
+  ) {
+    logger.warn(
+      "VFS OTP SECURITY CHALLENGE — CHECKING AGAIN",
+      {
+        applicationId: this.applicationId,
+        state: otpSecurityState
+      }
+    );
+
+    const captchaResult =
+      await this.solveScrapelessCaptcha()
+        .catch(error => ({
+          attempted: true,
+          solved: false,
+          status: "ERROR",
+          error:
+            error?.message ||
+            String(error)
+        }));
+
+    otpCaptchaSolverCalled = true;
+    otpLastSolverCallAt = Date.now();
+
+    logger.info(
+      "VFS OTP SCRAPELESS SOLVER RESULT",
+      {
+        applicationId: this.applicationId,
+        attempted:
+          captchaResult?.attempted === true,
+        solved:
+          captchaResult?.solved === true,
+        status:
+          captchaResult?.status || null,
+        error:
+          captchaResult?.error || null
+      }
+    );
+  }
+
+  await page.waitForTimeout(1000);
+
+  otpSecurityState =
+    await readOtpSecurityState()
+      .catch(error => ({
+        diagnosticError:
+          error?.message ||
+          String(error),
+        buttonDisabled: true,
+        turnstilePresent: false,
+        turnstileTokenPresent: false,
+        challengeVisible: true
+      }));
+
+  logger.info(
+    "VFS OTP SECURITY STATE POLL",
+    {
+      applicationId: this.applicationId,
+      elapsedMs:
+        Date.now() - otpSecurityWaitStartedAt,
+      state: otpSecurityState
+    }
+  );
+}
+
+logger.info(
+  "VFS OTP SECURITY STATE BEFORE SUBMIT",
+  {
+    applicationId: this.applicationId,
+    state: otpSecurityState
+  }
+);
+
+const otpChallengeStillPending =
+  otpSecurityState.challengeVisible === true ||
+  (
+    otpSecurityState.turnstilePresent === true &&
+    otpSecurityState.turnstileTokenPresent !== true
+  );
+
+if (
+  otpSecurityState.buttonDisabled !== false ||
+  otpChallengeStillPending
+) {
+  logger.warn(
+    "VFS OTP SECURITY WAIT EXPIRED",
+    {
+      applicationId: this.applicationId,
+      waitedMs:
+        Date.now() - otpSecurityWaitStartedAt,
+      state: otpSecurityState
+    }
+  );
+
+  return {
+    success: false,
+    requiresUser: true,
+    reason:
+      "A validação de segurança da VFS não ficou pronta dentro dos 3 minutos. O Bot 1 aguardou e verificou repetidamente, sem forçar o envio do OTP.",
+    securityState: otpSecurityState,
+    dom: this.getDomSummary()
+  };
+}
       const captchaResult =
         await this.solveScrapelessCaptcha()
           .catch(error => ({
