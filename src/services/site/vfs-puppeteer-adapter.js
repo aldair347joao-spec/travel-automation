@@ -7276,12 +7276,15 @@ if (
             ],
 
             visaType: [
-              "visa type",
-              "type of visa",
-              "visa category",
-              "application type",
-              "category"
-            ]
+  "choose your appointment category",
+  "appointment category",
+  "visa category",
+  "visa category/type",
+  "visa type",
+  "type of visa",
+  "application type",
+  "category"
+]
           };
 
           const terms =
