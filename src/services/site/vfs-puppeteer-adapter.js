@@ -8528,326 +8528,267 @@ if (triggerCount !== 1) {
         state: otpSecurityState
       }
     );
+  
+    // ============================================================
+    // VFS OTP — DUAS TENTATIVAS COM INTERVALOS DE 30 SEGUNDOS
+    // ============================================================
 
-   const otpSecurityBlocked =
-  otpSecurityState.challengeVisible === true ||
-  (
-    otpSecurityState.turnstilePresent === true &&
-    otpSecurityState.turnstileTokenPresent !== true
-  ) ||
-  otpSecurityState.buttonDisabled === true;
+    const otpInitialUrl = page.url();
 
-const otpSecurityWaitStartedAt =
-  Date.now();
+    let submitted = {
+      clicked: false,
+      ambiguous: false,
+      candidates: [],
+      reason: "Nenhuma tentativa executada.",
+      selector: null,
+      candidate: null
+    };
 
-const otpSecurityMaxWaitMs =
-  180000;
+    const findSignInButton = async () => {
+      let buttons = page.getByRole(
+        "button",
+        { name: /sign in/i }
+      );
 
-let otpCaptchaSolverCalled = false;
-let otpLastSolverCallAt = 0;
+      let count = await buttons.count();
 
-while (
-  Date.now() - otpSecurityWaitStartedAt <
-  otpSecurityMaxWaitMs
-) {
-  const challengePending =
-    otpSecurityState.challengeVisible === true ||
-    (
-      otpSecurityState.turnstilePresent === true &&
-      otpSecurityState.turnstileTokenPresent !== true
-    );
+      if (count === 0) {
+        buttons = page
+          .locator(
+            'button[type="submit"], button.btn-brand-orange'
+          )
+          .filter({ hasText: /sign in/i });
 
-  const buttonReady =
-    otpSecurityState.buttonDisabled === false;
-
-  if (
-    !challengePending &&
-    buttonReady
-  ) {
-    break;
-  }
-
-  /*
-   * Chamar o resolvedor quando há sinais de desafio.
-   * Se o desafio persistir, voltar a verificar antes
-   * de fazer uma nova chamada.
-   */
-  if (
-    challengePending &&
-    (
-      !otpCaptchaSolverCalled ||
-      Date.now() - otpLastSolverCallAt >= 15000
-    )
-  ) {
-    logger.warn(
-      "VFS OTP SECURITY CHALLENGE — CHECKING AGAIN",
-      {
-        applicationId: this.applicationId,
-        state: otpSecurityState
+        count = await buttons.count();
       }
-    );
 
-    const captchaResult =
-      await this.solveScrapelessCaptcha()
-        .catch(error => ({
-          attempted: true,
-          solved: false,
-          status: "ERROR",
-          error:
-            error?.message ||
-            String(error)
-        }));
-
-    otpCaptchaSolverCalled = true;
-    otpLastSolverCallAt = Date.now();
-
-    logger.info(
-      "VFS OTP SCRAPELESS SOLVER RESULT",
-      {
-        applicationId: this.applicationId,
-        attempted:
-          captchaResult?.attempted === true,
-        solved:
-          captchaResult?.solved === true,
-        status:
-          captchaResult?.status || null,
-        error:
-          captchaResult?.error || null
+      if (count === 0) {
+        return null;
       }
-    );
-  }
 
-  await page.waitForTimeout(1000);
+      const button = buttons.first();
 
-  otpSecurityState =
-    await readOtpSecurityState()
-      .catch(error => ({
-        diagnosticError:
-          error?.message ||
-          String(error),
+      return {
+        button,
+        count,
+        visible: await button.isVisible().catch(() => false),
+        enabled: await button.isEnabled().catch(() => false),
+        text: (
+          await button.innerText().catch(() => "Sign In")
+        ).trim()
+      };
+    };
+
+    const checkOtpSecurity = async () => {
+      return await readOtpSecurityState().catch(error => ({
+        diagnosticError: error?.message || String(error),
         buttonDisabled: true,
         turnstilePresent: false,
         turnstileTokenPresent: false,
         challengeVisible: true
       }));
+    };
 
-  logger.info(
-    "VFS OTP SECURITY STATE POLL",
-    {
-      applicationId: this.applicationId,
-      elapsedMs:
-        Date.now() - otpSecurityWaitStartedAt,
-      state: otpSecurityState
-    }
-  );
-}
+    const waitForOtpResult = async () => {
+      try {
+        await page.waitForURL(
+          url => url.toString() !== otpInitialUrl,
+          { timeout: 30000 }
+        );
+      } catch {
+        // O URL pode não mudar dentro do prazo.
+      }
 
-logger.info(
-  "VFS OTP SECURITY STATE BEFORE SUBMIT",
-  {
-    applicationId: this.applicationId,
-    state: otpSecurityState
-  }
-);
+      await this.detectState().catch(() => {});
+      await this.inspectCurrentDom().catch(() => {});
+      await this.detectCheckpoint().catch(() => {});
 
-const otpChallengeStillPending =
-  otpSecurityState.challengeVisible === true ||
-  (
-    otpSecurityState.turnstilePresent === true &&
-    otpSecurityState.turnstileTokenPresent !== true
-  );
+      const urlChanged = page.url() !== otpInitialUrl;
+      const authenticated =
+        this.isAuthenticatedState() === true;
+      const otpStillRequired =
+        this.lastCheckpoint?.type === "OTP_REQUIRED";
 
-if (
-  otpSecurityState.buttonDisabled !== false ||
-  otpChallengeStillPending
-) {
-  logger.warn(
-    "VFS OTP SECURITY WAIT EXPIRED",
-    {
-      applicationId: this.applicationId,
-      waitedMs:
-        Date.now() - otpSecurityWaitStartedAt,
-      state: otpSecurityState
-    }
-  );
+      return {
+        urlChanged,
+        authenticated,
+        otpStillRequired,
+        currentUrl: page.url()
+      };
+    };
 
-  return {
-    success: false,
-    requiresUser: true,
-    reason:
-      "A validação de segurança da VFS não ficou pronta dentro dos 3 minutos. O Bot 1 aguardou e verificou repetidamente, sem forçar o envio do OTP.",
-    securityState: otpSecurityState,
-    dom: this.getDomSummary()
-  };
-}
-      
-    let submitted =
-      await this.clickUnambiguousAction(
-        [
-          "verify",
-          "verify otp",
-          "submit",
-          "continue",
-          "sign in"
-        ]
+    // Espera inicial de 30 segundos após preencher o OTP.
+    logger.info(
+      "VFS OTP — ESPERA INICIAL DE 30 SEGUNDOS",
+      {
+        applicationId: this.applicationId,
+        url: page.url()
+      }
+    );
+
+    await page.waitForTimeout(30000);
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      if (page.url() !== otpInitialUrl) {
+        logger.info(
+          "VFS OTP — URL ALTERADO, A INTERROMPER",
+          {
+            applicationId: this.applicationId,
+            attempt,
+            url: page.url()
+          }
+        );
+        break;
+      }
+
+      const securityState = await checkOtpSecurity();
+
+      const challengePending =
+        securityState.challengeVisible === true ||
+        (
+          securityState.turnstilePresent === true &&
+          securityState.turnstileTokenPresent !== true
+        );
+
+      const signIn = await findSignInButton();
+
+      logger.info(
+        "VFS OTP — VERIFICAÇÃO ANTES DO CLIQUE",
+        {
+          applicationId: this.applicationId,
+          attempt,
+          buttonFound: Boolean(signIn),
+          buttonCount: signIn?.count || 0,
+          visible: signIn?.visible || false,
+          enabled: signIn?.enabled || false,
+          challengePending,
+          securityState
+        }
       );
 
+      if (
+        signIn &&
+        signIn.visible &&
+        signIn.enabled &&
+        !challengePending
+      ) {
+        try {
+          await signIn.button.click({ timeout: 10000 });
 
-/*
-     * FALLBACK SEGURO PARA O BOTÃO SIGN IN DA VFS.
-     * O botão pode estar fora do elemento FORM do OTP.
-     * Procurar na página inteira e clicar apenas
-     * quando existir exactamente um Sign In visível e activo.
-     */
+          submitted = {
+            clicked: true,
+            ambiguous: false,
+            candidates: [{
+              text: signIn.text,
+              type: "submit"
+            }],
+            reason: null,
+            selector: "getByRole.button",
+            candidate: signIn.text
+          };
 
+          logger.info(
+            "VFS OTP — CLIQUE EXECUTADO",
+            {
+              applicationId: this.applicationId,
+              attempt,
+              button: signIn.text
+            }
+          );
+        } catch (error) {
+          submitted = {
+            clicked: false,
+            ambiguous: false,
+            candidates: [],
+            reason: error?.message || String(error),
+            selector: null,
+            candidate: signIn.text
+          };
 
-
-   
-     if (
-  !submitted.clicked &&
-  submitted.reason ===
-    "Matched action has no safe selector."
-) {
-  try {
-    // Aguarda breves instantes para o Angular aplicar as classes de validação e o Turnstile acalmar os frames
-    await this.page.waitForTimeout(10000);
-
-    // Estratégia A: Localizar pelo papel de acessibilidade ARIA com Regex flexível (Tolerante a espaços)
-    let signInButtons = this.page.getByRole('button', { name: /sign in/i });
-    let buttonCount = await signInButtons.count();
-
-    // Estratégia B: Fallback se o ARIA falhar devido ao anidamento de frames da VFS
-    if (buttonCount !== 1) {
-      signInButtons = this.page.locator('button[type="submit"], button.btn-brand-orange').filter({
-        hasText: /Sign In/i
-      });
-      buttonCount = await signInButtons.count();
-    }
-
-    if (buttonCount >= 1) {
-      const button = signInButtons.first();
-      const buttonText = (await button.innerText() || 'Sign In').trim();
-      const visible = await button.isVisible();
-      const enabled = await button.isEnabled();
-
-      if (visible && enabled) {
-        // O parâmetro force: true evita que o Playwright aborte o clique por falta de "actionability" (causada pelos overlays do Turnstile)
-        await button.click({
-          timeout: 10000,
-          force: true
-        });
-
-        submitted = {
-          clicked: true,
-          ambiguous: false,
-          candidates: [{ text: buttonText, type: "submit" }],
-          reason: null,
-          selector: 'getByRole.button.force',
-          candidate: buttonText
-        };
-      } else {
-        // Estratégia C: O botão existe mas o DOM diz que está desativado (Falta de sincronia do token)
-        // Bypass total do motor de cliques do Playwright usando execução JavaScript injetada
-        logger.warn("Botão presente mas inativo/oculto. A forçar submissão direta via DOM...");
-        
-        await button.evaluate((el) => {
-          el.removeAttribute('disabled');
-          if (typeof el.click === 'function') {
-            el.click();
-          }
-        });
-
-        submitted = {
-          clicked: true,
-          ambiguous: false,
-          candidates: [{ text: buttonText, type: "submit" }],
-          reason: "Bypass JavaScript executado com sucesso sobre botão inativo.",
-          selector: 'evaluate.click',
-          candidate: buttonText
-        };
-      }
-    } else {
-      // Estratégia D: Último recurso absoluto se o botão evaporar do DOM
-      // Disparar o evento submit diretamente no elemento pai <form>
-      const formExists = await this.page.locator('form').count();
-      if (formExists > 0) {
-        logger.warn("Botão não encontrado. A disparar evento de submissão diretamente no formulário...");
-        await this.page.evaluate(() => {
-          const form = document.querySelector('form');
-          if (form) {
-            form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-          }
-        });
-        
-        submitted = {
-          clicked: true,
-          ambiguous: false,
-          candidates: [],
-          reason: "Evento de submit disparado diretamente no formulário nativo.",
-          selector: 'form.submit',
-          candidate: null
-        };
+          logger.warn(
+            "VFS OTP — FALHA NO CLIQUE",
+            {
+              applicationId: this.applicationId,
+              attempt,
+              error: submitted.reason
+            }
+          );
+        }
       } else {
         submitted = {
           clicked: false,
           ambiguous: false,
-          candidates: [],
-          reason: `Não foi possível encontrar o botão nem o formulário na árvore do DOM. Encontrados: ${buttonCount}.`,
+          candidates: signIn ? [{
+            text: signIn.text,
+            type: "submit"
+          }] : [],
+          reason: challengePending
+            ? "Desafio de segurança pendente."
+            : "Sign In não está visível e ativo.",
           selector: null,
-          candidate: null
+          candidate: signIn?.text || null
         };
       }
+
+      if (attempt === 1) {
+        const result = await waitForOtpResult();
+
+        logger.info(
+          "VFS OTP — RESULTADO DA PRIMEIRA TENTATIVA",
+          {
+            applicationId: this.applicationId,
+            clicked: submitted.clicked,
+            ...result
+          }
+        );
+
+        if (
+          result.urlChanged ||
+          result.authenticated ||
+          !result.otpStillRequired
+        ) {
+          break;
+        }
+
+        // Ainda está no OTP: aguardar mais 30 segundos.
+        logger.info(
+          "VFS OTP — SEGUNDA TENTATIVA EM 30 SEGUNDOS",
+          {
+            applicationId: this.applicationId
+          }
+        );
+
+        await page.waitForTimeout(30000);
+      }
     }
-  } catch (error) {
-    submitted = {
-      clicked: false,
-      ambiguous: false,
-      candidates: [],
-      reason: `Excepção no Fallback Playwright: ${error?.message || String(error)}`,
-      selector: null,
-      candidate: null
-    };
-  }
 
-  logger.info(
-    "VFS OTP SUBMIT FALLBACK DIAGNOSTICS",
-    {
-      applicationId: this.applicationId,
-      clicked: submitted.clicked,
-      reason: submitted.reason,
-      selector: submitted.selector,
-      candidate: submitted.candidate
-    }
-  );
-}
+    // Verificar o resultado final antes de devolver o controlo.
+    const finalResult = await waitForOtpResult();
 
-
-
-    
     logger.info(
-      "VFS OTP SUBMIT ACTION DIAGNOSTICS",
+      "VFS OTP — RESULTADO FINAL",
       {
         applicationId: this.applicationId,
         clicked: submitted.clicked,
-        ambiguous: submitted.ambiguous,
-        candidates: submitted.candidates || [],
-        reason: submitted.reason || null,
-        selector: submitted.selector || null,
-        candidate: submitted.candidate || null
+        reason: submitted.reason,
+        ...finalResult
       }
     );
 
-    if (!submitted.clicked) {
+    if (
+      !finalResult.authenticated &&
+      finalResult.otpStillRequired
+    ) {
       return {
         success: false,
         requiresUser: true,
         reason:
-          "OTP preenchido, mas não foi possível clicar com segurança no botão de submissão da VFS.",
+          "O OTP continuou na página após as duas tentativas de clique.",
+        submitted,
         dom: this.getDomSummary()
       };
     }
-
-
+ 
     await page
   .waitForLoadState("networkidle", {
     timeout: 8000
