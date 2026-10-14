@@ -627,56 +627,113 @@ function classifyState(
     return STATES.FACIAL;
   }
 
-  /*
-   * A URL é uma evidência forte.
-   */
+/*
+ * A URL é uma evidência forte.
+ *
+ * Em /application-detail, Luanda pode já estar
+ * predefinido. Por isso, não classificamos esta
+ * página como CENTER apenas por encontrar Luanda.
+ *
+ * Primeiro aguardamos o formulário; quando a
+ * etiqueta da categoria aparecer nos campos,
+ * avançamos para VISA_TYPE.
+ */
 
-  
-  /*
-   * O botão START NEW BOOKING indica que
-   * estamos no dashboard, ainda não dentro
-   * da nova reserva.
-   */
-  const normalizeButtonText = value =>
-    normalizeText(value);
-
-  const startBookingLabels = [
-    "start new booking",
-    "iniciar nova reserva"
-  ];
-
-  const buttonLabels = (observation.buttons || [])
-    .map(button =>
-      normalizeButtonText(
-        typeof button === "string"
-          ? button
-          : [
-              button?.text,
-              button?.label,
-              button?.ariaLabel,
-              button?.title
-            ].filter(Boolean).join(" ")
-      )
-    );
-
-  const bodyLabel = normalizeButtonText(
-    observation.bodyText || ""
+const normalizedUrl =
+  normalizeText(
+    observation.url || ""
   );
 
-  const hasStartNewBookingButton =
-    buttonLabels.some(label =>
-      startBookingLabels.some(expected =>
-        label.includes(expected)
-      )
-    ) ||
-    startBookingLabels.some(expected =>
-      bodyLabel.includes(expected)
-    );
+if (
+  normalizedUrl.includes(
+    "/application-detail"
+  )
+) {
 
-  if (hasStartNewBookingButton) {
-    return STATES.DASHBOARD;
+  const fieldEvidence =
+    normalizeText([
+      ...(observation.inputs || []),
+      ...(observation.selects || [])
+    ].map(item =>
+      typeof item === "string"
+        ? item
+        : [
+            item?.name,
+            item?.id,
+            item?.label,
+            item?.placeholder,
+            item?.text
+          ]
+            .filter(Boolean)
+            .join(" ")
+    ).join(" "));
+
+  const hasCategoryLabel =
+    /choose your appointment category|appointment category|visa category|visa category\/type|visa type|type of visa/
+      .test(fieldEvidence);
+
+  const hasVisibleFormControls =
+    (observation.inputs || []).length +
+    (observation.selects || []).length >
+    0;
+
+  if (
+    hasCategoryLabel &&
+    hasVisibleFormControls
+  ) {
+    return STATES.VISA_TYPE;
   }
-  
+
+  return STATES.NEW_BOOKING;
+}
+
+/*
+ * O botão START NEW BOOKING indica o dashboard
+ * apenas quando ainda não entrámos na nova reserva.
+ */
+
+const normalizeButtonText = value =>
+  normalizeText(value);
+
+const startBookingLabels = [
+  "start new booking",
+  "iniciar nova reserva"
+];
+
+const buttonLabels = (
+  observation.buttons || []
+).map(button =>
+  normalizeButtonText(
+    typeof button === "string"
+      ? button
+      : [
+          button?.text,
+          button?.label,
+          button?.ariaLabel,
+          button?.title
+        ]
+          .filter(Boolean)
+          .join(" ")
+  )
+);
+
+const bodyLabel = normalizeButtonText(
+  observation.bodyText || ""
+);
+
+const hasStartNewBookingButton =
+  buttonLabels.some(label =>
+    startBookingLabels.some(expected =>
+      label.includes(expected)
+    )
+  ) ||
+  startBookingLabels.some(expected =>
+    bodyLabel.includes(expected)
+  );
+
+if (hasStartNewBookingButton) {
+  return STATES.DASHBOARD;
+}
 
   const parts = [
     observation.title,
@@ -1116,48 +1173,72 @@ class VfsNavigator {
                   )
                   .filter(Boolean);
 
-              const inputData =
-                Array.from(
-                  document.querySelectorAll(
-                    "input, textarea"
-                  )
-                )
-                  .filter(
-                    visible
-                  )
-                  .map(
-                    element =>
-                      [
-                        element.name,
-                        element.id,
-                        element.placeholder,
-                        element.getAttribute(
-                          "aria-label"
-                        )
-                      ]
-                        .filter(Boolean)
-                        .join(" ")
-                  );
+              const describeField = element => {
 
-              const selectData =
-                Array.from(
-                  document.querySelectorAll(
-                    "select"
-                  )
-                )
-                  .filter(
-                    visible
-                  )
-                  .map(
-                    element =>
-                      [
-                        element.name,
-                        element.id
-                      ]
-                        .filter(Boolean)
-                        .join(" ")
-                  );
+  const labels = Array.from(
+    element.labels || []
+  ).map(
+    label =>
+      label.innerText ||
+      label.textContent ||
+      ""
+  );
 
+  const explicitLabels =
+    Array.from(
+      document.querySelectorAll("label")
+    )
+      .filter(
+        label =>
+          element.id &&
+          label.htmlFor === element.id
+      )
+      .map(
+        label =>
+          label.innerText ||
+          label.textContent ||
+          ""
+      );
+
+  const parentLabel =
+    element.closest("label");
+
+  const wrapper = element.closest(
+    "mat-form-field, .form-group, .form-field, " +
+    "[class*='form-field'], [class*='form-group']"
+  );
+
+  return [
+    element.name,
+    element.id,
+    element.getAttribute("placeholder"),
+    element.getAttribute("aria-label"),
+    ...labels,
+    ...explicitLabels,
+    parentLabel?.innerText || "",
+    wrapper?.innerText || ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+};
+
+const inputData =
+  Array.from(
+    document.querySelectorAll(
+      "input, textarea"
+    )
+  )
+    .filter(visible)
+    .map(describeField);
+
+const selectData =
+  Array.from(
+    document.querySelectorAll(
+      "select, [role='combobox']"
+    )
+  )
+    .filter(visible)
+    .map(describeField);
               const hasDate =
                 /\b20\d{2}[-/]\d{1,2}[-/]\d{1,2}\b/.test(
                   body
