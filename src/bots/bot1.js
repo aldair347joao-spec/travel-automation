@@ -3218,23 +3218,257 @@ START_NEW_BOOKING: async (app) => {
        * FORMULÁRIO
        * ---------------------------------------------------
        */
-
       INSPECT_BOOKING_FORM:
-        async (
-          app
-        ) => {
+  async (
+    app
+  ) => {
 
-          await this.heartbeat(
-            applicationId,
-            "navigator_booking_form"
-          );
+    await this.assertAdminRelease(
+      applicationId
+    );
+
+    await this.heartbeat(
+      applicationId,
+      "navigator_booking_form"
+    );
+
+    const page =
+      await this.site.ensurePage();
+
+    const timeoutMs = Math.max(
+      10000,
+      Number(
+        process.env.BOT1_TIMEOUT_MS
+      ) || 600000
+    );
+
+    const retryIntervalMs = 5000;
+    const deadline =
+      Date.now() + timeoutMs;
+
+    let attempt = 0;
+    let lastInspection = null;
+
+    logger.info(
+      "VFS BOOKING FORM WAIT STARTED",
+      {
+        applicationId,
+        timeoutMs,
+        retryIntervalMs,
+        url: page.url()
+      }
+    );
+
+    while (
+      Date.now() < deadline
+    ) {
+
+      await this.heartbeat(
+        applicationId,
+        "navigator_booking_form"
+      );
+
+      const checkpoint =
+        await this.site
+          .detectCheckpoint()
+          .catch(() => null);
+
+      if (checkpoint) {
+        return {
+          success: true,
+          requiresUser: true,
+          officialCheckpoint: true,
+          checkpoint
+        };
+      }
+
+      await this.site
+        .inspectCurrentDom()
+        .catch(() => {});
+
+      lastInspection =
+        await page.evaluate(() => {
+
+          const normalize = value =>
+            String(value || "")
+              .normalize("NFD")
+              .replace(
+                /[\u0300-\u036f]/g,
+                ""
+              )
+              .replace(/\s+/g, " ")
+              .trim()
+              .toLowerCase();
+
+          const visible = element => {
+            const rect =
+              element.getBoundingClientRect();
+
+            const style =
+              window.getComputedStyle(
+                element
+              );
+
+            return (
+              rect.width > 0 &&
+              rect.height > 0 &&
+              style.display !== "none" &&
+              style.visibility !== "hidden"
+            );
+          };
+
+          const controls = Array.from(
+            document.querySelectorAll(
+              "select, input, textarea, " +
+              "[role='combobox']"
+            )
+          ).filter(visible);
+
+          const categoryField =
+            controls.find(element => {
+
+              const labels = Array.from(
+                element.labels || []
+              ).map(
+                label =>
+                  label.innerText ||
+                  label.textContent ||
+                  ""
+              );
+
+              const parentLabel =
+                element.closest("label");
+
+              const wrapper = element.closest(
+                "mat-form-field, .form-group, " +
+                ".form-field, " +
+                "[class*='form-field'], " +
+                "[class*='form-group']"
+              );
+
+              const evidence = normalize([
+                element.name,
+                element.id,
+                element.getAttribute(
+                  "aria-label"
+                ),
+                element.getAttribute(
+                  "placeholder"
+                ),
+                ...labels,
+                parentLabel?.innerText || "",
+                wrapper?.innerText || ""
+              ].join(" "));
+
+              return (
+                /choose your appointment category|appointment category|visa category|visa category\/type|visa type|type of visa/
+                  .test(evidence) &&
+                !element.disabled &&
+                element.getAttribute(
+                  "aria-disabled"
+                ) !== "true"
+              );
+            });
 
           return {
-            success:
-              true
-          };
-        },
+            ready: Boolean(categoryField),
 
+            categoryField: categoryField
+              ? {
+                  tag:
+                    categoryField.tagName,
+                  id:
+                    categoryField.id || null,
+                  name:
+                    categoryField.name || null
+                }
+              : null,
+
+            visibleControlCount:
+              controls.length,
+
+            bodyText:
+              (
+                document.body?.innerText ||
+                ""
+              ).slice(0, 1000)
+          };
+        });
+
+      if (
+        lastInspection?.ready
+      ) {
+
+        logger.info(
+          "VFS BOOKING CATEGORY FIELD READY",
+          {
+            applicationId,
+            attempt,
+            url: page.url(),
+            categoryField:
+              lastInspection.categoryField,
+            visibleControlCount:
+              lastInspection.visibleControlCount
+          }
+        );
+
+        return {
+          success: true,
+          bookingFormReady: true,
+          categoryField:
+            lastInspection.categoryField,
+          url: page.url()
+        };
+      }
+
+      attempt += 1;
+
+      logger.info(
+        "VFS BOOKING FORM NOT READY — RETRYING",
+        {
+          applicationId,
+          attempt,
+          timeoutMs,
+          url: page.url(),
+          visibleControlCount:
+            lastInspection?.visibleControlCount || 0
+        }
+      );
+
+      const remainingMs =
+        deadline - Date.now();
+
+      if (remainingMs <= 0) {
+        break;
+      }
+
+      await page.waitForTimeout(
+        Math.min(
+          retryIntervalMs,
+          remainingMs
+        )
+      );
+    }
+
+    const details = {
+      applicationId,
+      attempts: attempt,
+      timeoutMs,
+      url: page.url(),
+      lastInspection
+    };
+
+    logger.error(
+      "VFS BOOKING FORM WAIT EXHAUSTED",
+      details
+    );
+
+    throw new Error(
+      "VFS_BOOKING_FORM_NOT_READY: " +
+      JSON.stringify(details)
+    );
+  },
+      
 
       /*
        * ---------------------------------------------------
