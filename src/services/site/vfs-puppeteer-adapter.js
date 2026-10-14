@@ -13708,16 +13708,55 @@ await input.setInputFiles(
    */
 
   async continueApplication(
-    application
+  application
+) {
+  const page =
+    await this.ensurePage();
+
+  const configuredTimeout =
+    Number(process.env.BOT1_TIMEOUT_MS) ||
+    600000;
+
+  // Deixa uma margem para o timeout externo
+  // do Bot 1 não interromper este ciclo primeiro.
+  const timeoutMs = Math.max(
+    10000,
+    configuredTimeout - 5000
+  );
+
+  const retryIntervalMs = 5000;
+  const deadline =
+    Date.now() + timeoutMs;
+
+  let attempt = 0;
+  let lastReason = null;
+
+  logger.info(
+    "VFS CONTINUE WAIT STARTED",
+    {
+      applicationId:
+        this.applicationId || null,
+      timeoutMs,
+      retryIntervalMs,
+      currentUrl: page.url()
+    }
+  );
+
+  while (
+    Date.now() < deadline
   ) {
+
     await this.inspectCurrentDom()
       .catch(() => {});
 
-    await this.detectCheckpoint();
+    await this.detectCheckpoint()
+      .catch(() => {});
+
+    const checkpointType =
+      this.lastCheckpoint?.type;
 
     if (
-      this.lastCheckpoint?.type ===
-      "CAPTCHA_REQUIRED"
+      checkpointType === "CAPTCHA_REQUIRED"
     ) {
       return this.checkpointResult(
         "CAPTCHA_REQUIRED",
@@ -13726,8 +13765,7 @@ await input.setInputFiles(
     }
 
     if (
-      this.lastCheckpoint?.type ===
-      "OTP_REQUIRED"
+      checkpointType === "OTP_REQUIRED"
     ) {
       return this.checkpointResult(
         "OTP_REQUIRED",
@@ -13736,8 +13774,7 @@ await input.setInputFiles(
     }
 
     if (
-      this.lastCheckpoint?.type ===
-      "FACIAL_POSITION"
+      checkpointType === "FACIAL_POSITION"
     ) {
       return {
         success: false,
@@ -13752,55 +13789,155 @@ await input.setInputFiles(
       };
     }
 
+    attempt += 1;
+
     const result =
       await this.clickUnambiguousAction(
         [
           "continue",
           "proceed",
           "next"
-        ]
-      );
+        ],
+        {
+          force: false,
+          allowJsFallback: false
+        }
+      ).catch(error => ({
+        clicked: false,
+        reason:
+          error?.message || String(error)
+      }));
 
     if (
-      !result.clicked
+      result?.clicked === true
     ) {
+
+      logger.info(
+        "VFS CONTINUE REAL CLICK EXECUTED",
+        {
+          applicationId:
+            this.applicationId || null,
+          attempt,
+          selector:
+            result.selector || null,
+          urlBeforeClick: page.url()
+        }
+      );
+
+      await page
+        .waitForLoadState(
+          "domcontentloaded",
+          { timeout: 10000 }
+        )
+        .catch(() => {});
+
+      await page
+        .waitForLoadState(
+          "networkidle",
+          { timeout: 10000 }
+        )
+        .catch(() => {});
+
+      await this.detectState()
+        .catch(() => {});
+
+      await this.inspectCurrentDom()
+        .catch(() => {});
+
+      await this.detectCheckpoint()
+        .catch(() => {});
+
+      if (this.lastCheckpoint?.type) {
+        return {
+          success: true,
+          requiresUser: true,
+          officialCheckpoint: true,
+          checkpoint:
+            this.lastCheckpoint
+        };
+      }
+
+      logger.info(
+        "VFS CONTINUE CLICK PROCESSED",
+        {
+          applicationId:
+            this.applicationId || null,
+          attempt,
+          currentUrl: page.url(),
+          state: this.state
+        }
+      );
+
       return {
-        success: false,
-        requiresUser: true,
-        reason:
-          "No unambiguous VFS continue action was found.",
+        success: true,
+        clicked: true,
+        realClick: true,
+        attempts: attempt,
+        state: this.state,
+        url: page.url(),
+        checkpoint:
+          this.lastCheckpoint,
         dom:
           this.getDomSummary()
       };
     }
 
-    const page =
-      await this.ensurePage();
+    lastReason =
+      result?.reason ||
+      "Continue is not visible, enabled or uniquely actionable.";
 
-    await page
-  .waitForLoadState("networkidle", {
-    timeout: 10000
-  })
-  .catch(() => {});
+    logger.info(
+      "VFS CONTINUE NOT READY — RETRYING",
+      {
+        applicationId:
+          this.applicationId || null,
+        attempt,
+        timeoutMs,
+        reason: lastReason,
+        currentUrl: page.url()
+      }
+    );
 
-    await this.detectState();
+    const remainingMs =
+      deadline - Date.now();
 
-    await this.inspectCurrentDom()
-      .catch(() => {});
+    if (remainingMs <= 0) {
+      break;
+    }
 
-    await this.detectCheckpoint();
-
-    return {
-      success: true,
-      state:
-        this.state,
-      checkpoint:
-        this.lastCheckpoint,
-      dom:
-        this.getDomSummary()
-    };
+    await page.waitForTimeout(
+      Math.min(
+        retryIntervalMs,
+        remainingMs
+      )
+    );
   }
 
+  logger.error(
+    "VFS CONTINUE WAIT EXHAUSTED",
+    {
+      applicationId:
+        this.applicationId || null,
+      attempts: attempt,
+      timeoutMs,
+      lastReason,
+      currentUrl: page.url()
+    }
+  );
+
+  return {
+    success: false,
+    reason:
+      "VFS_CONTINUE_NOT_READY_TIMEOUT: " +
+      JSON.stringify({
+        currentUrl: page.url(),
+        attempts: attempt,
+        timeoutMs,
+        lastReason
+      })
+  };
+}
+    
   /*
    * ============================================================
    * PAYMENT
