@@ -8741,12 +8741,25 @@ if (triggerCount !== 1) {
             ...result
           }
         );
-
-        if (
+            if (
           result.urlChanged ||
-          result.authenticated ||
-          !result.otpStillRequired
+          result.authenticated
         ) {
+          break;
+        }
+
+        if (!result.otpStillRequired) {
+          logger.warn(
+            "VFS OTP — CHECKPOINT NÃO CONFIRMADO",
+            {
+              applicationId: this.applicationId,
+              currentUrl: page.url(),
+              checkpoint: this.lastCheckpoint?.type || null
+            }
+          );
+
+          // Não repetir o envio sem confirmar que
+          // a página continua realmente no OTP.
           break;
         }
 
