@@ -7060,19 +7060,9 @@ if (
     client,
     preparedData
   ) {
-        const page =
-      await this.ensurePage();
-
-    if (
-      !page ||
-      page.isClosed()
-    ) {
-      return {
-        success: false,
-        reason:
-          "A página VFS não está disponível para preenchimento."
-      };
-    }
+            await this.navigate(
+      `${VFS_BASE_URL}/application-detail`
+    );
     if (
       this.lastCheckpoint?.type ===
       "CAPTCHA_REQUIRED"
