@@ -3010,7 +3010,7 @@ START_NEW_BOOKING: async (app) => {
     Number(config.timeoutMs) || 300000
   );
   const deadline = Date.now() + navigationTimeoutMs;
-  const initialWaitMs = 5000;
+  const initialWaitMs = 20000;
   const retryIntervalMs = 5000;
   const actionLabels = [
     "start new booking",
