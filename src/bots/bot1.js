@@ -3034,86 +3034,183 @@ START_NEW_BOOKING: async (app) => {
   await this.heartbeat(applicationId, "navigator_new_booking");
 
   const page = await this.site.ensurePage();
-  const context = page.context(); // Captura o contexto do Playwright
   const expectedPath = "/application-detail";
-  const navigationTimeoutMs = Math.max(10000, Number(config.timeoutMs) || 300000);
+  const navigationTimeoutMs = Math.max(
+    10000,
+    Number(config.timeoutMs) || 300000
+  );
   const deadline = Date.now() + navigationTimeoutMs;
   const initialWaitMs = 5000;
-  const actionLabels = ["start new booking", "iniciar nova reserva"];
+  const retryIntervalMs = 5000;
+  const actionLabels = [
+    "start new booking",
+    "iniciar nova reserva"
+  ];
+
   let attempt = 0;
   let lastClickResult = null;
 
-  logger.info("VFS START NEW BOOKING WAIT STARTED (PLAYWRIGHT)", { applicationId, currentUrl: page.url() });
+  logger.info("VFS START NEW BOOKING WAIT STARTED", {
+    applicationId,
+    timeoutMs: navigationTimeoutMs,
+    initialWaitMs,
+    retryIntervalMs,
+    currentUrl: page.url()
+  });
 
-  // Aguarda o ciclo inicial de carregamento
-  await page.waitForTimeout(Math.min(initialWaitMs, Math.max(0, deadline - Date.now())));
-
-  let targetPage = page;
+  // Dá tempo ao dashboard para terminar o ciclo inicial de carregamento.
+  await page.waitForTimeout(
+    Math.min(initialWaitMs, Math.max(0, deadline - Date.now()))
+  );
 
   while (Date.now() < deadline) {
-    const currentUrl = targetPage.url();
+    const currentUrl = page.url();
 
-    // Se já estamos no path esperado ou mudámos para a nova aba com o formulário, saímos do ciclo
-    if (currentUrl.toLowerCase().includes(expectedPath) && targetPage !== page) {
+    // Nunca repetir o clique depois de chegar ao destino.
+    if (currentUrl.toLowerCase().includes(expectedPath)) {
       break;
     }
 
-    const checkpoint = await this.site.detectCheckpoint().catch(() => null);
+    // Respeitar checkpoints oficiais da VFS.
+    const checkpoint = await this.site
+      .detectCheckpoint()
+      .catch(() => null);
+
     if (checkpoint) {
-      return { success: true, requiresUser: true, officialCheckpoint: true, checkpoint };
+      return {
+        success: true,
+        requiresUser: true,
+        officialCheckpoint: true,
+        checkpoint
+      };
     }
 
     attempt += 1;
 
-    try {
-      // PLAYWRIGHT PATTERN: Executa o clique e escuta uma possível nova aba em simultâneo
-      const [newPage] = await Promise.all([
-        context.waitForEvent('page', { timeout: 3000 }).catch(() => null), 
-        this.site.clickUnambiguousAction(actionLabels, { force: true, allowJsFallback: true })
-      ]);
+    lastClickResult = await this.site
+      .clickUnambiguousAction(actionLabels, {
+        force: false,
+        allowJsFallback: false
+      })
+      .catch(error => ({
+        clicked: false,
+        reason: error?.message || String(error)
+      }));
 
-      if (newPage) {
-        logger.info("PLAYWRIGHT DETECTED NEW TAB DISPATCHED", { url: newPage.url() });
-        targetPage = newPage;
-        await targetPage.waitForLoadState("domcontentloaded");
-        break; // Nova aba encontrada com sucesso, avançamos
-      }
-    } catch (error) {
-      logger.info("VFS CLICK OR TAB CAPTURE RETRYING", { attempt, reason: error?.message });
+    if (lastClickResult?.clicked === true) {
+      logger.info("VFS START NEW BOOKING CLICK ATTEMPT", {
+        applicationId,
+        attempt,
+        timeoutMs: navigationTimeoutMs,
+        urlBeforeClick: currentUrl,
+        selector: lastClickResult.selector || null
+      });
+    } else {
+      logger.info("VFS START NEW BOOKING NOT READY — RETRYING", {
+        applicationId,
+        attempt,
+        reason: lastClickResult?.reason ||
+          "Button unavailable, disabled or not actionable",
+        currentUrl: page.url()
+      });
     }
 
-    // Se não abriu nova aba, verifica se a página atual navegou
+    // Aguarda até 5 segundos para a navegação.
+    // Se o endereço não mudar, o ciclo tenta novamente.
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+
     try {
-      await targetPage.waitForURL(url => url.pathname.toLowerCase().includes(expectedPath), { timeout: 3000 });
-      break;
+      await page.waitForURL(
+        url => url.pathname.toLowerCase().includes(expectedPath),
+        {
+          timeout: Math.min(retryIntervalMs, remainingMs),
+          waitUntil: "domcontentloaded"
+        }
+      );
     } catch {
-      // Continua no ciclo se não houve navegação nem nova aba
+      // Sem navegação confirmada neste intervalo: voltar a verificar.
+    }
+
+    if (page.url().toLowerCase().includes(expectedPath)) {
+      break;
     }
   }
 
-  // Atualiza a referência global da página do bot se mudámos de aba
-  if (targetPage !== page) {
-    this.site.page = targetPage; 
-    logger.info("SWITCHED BOT ACTIVE PAGE TO NEW VFS TAB");
+  const destinationUrl = page.url();
+
+  if (!destinationUrl.toLowerCase().includes(expectedPath)) {
+    const checkpoint = await this.site
+      .detectCheckpoint()
+      .catch(() => null);
+
+    if (checkpoint) {
+      return {
+        success: true,
+        requiresUser: true,
+        officialCheckpoint: true,
+        checkpoint
+      };
+    }
+
+    logger.error("VFS START NEW BOOKING NAVIGATION EXHAUSTED", {
+      applicationId,
+      attempts: attempt,
+      timeoutMs: navigationTimeoutMs,
+      currentUrl: destinationUrl,
+      expectedPath,
+      lastClickReason: lastClickResult?.reason || null
+    });
+
+    throw new Error(
+      "START_NEW_BOOKING_NAVIGATION_FAILED: " +
+      JSON.stringify({
+        currentUrl: destinationUrl,
+        expectedPath,
+        attempts: attempt,
+        timeoutMs: navigationTimeoutMs,
+        lastClickReason: lastClickResult?.reason || null
+      })
+    );
   }
 
-  const destinationUrl = targetPage.url();
+  /*
+   * 3. INSPEÇÃO DE SEGURANÇA
+   */
 
-  // Inspeção de segurança na página de destino
   const observation = await this.navigator.inspect(app);
   if (observation.checkpoint) {
-    return { success: true, requiresUser: true, officialCheckpoint: true, checkpoint: observation.checkpoint };
+    return {
+      success: true,
+      requiresUser: true,
+      officialCheckpoint: true,
+      checkpoint: observation.checkpoint
+    };
+  }
+
+  const currentUrl = page.url();
+  if (!currentUrl.toLowerCase().includes("/application-detail")) {
+    throw new Error(
+      "START_NEW_BOOKING_DESTINATION_NOT_CONFIRMED: " + currentUrl
+    );
   }
 
   await this.heartbeat(applicationId, "navigator_booking_form");
-  logger.info("VFS NEW BOOKING PAGE CONFIRMED", { applicationId, url: destinationUrl });
 
-  // CRÍTICO PARA NÃO FECHAR: Executa imediatamente a inspeção do formulário.
-  // Isto impede que o Playwright descarregue o contexto ao devolver o controlo para o orchestrator principal.
-  logger.info("INVOKING INSPECT_BOOKING_FORM IMMEDIATELY TO KEEP THE BOT ALIVE");
-  return await this.INSPECT_BOOKING_FORM(app);
+  logger.info("VFS NEW BOOKING PAGE CONFIRMED", {
+    applicationId,
+    url: currentUrl,
+    navigatorState: this.navigator.state
+  });
+
+  return {
+    success: true,
+    clicked: true,
+    navigationConfirmed: true,
+    action: "START_NEW_BOOKING",
+    url: currentUrl
+  };
 },
-
 
 
       /*
