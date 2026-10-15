@@ -7060,9 +7060,10 @@ if (
     client,
     preparedData
   ) {
-            await this.navigate(
+    await this.navigate(
       `${VFS_BASE_URL}/application-detail`
     );
+
     if (
       this.lastCheckpoint?.type ===
       "CAPTCHA_REQUIRED"
