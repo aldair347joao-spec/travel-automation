@@ -786,36 +786,56 @@ if (hasStartNewBookingButton) {
   }
 
   /*
-   * Se estamos em /services e o DOM
-   * contém datas/horários, é calendário.
+   * ==========================================================
+   * CLASSIFICAR AS ROTAS REAIS DA VFS
+   * ==========================================================
+   *
+   * Os checkpoints oficiais já foram verificados acima.
+   * Agora usamos a rota real para não depender apenas
+   * dos textos encontrados no DOM.
    */
 
   if (
-    urlState ===
-      STATES.SERVICES &&
-    (
-      observation.hasCalendar ||
-      observation.hasSlots
-    )
+    urlState === STATES.YOUR_DETAILS
   ) {
-    return STATES.CALENDAR;
+    return STATES.YOUR_DETAILS;
   }
 
-  /*
-   * Serviços reais.
-   */
+  if (
+    urlState === STATES.FACIAL
+  ) {
+    return STATES.FACIAL;
+  }
 
   if (
-    urlState ===
-      STATES.SERVICES
+    urlState === STATES.SERVICES
   ) {
+    if (
+      observation.hasCalendar ||
+      observation.hasSlots
+    ) {
+      return STATES.CALENDAR;
+    }
+
     return STATES.SERVICES;
+  }
+
+  if (
+    urlState === STATES.REVIEW
+  ) {
+    return STATES.REVIEW;
+  }
+
+  if (
+    normalizeText(observation.url || "")
+      .includes("/book-appointment")
+  ) {
+    return STATES.CALENDAR;
   }
 
   return bestState;
 
 }
-
 
 /*
  * ============================================================
