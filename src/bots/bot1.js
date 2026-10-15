@@ -6896,16 +6896,24 @@ if (
     }
 
 
-    const confirmed =
-      confirmation?.confirmed ===
-        true ||
+    
+    const paymentConfirmed =
+      String(
+        confirmation?.paymentStatus || ""
+      ).trim().toLowerCase() === "true";
 
-      confirmation?.success ===
-        true ||
-
-      isPaidStatus(
-        confirmation?.paymentStatus
+    const hasTransactionEvidence =
+      Boolean(
+        confirmation?.requestReference ||
+        confirmation?.transactionId
       );
+
+    const confirmed =
+      confirmation?.confirmed === true &&
+      confirmation?.success === true &&
+      paymentConfirmed &&
+      hasTransactionEvidence;
+
 
 
     if (
