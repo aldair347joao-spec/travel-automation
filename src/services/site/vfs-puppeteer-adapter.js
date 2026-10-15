@@ -14081,7 +14081,8 @@ await input.setInputFiles(
     }
 
     attempt += 1;
-
+    const urlBeforeClick = page.url();
+    const stateBeforeClick = this.state;
     const result =
       await this.clickUnambiguousAction(
         [
@@ -14148,29 +14149,89 @@ await input.setInputFiles(
         };
       }
 
+      
+      /*
+       * Esperar pela transição real da VFS.
+       * Não repetir o clique enquanto aguardamos.
+       */
+      const transitionDeadline =
+        Date.now() + 30000;
+
+      let transitionConfirmed = false;
+
+      while (
+        Date.now() < transitionDeadline
+      ) {
+        await page.waitForTimeout(1000);
+
+        await this.detectState()
+          .catch(() => {});
+
+        await this.inspectCurrentDom()
+          .catch(() => {});
+
+        await this.detectCheckpoint()
+          .catch(() => {});
+
+        if (this.lastCheckpoint?.type) {
+          return {
+            success: true,
+            requiresUser: true,
+            officialCheckpoint: true,
+            checkpoint: this.lastCheckpoint
+          };
+        }
+
+        if (
+          page.url() !== urlBeforeClick ||
+          this.state !== stateBeforeClick
+        ) {
+          transitionConfirmed = true;
+          break;
+        }
+      }
+
       logger.info(
-        "VFS CONTINUE CLICK PROCESSED",
+        "VFS CONTINUE TRANSITION RESULT",
         {
           applicationId:
             this.applicationId || null,
           attempt,
+          urlBeforeClick,
           currentUrl: page.url(),
-          state: this.state
+          stateBeforeClick,
+          currentState: this.state,
+          transitionConfirmed
         }
       );
+
+      if (!transitionConfirmed) {
+        return {
+          success: false,
+          clicked: true,
+          realClick: true,
+          navigationConfirmed: false,
+          reason:
+            "VFS_CONTINUE_TRANSITION_NOT_CONFIRMED",
+          attempts: attempt,
+          url: page.url(),
+          state: this.state,
+          dom: this.getDomSummary()
+        };
+      }
 
       return {
         success: true,
         clicked: true,
         realClick: true,
+        navigationConfirmed: true,
         attempts: attempt,
         state: this.state,
         url: page.url(),
-        checkpoint:
-          this.lastCheckpoint,
-        dom:
-          this.getDomSummary()
+        checkpoint: this.lastCheckpoint,
+        dom: this.getDomSummary()
       };
+
     }
 
     lastReason =
