@@ -14608,13 +14608,46 @@ await input.setInputFiles(
       parsed.PaymentStatus ||
       null;
 
-    const confirmed =
+        const requestReference =
+      parsed.RequestRefNo ||
+      null;
+
+    const transactionId =
+      parsed.TransactionId ||
+      null;
+
+    const paymentConfirmed =
       String(
-        paymentStatus
-      ).toLowerCase() ===
-        "true" ||
-      this.state ===
-        "CONFIRMATION";
+        paymentStatus || ""
+      ).trim().toLowerCase() === "true";
+
+    const hasTransactionEvidence =
+      Boolean(
+        requestReference ||
+        transactionId
+      );
+
+    const confirmed =
+      url.includes("/confirmation") &&
+      paymentConfirmed &&
+      hasTransactionEvidence;
+
+    logger.info(
+      "VFS CONFIRMATION VERIFICATION",
+      {
+        applicationId:
+          this.applicationId || null,
+        confirmationRoute:
+          url.includes("/confirmation"),
+        paymentConfirmed,
+        hasRequestReference:
+          Boolean(requestReference),
+        hasTransactionId:
+          Boolean(transactionId),
+        confirmed,
+        url
+      }
+    );
 
     return {
       confirmed,
@@ -14624,16 +14657,17 @@ await input.setInputFiles(
 
       paymentStatus,
 
-      requestReference:
-        parsed.RequestRefNo ||
-        null,
+      requestReference,
 
-      transactionId:
-        parsed.TransactionId ||
-        null,
+      transactionId,
 
       confirmationUrl:
-        url
+        url,
+
+      reason:
+        confirmed
+          ? null
+          : "Official confirmation evidence is incomplete."
     };
   }
 
