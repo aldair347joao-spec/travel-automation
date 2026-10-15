@@ -1760,69 +1760,39 @@ logger.info("BOT1_DIAG_OTP_START", {
       }
 
 
-      await this.heartbeat(
-        applicationId,
-        "filling_application"
-      );
-
-
-      const filled =
-        await withTimeout(
-          this.site.fillApplication(
-            application,
-            application.client,
-            preparedData
-          ),
-          config.timeoutMs,
-          "Application preparation"
-        );
-
-
-      if (
-        filled?.success ===
-        false
-      ) {
-
-        if (
-          filled.requiresUser ===
-          true
-        ) {
-
-          application.bot1.status =
-            "waiting";
-
-          application.bot1.lastAction =
-            "application_checkpoint";
-
-
-          await application.save();
-
-          await this.releaseLock(
-            applicationId
-          );
-
-          return application;
-        }
-
-
-        throw new Error(
-          filled.reason ||
-          "Application preparation failed"
-        );
-      }
-
+      
+      /*
+       * -------------------------------------------------------
+       * PREPARAÇÃO DOS DADOS — SEM PREENCHER A PÁGINA AINDA
+       * -------------------------------------------------------
+       *
+       * O Navigator deve controlar a navegação até ao formulário.
+       * Não chamar fillApplication() nesta fase: isso podia
+       * navegar novamente para /application-detail antes da hora.
+       */
 
       application.preparedAt =
         new Date();
 
-
       application.metrics =
         application.metrics || {};
 
-
       application.metrics.preparationMs =
-        Date.now() -
-        startedAt;
+        Date.now() - startedAt;
+
+      logger.info(
+        "BOT1 DATA PREPARED — WAITING FOR NAVIGATOR",
+        {
+          applicationId,
+          preparedDataAvailable: Boolean(preparedData),
+          currentUrl:
+            typeof this.site.getCurrentUrl === "function"
+              ? this.site.getCurrentUrl()
+              : null
+        }
+      );
+
+        
 
 
             /*
