@@ -13307,7 +13307,185 @@ await input.setInputFiles(
       };
     }
 
+      /*
+     * ----------------------------------------------------------
+     * AGUARDAR A EXTRAÇÃO DO PASSAPORTE PELA VFS
+     * ----------------------------------------------------------
+     *
+     * Limite: 10 segundos.
+     * A ordem dos campos não importa.
+     * Nunca alterar os dados pessoais extraídos pela VFS.
+     */
 
+    const passportExtractionTimeoutMs = 10000;
+    const passportExtractionStartedAt = Date.now();
+
+    let passportExtraction = null;
+
+    while (
+      Date.now() - passportExtractionStartedAt <
+      passportExtractionTimeoutMs
+    ) {
+      passportExtraction = await page.evaluate(() => {
+        const normalize = value =>
+          String(value || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .toLowerCase();
+
+        const visible = element => {
+          if (!element) return false;
+
+          const style = window.getComputedStyle(element);
+          const rect = element.getBoundingClientRect();
+
+          return (
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            rect.width > 0 &&
+            rect.height > 0
+          );
+        };
+
+        const fields = Array.from(
+          document.querySelectorAll(
+            "input, select, textarea"
+          )
+        )
+          .filter(visible)
+          .map(element => {
+            const labels = Array.from(
+              element.labels || []
+            )
+              .map(label =>
+                label.innerText ||
+                label.textContent ||
+                ""
+              )
+              .join(" ");
+
+            const parentLabel =
+              element.closest("label")?.innerText || "";
+
+            return {
+              description: normalize([
+                element.name,
+                element.id,
+                element.placeholder,
+                element.getAttribute("aria-label"),
+                labels,
+                parentLabel
+              ].filter(Boolean).join(" ")),
+              value: String(element.value || "").trim()
+            };
+          });
+
+        const findFilled = patterns =>
+          fields.some(field =>
+            field.value &&
+            patterns.some(pattern =>
+              field.description.includes(pattern)
+            )
+          );
+
+        const detected = {
+          firstName: findFilled([
+            "first name",
+            "given name",
+            "given names",
+            "forename"
+          ]),
+
+          lastName: findFilled([
+            "last name",
+            "surname",
+            "family name"
+          ]),
+
+          gender: findFilled([
+            "gender",
+            "sex"
+          ]),
+
+          dateOfBirth: findFilled([
+            "date of birth",
+            "birth date",
+            "dob"
+          ]),
+
+          passportExpiry: findFilled([
+            "passport expiry",
+            "passport expiration",
+            "expiry date",
+            "expiration date",
+            "date of expiry",
+            "valid until",
+            "validity"
+          ]),
+
+          passportNumber: findFilled([
+            "passport number",
+            "passport no",
+            "passport no.",
+            "travel document number",
+            "document number"
+          ]),
+
+          currentNationality: findFilled([
+            "current nationality",
+            "nationality",
+            "citizenship"
+          ])
+        };
+
+        const detectedCount =
+          Object.values(detected).filter(Boolean).length;
+
+        return {
+          ...detected,
+          detectedCount,
+          ready:
+            detected.passportNumber &&
+            detected.firstName &&
+            detected.lastName &&
+            detected.dateOfBirth &&
+            detected.currentNationality &&
+            detectedCount >= 5
+        };
+      });
+
+      if (passportExtraction?.ready) {
+        break;
+      }
+
+      await new Promise(resolve =>
+        setTimeout(resolve, 250)
+      );
+    }
+
+    if (!passportExtraction?.ready) {
+      logger.warn(
+        "VFS PASSPORT EXTRACTION NOT CONFIRMED",
+        {
+          applicationId:
+            application?._id?.toString?.() ||
+            this.applicationId,
+          currentUrl: page.url(),
+          timeoutMs: passportExtractionTimeoutMs,
+          extraction: passportExtraction
+        }
+      );
+
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "A extração dos dados principais do passaporte não foi confirmada em 10 segundos. O Bot 1 não avançou.",
+        passportExtraction
+      };
+    }
     /*
      * Esperamos a VFS terminar a extração
      * e apresentar os campos de contacto.
