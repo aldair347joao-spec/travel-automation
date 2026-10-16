@@ -7060,7 +7060,8 @@ if (
     client,
     preparedData
   ) {
-        const page =
+        
+    const page =
       await this.ensurePage();
 
     if (
@@ -7073,6 +7074,48 @@ if (
           "A página VFS não está disponível para preenchimento."
       };
     }
+
+    const currentUrl =
+      page.url();
+
+    if (
+      !currentUrl
+        .toLowerCase()
+        .includes("/your-details")
+    ) {
+      logger.warn(
+        "VFS PERSONAL DETAILS FILL BLOCKED — WRONG PAGE",
+        {
+          applicationId:
+            application?._id?.toString() ||
+            this.applicationId,
+
+          currentUrl,
+
+          expectedPath:
+            "/your-details",
+
+          state:
+            this.state
+        }
+      );
+
+      return {
+        success: false,
+
+        reason:
+          "VFS_PERSONAL_FIELDS_WRONG_PAGE",
+
+        currentUrl,
+
+        expectedPath:
+          "/your-details",
+
+        state:
+          this.state
+      };
+    }
+
     if (
       this.lastCheckpoint?.type ===
       "CAPTCHA_REQUIRED"
@@ -13205,11 +13248,65 @@ await input.setInputFiles(
    * O telefone é mantido separado do country code.
    */
 
+  
   async fillVfsContactDetails(
     application = null
   ) {
     const page =
       await this.ensurePage();
+
+    if (
+      !page ||
+      page.isClosed()
+    ) {
+      return {
+        success: false,
+        reason:
+          "VFS_PAGE_NOT_AVAILABLE_FOR_CONTACT_DETAILS"
+      };
+    }
+
+    const currentUrl =
+      page.url();
+
+    if (
+      !currentUrl
+        .toLowerCase()
+        .includes("/your-details")
+    ) {
+      logger.warn(
+        "VFS CONTACT DETAILS BLOCKED — WRONG PAGE",
+        {
+          applicationId:
+            application?._id?.toString?.() ||
+            this.applicationId,
+
+          currentUrl,
+
+          expectedPath:
+            "/your-details",
+
+          state:
+            this.state
+        }
+      );
+
+      return {
+        success: false,
+
+        reason:
+          "VFS_CONTACT_DETAILS_WRONG_PAGE",
+
+        currentUrl,
+
+        expectedPath:
+          "/your-details",
+
+        state:
+          this.state
+      };
+    }
+
 
     /*
      * Esperamos a VFS terminar a extração
