@@ -13098,12 +13098,40 @@ async detectFacialPositionRequest() {
     }
 
     const page =
-      await this.ensurePage();
+  await this.ensurePage();
 
-    const inputs =
-      await page.$$(
-        "input[type='file']"
-      );
+const currentUrl = page.url();
+
+if (
+  !currentUrl
+    .toLowerCase()
+    .includes("/your-details")
+) {
+  logger.warn(
+    "VFS PASSPORT UPLOAD BLOCKED — WRONG PAGE",
+    {
+      applicationId:
+        metadata.applicationId ||
+        this.applicationId ||
+        null,
+      currentUrl,
+      expectedPath: "/your-details"
+    }
+  );
+
+  return {
+    success: false,
+    requiresUser: true,
+    reason:
+      "O upload do passaporte só pode ocorrer em /your-details.",
+    currentUrl
+  };
+}
+
+const inputs =
+  await page.$$(
+    "input[type='file']"
+  );
 
     if (
       inputs.length !== 1
@@ -13153,19 +13181,119 @@ async detectFacialPositionRequest() {
       };
     }
 
-    
-await input.setInputFiles(
-  passportPath
-);
+   
+    await input.setInputFiles(
+      passportPath
+    );
 
+    const fileAttachment =
+      await input.evaluate(node => ({
+        filesCount:
+          node.files?.length || 0,
+        fileName:
+          node.files?.[0]?.name || null,
+        fileSize:
+          node.files?.[0]?.size || 0
+      }));
+
+    if (
+      fileAttachment.filesCount !== 1 ||
+      !fileAttachment.fileName
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "O ficheiro do passaporte não ficou confirmado no campo de upload.",
+        fileAttachment
+      };
+    }
+
+    logger.info(
+      "VFS PASSPORT FILE ATTACHED",
+      {
+        applicationId:
+          metadata.applicationId ||
+          this.applicationId ||
+          null,
+        fileName:
+          fileAttachment.fileName,
+        fileSize:
+          fileAttachment.fileSize,
+        currentUrl:
+          page.url()
+      }
+    );
+
+    /*
+     * O primeiro Continue solicita à VFS
+     * a extração dos dados do passaporte.
+     * Não avançar se o clique real falhar.
+     */
+    const continueResult =
+      await this.clickUnambiguousAction(
+        ["continue"],
+        {
+          force: false,
+          allowJsFallback: false
+        }
+      ).catch(error => ({
+        clicked: false,
+        reason:
+          error?.message ||
+          String(error)
+      }));
+
+    if (
+      continueResult?.clicked !== true
+    ) {
+      logger.warn(
+        "VFS PASSPORT EXTRACTION CONTINUE NOT CLICKED",
+        {
+          applicationId:
+            metadata.applicationId ||
+            this.applicationId ||
+            null,
+          currentUrl:
+            page.url(),
+          reason:
+            continueResult?.reason ||
+            "O botão Continue não foi confirmado."
+        }
+      );
+
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "O passaporte foi anexado, mas não foi possível confirmar o clique em Continue.",
+        fileAttached: true,
+        continueResult
+      };
+    }
+
+    logger.info(
+      "VFS PASSPORT EXTRACTION REQUESTED",
+      {
+        applicationId:
+          metadata.applicationId ||
+          this.applicationId ||
+          null,
+        currentUrl:
+          page.url(),
+        fileAttached: true,
+        continueClicked: true
+      }
+    );
 
     return {
       success: true,
       uploaded: true,
-      size:
-        stat.size,
+      fileAttached: true,
+      extractionRequested: true,
+      size: stat.size,
       metadata
-    };
+    }; 
   }
 
   acceptsPassportFile(
@@ -14244,28 +14372,177 @@ await input.setInputFiles(
       };
     }
 
+    /*
+     * Só guardar depois de validar os contactos.
+     * Esta ação só pode ocorrer em /your-details.
+     */
+    const urlBeforeSave = page.url();
+
+    if (
+      !urlBeforeSave
+        .toLowerCase()
+        .includes("/your-details")
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "A página mudou antes do Save; o bot não deve guardar noutra página.",
+        currentUrl: urlBeforeSave
+      };
+    }
+
+    const saveResult =
+      await this.clickUnambiguousAction(
+        ["save"],
+        {
+          force: false,
+          allowJsFallback: false
+        }
+      ).catch(error => ({
+        clicked: false,
+        reason:
+          error?.message ||
+          String(error)
+      }));
+
+    if (
+      saveResult?.clicked !== true
+    ) {
+      logger.warn(
+        "VFS YOUR DETAILS SAVE NOT CLICKED",
+        {
+          applicationId:
+            application?._id?.toString?.() ||
+            this.applicationId ||
+            null,
+          currentUrl:
+            page.url(),
+          reason:
+            saveResult?.reason ||
+            "O clique em Save não foi confirmado."
+        }
+      );
+
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "Os contactos foram preenchidos, mas não foi possível confirmar o clique em Save.",
+        verification,
+        saveResult
+      };
+    }
+
+    logger.info(
+      "VFS YOUR DETAILS SAVE CLICKED",
+      {
+        applicationId:
+          application?._id?.toString?.() ||
+          this.applicationId ||
+          null,
+        urlBeforeSave,
+        currentUrl:
+          page.url()
+      }
+    );
+
+    /*
+     * Confirmar a transição para a próxima URL.
+     * Não considerar o Save concluído apenas
+     * porque o clique foi executado.
+     */
+    const navigationDeadline =
+      Date.now() + 30000;
+
+    let nextUrlConfirmed = false;
+
+    while (
+      Date.now() < navigationDeadline
+    ) {
+      await page.waitForTimeout(1000);
+
+      if (
+        page.isClosed()
+      ) {
+        break;
+      }
+
+      const currentUrl = page.url();
+
+      if (
+        currentUrl !== urlBeforeSave &&
+        !currentUrl
+          .toLowerCase()
+          .includes("/your-details")
+      ) {
+        nextUrlConfirmed = true;
+        break;
+      }
+    }
+
+    if (!nextUrlConfirmed) {
+      logger.warn(
+        "VFS SAVE NAVIGATION NOT CONFIRMED",
+        {
+          applicationId:
+            application?._id?.toString?.() ||
+            this.applicationId ||
+            null,
+          urlBeforeSave,
+          currentUrl:
+            page.isClosed()
+              ? null
+              : page.url(),
+          timeoutMs: 30000
+        }
+      );
+
+      return {
+        success: false,
+        requiresUser: true,
+        reason:
+          "O clique em Save foi executado, mas a próxima URL da VFS não foi confirmada em 30 segundos.",
+        urlBeforeSave,
+        currentUrl:
+          page.isClosed()
+            ? null
+            : page.url(),
+        verification
+      };
+    }
+
     await this.inspectCurrentDom()
       .catch(() => {});
 
+    logger.info(
+      "VFS YOUR DETAILS SAVED — NEXT URL CONFIRMED",
+      {
+        applicationId:
+          application?._id?.toString?.() ||
+          this.applicationId ||
+          null,
+        urlBeforeSave,
+        nextUrl:
+          page.url()
+      }
+    );
+
     return {
       success: true,
-
-      countryCode:
-        "244",
-
-      phone:
-        verification.phone,
-
-      email:
-        applicationEmail,
-
+      saved: true,
+      navigationConfirmed: true,
+      urlBeforeSave,
+      nextUrl: page.url(),
+      countryCode: "244",
+      phone: verification.phone,
+      email: applicationEmail,
       applicationId:
         application?._id?.toString?.() ||
         this.applicationId,
-
-      dom:
-        this.getDomSummary()
+      dom: this.getDomSummary()
     };
+
   }
   /*
    * ============================================================
