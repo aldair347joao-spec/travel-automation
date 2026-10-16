@@ -14446,30 +14446,33 @@ const inputs =
           page.url()
       }
     );
-
+  
     /*
-     * Confirmar a transição para a próxima URL.
-     * Não considerar o Save concluído apenas
-     * porque o clique foi executado.
+     * ----------------------------------------------------------
+     * APÓS SAVE: TRATAR UMA CAIXA DE MENSAGEM DA VFS
+     * ----------------------------------------------------------
+     *
+     * Se aparecer uma caixa de diálogo com Continue,
+     * clicar apenas no botão que pertence à caixa.
+     * Depois, aguardar a mudança real do URL.
      */
+
     const navigationDeadline =
       Date.now() + 30000;
 
     let nextUrlConfirmed = false;
+    let modalContinueClicked = false;
 
     while (
       Date.now() < navigationDeadline
     ) {
-      await page.waitForTimeout(1000);
-
-      if (
-        page.isClosed()
-      ) {
+      if (page.isClosed()) {
         break;
       }
 
       const currentUrl = page.url();
 
+      // A VFS já navegou para outra página.
       if (
         currentUrl !== urlBeforeSave &&
         !currentUrl
@@ -14479,6 +14482,101 @@ const inputs =
         nextUrlConfirmed = true;
         break;
       }
+
+      /*
+       * Procurar Continue exclusivamente dentro
+       * de uma caixa de diálogo visível.
+       */
+      if (!modalContinueClicked) {
+        const modalSelectors = [
+          '[role="dialog"]',
+          '[aria-modal="true"]',
+          '.modal',
+          '.modal-dialog',
+          '.cdk-overlay-pane',
+          '.MuiDialog-root',
+          '.swal2-popup'
+        ];
+
+        for (const selector of modalSelectors) {
+          const dialogs = page.locator(selector);
+
+          const dialogCount = await dialogs.count()
+            .catch(() => 0);
+
+          for (let i = 0; i < dialogCount; i++) {
+            const dialog = dialogs.nth(i);
+
+            const visible = await dialog.isVisible()
+              .catch(() => false);
+
+            if (!visible) {
+              continue;
+            }
+
+            const continueButton =
+              dialog.getByRole("button", {
+                name: /^continue$/i,
+                exact: true
+              });
+
+            const buttonCount =
+              await continueButton.count()
+                .catch(() => 0);
+
+            if (buttonCount !== 1) {
+              continue;
+            }
+
+            const enabled =
+              await continueButton.isEnabled()
+                .catch(() => false);
+
+            if (!enabled) {
+              continue;
+            }
+
+            logger.info(
+              "VFS YOUR DETAILS MODAL CONTINUE FOUND",
+              {
+                applicationId:
+                  application?._id?.toString?.() ||
+                  this.applicationId ||
+                  null,
+                currentUrl,
+                modalSelector: selector
+              }
+            );
+
+            await continueButton.click({
+              timeout: 5000
+            });
+
+            modalContinueClicked = true;
+
+            logger.info(
+              "VFS YOUR DETAILS MODAL CONTINUE CLICKED",
+              {
+                applicationId:
+                  application?._id?.toString?.() ||
+                  this.applicationId ||
+                  null,
+                urlBeforeSave,
+                currentUrl: page.url()
+              }
+            );
+
+            break;
+          }
+
+          if (modalContinueClicked) {
+            break;
+          }
+        }
+      }
+
+      await page.waitForTimeout(1000)
+        .catch(() => {});
     }
 
     if (!nextUrlConfirmed) {
@@ -14494,6 +14592,7 @@ const inputs =
             page.isClosed()
               ? null
               : page.url(),
+          modalContinueClicked,
           timeoutMs: 30000
         }
       );
@@ -14502,16 +14601,21 @@ const inputs =
         success: false,
         requiresUser: true,
         reason:
-          "O clique em Save foi executado, mas a próxima URL da VFS não foi confirmada em 30 segundos.",
+          modalContinueClicked
+            ? "O botão Continue da caixa foi clicado, mas a próxima URL da VFS não foi confirmada em 30 segundos."
+            : "O clique em Save foi executado, mas a próxima URL da VFS não foi confirmada em 30 segundos.",
         urlBeforeSave,
         currentUrl:
           page.isClosed()
             ? null
             : page.url(),
+        modalContinueClicked,
         verification
       };
     }
 
+
+    
     await this.inspectCurrentDom()
       .catch(() => {});
 
