@@ -12124,15 +12124,82 @@ async detectFacialPositionRequest() {
 
     /*
      * ----------------------------------------------------------
-     * 1. RESOLVER O PEDIDO ATUAL DA VFS
+     * 1. CONFIRMAR A PÁGINA E CLICAR NO BOTÃO INICIAL DA VFS
      * ----------------------------------------------------------
      */
 
-    const resolved =
-      await this.handleFacialPositionRequest(
-        application,
-        client
-      );
+    if (
+      !this.page ||
+      this.page.isClosed() ||
+      !this.page.url().includes("/ago/en/prt/fv-instructions")
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        unresolved: true,
+        state: "FV_INSTRUCTIONS_PAGE_NOT_READY",
+        reason: "A página de instruções faciais da VFS não está ativa."
+      };
+    }
+
+    if (!this.fvInstructionsButtonClicked) {
+      const button = this.page.getByRole("button", {
+        name: "inHouseAI.buttons.button1",
+        exact: true
+      });
+
+      try {
+        await button.waitFor({
+          state: "visible",
+          timeout: 30000
+        });
+
+        const enabled = await button.isEnabled();
+
+        if (!enabled) {
+          return {
+            success: false,
+            requiresUser: true,
+            unresolved: true,
+            state: "FV_INITIAL_BUTTON_DISABLED",
+            reason: "O botão inicial da VFS está visível, mas desativado."
+          };
+        }
+
+        await button.click({
+          timeout: 10000
+        });
+
+        this.fvInstructionsButtonClicked = true;
+
+        logger.info("VFS FACIAL INITIAL BUTTON CLICKED", {
+          applicationId: this.applicationId,
+          buttonText: "inHouseAI.buttons.button1",
+          url: this.page.url()
+        });
+      } catch (error) {
+        logger.warn("VFS FACIAL INITIAL BUTTON NOT READY", {
+          applicationId: this.applicationId,
+          buttonText: "inHouseAI.buttons.button1",
+          url: this.page.url(),
+          error: error.message
+        });
+
+        return {
+          success: false,
+          requiresUser: true,
+          unresolved: true,
+          state: "FV_INITIAL_BUTTON_NOT_READY",
+          reason: error.message
+        };
+      }
+    }
+
+    /*
+     * A etapa seguinte deve confirmar a ativação da câmera
+     * falsa ou persistente do nosso sistema e deixar o bot entregar as posições do cliente pre gravado acompanhar as instruções apresentadas pela VFS.
+     */
+
 
 
     /*
