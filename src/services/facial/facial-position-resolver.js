@@ -562,42 +562,33 @@ return (
 
 }
 
-semanticGroups(
-text
-) {
-const normalized =
-this.normalize(
-text
-);
+   
+semanticGroups(text) {
+  const normalized = this.normalize(text);
+  const groups = [];
 
-const groups = [];
+  for (const [group, terms] of Object.entries(SYNONYMS)) {
+    const matched = terms.some(term => {
+      const normalizedTerm = this.normalize(term);
 
-for (
-  const [group, terms] of
-  Object.entries(
-    SYNONYMS
-  )
-) {
-  if (
-    terms.some(
-      term =>
-        normalized.includes(
-          this.normalize(
-            term
-          )
-        )
-    )
-  ) {
-    groups.push(
-      group
-    );
+      const escapedTerm = normalizedTerm
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+        .replace(/\s+/g, "\\s+");
+
+      const expression = new RegExp(
+        `(^|[^a-z0-9])${escapedTerm}($|[^a-z0-9])`
+      );
+
+      return expression.test(normalized);
+    });
+
+    if (matched) {
+      groups.push(group);
+    }
   }
+
+  return groups;
 }
-
-return groups;
-
-}
-
 /*
 
 * ============================================================
