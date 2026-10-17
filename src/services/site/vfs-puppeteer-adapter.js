@@ -12196,37 +12196,60 @@ async detectFacialPositionRequest() {
     }
 
     /*
-     * A etapa seguinte deve confirmar a ativação da câmera
-     * falsa ou persistente do nosso sistema e deixar o bot entregar as posições do cliente pre gravado acompanhar as instruções apresentadas pela VFS.
-     */
-
-
-
-    /*
      * ----------------------------------------------------------
-     * 2. PEDIDO AINDA NÃO PODE SER RESOLVIDO
+     * 2. VERIFICAR A CÂMARA E AGUARDAR A VERIFICAÇÃO REAL
      * ----------------------------------------------------------
      */
 
-    if (
-      !resolved?.success ||
-      resolved?.unresolved
-    ) {
+    let cameraState;
+
+    try {
+      cameraState = await this.getFacialCameraState();
+    } catch (error) {
+      this.logger?.error?.(
+        "VFS FACIAL CAMERA STATE CHECK FAILED",
+        {
+          message: error.message
+        }
+      );
 
       return {
-        ...resolved,
-
-        success:
-          false,
-
-        requiresUser:
-          resolved?.requiresUser !== false,
-
-        state:
-          resolved?.state ||
-          "FACIAL_POSITION_UNRESOLVED"
+        success: false,
+        requiresUser: true,
+        state: "FACIAL_CAMERA_STATE_ERROR",
+        reason: error.message
       };
     }
+
+    if (
+      cameraState?.opened !== true ||
+      cameraState?.active !== true
+    ) {
+      return {
+        success: false,
+        requiresUser: true,
+        waitingForVerification: true,
+        state: "WAITING_FOR_VFS_CAMERA",
+        camera: cameraState
+      };
+    }
+
+    this.logger?.info?.(
+      "VFS FACIAL CAMERA AVAILABLE",
+      {
+        opened: cameraState.opened,
+        active: cameraState.active
+      }
+    );
+
+    return {
+      success: false,
+      requiresUser: true,
+      waitingForVerification: true,
+      state: "FACIAL_CAMERA_READY_AWAITING_VERIFICATION",
+      camera: cameraState
+    };
+
 
 
     const position =
