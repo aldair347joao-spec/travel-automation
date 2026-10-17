@@ -846,6 +846,93 @@ logger.info(
   }
 );
     await this.clearRemoteBrowserCache();
+    
+/*
+ * ============================================================
+ * DIAGNÓSTICO HTTP DA VFS — APENAS METADADOS
+ * ============================================================
+ *
+ * Ativar com VFS_HTTP_RADAR_DIAGNOSTICS=true.
+ * Não regista cookies, tokens nem valores do payload.
+ */
+
+if (
+  String(process.env.VFS_HTTP_RADAR_DIAGNOSTICS || "")
+    .trim()
+    .toLowerCase() === "true"
+) {
+  this.page.on("request", request => {
+    try {
+      const url = new URL(request.url());
+
+      if (url.hostname !== "lift-api.vfsglobal.com") {
+        return;
+      }
+
+      let payloadKeys = [];
+
+      const postData = request.postData();
+
+      if (postData) {
+        try {
+          const parsed = JSON.parse(postData);
+
+          if (
+            parsed &&
+            typeof parsed === "object" &&
+            !Array.isArray(parsed)
+          ) {
+            payloadKeys = Object.keys(parsed);
+          }
+        } catch {
+          payloadKeys = ["non-json-body"];
+        }
+      }
+
+      logger.info("VFS HTTP RADAR REQUEST", {
+        applicationId: this.applicationId,
+        method: request.method(),
+        host: url.hostname,
+        path: url.pathname,
+        payloadKeys
+      });
+    } catch (error) {
+      logger.warn("VFS HTTP RADAR REQUEST DIAGNOSTIC FAILED", {
+        applicationId: this.applicationId,
+        error: error?.message || String(error)
+      });
+    }
+  });
+
+  this.page.on("response", response => {
+    try {
+      const url = new URL(response.url());
+
+      if (url.hostname !== "lift-api.vfsglobal.com") {
+        return;
+      }
+
+      logger.info("VFS HTTP RADAR RESPONSE", {
+        applicationId: this.applicationId,
+        method: response.request().method(),
+        host: url.hostname,
+        path: url.pathname,
+        status: response.status(),
+        contentType:
+          response.headers()["content-type"] || null
+      });
+    } catch (error) {
+      logger.warn("VFS HTTP RADAR RESPONSE DIAGNOSTIC FAILED", {
+        applicationId: this.applicationId,
+        error: error?.message || String(error)
+      });
+    }
+  });
+
+  logger.info("VFS HTTP RADAR DIAGNOSTICS ENABLED", {
+    applicationId: this.applicationId
+  });
+}
   /*
  * ============================================================
  * DIAGNÓSTICO DO IP DE SAÍDA — SCRAPELESS / IPROYAL
