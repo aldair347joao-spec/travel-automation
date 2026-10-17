@@ -12240,12 +12240,98 @@ async detectFacialPositionRequest() {
       }
     );
 
+    
+    // Resolver a instrução atual usando as posições
+    // que já existem no perfil do cliente.
+    let resolved;
+
+    try {
+      resolved = await this.handleFacialPositionRequest(
+        application,
+        client
+      );
+    } catch (error) {
+      this.logger?.error?.(
+        "VFS FACIAL POSITION RESOLUTION FAILED",
+        {
+          applicationId: this.applicationId,
+          url: this.page.url(),
+          error: error?.message || String(error)
+        }
+      );
+
+      return {
+        success: false,
+        requiresUser: true,
+        unresolved: true,
+        waitingForVerification: true,
+        state: "FACIAL_POSITION_RESOLUTION_ERROR",
+        reason: error?.message || String(error),
+        camera: cameraState
+      };
+    }
+
+    // Não aceitar uma posição se o pedido não foi
+    // identificado inequivocamente.
+    if (
+      !resolved?.success ||
+      resolved.state !== "FACIAL_POSITION_RESOLVED"
+    ) {
+      return {
+        ...resolved,
+        success: false,
+        requiresUser: true,
+        waitingForVerification: true,
+        camera: cameraState
+      };
+    }
+
+    // Registar a posição reconhecida para identificar
+    // quando a VFS apresentar uma instrução diferente.
+    const previousPosition =
+      this.lastResolvedFacialPosition ?? null;
+
+    const positionChanged =
+      previousPosition !== null &&
+      Number(previousPosition) !== Number(resolved.position);
+
+    this.lastResolvedFacialPosition =
+      Number(resolved.position);
+
+    this.logger?.info?.(
+      "VFS FACIAL POSITION RESOLVED",
+      {
+        applicationId: this.applicationId,
+        request: resolved.request,
+        position: resolved.position,
+        label: resolved.label,
+        previousPosition,
+        positionChanged,
+        score: resolved.score,
+        cameraOpened: cameraState.opened,
+        cameraActive: cameraState.active,
+        accepted: false
+      }
+    );
+
+    // O reconhecimento da instrução não significa que
+    // a VFS já aceitou a verificação biométrica.
     return {
       success: false,
       requiresUser: true,
+      unresolved: false,
       waitingForVerification: true,
-      state: "FACIAL_CAMERA_READY_AWAITING_VERIFICATION",
-      camera: cameraState
+      state: "FACIAL_POSITION_RESOLVED_AWAITING_LIVE_ACTION",
+      request: resolved.request,
+      position: resolved.position,
+      label: resolved.label,
+      score: resolved.score,
+      matchedTerms: resolved.matchedTerms || [],
+      previousPosition,
+      positionChanged,
+      accepted: false,
+      camera: cameraState,
+      checkpoint: this.lastCheckpoint
     };
 
 
