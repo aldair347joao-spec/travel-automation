@@ -5559,6 +5559,66 @@ if (
       continue;
     }
 
+    /*
+     * -------------------------------------------------
+     * POSIÇÃO RECONHECIDA — MANTER O CICLO ATIVO
+     * -------------------------------------------------
+     *
+     * Reconhecer a instrução não significa que a VFS
+     * tenha aceite a verificação. Guardamos a posição
+     * como pendente e continuamos a acompanhar a página.
+     */
+
+    if (
+      facialResult?.state ===
+      "FACIAL_POSITION_RESOLVED_AWAITING_LIVE_ACTION"
+    ) {
+      noInstructionCount = 0;
+
+      application.facialCheckpoint =
+        application.facialCheckpoint || {};
+
+      application.facialCheckpoint.pendingPosition =
+        Number(facialResult.position);
+
+      application.facialCheckpoint.pendingLabel =
+        facialResult.label || null;
+
+      application.facialCheckpoint.pendingRequest =
+        facialResult.request || null;
+
+      application.facialCheckpoint.pendingScore =
+        facialResult.score ?? null;
+
+      application.facialCheckpoint.pendingSince =
+        application.facialCheckpoint.pendingSince ||
+        new Date();
+
+      application.bot1.lastAction =
+        "facial_position_waiting_live_action";
+
+      await application.save();
+
+      logger.info(
+        "BOT1 FACIAL POSITION PENDING",
+        {
+          applicationId,
+          position: facialResult.position,
+          label: facialResult.label,
+          positionChanged:
+            facialResult.positionChanged === true,
+          accepted: false,
+          nextAction: "poll_vfs_facial_checkpoint"
+        }
+      );
+
+      await new Promise(resolve =>
+        setTimeout(resolve, 1500)
+      );
+
+      continue;
+    }
+
 
     /*
      * -------------------------------------------------
