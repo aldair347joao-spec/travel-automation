@@ -10391,6 +10391,81 @@ if (
       lastFrameAt: null
     };
   }
+ 
+  /*
+   * ============================================================
+   * 1. CONFIRMAR A PÁGINA E O BOTÃO INICIAL DA VFS
+   * ============================================================
+   */
+
+  if (
+    !this.page ||
+    this.page.isClosed() ||
+    !this.page.url().includes("/ago/en/prt/fv-instructions")
+  ) {
+    return {
+      success: false,
+      requiresUser: true,
+      unresolved: true,
+      state: "FV_INSTRUCTIONS_PAGE_NOT_READY",
+      reason:
+        "A página de instruções faciais da VFS não está ativa."
+    };
+  }
+
+  if (!this.fvInstructionsButtonClicked) {
+    const button = this.page.getByRole("button", {
+      name: "inHouseAI.buttons.button1",
+      exact: true
+    });
+
+    try {
+      await button.waitFor({
+        state: "visible",
+        timeout: 30000
+      });
+
+      const enabled = await button.isEnabled();
+
+      if (!enabled) {
+        return {
+          success: false,
+          requiresUser: true,
+          unresolved: true,
+          state: "FV_INITIAL_BUTTON_DISABLED",
+          reason:
+            "O botão inicial da VFS está visível, mas desativado."
+        };
+      }
+
+      await button.click({
+        timeout: 10000
+      });
+
+      this.fvInstructionsButtonClicked = true;
+
+      logger.info("VFS FACIAL INITIAL BUTTON CLICKED", {
+        applicationId: this.applicationId,
+        buttonText: "inHouseAI.buttons.button1",
+        url: this.page.url()
+      });
+    } catch (error) {
+      logger.warn("VFS FACIAL INITIAL BUTTON NOT READY", {
+        applicationId: this.applicationId,
+        buttonText: "inHouseAI.buttons.button1",
+        url: this.page.url(),
+        error: error.message
+      });
+
+      return {
+        success: false,
+        requiresUser: true,
+        unresolved: true,
+        state: "FV_INITIAL_BUTTON_NOT_READY",
+        reason: error.message
+      };
+    }
+  }
 
   /*
    * ============================================================
