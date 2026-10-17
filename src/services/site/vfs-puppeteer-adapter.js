@@ -10590,13 +10590,13 @@ if (
    * ============================================================
    */
 
-  const positions =
+  const facialPositions =
   Array.isArray(client?.facialProfile?.positions)
     ? client.facialProfile.positions
     : [];
 
-  const validPositions =
-    facialPositions.filter(
+const validPositions =
+  facialPositions.filter(
       item => {
         const position =
           Number(item?.position);
@@ -11836,6 +11836,7 @@ async detectFacialPositionRequest() {
     }
 
     const positions =
+      
   Array.isArray(client?.facialProfile?.positions)
     ? client.facialProfile.positions
     : [];
@@ -11854,6 +11855,7 @@ async detectFacialPositionRequest() {
             ) &&
             number >= 1 &&
             number <= 10 &&
+            
             Boolean(
               position?.storageReference
             )
