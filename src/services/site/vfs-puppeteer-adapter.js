@@ -10590,12 +10590,10 @@ if (
    * ============================================================
    */
 
-  const facialPositions =
-    Array.isArray(
-      client?.facialPositions
-    )
-      ? client.facialPositions
-      : [];
+  const positions =
+  Array.isArray(client?.facialProfile?.positions)
+    ? client.facialProfile.positions
+    : [];
 
   const validPositions =
     facialPositions.filter(
@@ -11838,12 +11836,10 @@ async detectFacialPositionRequest() {
     }
 
     const positions =
-      Array.isArray(
-        client.facialPositions
-      )
-        ? client.facialPositions
-        : [];
-
+  Array.isArray(client?.facialProfile?.positions)
+    ? client.facialProfile.positions
+    : [];
+    
     const validPositions =
       positions.filter(
         position => {
