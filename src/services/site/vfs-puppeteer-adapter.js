@@ -10607,6 +10607,64 @@ if (
 
   const request =
     await this.detectFacialPositionRequest();
+    
+/*
+ * ============================================================
+ * VERIFICAR E CLICAR NO BOTÃO CONTINUE DA VFS
+ * ============================================================
+ */
+
+try {
+  const continueButton =
+    this.page.getByRole("button", {
+      name: "Continue",
+      exact: true
+    });
+
+  const visible =
+    await continueButton.isVisible()
+      .catch(() => false);
+
+  const enabled =
+    visible
+      ? await continueButton.isEnabled()
+          .catch(() => false)
+      : false;
+
+  console.log(
+    "[VFS FACIAL CONTINUE CHECK]",
+    JSON.stringify({
+      url: this.page.url(),
+      visible,
+      enabled,
+      checkedAt: new Date().toISOString()
+    })
+  );
+
+  if (visible && enabled) {
+    await continueButton.click({
+      timeout: 10000
+    });
+
+    console.log(
+      "[VFS FACIAL CONTINUE CLICKED]",
+      JSON.stringify({
+        url: this.page.url(),
+        clickedAt: new Date().toISOString()
+      })
+    );
+  }
+
+} catch (error) {
+  console.warn(
+    "[VFS FACIAL CONTINUE CHECK ERROR]",
+    {
+      url: this.page?.url?.() || null,
+      message: error.message
+    }
+  );
+}
+
 
   if (
     !request ||
